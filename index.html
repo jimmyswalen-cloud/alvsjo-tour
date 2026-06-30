@@ -149,6 +149,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <span><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
   <span style="display:flex;gap:10px">
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600" onclick="showUsersView()"><i class="ti ti-users-group"></i> Användare</span>
+    <span style="cursor:pointer" onclick="openMyProfile()"><i class="ti ti-user-edit"></i> Min profil</span>
     <span style="cursor:pointer" onclick="openChangePassword()"><i class="ti ti-key"></i> Byt lösenord</span>
     <span style="cursor:pointer" onclick="logout()"><i class="ti ti-logout"></i> Logga ut</span>
   </span>
@@ -412,7 +413,8 @@ function getTour() {
 function getPlayersForTour(t) {
   if(!t.playerIndexMap) t.playerIndexMap = {};
   var accessUsers = (S.users||[]).filter(function(u){
-    return u.role !== 'admin' && (u.tourAccess||[]).indexOf(t.id) >= 0;
+    var wantsToPlay = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin'); // default: non-admins play, admins don't, unless explicitly set
+    return wantsToPlay && (u.tourAccess||[]).indexOf(t.id) >= 0;
   });
   // Assign a stable pi to any new user who doesn't have one yet (append-only, never reshuffle).
   var usedIndices = Object.values(t.playerIndexMap);
@@ -429,7 +431,7 @@ function getPlayersForTour(t) {
   var arr = new Array(maxIdx+1);
   accessUsers.forEach(function(u){
     var pi = t.playerIndexMap[u.username];
-    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: u.img||null, username: u.username };
+    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: u.img||null, username: u.username, golfId: u.golfId||'' };
   });
   return arr;
 }
@@ -1532,9 +1534,73 @@ function afterLogin() {
     document.getElementById('nav-users-btn').style.display = '';
   }
   showToursView();
+  if(!currentUser.golfId || currentUser.golfId.length !== 10) {
+    setTimeout(function(){
+      alert('Du saknar ett giltigt Golf-ID (10 tecken). Fyll i det i din profil för att kunna fortsätta.');
+      openMyProfile();
+    }, 200);
+  }
 }
 
 // ── PASSWORD CHANGE (self-service) ──────────────────────────────────────────
+var _myProfileImg = null;
+function openMyProfile() {
+  _myProfileImg = null;
+  var u = currentUser;
+  var h = '<h3>Min profil</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Den här informationen visas i resultatlistor, OoM och anmälningar.</p>';
+  h += '<div class="field"><label>Namn</label><input id="mp-name" type="text" value="'+esc(u.name||u.username)+'" placeholder="För- och efternamn"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="mp-golfid" type="text" value="'+esc(u.golfId||'')+'" maxlength="10" placeholder="10 tecken"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="mp-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="mp-gender" value="kvinna" '+(u.gender==='kvinna'?'checked':'')+' style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="mp-hcp" type="number" step="0.1" value="'+(u.hcp!=null?u.hcp:0)+'"></div>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin-top:-6px;margin-bottom:12px">Uppdatera manuellt när ditt HCP ändras, t.ex. i Min Golf/GIT.</p>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="mp-img-prev">'+(u.img?'<img src="'+u.img+'" class="avatar-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="mp-img-btn"><i class="ti ti-upload"></i> '+(u.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="mp-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="submitMyProfile()">Spara</button>';
+  h += '</div>';
+  showModal(h, true);
+  setTimeout(function(){
+    var b=document.getElementById('mp-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('mp-file-inp').click(); };
+    var inp=document.getElementById('mp-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onMyProfileImgFile(this.files[0]); };
+    enablePasteForInput('mp-img-btn', onMyProfileImgFile);
+  }, 30);
+}
+
+function onMyProfileImgFile(file) {
+  compressImage(file, 480, 480, 0.92, function(d) {
+    _myProfileImg = d;
+    var prev = document.getElementById('mp-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
+}
+
+function submitMyProfile() {
+  var u = findUser(currentUser.username);
+  var golfId = document.getElementById('mp-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
+  u.name = document.getElementById('mp-name').value.trim() || u.username;
+  u.golfId = golfId;
+  var genderEl = document.querySelector('input[name="mp-gender"]:checked');
+  u.gender = genderEl ? genderEl.value : 'man';
+  u.hcp = parseFloat(document.getElementById('mp-hcp').value) || 0;
+  if(_myProfileImg) u.img = _myProfileImg;
+  currentUser = u;
+  save(); closeModal();
+  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+  refreshCurrentView();
+}
+
 function openChangePassword() {
   var h = '<h3>Byt lösenord</h3>';
   h += '<div class="field"><label>Nuvarande lösenord</label><input id="cp-old" type="password"></div>';
@@ -1582,18 +1648,21 @@ function renderUsersList() {
       var t = S.tours.find(function(x){return x.id===tid;});
       return t ? t.name : null;
     }).filter(Boolean);
+    var isPlayer = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
     return '<div class="card">'+
       '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
         '<div>'+
           '<div style="font-weight:600;font-size:16px">'+u.username+'</div>'+
           '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>'+
+          (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
         '</div>'+
         '<div class="row" style="gap:6px">'+
           '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
           (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
         '</div>'+
       '</div>'+
-      (u.role!=='admin' ? '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>' : '<div style="font-size:13px;color:var(--text-2)">Admin ser alla tourer</div>')+
+      (u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-bottom:2px">Admin ser alltid alla tourer i översikten</div>' : '')+
+      '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
     '</div>';
   }).join('');
 }
@@ -1608,11 +1677,16 @@ function openNewUser() {
   h += '<div class="field"><label>Lösenord</label><input id="u-password" type="text" placeholder="Ange ett lösenord"></div>';
   h += '<hr class="divider">';
   h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" placeholder="t.ex. För- och efternamn"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="u-golfid" type="text" maxlength="10" placeholder="10 tecken"></div>';
   h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" checked style="width:auto;margin:0"> Man</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" style="width:auto;margin:0"> Kvinna</label>';
   h += '</div></div>';
   h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" placeholder="t.ex. 12.4"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600"><input type="checkbox" id="u-isplayer" checked style="width:auto;margin:0"> Spelare i tourer</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Avgör om kontot syns som spelare (i resultat, OoM, anmälningar) i de tourer det har åtkomst till.</p>';
+  h += '</div>';
   h += '<div class="field"><label>Profilbild</label>';
   h += '<div id="u-img-prev"></div>';
   h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> Välj bild</button>';
@@ -1634,7 +1708,7 @@ function openNewUser() {
   showModal(h, true);
   setTimeout(function(){
     var roleRadios = document.querySelectorAll('input[name="u-role"]');
-    roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+    // Tour access field stays visible for all roles now, since admins can also be marked as players.
     var b=document.getElementById('u-img-btn');
     if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
     var inp=document.getElementById('u-file-inp');
@@ -1700,15 +1774,18 @@ function saveNewUser() {
   var password = document.getElementById('u-password').value;
   if(!username || !password) { alert('Användarnamn och lösenord krävs.'); return; }
   if(findUser(username)) { alert('Användarnamnet finns redan.'); return; }
+  var golfId = document.getElementById('u-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
   var name = document.getElementById('u-name').value.trim();
   var genderEl = document.querySelector('input[name="u-gender"]:checked');
   var hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
   var role = document.querySelector('input[name="u-role"]:checked').value;
-  var tourAccess = (role !== 'admin') ? _pendingTourAccess.slice() : [];
+  var isPlayer = document.getElementById('u-isplayer').checked;
+  var tourAccess = _pendingTourAccess.slice();
   if(!S.users) S.users = [];
   S.users.push({
     username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
-    name: name || username, gender: genderEl?genderEl.value:'man', hcp: hcp, img: _newUserImg||null
+    name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: _newUserImg||null, isPlayer: isPlayer
   });
   save(); closeModal(); renderUsersList();
 }
@@ -1722,11 +1799,17 @@ function openEditUser(i) {
   h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
   h += '<hr class="divider">';
   h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" value="'+esc(u.name||u.username)+'"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="u-golfid" type="text" value="'+esc(u.golfId||'')+'" maxlength="10" placeholder="10 tecken"></div>';
   h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" '+(u.gender==='kvinna'?'checked':'')+' style="width:auto;margin:0"> Kvinna</label>';
   h += '</div></div>';
   h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" value="'+(u.hcp!=null?u.hcp:0)+'"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  var isPlayerDefault = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600"><input type="checkbox" id="u-isplayer" '+(isPlayerDefault?'checked':'')+' style="width:auto;margin:0"> Spelare i tourer</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Avgör om kontot syns som spelare (i resultat, OoM, anmälningar) i de tourer det har åtkomst till.</p>';
+  h += '</div>';
   h += '<div class="field"><label>Profilbild</label>';
   h += '<div id="u-img-prev">'+(u.img?'<img src="'+u.img+'" class="avatar-preview">':'')+'</div>';
   h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> '+(u.img?'Byt bild':'Välj bild')+'</button>';
@@ -1738,7 +1821,7 @@ function openEditUser(i) {
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" '+(u.role!=='admin'?'checked':'')+' style="width:auto;margin:0"> Användare</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
   h += '</div></div>';
-  h += '<div class="field" id="u-tour-access-field" style="'+(u.role==='admin'?'display:none':'')+'"><label>Tour-åtkomst</label>';
+  h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
   h += buildTourAccessPickerHTML();
   h += '</div>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
@@ -1748,7 +1831,7 @@ function openEditUser(i) {
   showModal(h, true);
   setTimeout(function(){
     var roleRadios = document.querySelectorAll('input[name="u-role"]');
-    roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+    // Tour access field stays visible for all roles now, since admins can also be marked as players.
     var b=document.getElementById('u-img-btn');
     if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
     var inp=document.getElementById('u-file-inp');
@@ -1769,19 +1852,19 @@ function onEditUserImgFile(file) {
 
 function saveEditUser(i) {
   var u = getUsers()[i];
+  var golfId = document.getElementById('u-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
   var newPass = document.getElementById('u-password').value;
   if(newPass) u.passHash = simpleHash(newPass);
   u.name = document.getElementById('u-name').value.trim() || u.username;
+  u.golfId = golfId;
   var genderEl = document.querySelector('input[name="u-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
   u.hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
   if(_editUserImg) u.img = _editUserImg;
+  u.isPlayer = document.getElementById('u-isplayer').checked;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
-  if(u.role !== 'admin') {
-    u.tourAccess = _pendingTourAccess.slice();
-  } else {
-    u.tourAccess = [];
-  }
+  u.tourAccess = _pendingTourAccess.slice();
   if(currentUser.username === u.username) currentUser = u;
   save(); closeModal(); renderUsersList();
 }
