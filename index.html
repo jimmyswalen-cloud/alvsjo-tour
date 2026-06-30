@@ -175,6 +175,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div class="row" style="justify-content:flex-end;margin-bottom:16px">
     <button class="btn btn-primary btn-sm" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
   </div>
+  <div id="db-diagnostics"></div>
   <div id="users-list"></div>
 </div>
 
@@ -2262,6 +2263,7 @@ function showUsersView() {
 }
 
 function renderUsersList() {
+  renderDbDiagnostics();
   var el = document.getElementById('users-list');
   var users = getUsers();
   if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
@@ -2288,6 +2290,64 @@ function renderUsersList() {
       '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
     '</div>';
   }).join('');
+}
+
+var _dbDiagnosticItems = [];
+
+function renderDbDiagnostics() {
+  var el = document.getElementById('db-diagnostics');
+  if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
+
+  var totalSize = JSON.stringify(S).length;
+  var items = [];
+
+  (S.users||[]).forEach(function(u){
+    if(u.img) items.push({ label: 'Profilbild: ' + (u.name||u.username), size: u.img.length, type:'profile', ref:u });
+  });
+
+  (S.tours||[]).forEach(function(t){
+    if(t.img) items.push({ label: 'Tour-omslag: ' + t.name, size: t.img.length, type:'tourimg', ref:t });
+    (t.events||[]).forEach(function(e){
+      if(e.img) items.push({ label: t.name + ' – ' + e.name + ' (banfoto)', size: e.img.length, type:'eventimg', ref:e });
+      if(e.winnerImg) items.push({ label: t.name + ' – ' + e.name + ' (vinnarfoto)', size: e.winnerImg.length, type:'winnerimg', ref:e });
+      (e.comments||[]).forEach(function(c){
+        if(c.img) items.push({ label: t.name + ' – ' + e.name + ' (kommentarsbild)', size: c.img.length, type:'commentimg', ref:c });
+      });
+    });
+  });
+
+  items.sort(function(a,b){ return b.size - a.size; });
+  _dbDiagnosticItems = items;
+  var totalKB = Math.round(totalSize/1024);
+  var pct = Math.min(100, Math.round(totalKB/1000*100));
+  var barColor = totalKB > 850 ? 'var(--danger-text)' : (totalKB > 600 ? 'var(--gold)' : 'var(--green)');
+
+  var html = '<div class="card" style="margin-bottom:16px">';
+  html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
+  html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
+  if(!items.length) {
+    html += '<p style="font-size:13px;color:var(--text-2)">Inga bilder hittades. Storleken kommer från text-data (resultat, namn, etc).</p>';
+  } else {
+    html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Största bidragsgivarna (bilder), störst först:</p>';
+    items.slice(0,15).forEach(function(it, i){
+      html += '<div class="row" style="justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span>'+esc(it.label)+'</span><span class="row" style="gap:8px;align-items:center"><span style="color:var(--text-2)">'+Math.round(it.size/1024)+' KB</span><i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer" onclick="deleteDiagnosticImage('+i+')" title="Ta bort denna bild"></i></span></div>';
+    });
+    if(items.length > 15) html += '<p style="font-size:11px;color:var(--text-3);margin-top:6px">+ '+(items.length-15)+' fler bilder, mindre storlek</p>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function deleteDiagnosticImage(i) {
+  var it = _dbDiagnosticItems[i];
+  if(!it) return;
+  if(!confirm('Ta bort denna bild ("'+it.label+'")? Det går inte att ångra.')) return;
+  if(it.type === 'profile' || it.type === 'tourimg') it.ref.img = null;
+  else if(it.type === 'eventimg') it.ref.img = null;
+  else if(it.type === 'winnerimg') it.ref.winnerImg = null;
+  else if(it.type === 'commentimg') it.ref.img = null;
+  save();
+  renderDbDiagnostics();
 }
 
 var _newUserImg = null;
