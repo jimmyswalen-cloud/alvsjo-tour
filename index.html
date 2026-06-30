@@ -957,7 +957,7 @@ function buildDateGroupingHTML(e, t) {
   if(!e.teeGroups) e.teeGroups = [];
 
   var html = '<div class="section-title">Spelare per datum</div>';
-  html += '<table class="hist-table" style="margin-bottom:16px"><thead><tr><th>Spelare</th><th>Speldatum</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto"><table class="hist-table" style="margin-bottom:16px"><thead><tr><th>Spelare</th><th>Speldatum</th></tr></thead><tbody>';
   dates.forEach(function(d){
     groups[d].forEach(function(pi, idx){
       var p = t.players[pi];
@@ -969,7 +969,7 @@ function buildDateGroupingHTML(e, t) {
       '</tr>';
     });
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   html += '<div class="section-title">Bollar (starttider)</div>';
   dates.forEach(function(d){
@@ -1189,7 +1189,9 @@ function onWinnerImgFile(file) {
 
 function saveResults(i) {
   var t=getTour(), e=t.events[i], isStab=e.type==='stableford';
-  var regs=(e.registrations||[]).filter(function(pi){return t.players[pi];});
+  var regsRaw = e.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var regs = regPis.filter(function(pi){return t.players[pi];});
   var results=[];
   for(var k=0;k<regs.length;k++){
     var pi=regs[k];
