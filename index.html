@@ -859,7 +859,8 @@ function eventCardHTML(i,e) {
 
   var regsTable = '';
   if(regs.length) {
-    var rows = regs.map(function(r){
+    var sortedRegs = regs.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+    var rows = sortedRegs.map(function(r){
       var p = t.players[r.pi];
       if(!p) return '';
       var altDate = r.date !== e.date;
