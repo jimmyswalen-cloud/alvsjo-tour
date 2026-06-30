@@ -145,7 +145,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   </div>
 </div>
 
-<div id="user-bar" style="display:none;display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;color:var(--text-2)">
+<div id="user-bar" style="display:none;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;color:var(--text-2)">
   <span><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
   <span style="display:flex;gap:10px">
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600" onclick="showUsersView()"><i class="ti ti-users-group"></i> Användare</span>
@@ -1527,7 +1527,7 @@ function afterLogin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('hero-bg').style.display = '';
   document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
-  document.getElementById('user-bar').style.display = '';
+  document.getElementById('user-bar').style.display = 'flex';
   if(currentUser.role === 'admin') {
     document.getElementById('nav-users-btn').style.display = '';
   }
