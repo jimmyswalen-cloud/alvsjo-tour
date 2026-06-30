@@ -189,20 +189,20 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   </div>
   <div class="nav-wrap">
     <nav class="nav">
-      <button class="nav-btn active" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
-      <button class="nav-btn" onclick="showView('tournament')" id="nav-tournament"><i class="ti ti-trophy"></i><span>Tävlingar</span></button>
+      <button class="nav-btn active" onclick="showView('tournament')" id="nav-tournament"><i class="ti ti-trophy"></i><span>Tävlingar</span></button>
+      <button class="nav-btn" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
       <button class="nav-btn" onclick="showView('calendar')" id="nav-calendar"><i class="ti ti-calendar"></i><span>Kalender</span></button>
       <button class="nav-btn" onclick="showView('oom')" id="nav-oom"><i class="ti ti-medal"></i><span>OoM</span></button>
       <button class="nav-btn" onclick="showView('settings')" id="nav-settings"><i class="ti ti-settings"></i><span>Inst.</span></button>
     </nav>
   </div>
-  <div id="view-players" class="view active">
+  <div id="view-players" class="view">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
       <h2 style="margin:0">Spelare</h2>
     </div>
     <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
   </div>
-  <div id="view-tournament" class="view">
+  <div id="view-tournament" class="view active">
     <h2>Deltävlingar</h2>
     <p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>
     <div id="events-list"></div>
@@ -527,7 +527,7 @@ function enterTour(id) {
   document.getElementById('app-screen').style.display = '';
   document.getElementById('active-tour-name').textContent = getTour().name;
   updateHero(id);
-  showView('players');
+  showView('tournament');
 }
 
 function showView(v) {
