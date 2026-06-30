@@ -970,7 +970,9 @@ function renderPlayers() {
     return '<div class="player-card">'+
       (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
       '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
-      '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div></div>'+
+      '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
+      (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
+      '</div>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(\''+p.username+'\')" title="Redigera i Användare"><i class="ti ti-edit"></i></button>' : '')+
     '</div>';
   }).join('');
@@ -1364,6 +1366,17 @@ function renderLeaderboardSection() {
   el.innerHTML = html;
 }
 
+function recalcNet(pi) {
+  var bruttoEl = document.getElementById('brutto-'+pi);
+  var shcpEl = document.getElementById('shcp-'+pi);
+  var resEl = document.getElementById('res-'+pi);
+  if(!bruttoEl || !shcpEl || !resEl) return;
+  var brutto = parseFloat(bruttoEl.value);
+  var shcp = parseFloat(shcpEl.value);
+  if(isNaN(brutto) || isNaN(shcp)) { resEl.value = ''; return; }
+  resEl.value = Math.round((brutto - shcp) * 10) / 10;
+}
+
 function openResults(i) {
   var t=getTour(), e=t.events[i]; _wImg=null;
   var regsRaw = e.registrations || [];
@@ -1375,11 +1388,15 @@ function openResults(i) {
     var ex=e.results?e.results.find(function(r){return r.pi===pi;}):null;
     var p=t.players[pi];
     var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
-    return '<div class="row" style="margin-bottom:10px;gap:8px">'+
+    var shcpVal = (ex&&ex.shcp!=null) ? ex.shcp : (p.hcp!=null?p.hcp:0);
+    return '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center">'+
       (p.img?'<img src="'+p.img+'" class="avatar" style="width:30px;height:30px" alt="">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+ini(p.name)+'</div>')+
       '<span style="flex:1;font-size:14px;font-weight:500">'+p.name+(e.isFinal?' <span style="font-size:11px;color:var(--gold);font-weight:600">('+(hs>0?'-':'')+hs+' förspr.)</span>':'')+'</span>'+
-      (!isStab?'<input type="number" style="width:74px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+(ex&&ex.brutto!=null?ex.brutto:'')+'">':'')+
-      '<input type="number" style="width:84px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+(ex?ex.score:'')+'">'+
+      (!isStab?
+        '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+(ex&&ex.brutto!=null?ex.brutto:'')+'" oninput="recalcNet('+pi+')">'+
+        '<input type="number" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
+        :'')+
+      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+(ex?ex.score:'')+'" '+(!isStab?'readonly':'')+'>'+
     '</div>';
   }).join('');
   var h='<h3>'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+'Resultatinmatning – '+e.name+'</h3>';
@@ -1430,7 +1447,9 @@ function saveResults(i) {
     var score=parseFloat(v);
     var bruttoEl=document.getElementById('brutto-'+pi);
     var brutto=bruttoEl&&bruttoEl.value!==''?parseFloat(bruttoEl.value):null;
-    var entry={pi:pi,score:score,brutto:brutto};
+    var shcpEl=document.getElementById('shcp-'+pi);
+    var shcp=shcpEl&&shcpEl.value!==''?parseFloat(shcpEl.value):null;
+    var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
     if(e.isFinal) {
       var hs = getHeadStart(t,e,pi);
       entry.headStart = hs;
