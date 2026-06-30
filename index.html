@@ -190,7 +190,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="view-players" class="view active">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
       <h2 style="margin:0">Spelare</h2>
-      <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer(null)"><i class="ti ti-plus"></i> Lägg till</button>
     </div>
     <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
   </div>
@@ -391,7 +390,38 @@ function showView(v) {
   if(v==='settings')   renderSettings();
 }
 
-function getTour() { return S.tours.find(function(t){return t.id===activeTourId;}); }
+function getTour() {
+  var t = S.tours.find(function(x){return x.id===activeTourId;});
+  if(t) t.players = getPlayersForTour(t);
+  return t;
+}
+
+// Players for a tour = all users with access to it, sorted by username for stable indexing.
+// Admin accounts are excluded (they manage, they don't play in the OoM by default).
+function getPlayersForTour(t) {
+  if(!t.playerIndexMap) t.playerIndexMap = {};
+  var accessUsers = (S.users||[]).filter(function(u){
+    return u.role !== 'admin' && (u.tourAccess||[]).indexOf(t.id) >= 0;
+  });
+  // Assign a stable pi to any new user who doesn't have one yet (append-only, never reshuffle).
+  var usedIndices = Object.values(t.playerIndexMap);
+  var nextFree = usedIndices.length ? Math.max.apply(null, usedIndices) + 1 : 0;
+  accessUsers.forEach(function(u){
+    if(t.playerIndexMap[u.username] == null) {
+      t.playerIndexMap[u.username] = nextFree;
+      nextFree++;
+    }
+  });
+  // Build array sized to cover the highest assigned index, sparse entries stay undefined
+  // (e.g. a user later lost access — keep their slot empty rather than reusing the index).
+  var maxIdx = Object.values(t.playerIndexMap).length ? Math.max.apply(null, Object.values(t.playerIndexMap)) : -1;
+  var arr = new Array(maxIdx+1);
+  accessUsers.forEach(function(u){
+    var pi = t.playerIndexMap[u.username];
+    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: u.img||null, username: u.username };
+  });
+  return arr;
+}
 
 // ── MODAL ──────────────────────────────────────────────────────────────────
 function showModal(html, wide) {
@@ -756,65 +786,29 @@ function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
 // ── PLAYERS ────────────────────────────────────────────────────────────────
 function renderPlayers() {
   var t=getTour(), el=document.getElementById('players-list');
-  document.getElementById('add-player-btn').style.display = isAdmin() ? '' : 'none';
-  if(!t.players.length){el.innerHTML='<p class="empty">Inga spelare ännu.</p>';return;}
+  if(!t.players.length){
+    el.innerHTML = isAdmin()
+      ? '<p class="empty">Inga spelare ännu. Ge användare åtkomst till touren under <i class="ti ti-users-group"></i> Användare.</p>'
+      : '<p class="empty">Inga spelare ännu.</p>';
+    return;
+  }
   el.innerHTML=t.players.map(function(p,i){
+    if(!p) return '';
     return '<div class="player-card">'+
       (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
       '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
-      '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+'</div></div>'+
-      (isAdmin() ? '<button class="btn btn-sm" onclick="openAddPlayer('+i+')"><i class="ti ti-edit"></i></button>'+
-      '<button class="btn btn-sm btn-danger" onclick="delPlayer('+i+')"><i class="ti ti-trash"></i></button>' : '')+
+      '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div></div>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(\''+p.username+'\')" title="Redigera i Användare"><i class="ti ti-edit"></i></button>' : '')+
     '</div>';
   }).join('');
 }
 
-function openAddPlayer(editIdx) {
-  _pImg=null;
-  var t=getTour(), p=(editIdx!=null?t.players[editIdx]:null);
-  var h='<h3>'+(p?'Redigera spelare':'Ny spelare')+'</h3>';
-  h+='<div class="field"><label>Namn</label><input id="p-name" type="text" value="'+(p?esc(p.name):'')+'" placeholder="För- och efternamn"></div>';
-  h+='<div class="field"><label>HCP</label><input id="p-hcp" type="number" step="0.1" value="'+(p?p.hcp:'')+'" placeholder="t.ex. 12.4"></div>';
-  h+='<div class="field"><label>Profilbild</label>';
-  h+='<div id="p-img-prev">'+(p&&p.img?'<img src="'+p.img+'" class="avatar-preview">':'')+'</div>';
-  h+='<button type="button" class="btn btn-sm" id="p-img-btn"><i class="ti ti-upload"></i> Välj bild</button>';
-  h+=' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
-  h+='<input type="file" id="p-file-inp" accept="image/*" style="display:none">';
-  h+='</div>';
-  h+='<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
-  h+='<button class="btn" onclick="closeModal()">Avbryt</button>';
-  h+='<button class="btn btn-primary" onclick="savePlayer('+(editIdx!=null?editIdx:'null')+')">Spara</button>';
-  h+='</div>';
-  showModal(h);
-  setTimeout(function(){
-    var b=document.getElementById('p-img-btn');
-    if(b) b.onclick=function(){ document.getElementById('p-file-inp').click(); };
-    var inp=document.getElementById('p-file-inp');
-    if(inp) inp.onchange=function(){ if(this.files[0]) onPlayerImgFile(this.files[0]); };
-    enablePasteForInput('p-img-btn', onPlayerImgFile);
-  },50);
+function jumpToEditUserByUsername(username) {
+  var idx = getUsers().findIndex(function(u){return u.username===username;});
+  if(idx<0) return;
+  showUsersView();
+  setTimeout(function(){ openEditUser(idx); }, 60);
 }
-
-function onPlayerImgFile(file) {
-  compressImage(file, 600, 600, 0.88, function(d) {
-    _pImg=d;
-    var prev=document.getElementById('p-img-prev');
-    if(prev) prev.innerHTML='<img src="'+d+'" class="avatar-preview">';
-  });
-}
-
-function savePlayer(editIdx) {
-  var t=getTour();
-  var name=document.getElementById('p-name').value.trim();
-  var hcp=parseFloat(document.getElementById('p-hcp').value);
-  if(!name||isNaN(hcp)){alert('Namn och HCP krävs.');return;}
-  var ex=(editIdx!=null&&editIdx!=='null'?t.players[editIdx]:null);
-  var obj={name:name,hcp:hcp,img:_pImg||(ex?ex.img:null)};
-  if(ex) t.players[editIdx]=obj; else t.players.push(obj);
-  _pImg=null; save(); closeModal(); renderPlayers();
-}
-
-function delPlayer(i){var t=getTour();if(confirm('Ta bort '+t.players[i].name+'?')){t.players.splice(i,1);save();renderPlayers();}}
 
 // ── EVENTS (list / register / results) ─────────────────────────────────────
 function renderEvents() {
@@ -879,6 +873,7 @@ function openRegister(i) {
 
   var rows = t.players.length
     ? t.players.map(function(p,pi){
+        if(!p) return '';
         var reg = regs.find(function(r){return r.pi===pi;});
         var checked = !!reg;
         var dateVal = reg ? reg.date : e.date;
@@ -1507,10 +1502,26 @@ function renderUsersList() {
   }).join('');
 }
 
+var _newUserImg = null;
 function openNewUser() {
+  _newUserImg = null;
   var h = '<h3>Ny användare</h3>';
-  h += '<div class="field"><label>Användarnamn</label><input id="u-username" type="text" placeholder="t.ex. namn eller e-post"></div>';
+  h += '<div class="field"><label>Användarnamn (för inloggning)</label><input id="u-username" type="text" placeholder="t.ex. namn eller e-post"></div>';
   h += '<div class="field"><label>Lösenord</label><input id="u-password" type="text" placeholder="Ange ett lösenord"></div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" placeholder="t.ex. För- och efternamn"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" checked style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" placeholder="t.ex. 12.4"></div>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="u-img-prev"></div>';
+  h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> Välj bild</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="u-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<hr class="divider">';
   h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" checked style="width:auto;margin:0"> Användare</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" style="width:auto;margin:0"> Admin</label>';
@@ -1524,11 +1535,24 @@ function openNewUser() {
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" onclick="saveNewUser()">Skapa användare</button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, true);
   setTimeout(function(){
     var roleRadios = document.querySelectorAll('input[name="u-role"]');
     roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+    var b=document.getElementById('u-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
+    var inp=document.getElementById('u-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onNewUserImgFile(this.files[0]); };
+    enablePasteForInput('u-img-btn', onNewUserImgFile);
   }, 30);
+}
+
+function onNewUserImgFile(file) {
+  compressImage(file, 600, 600, 0.88, function(d) {
+    _newUserImg = d;
+    var prev = document.getElementById('u-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
 }
 
 function saveNewUser() {
@@ -1536,20 +1560,42 @@ function saveNewUser() {
   var password = document.getElementById('u-password').value;
   if(!username || !password) { alert('Användarnamn och lösenord krävs.'); return; }
   if(findUser(username)) { alert('Användarnamnet finns redan.'); return; }
+  var name = document.getElementById('u-name').value.trim();
+  var genderEl = document.querySelector('input[name="u-gender"]:checked');
+  var hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
   var role = document.querySelector('input[name="u-role"]:checked').value;
   var tourAccess = [];
   if(role !== 'admin') {
     document.querySelectorAll('.u-tour-cb:checked').forEach(function(cb){ tourAccess.push(cb.value); });
   }
   if(!S.users) S.users = [];
-  S.users.push({ username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess });
+  S.users.push({
+    username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
+    name: name || username, gender: genderEl?genderEl.value:'man', hcp: hcp, img: _newUserImg||null
+  });
   save(); closeModal(); renderUsersList();
 }
 
+var _editUserImg = null;
 function openEditUser(i) {
+  _editUserImg = null;
   var u = getUsers()[i];
   var h = '<h3>Redigera ' + u.username + '</h3>';
   h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" value="'+esc(u.name||u.username)+'"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" '+(u.gender==='kvinna'?'checked':'')+' style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" value="'+(u.hcp!=null?u.hcp:0)+'"></div>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="u-img-prev">'+(u.img?'<img src="'+u.img+'" class="avatar-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> '+(u.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="u-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<hr class="divider">';
   h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" '+(u.role!=='admin'?'checked':'')+' style="width:auto;margin:0"> Användare</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
@@ -1563,17 +1609,35 @@ function openEditUser(i) {
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" onclick="saveEditUser('+i+')">Spara</button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, true);
   setTimeout(function(){
     var roleRadios = document.querySelectorAll('input[name="u-role"]');
     roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+    var b=document.getElementById('u-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
+    var inp=document.getElementById('u-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onEditUserImgFile(this.files[0]); };
+    enablePasteForInput('u-img-btn', onEditUserImgFile);
   }, 30);
+}
+
+function onEditUserImgFile(file) {
+  compressImage(file, 600, 600, 0.88, function(d) {
+    _editUserImg = d;
+    var prev = document.getElementById('u-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
 }
 
 function saveEditUser(i) {
   var u = getUsers()[i];
   var newPass = document.getElementById('u-password').value;
   if(newPass) u.passHash = simpleHash(newPass);
+  u.name = document.getElementById('u-name').value.trim() || u.username;
+  var genderEl = document.querySelector('input[name="u-gender"]:checked');
+  u.gender = genderEl ? genderEl.value : 'man';
+  u.hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
+  if(_editUserImg) u.img = _editUserImg;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
   if(u.role !== 'admin') {
     var tourAccess = [];
