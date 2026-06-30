@@ -46,7 +46,7 @@ h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px}
 .btn-primary:hover{background:var(--green-dark)}
 .btn-danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-text)}
 .btn-sm{padding:5px 10px;font-size:12px}
-input[type=text],input[type=number],input[type=date],input[type=time],select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:8px;font-family:inherit}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],textarea,select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;background:var(--surface);color:var(--text);margin-bottom:8px;font-family:inherit}
 input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(29,158,117,.1)}
 label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-weight:500}
 .field{margin-bottom:14px}
@@ -102,7 +102,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .pos-2{background:#D3D1C7;color:#2C2C2A}
 .pos-3{background:#F5C4B3;color:#4A1B0C}
 .pos-other{background:var(--surface2);color:var(--text-2)}
-.signature{position:fixed;bottom:18px;right:18px;z-index:50;pointer-events:none;opacity:.35;transition:opacity .2s}
+.signature{position:fixed;bottom:18px;right:18px;z-index:1;pointer-events:none;opacity:.35;transition:opacity .2s}
 .signature:hover{opacity:.7;pointer-events:auto}
 .signature img{width:110px;height:auto}
 
@@ -360,7 +360,7 @@ function openComments(eid) {
   var h = '<h3><i class="ti ti-message-circle"></i> Diskussionsvägg – '+e.name+'</h3>';
   h += '<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2)"></div>';
   h += '<div class="field">';
-  h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
+  h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
   h += '</div>';
   h += '<div id="comment-img-prev"></div>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
@@ -390,7 +390,7 @@ function onCommentImgFile(file) {
   compressImage(file, 700, 700, 0.78, function(d) {
     _commentImg = d;
     var prev = document.getElementById('comment-img-prev');
-    if(prev) prev.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px"><img src="'+d+'" style="max-height:90px;border-radius:8px;display:block"><span onclick="_commentImg=null;document.getElementById(\'comment-img-prev\').innerHTML=\'\';" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer">&times;</span></div>';
+    if(prev) prev.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px"><img src="'+d+'" style="max-height:90px;border-radius:8px;display:block"><span onclick="_commentImg=null;document.getElementById(\'comment-img-prev\').innerHTML=\'\';" style="position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer">&times;</span></div>';
   });
 }
 
@@ -409,7 +409,7 @@ function renderCommentsList(eid) {
         '<span style="font-weight:600;font-size:13px">'+esc(c.name||c.username)+'</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+
           '<span style="font-size:11px;color:var(--text-3)">'+dtStr+'</span>'+
-          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px" onclick="deleteComment(\''+eid+'\',\''+idx+'\')"></i>' : '')+
+          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px;padding:8px;margin:-8px" onclick="deleteComment(\''+eid+'\',\''+idx+'\')"></i>' : '')+
         '</span>'+
       '</div>'+
       (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
