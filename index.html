@@ -74,7 +74,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .oom-pts{margin-left:auto;font-weight:600;font-size:16px;color:var(--green-dark)}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal{background:var(--surface);border-radius:14px;padding:1.5rem;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
-.modal-wide{max-width:560px}
+.modal-wide{max-width:640px}
 .tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:13px;background:var(--surface2);border:1px solid var(--border);color:var(--text-2);margin:3px;cursor:pointer;transition:all .12s}
 .tag.selected{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
 .img-preview{width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);margin-bottom:8px;display:block}
@@ -132,10 +132,43 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 
 <div class="wrap">
 
+<div id="login-screen" style="display:none;max-width:360px;margin:60px auto 0">
+  <div class="card">
+    <h2 style="margin-bottom:4px">Logga in</h2>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:18px">Älvsjö Players Tour</p>
+    <form id="login-form">
+      <div class="field"><label>Användarnamn</label><input id="login-username" type="text" autocomplete="username"></div>
+      <div class="field"><label>Lösenord</label><input id="login-password" type="password" autocomplete="current-password"></div>
+      <div id="login-error" style="color:var(--danger-text);font-size:13px;margin-bottom:10px;display:none"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Logga in</button>
+    </form>
+  </div>
+</div>
+
+<div id="user-bar" style="display:none;display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;color:var(--text-2)">
+  <span><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
+  <span style="display:flex;gap:10px">
+    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600" onclick="showUsersView()"><i class="ti ti-users-group"></i> Användare</span>
+    <span style="cursor:pointer" onclick="openChangePassword()"><i class="ti ti-key"></i> Byt lösenord</span>
+    <span style="cursor:pointer" onclick="logout()"><i class="ti ti-logout"></i> Logga ut</span>
+  </span>
+</div>
+
+<div id="users-screen" style="display:none">
+  <div class="tours-header">
+    <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> Tourer</button>
+    <h2 style="margin:0;flex:1;text-align:right">Användare</h2>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-bottom:16px">
+    <button class="btn btn-primary btn-sm" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
+  </div>
+  <div id="users-list"></div>
+</div>
+
 <div id="tours-screen">
   <div class="tours-header">
     <h2 style="margin:0">Mina tourer</h2>
-    <button class="btn btn-primary btn-sm" onclick="openNewTourWizard()"><i class="ti ti-plus"></i> Ny tour</button>
+    <button class="btn btn-primary btn-sm" id="new-tour-btn" onclick="openNewTourWizard()"><i class="ti ti-plus"></i> Ny tour</button>
   </div>
   <div id="tours-list"></div>
 </div>
@@ -157,7 +190,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="view-players" class="view active">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
       <h2 style="margin:0">Spelare</h2>
-      <button class="btn btn-primary btn-sm" onclick="openAddPlayer(null)"><i class="ti ti-plus"></i> Lägg till</button>
+      <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer(null)"><i class="ti ti-plus"></i> Lägg till</button>
     </div>
     <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
   </div>
@@ -242,11 +275,21 @@ function initFirebaseSync(onFirstLoad) {
     if (doc.exists && doc.data().data) {
       var incoming = JSON.parse(doc.data().data);
       S.tours = incoming.tours || [];
+      S.users = incoming.users || [];
     } else {
       S.tours = [];
+      S.users = [];
     }
     if (!firebaseReady) {
       firebaseReady = true;
+      if (!S.users.length) {
+        // First-ever run: seed a default admin account.
+        S.users.push({ username: 'admin', passHash: simpleHash('admin123'), role: 'admin', tourAccess: [] });
+        save();
+        setTimeout(function(){
+          alert('Första admin-kontot skapades automatiskt:\n\nAnvändarnamn: admin\nLösenord: admin123\n\nByt lösenord direkt efter inloggning!');
+        }, 500);
+      }
       onFirstLoad();
     } else {
       // Data changed remotely (another visitor edited something) — re-render current view.
@@ -370,13 +413,14 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 function showCropModal(dataUrl, cH, cb) {
   crop.cb = cb;
   var h = '<h3 style="margin-bottom:6px">Välj bildutsnitt</h3>';
-  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma</p>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma &nbsp;·&nbsp; Rutan visar exakt hur bilden sparas</p>';
   h += '<div id="crop-box" style="position:relative;width:100%;height:'+cH+'px;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" id="crop-save-btn"><i class="ti ti-check"></i> Använd utsnitt</button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, true);
   setTimeout(function() {
     var box = document.getElementById('crop-box');
     if(!box) return;
@@ -409,13 +453,41 @@ var _lastPinchDist=0;
 function cropTS(e){e.preventDefault();if(e.touches.length===1){crop.drag=true;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;function tm(e){if(!crop.drag)return;if(e.touches.length===2){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(_lastPinchDist){var delta=d/_lastPinchDist;cropZoom(delta,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);}_lastPinchDist=d;return;}crop.x+=e.touches[0].clientX-crop.lx;crop.y+=e.touches[0].clientY-crop.ly;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;cropClamp();cropRender();}function tu(){crop.drag=false;_lastPinchDist=0;document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);}document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu);}}
 function cropWheel(e){e.preventDefault();var box=document.getElementById('crop-box');if(!box)return;var rect=box.getBoundingClientRect();cropZoom(e.deltaY<0?1.08:0.93,e.clientX-rect.left,e.clientY-rect.top);}
 function cropZoom(factor,cx,cy){var newScale=Math.max(crop.minScale,crop.scale*factor);crop.x=cx-(cx-crop.x)*(newScale/crop.scale);crop.y=cy-(cy-crop.y)*(newScale/crop.scale);crop.scale=newScale;cropClamp();cropRender();}
-function cropCommit(){var c=document.createElement('canvas');c.width=crop.cW;c.height=crop.cH;var ctx=c.getContext('2d');ctx.drawImage(crop.imgEl,-crop.x/crop.scale,-crop.y/crop.scale,crop.imgEl.naturalWidth,crop.imgEl.naturalHeight,0,0,crop.imgEl.naturalWidth*crop.scale,crop.imgEl.naturalHeight*crop.scale);var result=c.toDataURL('image/jpeg',0.82);var cb=crop.cb;crop.active=false;closeModal();if(cb)cb(result);}
+function cropCommit(){
+  // Render the output at a fixed high resolution (independent of the on-screen
+  // crop box size) so the result stays sharp even when later displayed at full
+  // container width (~700px) on high-DPI screens.
+  var OUTPUT_W = 1000;
+  var aspect = crop.cH / crop.cW;
+  var outW = OUTPUT_W, outH = Math.round(OUTPUT_W * aspect);
+  var c=document.createElement('canvas');
+  c.width=outW; c.height=outH;
+  var ctx=c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  var scaleUp = outW / crop.cW;
+  ctx.drawImage(
+    crop.imgEl,
+    -crop.x/crop.scale, -crop.y/crop.scale,
+    crop.imgEl.naturalWidth, crop.imgEl.naturalHeight,
+    0, 0,
+    crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
+  );
+  var result=c.toDataURL('image/jpeg',0.9);
+  var cb=crop.cb;crop.active=false;closeModal();if(cb)cb(result);
+}
 
 // ── TOURS LIST ─────────────────────────────────────────────────────────────
 function renderToursList() {
   var el = document.getElementById('tours-list');
-  if(!S.tours.length){el.innerHTML='<p class="empty">Inga tourer ännu. Skapa din första!</p>';return;}
-  el.innerHTML = S.tours.map(function(t) {
+  var tours = visibleTours();
+  document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
+  if(!tours.length){
+    el.innerHTML = isAdmin()
+      ? '<p class="empty">Inga tourer ännu. Skapa din första!</p>'
+      : '<p class="empty">Du har inte fått åtkomst till någon tour ännu. Kontakta din admin.</p>';
+    return;
+  }
+  el.innerHTML = tours.map(function(t) {
     var n=(t.events||[]).length, cl=(t.events||[]).filter(function(e){return e.closed;}).length;
     var finalsCount=(t.events||[]).filter(function(e){return e.isFinal;}).length;
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
@@ -430,7 +502,7 @@ function renderToursList() {
         '</div>'+
         '<div class="row" style="gap:6px">'+
           '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();enterTour(\''+t.id+'\')"><i class="ti ti-arrow-right"></i> Öppna</button>'+
-          '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delTour(\''+t.id+'\')"><i class="ti ti-trash"></i></button>'+
+          (isAdmin() ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delTour(\''+t.id+'\')"><i class="ti ti-trash"></i></button>' : '')+
         '</div>'+
       '</div>'+
     '</div>';
@@ -483,7 +555,7 @@ function wizStep1() {
 
 function handleWizImg(file) {
   wizSaveStep1Fields();
-  compressImage(file, 1400, 1200, 0.85, function(d) {
+  compressImage(file, 1600, 1400, 0.88, function(d) {
     showCropModal(d, 160, function(cropped) {
       wiz.img = cropped;
       wizStep1();
@@ -530,7 +602,14 @@ function wizStep2() {
   var h = '<h3>'+(ev.isFinal?'Final':'Deltävling')+' '+(i+1)+' av '+total+'</h3>';
   h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
   h += '<div class="field"><label>Bana</label><input id="w-ev-course" type="text" value="'+esc(ev.course)+'" placeholder="t.ex. Haninge GK"></div>';
-  h += '<div class="field"><label>Datum</label><input id="w-ev-date" type="date" value="'+ev.date+'"></div>';
+  h += '<div class="field"><label>Datum (ordinarie)</label><input id="w-ev-date" type="date" value="'+ev.date+'"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  h += '<label style="margin-bottom:8px;display:block"><i class="ti ti-calendar-stats"></i> Speltidsperiod</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin-bottom:8px">Spelare kan välja vilket datum inom perioden de avser spela.</p>';
+  h += '<div class="row" style="gap:8px">';
+  h += '<div style="flex:1"><label style="font-size:11px">Från</label><input id="w-ev-pstart" type="date" value="'+(ev.periodStart||ev.date||'')+'"></div>';
+  h += '<div style="flex:1"><label style="font-size:11px">Till</label><input id="w-ev-pend" type="date" value="'+(ev.periodEnd||ev.date||'')+'"></div>';
+  h += '</div></div>';
   h += '<div class="field"><label>Typ</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="w-etype" value="slag" '+(ev.type!=='stableford'?'checked':'')+' style="width:auto;margin:0"> Slag</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="w-etype" value="stableford" '+(ev.type==='stableford'?'checked':'')+' style="width:auto;margin:0"> Stableford</label>';
@@ -564,7 +643,7 @@ function wizStep2() {
 
 function handleWizEvImg(file) {
   wizStep2SaveCurrent();
-  compressImage(file, 1400, 1200, 0.85, function(d) {
+  compressImage(file, 1600, 1400, 0.88, function(d) {
     showCropModal(d, 160, function(cropped) {
       wiz.events[wiz.stepIdx].img = cropped;
       wizStep2();
@@ -577,6 +656,10 @@ function wizStep2SaveCurrent() {
   ev.name = document.getElementById('w-ev-name').value.trim();
   ev.course = document.getElementById('w-ev-course').value.trim();
   ev.date = document.getElementById('w-ev-date').value;
+  var pStartEl = document.getElementById('w-ev-pstart');
+  var pEndEl = document.getElementById('w-ev-pend');
+  if(pStartEl) ev.periodStart = pStartEl.value || ev.date;
+  if(pEndEl) ev.periodEnd = pEndEl.value || ev.date;
   var t = document.querySelector('input[name="w-etype"]:checked');
   ev.type = t ? t.value : 'slag';
   var majorEl = document.getElementById('w-ev-major');
@@ -651,6 +734,7 @@ function wizFinish() {
   wizStep3SaveCurrent();
   var events = wiz.events.map(function(ev) {
     return { id:uid(), name:ev.name, course:ev.course, date:ev.date, type:ev.type,
+      periodStart: ev.periodStart||ev.date, periodEnd: ev.periodEnd||ev.date,
       isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: ev.img||null, registrations:[], results:[], closed:false };
   });
   var tour = {
@@ -672,14 +756,15 @@ function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
 // ── PLAYERS ────────────────────────────────────────────────────────────────
 function renderPlayers() {
   var t=getTour(), el=document.getElementById('players-list');
+  document.getElementById('add-player-btn').style.display = isAdmin() ? '' : 'none';
   if(!t.players.length){el.innerHTML='<p class="empty">Inga spelare ännu.</p>';return;}
   el.innerHTML=t.players.map(function(p,i){
     return '<div class="player-card">'+
       (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
       '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
       '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+'</div></div>'+
-      '<button class="btn btn-sm" onclick="openAddPlayer('+i+')"><i class="ti ti-edit"></i></button>'+
-      '<button class="btn btn-sm btn-danger" onclick="delPlayer('+i+')"><i class="ti ti-trash"></i></button>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="openAddPlayer('+i+')"><i class="ti ti-edit"></i></button>'+
+      '<button class="btn btn-sm btn-danger" onclick="delPlayer('+i+')"><i class="ti ti-trash"></i></button>' : '')+
     '</div>';
   }).join('');
 }
@@ -711,7 +796,7 @@ function openAddPlayer(editIdx) {
 }
 
 function onPlayerImgFile(file) {
-  compressImage(file, 400, 400, 0.82, function(d) {
+  compressImage(file, 600, 600, 0.88, function(d) {
     _pImg=d;
     var prev=document.getElementById('p-img-prev');
     if(prev) prev.innerHTML='<img src="'+d+'" class="avatar-preview">';
@@ -747,14 +832,21 @@ function eventCardHTML(i,e) {
   var tl=e.type==='stableford'?'Stableford':'Slag';
   var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
   var t=getTour();
-  var regs=e.registrations&&e.registrations.length
-    ? e.registrations.map(function(ri){return t.players[ri]?'<span class="tag">'+t.players[ri].name+'</span>':'';}).join('')
-    : '<span style="color:var(--text-3)">Inga anmälda ännu</span>';
+  var regsRaw = e.registrations || [];
+  var regs = (regsRaw.length && typeof regsRaw[0] === 'object')
+    ? regsRaw.map(function(r){
+        var p=t.players[r.pi];
+        if(!p) return '';
+        var altDate = r.date !== e.date;
+        return '<span class="tag'+(altDate?'':'')+'">'+p.name+(altDate?' <span style="color:var(--gold);font-weight:600">('+r.date+')</span>':'')+'</span>';
+      }).join('')
+    : (regsRaw.length ? regsRaw.map(function(ri){return t.players[ri]?'<span class="tag">'+t.players[ri].name+'</span>':'';}).join('') : '');
+  if(!regs) regs = '<span style="color:var(--text-3)">Inga anmälda ännu</span>';
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
-      '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
-      '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>';
+      (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
   return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (e.img?'<img src="'+e.img+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
@@ -779,26 +871,93 @@ function eventCardHTML(i,e) {
 // ── REGISTER ───────────────────────────────────────────────────────────────
 function openRegister(i) {
   var t=getTour(), e=t.events[i], regs=e.registrations||[];
-  var tags=t.players.length
+  if(!e.periodStart) e.periodStart = e.date;
+  if(!e.periodEnd) e.periodEnd = e.date;
+  // regs is an array of {pi, date}. Migrate old format (plain pi numbers) if present.
+  regs = regs.map(function(r){ return (typeof r === 'object') ? r : {pi:r, date:e.date}; });
+  e.registrations = regs;
+
+  var rows = t.players.length
     ? t.players.map(function(p,pi){
-        return '<span class="tag'+(regs.indexOf(pi)>=0?' selected':'')+'" onclick="toggleReg('+i+','+pi+',this)">'+
-          (p.img?'<img src="'+p.img+'" style="width:18px;height:18px;border-radius:50%;object-fit:cover" alt="">':'')+
-          ' '+p.name+'</span>';
+        var reg = regs.find(function(r){return r.pi===pi;});
+        var checked = !!reg;
+        var dateVal = reg ? reg.date : e.date;
+        return '<div class="row" style="margin-bottom:8px;gap:8px;align-items:center">'+
+          '<label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;font-weight:400">'+
+            '<input type="checkbox" class="reg-cb" data-pi="'+pi+'" '+(checked?'checked':'')+' style="width:auto;margin:0" onchange="onRegCbChange('+i+','+pi+',this)">'+
+            (p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover" alt="">':'<div class="avatar-ph" style="width:24px;height:24px;font-size:10px">'+ini(p.name)+'</div>')+
+            ' '+p.name+
+          '</label>'+
+          '<input type="date" id="reg-date-'+pi+'" style="width:140px;margin:0" min="'+e.periodStart+'" max="'+e.periodEnd+'" value="'+dateVal+'" '+(checked?'':'disabled')+' onchange="onRegDateChange('+i+','+pi+',this)">'+
+        '</div>';
       }).join('')
     : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
-  showModal('<h3>Anmälningar – '+e.name+'</h3>'+
-    '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Klicka på namn för att anmäla/avanmäla</p>'+
-    '<div>'+tags+'</div>'+
-    '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
-    '<button class="btn btn-primary" onclick="closeModal()">Klar</button></div>');
+
+  var h = '<h3>Anmälningar – '+e.name+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-calendar"></i> Speltidsperiod: '+e.periodStart+' &ndash; '+e.periodEnd+' (ordinarie datum: '+e.date+')</p>';
+  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Kryssa i och välj vilket datum spelaren avser spela.</p>';
+  h += rows;
+  h += '<hr class="divider">';
+  h += buildDateGroupingHTML(e, t);
+  h += '<div class="row" style="justify-content:flex-end;margin-top:16px">';
+  h += '<button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
+  showModal(h, true);
 }
 
-function toggleReg(ei,pi,el) {
-  var e=getTour().events[ei]; if(!e.registrations) e.registrations=[];
-  var idx=e.registrations.indexOf(pi);
-  if(idx>=0){e.registrations.splice(idx,1);el.classList.remove('selected');}
-  else{e.registrations.push(pi);el.classList.add('selected');}
+function buildDateGroupingHTML(e, t) {
+  var regs = e.registrations || [];
+  if(!regs.length) return '';
+  var groups = {};
+  regs.forEach(function(r){
+    if(!groups[r.date]) groups[r.date] = [];
+    var p = t.players[r.pi];
+    if(p) groups[r.date].push(p.name);
+  });
+  var dates = Object.keys(groups).sort();
+  if(!dates.length) return '';
+  var html = '<div class="section-title">Spelare per datum</div>';
+  html += dates.map(function(d){
+    var isOfficial = d === e.date;
+    return '<div class="row" style="margin-bottom:6px;gap:8px;align-items:flex-start">'+
+      '<span class="badge '+(isOfficial?'badge-green':'badge-gold')+'" style="flex-shrink:0;white-space:nowrap">'+d+(isOfficial?' (ordinarie)':'')+'</span>'+
+      '<span style="font-size:13px;color:var(--text-2)">'+groups[d].join(', ')+(groups[d].length>1?' &nbsp;<i class="ti ti-users" style="color:var(--green-dark)"></i>':'')+'</span>'+
+    '</div>';
+  }).join('');
+  return html;
+}
+
+function onRegCbChange(ei, pi, cb) {
+  var e = getTour().events[ei];
+  if(!e.registrations) e.registrations = [];
+  var dateInp = document.getElementById('reg-date-'+pi);
+  if(cb.checked) {
+    dateInp.disabled = false;
+    var existing = e.registrations.find(function(r){return r.pi===pi;});
+    if(!existing) e.registrations.push({pi:pi, date: dateInp.value || e.date});
+  } else {
+    dateInp.disabled = true;
+    e.registrations = e.registrations.filter(function(r){return r.pi!==pi;});
+  }
   save();
+  refreshRegisterModal(ei);
+}
+
+function onRegDateChange(ei, pi, inp) {
+  var e = getTour().events[ei];
+  var reg = (e.registrations||[]).find(function(r){return r.pi===pi;});
+  if(reg) { reg.date = inp.value; save(); refreshRegisterModal(ei); }
+}
+
+function refreshRegisterModal(ei) {
+  // Re-render just the date grouping section without closing the modal / losing focus
+  var t = getTour(), e = t.events[ei];
+  var groupEl = document.querySelector('#modal-mc .section-title');
+  var container = groupEl ? groupEl.parentElement : null;
+  // Simplicity: just rebuild the whole modal content (cheap), but keep scroll position acceptable for this list size
+  var scrollTop = document.querySelector('#modal-mc .modal') ? document.querySelector('#modal-mc .modal').scrollTop : 0;
+  openRegister(ei);
+  var modalEl = document.querySelector('#modal-mc .modal');
+  if(modalEl) modalEl.scrollTop = scrollTop;
 }
 
 // ── RESULTS INPUT ──────────────────────────────────────────────────────────
@@ -835,7 +994,9 @@ function computeOOM(t) {
 
 function openResults(i) {
   var t=getTour(), e=t.events[i]; _wImg=null;
-  var regs=(e.registrations||[]).filter(function(pi){return t.players[pi];});
+  var regsRaw = e.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var regs = regPis.filter(function(pi){return t.players[pi];});
   if(!regs.length){alert('Inga anmälda spelare.');return;}
   var isStab=e.type==='stableford';
   var rows=regs.map(function(pi){
@@ -875,7 +1036,7 @@ function openResults(i) {
 }
 
 function onWinnerImgFile(file) {
-  compressImage(file, 1200, 900, 0.82, function(d) {
+  compressImage(file, 1400, 1100, 0.88, function(d) {
     showCropModal(d, 220, function(cropped) {
       _wImg=cropped;
       var prev=document.getElementById('w-img-prev');
@@ -1205,10 +1366,250 @@ function updateHero(tourId) {
   }
 }
 
+// ── AUTH STATE ─────────────────────────────────────────────────────────────
+var currentUser = null; // { username, role: 'admin'|'user', tourAccess: [tourId,...] }
+var USERS_DOC_REF = null; // set after db init
+
+function simpleHash(str) {
+  // Lightweight non-cryptographic hash, sufficient for a private friends' tour site.
+  // Not meant to withstand serious attack — adequate for casual protection.
+  var h = 0;
+  for (var i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return 'h' + (h >>> 0).toString(36) + '_' + str.length;
+}
+
+function getUsers() { return S.users || []; }
+function findUser(username) {
+  return getUsers().find(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
+}
+
+// ── LOGIN SCREEN ───────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('hero-bg').style.display = 'none';
+  setTimeout(function(){
+    var f = document.getElementById('login-form');
+    if(f) f.onsubmit = function(e){ e.preventDefault(); doLogin(); return false; };
+  }, 30);
+}
+
+function doLogin() {
+  var u = document.getElementById('login-username').value.trim();
+  var p = document.getElementById('login-password').value;
+  var errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if(!u || !p) { errEl.textContent = 'Fyll i användarnamn och lösenord.'; errEl.style.display=''; return; }
+  var user = findUser(u);
+  if(!user || user.passHash !== simpleHash(p)) {
+    errEl.textContent = 'Fel användarnamn eller lösenord.';
+    errEl.style.display = '';
+    return;
+  }
+  currentUser = user;
+  sessionStorage.setItem('tourapp_session', JSON.stringify({username:user.username}));
+  afterLogin();
+}
+
+function tryAutoLogin() {
+  var raw = sessionStorage.getItem('tourapp_session');
+  if(!raw) return false;
+  try {
+    var sess = JSON.parse(raw);
+    var user = findUser(sess.username);
+    if(user) { currentUser = user; return true; }
+  } catch(e) {}
+  return false;
+}
+
+function logout() {
+  sessionStorage.removeItem('tourapp_session');
+  currentUser = null;
+  location.reload();
+}
+
+function afterLogin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('hero-bg').style.display = '';
+  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+  document.getElementById('user-bar').style.display = '';
+  if(currentUser.role === 'admin') {
+    document.getElementById('nav-users-btn').style.display = '';
+  }
+  showToursView();
+}
+
+// ── PASSWORD CHANGE (self-service) ──────────────────────────────────────────
+function openChangePassword() {
+  var h = '<h3>Byt lösenord</h3>';
+  h += '<div class="field"><label>Nuvarande lösenord</label><input id="cp-old" type="password"></div>';
+  h += '<div class="field"><label>Nytt lösenord</label><input id="cp-new" type="password"></div>';
+  h += '<div class="field"><label>Bekräfta nytt lösenord</label><input id="cp-new2" type="password"></div>';
+  h += '<div id="cp-error" style="color:var(--danger-text);font-size:13px;margin-bottom:8px;display:none"></div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="submitChangePassword()">Byt lösenord</button>';
+  h += '</div>';
+  showModal(h);
+}
+
+function submitChangePassword() {
+  var oldP = document.getElementById('cp-old').value;
+  var newP = document.getElementById('cp-new').value;
+  var newP2 = document.getElementById('cp-new2').value;
+  var err = document.getElementById('cp-error');
+  if(simpleHash(oldP) !== currentUser.passHash) { err.textContent='Fel nuvarande lösenord.'; err.style.display=''; return; }
+  if(!newP || newP.length < 4) { err.textContent='Nytt lösenord måste vara minst 4 tecken.'; err.style.display=''; return; }
+  if(newP !== newP2) { err.textContent='Lösenorden matchar inte.'; err.style.display=''; return; }
+  var u = findUser(currentUser.username);
+  u.passHash = simpleHash(newP);
+  currentUser.passHash = u.passHash;
+  save();
+  closeModal();
+  alert('Lösenord ändrat!');
+}
+
+// ── ADMIN: USER MANAGEMENT ─────────────────────────────────────────────────
+function showUsersView() {
+  document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = '';
+  updateHero(null);
+  renderUsersList();
+}
+
+function renderUsersList() {
+  var el = document.getElementById('users-list');
+  var users = getUsers();
+  if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
+  el.innerHTML = users.map(function(u, i) {
+    var tourNames = (u.tourAccess||[]).map(function(tid){
+      var t = S.tours.find(function(x){return x.id===tid;});
+      return t ? t.name : null;
+    }).filter(Boolean);
+    return '<div class="card">'+
+      '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
+        '<div>'+
+          '<div style="font-weight:600;font-size:16px">'+u.username+'</div>'+
+          '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>'+
+        '</div>'+
+        '<div class="row" style="gap:6px">'+
+          '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
+          (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
+        '</div>'+
+      '</div>'+
+      (u.role!=='admin' ? '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>' : '<div style="font-size:13px;color:var(--text-2)">Admin ser alla tourer</div>')+
+    '</div>';
+  }).join('');
+}
+
+function openNewUser() {
+  var h = '<h3>Ny användare</h3>';
+  h += '<div class="field"><label>Användarnamn</label><input id="u-username" type="text" placeholder="t.ex. namn eller e-post"></div>';
+  h += '<div class="field"><label>Lösenord</label><input id="u-password" type="text" placeholder="Ange ett lösenord"></div>';
+  h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" checked style="width:auto;margin:0"> Användare</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" style="width:auto;margin:0"> Admin</label>';
+  h += '</div></div>';
+  h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
+  h += S.tours.length
+    ? S.tours.map(function(t){ return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-weight:400;font-size:14px"><input type="checkbox" class="u-tour-cb" value="'+t.id+'" style="width:auto;margin:0"> '+t.name+'</label>'; }).join('')
+    : '<p style="font-size:13px;color:var(--text-3)">Inga tourer skapade ännu.</p>';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveNewUser()">Skapa användare</button>';
+  h += '</div>';
+  showModal(h);
+  setTimeout(function(){
+    var roleRadios = document.querySelectorAll('input[name="u-role"]');
+    roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+  }, 30);
+}
+
+function saveNewUser() {
+  var username = document.getElementById('u-username').value.trim();
+  var password = document.getElementById('u-password').value;
+  if(!username || !password) { alert('Användarnamn och lösenord krävs.'); return; }
+  if(findUser(username)) { alert('Användarnamnet finns redan.'); return; }
+  var role = document.querySelector('input[name="u-role"]:checked').value;
+  var tourAccess = [];
+  if(role !== 'admin') {
+    document.querySelectorAll('.u-tour-cb:checked').forEach(function(cb){ tourAccess.push(cb.value); });
+  }
+  if(!S.users) S.users = [];
+  S.users.push({ username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess });
+  save(); closeModal(); renderUsersList();
+}
+
+function openEditUser(i) {
+  var u = getUsers()[i];
+  var h = '<h3>Redigera ' + u.username + '</h3>';
+  h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
+  h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" '+(u.role!=='admin'?'checked':'')+' style="width:auto;margin:0"> Användare</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
+  h += '</div></div>';
+  h += '<div class="field" id="u-tour-access-field" style="'+(u.role==='admin'?'display:none':'')+'"><label>Tour-åtkomst</label>';
+  h += S.tours.length
+    ? S.tours.map(function(t){ var checked=(u.tourAccess||[]).indexOf(t.id)>=0; return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-weight:400;font-size:14px"><input type="checkbox" class="u-tour-cb" value="'+t.id+'" '+(checked?'checked':'')+' style="width:auto;margin:0"> '+t.name+'</label>'; }).join('')
+    : '<p style="font-size:13px;color:var(--text-3)">Inga tourer skapade ännu.</p>';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveEditUser('+i+')">Spara</button>';
+  h += '</div>';
+  showModal(h);
+  setTimeout(function(){
+    var roleRadios = document.querySelectorAll('input[name="u-role"]');
+    roleRadios.forEach(function(r){ r.onchange = function(){ document.getElementById('u-tour-access-field').style.display = (this.value==='admin') ? 'none' : ''; }; });
+  }, 30);
+}
+
+function saveEditUser(i) {
+  var u = getUsers()[i];
+  var newPass = document.getElementById('u-password').value;
+  if(newPass) u.passHash = simpleHash(newPass);
+  u.role = document.querySelector('input[name="u-role"]:checked').value;
+  if(u.role !== 'admin') {
+    var tourAccess = [];
+    document.querySelectorAll('.u-tour-cb:checked').forEach(function(cb){ tourAccess.push(cb.value); });
+    u.tourAccess = tourAccess;
+  } else {
+    u.tourAccess = [];
+  }
+  if(currentUser.username === u.username) currentUser = u;
+  save(); closeModal(); renderUsersList();
+}
+
+function delUser(i) {
+  var u = getUsers()[i];
+  if(u.username === currentUser.username) { alert('Du kan inte ta bort dig själv.'); return; }
+  if(!confirm('Ta bort användaren "'+u.username+'"?')) return;
+  S.users.splice(i,1);
+  save(); renderUsersList();
+}
+
+// ── ACCESS CONTROL HELPERS ──────────────────────────────────────────────────
+function visibleTours() {
+  if(currentUser.role === 'admin') return S.tours;
+  return S.tours.filter(function(t){ return (currentUser.tourAccess||[]).indexOf(t.id) >= 0; });
+}
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+
+
 initFirebaseSync(function() {
   var ls = document.getElementById('loading-screen');
   if (ls) ls.style.display = 'none';
-  showToursView();
+  if (tryAutoLogin()) {
+    afterLogin();
+  } else {
+    showLoginScreen();
+  }
 });
 
 </script>
