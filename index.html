@@ -1807,6 +1807,7 @@ function updateHero(tourId) {
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
 var currentUser = null; // { username, role: 'admin'|'user', tourAccess: [tourId,...] }
+var impersonatorAdmin = null; // set to the real admin's username while impersonating another user
 var USERS_DOC_REF = null; // set after db init
 
 function simpleHash(str) {
@@ -1880,12 +1881,49 @@ function afterLogin() {
     document.getElementById('nav-users-btn').style.display = '';
   }
   showToursView();
+  renderImpersonationBanner();
   if(!currentUser.golfId || currentUser.golfId.length !== 10) {
     setTimeout(function(){
       alert('Du saknar ett giltigt Golf-ID (10 tecken). Fyll i det i din profil för att kunna fortsätta.');
       openMyProfile();
     }, 200);
   }
+}
+
+function impersonateUser(username) {
+  var target = findUser(username);
+  if(!target) return;
+  if(target.role === 'admin') { alert('Du kan inte logga in som en annan admin.'); return; }
+  if(!confirm('Logga in som '+(target.name||target.username)+'? Du kan gå tillbaka till ditt eget konto när du vill.')) return;
+  impersonatorAdmin = currentUser.username;
+  currentUser = target;
+  document.getElementById('user-badge').textContent = currentUser.username;
+  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'none';
+  renderImpersonationBanner();
+  showToursView();
+}
+
+function stopImpersonating() {
+  if(!impersonatorAdmin) return;
+  var admin = findUser(impersonatorAdmin);
+  impersonatorAdmin = null;
+  if(!admin) { logout(); return; }
+  currentUser = admin;
+  document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
+  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = '';
+  renderImpersonationBanner();
+  showToursView();
+}
+
+function renderImpersonationBanner() {
+  var existing = document.getElementById('impersonation-banner');
+  if(existing) existing.remove();
+  if(!impersonatorAdmin) return;
+  var bar = document.createElement('div');
+  bar.id = 'impersonation-banner';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:600;background:#BA7517;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  bar.innerHTML = '<i class="ti ti-user-shield"></i> Du är inloggad som '+esc(currentUser.name||currentUser.username)+' <button class="btn btn-sm" style="background:#fff;color:#BA7517;border:none" onclick="stopImpersonating()">Avsluta</button>';
+  document.body.insertBefore(bar, document.body.firstChild);
 }
 
 // ── PASSWORD CHANGE (self-service) ──────────────────────────────────────────
@@ -2003,6 +2041,7 @@ function renderUsersList() {
           (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
         '</div>'+
         '<div class="row" style="gap:6px">'+
+          (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
           '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
           (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
         '</div>'+
