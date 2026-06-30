@@ -329,6 +329,13 @@ function refreshCurrentView() {
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function ini(n) { return n.trim().split(/\s+/).map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
+function weekdaySv(dateStr) {
+  if(!dateStr) return '';
+  var days = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
+  var d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return '';
+  return days[d.getDay()];
+}
 
 function compressImage(file, maxW, maxH, quality, cb) {
   maxW=maxW||1200; maxH=maxH||900; quality=quality||0.75;
@@ -840,15 +847,30 @@ function eventCardHTML(i,e) {
   var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
   var t=getTour();
   var regsRaw = e.registrations || [];
-  var regs = (regsRaw.length && typeof regsRaw[0] === 'object')
-    ? regsRaw.map(function(r){
-        var p=t.players[r.pi];
-        if(!p) return '';
-        var altDate = r.date !== e.date;
-        return '<span class="tag'+(altDate?'':'')+'">'+p.name+(altDate?' <span style="color:var(--gold);font-weight:600">('+r.date+')</span>':'')+'</span>';
-      }).join('')
-    : (regsRaw.length ? regsRaw.map(function(ri){return t.players[ri]?'<span class="tag">'+t.players[ri].name+'</span>':'';}).join('') : '');
-  if(!regs) regs = '<span style="color:var(--text-3)">Inga anmälda ännu</span>';
+  var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
+
+  var regsTable = '';
+  if(regs.length) {
+    var rows = regs.map(function(r){
+      var p = t.players[r.pi];
+      if(!p) return '';
+      var altDate = r.date !== e.date;
+      var timeStr = '';
+      if(e.teeGroups) {
+        var g = e.teeGroups.find(function(gr){ return gr.date===r.date && gr.playerPis.indexOf(r.pi)>=0; });
+        if(g && g.time) timeStr = g.time;
+      }
+      return '<tr>'+
+        '<td>'+p.name+'</td>'+
+        '<td>'+r.date+' ('+weekdaySv(r.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')+'</td>'+
+        '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  } else {
+    regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga anmälda ännu</p>';
+  }
+
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
