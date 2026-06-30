@@ -221,7 +221,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="cal-events-list"></div>
   </div>
   <div id="view-oom" class="view">
-    <div id="oom-main"><h2>Order of Merit</h2><div class="card" id="oom-list"><p class="empty">Inga resultat ännu.</p></div></div>
+    <div id="oom-main">
+      <div id="leaderboard-section"></div>
+      <h2>Leaderboard &amp; Order of Merit</h2>
+      <div class="card" id="oom-list"><p class="empty">Inga resultat ännu.</p></div>
+    </div>
     <div id="oom-profile" style="display:none"></div>
   </div>
   <div id="view-settings" class="view">
@@ -325,6 +329,10 @@ function refreshCurrentView() {
   }
   // If the tour we're viewing was deleted remotely, bounce back to the list
   if (!getTour()) { showToursView(); return; }
+  if (_openCommentsEventId && document.getElementById('comments-list')) {
+    renderCommentsList(_openCommentsEventId);
+    return;
+  }
   var visible = document.querySelector('.view.active');
   if (!visible) return;
   var id = visible.id;
@@ -333,6 +341,115 @@ function refreshCurrentView() {
   if (id === 'view-calendar')   renderCalendar();
   if (id === 'view-oom')        renderOOM();
   if (id === 'view-settings')   renderSettings();
+}
+
+// ── COMMENTS / DISKUSSIONSVÄGG ──────────────────────────────────────────────
+var _openCommentsEventId = null;
+var _commentImg = null;
+
+function findEventById(eid) {
+  var t = getTour();
+  return t.events.find(function(x){ return x.id === eid; });
+}
+
+function openComments(eid) {
+  _commentImg = null;
+  var e = findEventById(eid);
+  if(!e) return;
+  if(!e.comments) e.comments = [];
+  var h = '<h3><i class="ti ti-message-circle"></i> Diskussionsvägg – '+e.name+'</h3>';
+  h += '<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2)"></div>';
+  h += '<div class="field">';
+  h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
+  h += '</div>';
+  h += '<div id="comment-img-prev"></div>';
+  h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
+  h += '<div>';
+  h += '<button type="button" class="btn btn-sm" id="comment-img-btn"><i class="ti ti-photo"></i> Bild</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="comment-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<button class="btn btn-primary btn-sm" onclick="submitComment('+eid+')"><i class="ti ti-send"></i> Skicka</button>';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px">';
+  h += '<button class="btn" onclick="closeModal()">Stäng</button>';
+  h += '</div>';
+  showModal(h, true);
+  _openCommentsEventId = eid;
+  renderCommentsList(eid);
+  setTimeout(function(){
+    var b=document.getElementById('comment-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('comment-file-inp').click(); };
+    var inp=document.getElementById('comment-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onCommentImgFile(this.files[0]); };
+    enablePasteForInput('comment-img-btn', onCommentImgFile);
+  }, 30);
+}
+
+function onCommentImgFile(file) {
+  compressImage(file, 700, 700, 0.78, function(d) {
+    _commentImg = d;
+    var prev = document.getElementById('comment-img-prev');
+    if(prev) prev.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px"><img src="'+d+'" style="max-height:90px;border-radius:8px;display:block"><span onclick="_commentImg=null;document.getElementById(\'comment-img-prev\').innerHTML=\'\';" style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer">&times;</span></div>';
+  });
+}
+
+function renderCommentsList(eid) {
+  var e = findEventById(eid);
+  var el = document.getElementById('comments-list');
+  if(!e || !el) return;
+  var comments = e.comments || [];
+  if(!comments.length) { el.innerHTML = '<p class="empty" style="padding:1rem 0">Inga kommentarer ännu. Var först att skriva något!</p>'; return; }
+  el.innerHTML = comments.map(function(c, idx) {
+    var canDelete = isAdmin() || c.username === currentUser.username;
+    var dt = new Date(c.timestamp);
+    var dtStr = dt.toLocaleDateString('sv-SE') + ' ' + dt.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+    return '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border)">'+
+      '<div class="row" style="justify-content:space-between;margin-bottom:4px">'+
+        '<span style="font-weight:600;font-size:13px">'+esc(c.name||c.username)+'</span>'+
+        '<span style="display:flex;align-items:center;gap:8px">'+
+          '<span style="font-size:11px;color:var(--text-3)">'+dtStr+'</span>'+
+          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px" onclick="deleteComment('+eid+','+idx+')"></i>' : '')+
+        '</span>'+
+      '</div>'+
+      (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
+      (c.img ? '<img src="'+c.img+'" style="max-width:100%;border-radius:8px;margin-top:6px;display:block">' : '')+
+    '</div>';
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function submitComment(eid) {
+  var e = findEventById(eid);
+  if(!e) return;
+  var textEl = document.getElementById('comment-text');
+  var text = textEl ? textEl.value.trim() : '';
+  if(!text && !_commentImg) { alert('Skriv något eller lägg till en bild innan du skickar.'); return; }
+  if(!e.comments) e.comments = [];
+  e.comments.push({
+    username: currentUser.username,
+    name: currentUser.name || currentUser.username,
+    text: text,
+    img: _commentImg || null,
+    timestamp: Date.now()
+  });
+  _commentImg = null;
+  save();
+  if(textEl) textEl.value = '';
+  var prev = document.getElementById('comment-img-prev');
+  if(prev) prev.innerHTML = '';
+  renderCommentsList(eid);
+}
+
+function deleteComment(eid, idx) {
+  var e = findEventById(eid);
+  if(!e || !e.comments || !e.comments[idx]) return;
+  var c = e.comments[idx];
+  if(!isAdmin() && c.username !== currentUser.username) { alert('Du kan bara ta bort dina egna kommentarer.'); return; }
+  if(!confirm('Ta bort kommentaren?')) return;
+  e.comments.splice(idx, 1);
+  save();
+  renderCommentsList(eid);
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -463,7 +580,7 @@ function showModal(html, wide) {
   ov.addEventListener('click', function(e){ if(e.target===ov) closeModal(); });
   document.body.appendChild(ov);
 }
-function closeModal() { var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); }
+function closeModal() { var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null; }
 
 // ── CROP ───────────────────────────────────────────────────────────────────
 var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0, drag:false, lx:0, ly:0, cb:null };
@@ -545,7 +662,7 @@ function renderToursList() {
       : '<p class="empty">Du har inte fått åtkomst till någon tour ännu. Kontakta din admin.</p>';
     return;
   }
-  el.innerHTML = tours.map(function(t) {
+  function tourCardHTML(t) {
     var n=(t.events||[]).length, cl=(t.events||[]).filter(function(e){return e.closed;}).length;
     var finalsCount=(t.events||[]).filter(function(e){return e.isFinal;}).length;
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
@@ -564,7 +681,23 @@ function renderToursList() {
         '</div>'+
       '</div>'+
     '</div>';
-  }).join('');
+  }
+
+  var active = [], finished = [];
+  tours.forEach(function(t){
+    var events = t.events || [];
+    var allClosed = events.length > 0 && events.every(function(e){ return e.closed; });
+    (allClosed ? finished : active).push(t);
+  });
+
+  var html = '';
+  if(active.length) {
+    html += '<p class="section-title">Aktiva</p>' + active.map(tourCardHTML).join('');
+  }
+  if(finished.length) {
+    html += '<p class="section-title" style="margin-top:'+(active.length?'20px':'0')+'">Avslutade</p>' + finished.map(tourCardHTML).join('');
+  }
+  el.innerHTML = html;
 }
 
 function delTour(id) {
@@ -809,7 +942,7 @@ function wizFinish() {
   save(); closeModal(); renderToursList();
 }
 
-function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── PLAYERS ────────────────────────────────────────────────────────────────
 function renderPlayers() {
@@ -858,7 +991,23 @@ function eventCardHTML(i,e) {
   var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
 
   var regsTable = '';
-  if(regs.length) {
+  if(e.closed && e.results && e.results.length) {
+    var isStab = e.type === 'stableford';
+    var medals = ['🥇','🥈','🥉'];
+    var resultRows = e.results.map(function(r, idx){
+      var p = t.players[r.pi];
+      if(!p) return '';
+      var scoreLabel = isStab ? (r.score+' p') : (r.score+' netto');
+      if(e.isFinal && r.adjusted != null) scoreLabel += ' (just. '+r.adjusted+')';
+      return '<tr>'+
+        '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
+        '<td>'+esc(p.name)+'</td>'+
+        '<td style="text-align:right">'+scoreLabel+'</td>'+
+        (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
+      '</tr>';
+    }).join('');
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+  } else if(regs.length) {
     var sortedRegs = regs.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
     var rows = sortedRegs.map(function(r){
       var p = t.players[r.pi];
@@ -885,7 +1034,7 @@ function eventCardHTML(i,e) {
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
-  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
+  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+(e.closed?';background:var(--surface2)':'')+'">'+
     (e.img?'<img src="'+e.img+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
@@ -897,10 +1046,14 @@ function eventCardHTML(i,e) {
           (e.isMajor?'<span class="badge badge-gold"><i class="ti ti-star" style="font-size:10px"></i> Major 1.5x</span>':'')+
         '</div>'+
       '</div>'+
-      '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0">'+(e.closed?'Avslutad':'Öppen')+'</span>'+
+      '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
     '</div>'+
+    (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
     '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
-    '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+    '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:space-between">'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Diskussionsvägg'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>'+
+    '</div>'+
   '</div>';
 }
 
@@ -1132,6 +1285,65 @@ function computeOOM(t) {
     });
   });
   return Object.values(totals).sort(function(a,b){return b.pts-a.pts;});
+}
+
+function findRelevantFinal(t) {
+  var finals = t.events.filter(function(e){ return e.isFinal; });
+  if(!finals.length) return null;
+  // Prefer the first still-open final; otherwise fall back to the most recently closed one.
+  var open = finals.find(function(e){ return !e.closed; });
+  if(open) return open;
+  var closedFinals = finals.filter(function(e){ return e.closed; });
+  return closedFinals.length ? closedFinals[closedFinals.length-1] : finals[0];
+}
+
+function renderLeaderboardSection() {
+  var t = getTour();
+  var el = document.getElementById('leaderboard-section');
+  if(!el) return;
+  var final = findRelevantFinal(t);
+  if(!final) { el.innerHTML = ''; return; }
+
+  var regsRaw = final.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var pis = regPis.filter(function(pi){ return t.players[pi]; });
+  if(!pis.length) { el.innerHTML = ''; return; }
+
+  var isStab = final.type === 'stableford';
+  var rows = pis.map(function(pi){
+    var hs = getHeadStart(t, final, pi);
+    var liveResult = final.results ? final.results.find(function(r){return r.pi===pi;}) : null;
+    return { pi:pi, headStart:hs, result:liveResult };
+  });
+  // Sort by head start descending: a HIGHER head start means a bigger advantage (better position).
+  rows.sort(function(a,b){ return b.headStart - a.headStart; });
+
+  var finalLabel = final.closed ? 'Resultat' : (final.name);
+  var html = '<div class="card" style="border-color:var(--gold);box-shadow:0 0 0 1px var(--gold);margin-bottom:20px">';
+  html += '<div class="row" style="justify-content:space-between;margin-bottom:10px">';
+  html += '<h3 style="margin:0;display:flex;align-items:center;gap:6px"><i class="ti ti-flag" style="color:var(--gold)"></i> Leaderboard – '+esc(final.name)+'</h3>';
+  html += '<span class="badge '+(final.closed?'badge-gray':'badge-gold')+'">'+(final.closed?'Färdigspelad':'Kommande/pågående')+'</span>';
+  html += '</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+(final.closed?'Slutställning för finalen.':'Startläge inför finalen, baserat på ställningen i föregående OoM/final. Uppdateras inte under spelets gång.')+'</p>';
+  html += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr><th>Plac.</th><th>Spelare</th><th style="text-align:right">'+(final.closed?'Resultat':'Startläge')+'</th></tr></thead><tbody>';
+  rows.forEach(function(r, idx){
+    var p = t.players[r.pi];
+    var hsLabel = r.headStart > 0 ? ('-'+r.headStart) : 'Scratch';
+    var cell;
+    if(final.closed && r.result) {
+      var scoreLabel = isStab ? (r.result.score+'p') : (r.result.score+' netto');
+      cell = scoreLabel + ' <span style="color:var(--text-3);font-size:11px">(just. '+r.result.adjusted+')</span>';
+    } else {
+      cell = '<span style="font-weight:700;'+(r.headStart===0?'color:var(--gold)':'')+'">'+hsLabel+'</span>';
+    }
+    html += '<tr>'+
+      '<td>'+(idx+1)+'</td>'+
+      '<td>'+(p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px">':'')+esc(p.name)+'</td>'+
+      '<td style="text-align:right">'+cell+'</td>'+
+    '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
 }
 
 function openResults(i) {
@@ -1452,6 +1664,7 @@ function buildProfileHTML(pi){
 }
 
 function renderOOM(){
+  renderLeaderboardSection();
   var t=getTour(),el=document.getElementById('oom-list'),totals={};
   t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;}).forEach(function(e){
     e.results.forEach(function(r){
