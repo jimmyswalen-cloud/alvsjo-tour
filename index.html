@@ -311,6 +311,7 @@ function courseKey(name) {
 function getCourseImage(name) {
   var key = courseKey(name);
   if(!key) return null;
+  if(STATIC_COURSE_IMAGES[key]) return STATIC_COURSE_IMAGES[key];
   var entry = courseBank[key];
   if(!entry) return null;
   // Static (GitHub-hosted) images are stored as a plain filename string; uploaded ones as a data: URI.
@@ -373,6 +374,32 @@ var DOC_REF = db.collection('golfapp').doc('shared');
 var DRAFTS_REF = db.collection('golfapp').doc('tourDrafts');
 var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
 var courseBank = {}; // { courseName: base64ImageData } -- loaded from Firestore, kept in sync
+
+// Statically hosted course images (uploaded to the GitHub repo alongside index.html).
+// Matching is done on a normalized (lowercase, trimmed) name via courseKey().
+var STATIC_COURSE_IMAGES = {
+  'riksten': 'riksten.jpg',
+  'kyssinge': 'kyssinge.jpg',
+  'lindö': 'lindo.jpg',
+  'lindo': 'lindo.jpg',
+  'lövsättra': 'lovsattra.jpg',
+  'lovsattra': 'lovsattra.jpg',
+  'sofiedal': 'sofiedal.jpg',
+  'waxholm': 'waxholm.jpg',
+  'haninge strand': 'haninge-strand.jpg',
+  'haninge strand gk': 'haninge-strand.jpg',
+  'kallfors': 'kallfors.jpg',
+  'ågesta': 'agesta.jpg',
+  'agesta': 'agesta.jpg',
+  'brollsta': 'brollsta.jpg',
+  'bodaholm': 'bodaholm.jpg',
+  'bromma': 'bromma.jpg',
+  'gripsholm': 'gripsholm.jpg',
+  'hässelby': 'hasselby.jpg',
+  'hasselby': 'hasselby.jpg',
+  'hinton': 'hinton.jpg',
+  'international': 'international.jpg'
+};
 
 var S = { tours: [] };
 var firebaseReady = false;
@@ -2009,6 +2036,7 @@ function renderCourseBankSection() {
   if(!entries.length) {
     html += '<p class="empty">Inga banor sparade ännu.</p>';
   } else {
+    html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn btn-sm btn-primary" onclick="downloadAllCourseImages()"><i class="ti ti-download"></i> Ladda ner alla ('+entries.length+')</button></div>';
     html += '<div class="card" style="padding:0">';
     entries.forEach(function(e, idx){
       html += '<div class="row" style="justify-content:space-between;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
