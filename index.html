@@ -46,7 +46,7 @@ h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px}
 .btn-primary:hover{background:var(--green-dark)}
 .btn-danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-text)}
 .btn-sm{padding:5px 10px;font-size:12px}
-input[type=text],input[type=number],input[type=date],select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:8px;font-family:inherit}
+input[type=text],input[type=number],input[type=date],input[type=time],select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;background:var(--surface);color:var(--text);margin-bottom:8px;font-family:inherit}
 input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(29,158,117,.1)}
 label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-weight:500}
 .field{margin-bottom:14px}
@@ -260,9 +260,18 @@ var saveTimer = null;
 function save() {
   // Write the full state to Firestore. Debounced slightly so rapid edits
   // (e.g. typing) don't spam the network with a write per keystroke.
+  // To reduce the risk of two users' concurrent edits clobbering each other,
+  // we re-read the latest server copy right before writing and only overwrite
+  // it with our current in-memory S (this narrows, but does not eliminate,
+  // the race — a proper fix would use per-document writes instead of one blob).
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(function() {
-    DOC_REF.set({ data: JSON.stringify(S) }).catch(function(err) {
+    var payload = JSON.stringify(S);
+    var sizeKB = Math.round(payload.length / 1024);
+    if (sizeKB > 850) {
+      alert('Varning: databasen är nästan full (' + sizeKB + ' KB av max ~1000 KB). Ta bort gamla bilder eller komprimera mer för att undvika sparfel.');
+    }
+    DOC_REF.set({ data: payload }).catch(function(err) {
       console.error('Firestore save failed', err);
       alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
     });
@@ -365,6 +374,7 @@ function showToursView() {
   activeTourId = null;
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
   renderToursList();
   updateHero(null);
 }
@@ -372,6 +382,7 @@ function showToursView() {
 function enterTour(id) {
   activeTourId = id;
   document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = '';
   document.getElementById('active-tour-name').textContent = getTour().name;
   updateHero(id);
@@ -487,7 +498,7 @@ function cropCommit(){
   // Render the output at a fixed high resolution (independent of the on-screen
   // crop box size) so the result stays sharp even when later displayed at full
   // container width (~700px) on high-DPI screens.
-  var OUTPUT_W = 1000;
+  var OUTPUT_W = 900;
   var aspect = crop.cH / crop.cW;
   var outW = OUTPUT_W, outH = Math.round(OUTPUT_W * aspect);
   var c=document.createElement('canvas');
@@ -502,7 +513,7 @@ function cropCommit(){
     0, 0,
     crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
   );
-  var result=c.toDataURL('image/jpeg',0.9);
+  var result=c.toDataURL('image/jpeg',0.92);
   var cb=crop.cb;crop.active=false;closeModal();if(cb)cb(result);
 }
 
@@ -585,7 +596,7 @@ function wizStep1() {
 
 function handleWizImg(file) {
   wizSaveStep1Fields();
-  compressImage(file, 1600, 1400, 0.88, function(d) {
+  compressImage(file, 1100, 950, 0.92, function(d) {
     showCropModal(d, 160, function(cropped) {
       wiz.img = cropped;
       wizStep1();
@@ -673,7 +684,7 @@ function wizStep2() {
 
 function handleWizEvImg(file) {
   wizStep2SaveCurrent();
-  compressImage(file, 1600, 1400, 0.88, function(d) {
+  compressImage(file, 1100, 950, 0.92, function(d) {
     showCropModal(d, 160, function(cropped) {
       wiz.events[wiz.stepIdx].img = cropped;
       wizStep2();
@@ -905,20 +916,105 @@ function buildDateGroupingHTML(e, t) {
   var groups = {};
   regs.forEach(function(r){
     if(!groups[r.date]) groups[r.date] = [];
-    var p = t.players[r.pi];
-    if(p) groups[r.date].push(p.name);
+    groups[r.date].push(r.pi);
   });
   var dates = Object.keys(groups).sort();
   if(!dates.length) return '';
+  if(!e.teeGroups) e.teeGroups = [];
+
   var html = '<div class="section-title">Spelare per datum</div>';
-  html += dates.map(function(d){
-    var isOfficial = d === e.date;
-    return '<div class="row" style="margin-bottom:6px;gap:8px;align-items:flex-start">'+
-      '<span class="badge '+(isOfficial?'badge-green':'badge-gold')+'" style="flex-shrink:0;white-space:nowrap">'+d+(isOfficial?' (ordinarie)':'')+'</span>'+
-      '<span style="font-size:13px;color:var(--text-2)">'+groups[d].join(', ')+(groups[d].length>1?' &nbsp;<i class="ti ti-users" style="color:var(--green-dark)"></i>':'')+'</span>'+
-    '</div>';
-  }).join('');
+  html += '<table class="hist-table" style="margin-bottom:16px"><thead><tr><th>Spelare</th><th>Speldatum</th></tr></thead><tbody>';
+  dates.forEach(function(d){
+    groups[d].forEach(function(pi, idx){
+      var p = t.players[pi];
+      if(!p) return;
+      var isOfficial = d === e.date;
+      html += '<tr>'+
+        '<td>'+p.name+'</td>'+
+        '<td>'+(idx===0 ? '<span class="badge '+(isOfficial?'badge-green':'badge-gold')+'">'+d+(isOfficial?' (ordinarie)':'')+'</span>' : '')+'</td>'+
+      '</tr>';
+    });
+  });
+  html += '</tbody></table>';
+
+  html += '<div class="section-title">Bollar (starttider)</div>';
+  dates.forEach(function(d){
+    var pisForDate = groups[d];
+    var assigned = {}; // pi -> true if already in a tee group for this date
+    e.teeGroups.filter(function(g){return g.date===d;}).forEach(function(g){
+      g.playerPis.forEach(function(pi){ assigned[pi]=true; });
+    });
+    var unassigned = pisForDate.filter(function(pi){ return !assigned[pi]; });
+
+    html += '<div class="card" style="margin-bottom:10px">';
+    html += '<div class="row" style="justify-content:space-between;margin-bottom:8px">';
+    html += '<span style="font-weight:600;font-size:14px"><i class="ti ti-calendar"></i> '+d+'</span>';
+    if(isAdmin() && unassigned.length) {
+      html += '<button class="btn btn-sm btn-primary" onclick="autoCreateTeeGroups(\''+e.id+'\',\''+d+'\')"><i class="ti ti-wand"></i> Skapa bollar</button>';
+    }
+    html += '</div>';
+
+    var groupsForDate = e.teeGroups.filter(function(g){return g.date===d;});
+    if(groupsForDate.length) {
+      groupsForDate.forEach(function(g){
+        var gIdx = e.teeGroups.indexOf(g);
+        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">';
+        html += '<div class="row" style="justify-content:space-between;margin-bottom:6px">';
+        html += isAdmin()
+          ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
+          : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
+        if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
+        html += '</div>';
+        html += '<div style="font-size:13px;color:var(--text-2)">'+g.playerPis.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
+        html += '</div>';
+      });
+    }
+    if(unassigned.length) {
+      html += '<div style="font-size:12px;color:var(--text-3);margin-top:4px">Ej tilldelade: '+unassigned.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
+    }
+    html += '</div>';
+  });
+
   return html;
+}
+
+function autoCreateTeeGroups(eid, date) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e) return;
+  if(!e.teeGroups) e.teeGroups = [];
+  var regs = (e.registrations||[]).filter(function(r){return r.date===date;});
+  var assigned = {};
+  e.teeGroups.filter(function(g){return g.date===date;}).forEach(function(g){
+    g.playerPis.forEach(function(pi){assigned[pi]=true;});
+  });
+  var unassigned = regs.map(function(r){return r.pi;}).filter(function(pi){return !assigned[pi];});
+  while(unassigned.length) {
+    var chunk = unassigned.splice(0,4);
+    e.teeGroups.push({ date: date, time: '', playerPis: chunk });
+  }
+  save();
+  // re-render in place
+  var ei = t.events.indexOf(e);
+  refreshRegisterModal(ei);
+}
+
+function setTeeGroupTime(eid, gIdx, time) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e || !e.teeGroups[gIdx]) return;
+  e.teeGroups[gIdx].time = time;
+  save();
+}
+
+function deleteTeeGroup(eid, gIdx) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e) return;
+  e.teeGroups.splice(gIdx,1);
+  save();
+  var ei = t.events.indexOf(e);
+  refreshRegisterModal(ei);
 }
 
 function onRegCbChange(ei, pi, cb) {
@@ -1031,7 +1127,7 @@ function openResults(i) {
 }
 
 function onWinnerImgFile(file) {
-  compressImage(file, 1400, 1100, 0.88, function(d) {
+  compressImage(file, 1000, 800, 0.92, function(d) {
     showCropModal(d, 220, function(cropped) {
       _wImg=cropped;
       var prev=document.getElementById('w-img-prev');
@@ -1503,8 +1599,10 @@ function renderUsersList() {
 }
 
 var _newUserImg = null;
+var _pendingTourAccess = [];
 function openNewUser() {
   _newUserImg = null;
+  _pendingTourAccess = [];
   var h = '<h3>Ny användare</h3>';
   h += '<div class="field"><label>Användarnamn (för inloggning)</label><input id="u-username" type="text" placeholder="t.ex. namn eller e-post"></div>';
   h += '<div class="field"><label>Lösenord</label><input id="u-password" type="text" placeholder="Ange ett lösenord"></div>';
@@ -1527,9 +1625,7 @@ function openNewUser() {
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" style="width:auto;margin:0"> Admin</label>';
   h += '</div></div>';
   h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
-  h += S.tours.length
-    ? S.tours.map(function(t){ return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-weight:400;font-size:14px"><input type="checkbox" class="u-tour-cb" value="'+t.id+'" style="width:auto;margin:0"> '+t.name+'</label>'; }).join('')
-    : '<p style="font-size:13px;color:var(--text-3)">Inga tourer skapade ännu.</p>';
+  h += buildTourAccessPickerHTML();
   h += '</div>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
@@ -1544,11 +1640,55 @@ function openNewUser() {
     var inp=document.getElementById('u-file-inp');
     if(inp) inp.onchange=function(){ if(this.files[0]) onNewUserImgFile(this.files[0]); };
     enablePasteForInput('u-img-btn', onNewUserImgFile);
+    var addBtn = document.getElementById('tour-access-add-btn');
+    if(addBtn) addBtn.onclick = addPendingTourAccess;
   }, 30);
 }
 
+function buildTourAccessPickerHTML() {
+  var available = S.tours.filter(function(t){ return _pendingTourAccess.indexOf(t.id) < 0; });
+  var h = '<div class="row" style="gap:8px;margin-bottom:10px">';
+  h += '<select id="tour-access-select" style="margin:0;flex:1">';
+  h += available.length
+    ? available.map(function(t){ return '<option value="'+t.id+'">'+t.name+'</option>'; }).join('')
+    : '<option value="">Inga fler tourer</option>';
+  h += '</select>';
+  h += '<button type="button" class="btn btn-sm btn-primary" id="tour-access-add-btn" '+(available.length?'':'disabled')+'><i class="ti ti-plus"></i> Lägg till</button>';
+  h += '</div>';
+  h += '<div id="tour-access-tags">';
+  h += _pendingTourAccess.length
+    ? _pendingTourAccess.map(function(tid){
+        var t = S.tours.find(function(x){return x.id===tid;});
+        if(!t) return '';
+        return '<span class="tag selected">'+t.name+' <i class="ti ti-x" style="cursor:pointer" onclick="removePendingTourAccess(\''+tid+'\')"></i></span>';
+      }).join('')
+    : '<p style="font-size:12px;color:var(--text-3)">Ingen tour vald ännu.</p>';
+  h += '</div>';
+  return h;
+}
+
+function addPendingTourAccess() {
+  var sel = document.getElementById('tour-access-select');
+  if(!sel || !sel.value) return;
+  _pendingTourAccess.push(sel.value);
+  refreshTourAccessPicker();
+}
+
+function removePendingTourAccess(tid) {
+  _pendingTourAccess = _pendingTourAccess.filter(function(x){return x!==tid;});
+  refreshTourAccessPicker();
+}
+
+function refreshTourAccessPicker() {
+  var field = document.getElementById('u-tour-access-field');
+  if(!field) return;
+  field.innerHTML = '<label>Tour-åtkomst</label>' + buildTourAccessPickerHTML();
+  var addBtn = document.getElementById('tour-access-add-btn');
+  if(addBtn) addBtn.onclick = addPendingTourAccess;
+}
+
 function onNewUserImgFile(file) {
-  compressImage(file, 600, 600, 0.88, function(d) {
+  compressImage(file, 480, 480, 0.92, function(d) {
     _newUserImg = d;
     var prev = document.getElementById('u-img-prev');
     if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
@@ -1564,10 +1704,7 @@ function saveNewUser() {
   var genderEl = document.querySelector('input[name="u-gender"]:checked');
   var hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
   var role = document.querySelector('input[name="u-role"]:checked').value;
-  var tourAccess = [];
-  if(role !== 'admin') {
-    document.querySelectorAll('.u-tour-cb:checked').forEach(function(cb){ tourAccess.push(cb.value); });
-  }
+  var tourAccess = (role !== 'admin') ? _pendingTourAccess.slice() : [];
   if(!S.users) S.users = [];
   S.users.push({
     username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
@@ -1580,6 +1717,7 @@ var _editUserImg = null;
 function openEditUser(i) {
   _editUserImg = null;
   var u = getUsers()[i];
+  _pendingTourAccess = (u.tourAccess||[]).slice();
   var h = '<h3>Redigera ' + u.username + '</h3>';
   h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
   h += '<hr class="divider">';
@@ -1601,9 +1739,7 @@ function openEditUser(i) {
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
   h += '</div></div>';
   h += '<div class="field" id="u-tour-access-field" style="'+(u.role==='admin'?'display:none':'')+'"><label>Tour-åtkomst</label>';
-  h += S.tours.length
-    ? S.tours.map(function(t){ var checked=(u.tourAccess||[]).indexOf(t.id)>=0; return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-weight:400;font-size:14px"><input type="checkbox" class="u-tour-cb" value="'+t.id+'" '+(checked?'checked':'')+' style="width:auto;margin:0"> '+t.name+'</label>'; }).join('')
-    : '<p style="font-size:13px;color:var(--text-3)">Inga tourer skapade ännu.</p>';
+  h += buildTourAccessPickerHTML();
   h += '</div>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
@@ -1618,11 +1754,13 @@ function openEditUser(i) {
     var inp=document.getElementById('u-file-inp');
     if(inp) inp.onchange=function(){ if(this.files[0]) onEditUserImgFile(this.files[0]); };
     enablePasteForInput('u-img-btn', onEditUserImgFile);
+    var addBtn = document.getElementById('tour-access-add-btn');
+    if(addBtn) addBtn.onclick = addPendingTourAccess;
   }, 30);
 }
 
 function onEditUserImgFile(file) {
-  compressImage(file, 600, 600, 0.88, function(d) {
+  compressImage(file, 480, 480, 0.92, function(d) {
     _editUserImg = d;
     var prev = document.getElementById('u-img-prev');
     if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
@@ -1640,9 +1778,7 @@ function saveEditUser(i) {
   if(_editUserImg) u.img = _editUserImg;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
   if(u.role !== 'admin') {
-    var tourAccess = [];
-    document.querySelectorAll('.u-tour-cb:checked').forEach(function(cb){ tourAccess.push(cb.value); });
-    u.tourAccess = tourAccess;
+    u.tourAccess = _pendingTourAccess.slice();
   } else {
     u.tourAccess = [];
   }
