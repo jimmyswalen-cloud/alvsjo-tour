@@ -369,7 +369,7 @@ function openComments(eid) {
   h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
   h += '<input type="file" id="comment-file-inp" accept="image/*" style="display:none">';
   h += '</div>';
-  h += '<button class="btn btn-primary btn-sm" onclick="submitComment('+eid+')"><i class="ti ti-send"></i> Skicka</button>';
+  h += '<button class="btn btn-primary btn-sm" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
   h += '</div>';
   h += '<div class="row" style="justify-content:flex-end;margin-top:12px">';
   h += '<button class="btn" onclick="closeModal()">Stäng</button>';
@@ -409,7 +409,7 @@ function renderCommentsList(eid) {
         '<span style="font-weight:600;font-size:13px">'+esc(c.name||c.username)+'</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+
           '<span style="font-size:11px;color:var(--text-3)">'+dtStr+'</span>'+
-          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px" onclick="deleteComment('+eid+','+idx+')"></i>' : '')+
+          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px" onclick="deleteComment(\''+eid+'\',\''+idx+'\')"></i>' : '')+
         '</span>'+
       '</div>'+
       (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
@@ -991,23 +991,7 @@ function eventCardHTML(i,e) {
   var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
 
   var regsTable = '';
-  if(e.closed && e.results && e.results.length) {
-    var isStab = e.type === 'stableford';
-    var medals = ['🥇','🥈','🥉'];
-    var resultRows = e.results.map(function(r, idx){
-      var p = t.players[r.pi];
-      if(!p) return '';
-      var scoreLabel = isStab ? (r.score+' p') : (r.score+' netto');
-      if(e.isFinal && r.adjusted != null) scoreLabel += ' (just. '+r.adjusted+')';
-      return '<tr>'+
-        '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
-        '<td>'+esc(p.name)+'</td>'+
-        '<td style="text-align:right">'+scoreLabel+'</td>'+
-        (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
-      '</tr>';
-    }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
-  } else if(regs.length) {
+  if(regs.length) {
     var sortedRegs = regs.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
     var rows = sortedRegs.map(function(r){
       var p = t.players[r.pi];
@@ -1034,7 +1018,7 @@ function eventCardHTML(i,e) {
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
-  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+(e.closed?';background:var(--surface2)':'')+'">'+
+  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (e.img?'<img src="'+e.img+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
