@@ -581,7 +581,7 @@ function getPlayersForTour(t) {
 }
 
 // ── MODAL ──────────────────────────────────────────────────────────────────
-function showModal(html, wide) {
+function showModal(html, wide, preventOutsideClose) {
   closeModal();
   var ov = document.createElement('div');
   ov.className = 'modal-overlay'; ov.id = 'modal-mc';
@@ -589,7 +589,7 @@ function showModal(html, wide) {
   box.className = 'modal' + (wide?' modal-wide':'');
   box.innerHTML = html;
   ov.appendChild(box);
-  ov.addEventListener('click', function(e){ if(e.target===ov) closeModal(); });
+  ov.addEventListener('click', function(e){ if(e.target===ov && !preventOutsideClose) closeModal(); });
   document.body.appendChild(ov);
 }
 function closeModal() { var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null; }
@@ -749,7 +749,7 @@ function wizStep1() {
   h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" onclick="wizToStep2()">Nästa <i class="ti ti-arrow-right"></i></button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, false, true);
   setTimeout(function(){
     var b=document.getElementById('w-img-btn');
     if(b) b.onclick=function(){ document.getElementById('w-file-inp').click(); };
@@ -835,9 +835,10 @@ function wizStep2() {
   if(ev.isFinal) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px;margin-top:10px"><i class="ti ti-flag"></i> Detta är en final &ndash; spelarna startar med slagförsprång enligt OoM-tabellen som ställs in i sista steget.</p>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:16px">';
   h += '<button class="btn" onclick="wizStep2Back()">'+(i===0?'Tillbaka':'<i class="ti ti-arrow-left"></i> Föregående')+'</button>';
+  h += '<button class="btn" style="color:var(--danger-text)" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" onclick="wizStep2Next()">'+(i===total-1?'Nästa: poängtabell':'Nästa')+' <i class="ti ti-arrow-right"></i></button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, false, true);
   setTimeout(function(){
     var b=document.getElementById('w-ev-img-btn');
     if(b) b.onclick=function(){ document.getElementById('w-ev-file-inp').click(); };
@@ -915,9 +916,10 @@ function wizStep3() {
   h += '<p style="font-size:12px;color:var(--danger-text);background:var(--danger-bg);padding:8px 10px;border-radius:8px;margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Touren låses efter skapande &ndash; strukturen (tävlingar/finaler) kan inte ändras senare.</p>';
   h += '<div class="row" style="justify-content:space-between;gap:8px">';
   h += '<button class="btn" onclick="wizStep3Back()"><i class="ti ti-arrow-left"></i> Föregående</button>';
+  h += '<button class="btn" style="color:var(--danger-text)" onclick="closeModal()">Avbryt</button>';
   h += '<button class="btn btn-primary" onclick="wizFinish()"><i class="ti ti-check"></i> Skapa tour</button>';
   h += '</div>';
-  showModal(h);
+  showModal(h, false, true);
 }
 
 function wizStep3Back() {
