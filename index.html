@@ -3063,6 +3063,7 @@ function computeOomStandings(t) {
 function buildTop3HTML(t, compact) {
   var standings = computeOomStandings(t).filter(function(s){ return s.events > 0; });
   if(!standings.length) return '';
+  var players = t.players || getPlayersForTour(t);
   var events = t.events || [];
   var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
   var top = isClosed ? standings.slice(0,1) : standings.slice(0,3);
@@ -3070,7 +3071,7 @@ function buildTop3HTML(t, compact) {
   var title = isClosed ? 'Vinnare' : 'Top 3 i ledning';
   var avatarSize = compact ? 22 : 28;
   var rows = top.map(function(s, idx){
-    var p = t.players[s.pi]; if(!p) return '';
+    var p = players[s.pi]; if(!p) return '';
     var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     var pImg = (pUser&&pUser.img) || p.img || null;
     return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border)">'+
