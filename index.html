@@ -1507,6 +1507,7 @@ function eventCardHTML(i,e) {
       (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
+      '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
   return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
@@ -1945,12 +1946,15 @@ function toggleNettoOnly(eventIdx) {
   var regsRaw = e.registrations || [];
   var regPis = (regsRaw.length && typeof regsRaw[0]==='object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
   regPis.filter(function(pi){return t.players[pi];}).forEach(function(pi){
-    var row = document.getElementById('res-'+pi);
+    var nettoEl  = document.getElementById('res-'+pi);
     var bruttoEl = document.getElementById('brutto-'+pi);
-    var shcpEl = document.getElementById('shcp-'+pi);
-    if(bruttoEl) bruttoEl.closest('div').style.display = nettoOnly ? 'none' : '';
-    if(shcpEl) shcpEl.closest('div').style.display = nettoOnly ? 'none' : '';
-    if(row) { if(nettoOnly){ row.removeAttribute('readonly'); row.placeholder='Netto'; } else { row.setAttribute('readonly',''); } }
+    var shcpEl   = document.getElementById('shcp-'+pi);
+    if(bruttoEl) bruttoEl.style.display = nettoOnly ? 'none' : '';
+    if(shcpEl)   shcpEl.style.display   = nettoOnly ? 'none' : '';
+    if(nettoEl) {
+      if(nettoOnly) { nettoEl.removeAttribute('readonly'); nettoEl.placeholder = 'Netto'; }
+      else          { nettoEl.setAttribute('readonly',''); nettoEl.placeholder = 'Netto'; }
+    }
   });
 }
 
@@ -2017,6 +2021,18 @@ function pickW(ei,from,keep,move){
   var e=getTour().events[ei];
   if(keep!==from){var tmp=e.results[keep];e.results[keep]=e.results[move];e.results[move]=tmp;}
   save(); resolveTies(ei,from+1,function(){save();closeModal();renderEvents();});
+}
+
+function changeEventType(i) {
+  var t = getTour(), e = t.events[i];
+  if(e.closed) { alert('Kan inte ändra spelform på en stängd tävling.'); return; }
+  var current = e.type === 'stableford' ? 'Stableford' : 'Slag';
+  var newType = e.type === 'stableford' ? 'slag' : 'stableford';
+  var newLabel = newType === 'stableford' ? 'Stableford' : 'Slag';
+  if(!confirm('Byt spelform för "'+e.name+'" från '+current+' till '+newLabel+'?')) return;
+  e.type = newType;
+  save();
+  renderEvents();
 }
 
 function closeEvent(i){
