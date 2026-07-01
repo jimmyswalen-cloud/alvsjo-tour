@@ -1510,13 +1510,25 @@ function renderPlayers() {
     var weaknesses = (tourUser&&tourUser.weaknesses) || [];
     var swBadges = '';
     if(strengths.length||weaknesses.length) {
-      swBadges = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px">';
-      strengths.forEach(function(s){
-        swBadges += '<span style="background:#E1F5EE;color:#0F6E56;font-size:11px;padding:2px 8px;border-radius:20px;display:flex;align-items:center;gap:3px"><i class="ti ti-arrow-up" style="font-size:11px"></i>'+esc(s)+'</span>';
-      });
-      weaknesses.forEach(function(w){
-        swBadges += '<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;padding:2px 8px;border-radius:20px;display:flex;align-items:center;gap:3px"><i class="ti ti-arrow-down" style="font-size:11px"></i>'+esc(w)+'</span>';
-      });
+      swBadges = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px">';
+      if(strengths.length) {
+        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<span style="font-size:11px;font-weight:700;color:#0F6E56;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-up" style="font-size:11px"></i> Styrkor</span>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+        strengths.forEach(function(s){
+          swBadges += '<span style="background:#E1F5EE;color:#0F6E56;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(s)+'</span>';
+        });
+        swBadges += '</div></div>';
+      }
+      if(weaknesses.length) {
+        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<span style="font-size:11px;font-weight:700;color:#A32D2D;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-down" style="font-size:11px"></i> Svagheter</span>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+        weaknesses.forEach(function(w){
+          swBadges += '<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(w)+'</span>';
+        });
+        swBadges += '</div></div>';
+      }
       swBadges += '</div>';
     }
     return '<div class="player-card" style="flex-direction:column;align-items:flex-start">'+
@@ -2604,7 +2616,8 @@ var SW_STRENGTHS = [
   'Bjuder gärna på en öl efter rundan','Är väldigt bra på att ge råd till andra',
   'Exceptionell på att spela från skogen','Driver längre än GPS:en räknar med',
   'Aldrig rädd för att gå över vatten','Puttar med stort självförtroende, oavsett avstånd',
-  'Vet exakt hur man använder alla 14 klubbor... till punchslag'
+  'Vet exakt hur man använder alla 14 klubbor... till punchslag',
+  'Kan göra birdie från ingenstans'
 ];
 var SW_WEAKNESSES = [
   'Slår bara järn från tee','Slice Slice Babe','Snappy hooks','Kan inte chippa',
@@ -2612,7 +2625,7 @@ var SW_WEAKNESSES = [
   'Tror att vinden alltid är emot','Har svårt att skilja på "lay up" och "go for it"',
   'Blir aggressiv efter en bra drive','Håller bollförrådet hos proshopen vid liv',
   'Chansar hellre än räknar','Skyller på greenerna',
-  'Kan göra birdie från ingenstans','Kan göra trippelbogey från ingenstans',
+  'Kan göra trippelbogey från ingenstans',
   'Tre puttar i överflöd'
 ];
 
