@@ -71,12 +71,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .cal-day.today{border:2px solid var(--green)}
 .cal-day.empty-day{color:transparent}
 .section-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 10px}
-.home-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.6rem 1rem;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:background .15s}
-.home-card:hover{background:var(--surface)}
-.home-card-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center}
-.home-card-icon i{font-size:28px}
-.home-card-label{font-weight:600;font-size:15px;color:var(--text);text-align:center}
-.home-card-sub{font-size:12px;color:var(--text-3);text-align:center}
+.home-card{border-radius:12px;padding:1.6rem 1rem;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:filter .15s,transform .1s}
+.home-card:hover{filter:brightness(0.93);transform:translateY(-1px)}
+.home-card:active{transform:translateY(0)}
+.home-card-label{font-weight:600;font-size:15px;text-align:center}
+.home-card-sub{font-size:12px;text-align:center}
 .oom-row{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:var(--radius);transition:background .1s}
 .oom-row:hover{background:var(--surface2)}
 .oom-row:last-child{border-bottom:none}
@@ -188,25 +187,25 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="tours-screen">
   <div id="home-screen-content">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="home-card" onclick="showToursList()">
-        <div class="home-card-icon" style="background:#e8f5e9"><i class="ti ti-trophy" style="color:var(--green-dark)"></i></div>
-        <div class="home-card-label">Tourer</div>
-        <div class="home-card-sub">Tävlingar &amp; resultat</div>
+      <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
+        <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#085041">Tourer</div>
+        <div class="home-card-sub" style="color:#0F6E56">Tävlingar &amp; resultat</div>
       </div>
-      <div class="home-card" onclick="showCourseStats()">
-        <div class="home-card-icon" style="background:#e3f2fd"><i class="ti ti-golf" style="color:#1565c0"></i></div>
-        <div class="home-card-label">Banstatistik</div>
-        <div class="home-card-sub">Rundor per bana</div>
+      <div class="home-card" onclick="showCourseStats()" style="background:#B5D4F4;border:none">
+        <i class="ti ti-golf" style="font-size:32px;color:#0C447C" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#0C447C">Banstatistik</div>
+        <div class="home-card-sub" style="color:#185FA5">Rundor per bana</div>
       </div>
-      <div class="home-card" onclick="showGlobalPlayers()">
-        <div class="home-card-icon" style="background:#fff8e1"><i class="ti ti-users" style="color:#f57f17"></i></div>
-        <div class="home-card-label">Spelare</div>
-        <div class="home-card-sub">Profiler &amp; statistik</div>
+      <div class="home-card" onclick="showGlobalPlayers()" style="background:#FAC775;border:none">
+        <i class="ti ti-users" style="font-size:32px;color:#633806" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#633806">Spelare</div>
+        <div class="home-card-sub" style="color:#854F0B">Profiler &amp; statistik</div>
       </div>
-      <div class="home-card" onclick="showGlobalSettings()">
-        <div class="home-card-icon" style="background:var(--surface2)"><i class="ti ti-settings" style="color:var(--text-2)"></i></div>
-        <div class="home-card-label">Inställningar</div>
-        <div class="home-card-sub">Banor &amp; konfiguration</div>
+      <div class="home-card" onclick="showGlobalSettings()" style="background:#D3D1C7;border:none">
+        <i class="ti ti-settings" style="font-size:32px;color:#444441" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#444441">Inställningar</div>
+        <div class="home-card-sub" style="color:#5F5E5A">Banor &amp; konfiguration</div>
       </div>
     </div>
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px"></div>
@@ -2610,9 +2609,10 @@ function buildProfileHTML(pi){
 }
 
 var SW_STRENGTHS = [
-  'Långa drives','Precisions drives','Sänker allt på green',
+  'Långa drives','Precisions drives','Powerfade drives','Sänker allt på green',
   'Närspel som Phil Mickelson','Stabil som Tiger','Långa järn',
-  'Träffar alltid fairway','Kan hitta bollar ingen annan visste fanns',
+  'Träffar alltid fairway','GIR-KING','Älskar alla banor',
+  'Kan hitta bollar ingen annan visste fanns',
   'Bjuder gärna på en öl efter rundan','Är väldigt bra på att ge råd till andra',
   'Exceptionell på att spela från skogen','Driver längre än GPS:en räknar med',
   'Aldrig rädd för att gå över vatten','Puttar med stort självförtroende, oavsett avstånd',
@@ -2625,6 +2625,8 @@ var SW_WEAKNESSES = [
   'Tror att vinden alltid är emot','Har svårt att skilja på "lay up" och "go for it"',
   'Blir aggressiv efter en bra drive','Håller bollförrådet hos proshopen vid liv',
   'Chansar hellre än räknar','Skyller på greenerna',
+  'Kan inte spela vid nederbörd','Klarar inte av psykningar',
+  'Tappar rytmen vid lågt tempo',
   'Kan göra trippelbogey från ingenstans',
   'Tre puttar i överflöd'
 ];
