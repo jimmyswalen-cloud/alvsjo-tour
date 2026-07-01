@@ -2261,12 +2261,39 @@ function deleteCourse(id) {
   renderCourseDbSection();
 }
 
+function importCoursesFromTours() {
+  var imported = 0;
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      var name = (e.course||'').trim();
+      if(!name) return;
+      var already = courseDb.find(function(c){ return c.name.toLowerCase()===name.toLowerCase(); });
+      if(already) return;
+      courseDb.push({ id: uid(), name: name, par: 72 });
+      imported++;
+      // Register suggested filename in course bank for future image lookups
+      var key = courseKey(name);
+      var suggested = suggestCourseFilename(name);
+      if(key && !STATIC_COURSE_IMAGES[key] && suggested && COURSE_BANK_REF) {
+        var update = {};
+        update[key] = { displayName: name, url: suggested };
+        COURSE_BANK_REF.set(update, { merge: true });
+      }
+    });
+  });
+  if(!imported) { alert('Inga nya banor hittades – alla banor från dina tourer finns redan i databasen.'); return; }
+  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+  saveCourseDb();
+  renderCourseDbSection();
+  alert(imported + ' bana' + (imported===1?'':'nor') + ' importerades från dina tourer.');
+}
+
 function renderCourseDbSection() {
   var el = document.getElementById('course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
-  html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button></div>';
+  html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px"><button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button><button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button></div>';
   if(!courseDb.length) {
     html += '<p class="empty">Inga banor inlagda ännu.</p>';
   } else {
