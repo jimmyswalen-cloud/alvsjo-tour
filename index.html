@@ -71,9 +71,8 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .cal-day.today{border:2px solid var(--green)}
 .cal-day.empty-day{color:transparent}
 .section-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 10px}
-.home-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.6rem 1rem;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:background .15s,transform .1s}
-.home-card:hover{background:var(--surface);transform:translateY(-1px)}
-.home-card:active{transform:translateY(0)}
+.home-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.6rem 1rem;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:background .15s}
+.home-card:hover{background:var(--surface)}
 .home-card-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center}
 .home-card-icon i{font-size:28px}
 .home-card-label{font-weight:600;font-size:15px;color:var(--text);text-align:center}
@@ -188,13 +187,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 
 <div id="tours-screen">
   <div id="home-screen-content">
-    <div style="text-align:center;padding:1.5rem 0 1.2rem">
-      <div class="hero-title" id="home-title">TOURER</div>
-      <div style="font-size:13px;color:var(--text-2);margin-top:4px">Älvsjö Golf &amp; Country Club</div>
-    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()">
-        <div class="home-card-icon" style="background:var(--green-light,#e8f5e9)"><i class="ti ti-trophy" style="color:var(--green-dark)"></i></div>
+        <div class="home-card-icon" style="background:#e8f5e9"><i class="ti ti-trophy" style="color:var(--green-dark)"></i></div>
         <div class="home-card-label">Tourer</div>
         <div class="home-card-sub">Tävlingar &amp; resultat</div>
       </div>
@@ -238,7 +233,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     </div>
     <div id="global-settings-content"></div>
   </div>
-
+</div>
 
 <div id="app-screen" style="display:none">
   <div class="app-header">
@@ -740,8 +735,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  var screens = ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'];
-  screens.forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -751,26 +745,32 @@ function showToursList() {
 }
 
 function showCourseStats() {
-  document.getElementById('home-screen-content').style.display = 'none';
-  document.getElementById('tours-list-screen').style.display = 'none';
-  document.getElementById('course-stats-screen').style.display = '';
-  document.getElementById('global-settings-screen').style.display = 'none';
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
+  });
   renderCourseStatsView();
 }
 
 function showGlobalPlayers() {
-  document.getElementById('home-screen-content').style.display = 'none';
-  document.getElementById('tours-list-screen').style.display = 'none';
-  document.getElementById('course-stats-screen').style.display = 'none';
-  document.getElementById('global-settings-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
   showUsersView();
 }
 
 function showGlobalSettings() {
-  document.getElementById('home-screen-content').style.display = 'none';
-  document.getElementById('tours-list-screen').style.display = 'none';
-  document.getElementById('course-stats-screen').style.display = 'none';
-  document.getElementById('global-settings-screen').style.display = '';
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
+  });
   renderGlobalSettings();
 }
 
@@ -781,7 +781,7 @@ function renderHomeUserBar() {
   var initials = ini(u.name||u.username);
   el.innerHTML =
     (u.img ? '<img src="'+u.img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
-      '<div style="width:36px;height:36px;border-radius:50%;background:var(--green-light,#e8f5e9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
+      '<div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
     '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(u.name||u.username)+'</div>' +
     '<div style="font-size:12px;color:var(--text-3)">'+(isAdmin()?'Admin':'Spelare')+'</div></div>' +
     '<button class="btn btn-sm" onclick="openMyProfile()" style="margin-right:6px"><i class="ti ti-user"></i></button>' +
@@ -796,10 +796,10 @@ function renderGlobalSettings() {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
   }
-  html += '<div id="course-bank-section-global"></div><div id="course-db-section-global"></div>';
+  html += '<div id="course-bank-section"></div><div id="course-db-section"></div>';
   el.innerHTML = html;
-  renderCourseBankSectionIn('course-bank-section-global');
-  renderCourseDbSectionIn('course-db-section-global');
+  renderCourseBankSection();
+  renderCourseDbSection();
 }
 
 function renderCourseStatsView() {
@@ -809,66 +809,76 @@ function renderCourseStatsView() {
   (S.tours||[]).forEach(function(t){
     (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && !e.isFinal; }).forEach(function(e){
       var key = (e.course||'Okänd bana').trim();
+      var isStab = e.type === 'stableford';
       if(!courseMap[key]) courseMap[key] = { name:key, rounds:[], players:{} };
       e.results.forEach(function(r){
         var p = t.players && t.players[r.pi];
         if(!p) return;
-        courseMap[key].rounds.push({ pts: r.points||0, score: r.score||0 });
-        if(!courseMap[key].players[p.name]) courseMap[key].players[p.name] = { name:p.name, img:null, username:p.username, rounds:[] };
-        courseMap[key].players[p.name].rounds.push({ pts: r.points||0, score: r.score||0 });
+        var golfResult = r.score || 0;
+        courseMap[key].rounds.push({ golfResult:golfResult, isStab:isStab });
+        if(!courseMap[key].players[p.name]) courseMap[key].players[p.name] = { name:p.name, username:p.username, rounds:[] };
+        courseMap[key].players[p.name].rounds.push({ golfResult:golfResult, isStab:isStab });
       });
     });
   });
-  var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length - a.rounds.length; });
+  var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
   if(!courses.length) { el.innerHTML = '<p class="empty">Inga avslutade tävlingar ännu.</p>'; return; }
   el.innerHTML = courses.map(function(c){
-    var avgPts = c.rounds.length ? (c.rounds.reduce(function(s,r){return s+r.pts;},0)/c.rounds.length).toFixed(1) : '-';
-    var bestPts = c.rounds.length ? Math.max.apply(null,c.rounds.map(function(r){return r.pts;})) : '-';
-    var avgScore = c.rounds.filter(function(r){return r.score>0;}).length ?
-      Math.round(c.rounds.filter(function(r){return r.score>0;}).reduce(function(s,r){return s+r.score;},0)/c.rounds.filter(function(r){return r.score>0;}).length) : '-';
+    var stabR = c.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
+    var slagR = c.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
+    var useStab = stabR.length >= slagR.length && stabR.length > 0;
+    var statR = useStab ? stabR : slagR;
+    var avg = statR.length ? (statR.reduce(function(s,r){return s+r.golfResult;},0)/statR.length).toFixed(1) : '-';
+    var best = statR.length ? (useStab ? Math.max : Math.min).apply(null, statR.map(function(r){return r.golfResult;})) : '-';
+    var avgLabel = useStab ? 'Snitt poäng' : 'Snitt netto';
+    var bestLabel = useStab ? 'Bästa runda' : 'Bästa netto';
     var img = getCourseImage(c.name);
     var players = Object.values(c.players).sort(function(a,b){
-      var ab = b.rounds.reduce(function(s,r){return s+r.pts;},0)/b.rounds.length;
-      var aa = a.rounds.reduce(function(s,r){return s+r.pts;},0)/a.rounds.length;
-      return ab-aa;
+      var getAvg = function(rounds, stab){
+        var rs = rounds.filter(function(r){ return r.isStab===stab && r.golfResult>0; });
+        if(!rs.length) return stab ? 0 : 999;
+        return rs.reduce(function(s,r){return s+r.golfResult;},0)/rs.length;
+      };
+      var st = b.rounds.some(function(r){ return r.isStab; });
+      return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
     });
     var playerRows = players.slice(0,5).map(function(p){
-      var pAvgPts = (p.rounds.reduce(function(s,r){return s+r.pts;},0)/p.rounds.length).toFixed(1);
-      var pBestPts = Math.max.apply(null,p.rounds.map(function(r){return r.pts;}));
-      var pAvgScore = p.rounds.filter(function(r){return r.score>0;}).length ?
-        Math.round(p.rounds.filter(function(r){return r.score>0;}).reduce(function(s,r){return s+r.score;},0)/p.rounds.filter(function(r){return r.score>0;}).length) : '-';
+      var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
+      var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
+      var pUseS = pS.length >= pL.length && pS.length > 0;
+      var pR = pUseS ? pS : pL;
+      var pAvg = pR.length ? (pR.reduce(function(s,r){return s+r.golfResult;},0)/pR.length).toFixed(1) : '-';
+      var pBest = pR.length ? (pUseS ? Math.max : Math.min).apply(null, pR.map(function(r){return r.golfResult;})) : '-';
       var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
       var pImg = (pUser&&pUser.img)||null;
       var pIni = ini(p.name);
-      return '<div style="display:grid;grid-template-columns:1fr 56px 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
+      return '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
         '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
-        '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvgPts+'</span>'+
-        '<span style="text-align:right;color:var(--green-dark)">'+pBestPts+'</span>'+
-        '<span style="text-align:right;color:var(--text-2)">'+pAvgScore+'</span>'+
+        '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvg+'</span>'+
+        '<span style="text-align:right;color:var(--green-dark)">'+pBest+'</span>'+
       '</div>';
     }).join('');
     return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
       '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)">'+
         (img?'<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:56px;height:36px;border-radius:6px;background:var(--surface2);flex-shrink:0"></div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+esc(c.name)+'</div>'+
-        '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+' runda'+(c.rounds.length!==1?'r':'')+' spelade</div></div>'+
+        '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+' runda'+(c.rounds.length!==1?'r':'')+
+          (stabR.length&&slagR.length?' · Blandat':''+useStab?' · Stableford':' · Slag')+
+        '</div></div>'+
       '</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border)">'+
-        '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Snitt poäng</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avgPts+'</div></div>'+
-        '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Bästa runda</div><div style="font-size:20px;font-weight:600;color:var(--green-dark)">'+bestPts+'</div></div>'+
-        '<div style="padding:10px 16px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Snitt slag</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avgScore+'</div></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">'+
+        '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+avgLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avg+'</div></div>'+
+        '<div style="padding:10px 16px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+bestLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--green-dark)">'+best+'</div></div>'+
       '</div>'+
       '<div style="padding:0 16px">'+
-        '<div style="display:grid;grid-template-columns:1fr 56px 56px 56px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
-          '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span><span style="text-align:right">Slag</span>'+
+        '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
+          '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
         '</div>'+playerRows+
       '</div>'+
       (players.length>5?'<div style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-3);text-align:center">+'+(players.length-5)+' fler spelare</div>':'')+
     '</div>';
   }).join('');
 }
-
-
 
 function enterTour(id) {
   activeTourId = id;
@@ -1935,106 +1945,78 @@ function toggleNettoOnly(eventIdx) {
   var regsRaw = e.registrations || [];
   var regPis = (regsRaw.length && typeof regsRaw[0]==='object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
   regPis.filter(function(pi){return t.players[pi];}).forEach(function(pi){
+    var row = document.getElementById('res-'+pi);
     var bruttoEl = document.getElementById('brutto-'+pi);
-    var shcpEl   = document.getElementById('shcp-'+pi);
-    var nettoEl  = document.getElementById('res-'+pi);
-    if(bruttoEl) bruttoEl.parentElement.style.display = nettoOnly ? 'none' : '';
-    if(shcpEl)   shcpEl.parentElement.style.display   = nettoOnly ? 'none' : '';
-    if(nettoEl && nettoOnly) { nettoEl.removeAttribute('readonly'); nettoEl.placeholder = 'Netto'; }
-    else if(nettoEl && !nettoOnly) { nettoEl.setAttribute('readonly',''); }
+    var shcpEl = document.getElementById('shcp-'+pi);
+    if(bruttoEl) bruttoEl.closest('div').style.display = nettoOnly ? 'none' : '';
+    if(shcpEl) shcpEl.closest('div').style.display = nettoOnly ? 'none' : '';
+    if(row) { if(nettoOnly){ row.removeAttribute('readonly'); row.placeholder='Netto'; } else { row.setAttribute('readonly',''); } }
   });
 }
 
 function resolveTies(ei, from, done) {
   var t = getTour(), e = t.events[ei];
-  var isStab = e.type === 'stableford';
-  // Find a group of tied players starting at 'from'
-  for(var i = from; i < e.results.length - 1; i++) {
+  for(var i = from; i < e.results.length-1; i++) {
     var a = e.results[i], b = e.results[i+1];
-    var aScore = isStab ? a.score : a.score;
-    var bScore = isStab ? b.score : b.score;
-    if(aScore === bScore) {
-      // Collect all tied players starting at i
-      var tieEnd = i + 1;
-      while(tieEnd < e.results.length && e.results[tieEnd].score === aScore) tieEnd++;
+    if(a.score === b.score) {
+      var tieEnd = i+1;
+      while(tieEnd < e.results.length && e.results[tieEnd].score === a.score) tieEnd++;
       var tiedPis = e.results.slice(i, tieEnd).map(function(r){ return r.pi; });
       if(tiedPis.length === 2) {
-        // Simple two-player tie: show button choice
-        var na = t.players[tiedPis[0]].name, nb = t.players[tiedPis[1]].name;
-        showModal(
-          '<h3>Lika resultat!</h3>' +
-          '<p style="font-size:14px;color:var(--text-2);margin-bottom:16px">'+na+' och '+nb+' har samma nettoscore. Vem ska få plats '+(i+1)+'?</p>' +
-          '<div class="row" style="gap:8px;justify-content:center">' +
-            '<button class="btn btn-primary" onclick="pickW('+ei+','+i+','+i+','+(i+1)+')">'+na+'</button>' +
-            '<button class="btn btn-primary" onclick="pickW('+ei+','+i+','+(i+1)+','+i+')">'+nb+'</button>' +
-          '</div>',
-          false, true
-        );
+        var na = t.players[tiedPis[0]].name, nb = t.players[tiedPis[1]].name, ii = i;
+        showModal('<h3>Lika nettoscore!</h3>'+
+          '<p style="font-size:14px;color:var(--text-2);margin-bottom:16px">'+na+' och '+nb+' har samma nettoscore. Vem ska få plats '+(i+1)+'?</p>'+
+          '<div class="row" style="gap:8px;justify-content:center">'+
+          '<button class="btn btn-primary" onclick="pickW('+ei+','+ii+','+ii+','+(ii+1)+')">'+na+'</button>'+
+          '<button class="btn btn-primary" onclick="pickW('+ei+','+ii+','+(ii+1)+','+ii+')">'+nb+'</button>'+
+          '</div>', false, true);
+        return;
       } else {
-        // Multi-player tie: show draggable ranking
-        showTiebreakModal(ei, i, tieEnd, done);
+        window._tiebreakDone = done;
+        var h = '<h3>Lika nettoscore – rangordna</h3>';
+        h += '<p style="font-size:14px;color:var(--text-2);margin-bottom:12px">'+(tieEnd-i)+' spelare har score '+a.score+'. Välj ordning för plats '+(i+1)+'–'+tieEnd+'.</p>';
+        h += '<div style="display:flex;flex-direction:column;gap:8px">';
+        tiedPis.forEach(function(pi, idx){
+          var p = t.players[pi];
+          h += '<div class="row" style="gap:10px;align-items:center;background:var(--surface2);padding:10px 12px;border-radius:8px">';
+          h += (p.img?'<img src="'+p.img+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover">':'<div class="avatar-ph" style="width:28px;height:28px;font-size:10px">'+ini(p.name)+'</div>');
+          h += '<span style="flex:1;font-weight:500">'+esc(p.name)+'</span>';
+          h += '<select id="tiebreak-sel-'+pi+'" style="width:90px;margin:0">';
+          for(var r=1;r<=tiedPis.length;r++) h += '<option value="'+r+'"'+(r===idx+1?' selected':'')+'>Plats '+r+'</option>';
+          h += '</select></div>';
+        });
+        h += '</div>';
+        h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">';
+        h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+        h += '<button class="btn btn-primary" onclick="saveTiebreak('+ei+','+i+','+tieEnd+')">Spara</button></div>';
+        showModal(h, false, true);
+        return;
       }
-      return;
     }
   }
   done();
 }
 
-function showTiebreakModal(ei, start, end, done) {
-  var t = getTour(), e = t.events[ei];
-  var tiedPis = e.results.slice(start, end).map(function(r){ return r.pi; });
-  var score = e.results[start].score;
-  var h = '<h3>Lika resultat – rangordna</h3>';
-  h += '<p style="font-size:14px;color:var(--text-2);margin-bottom:4px">'+(end-start)+' spelare har nettoscore <strong>'+score+'</strong>. Dra eller välj ordning för plats '+(start+1)+'–'+end+'.</p>';
-  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Välj 1 = bäst placerad.</p>';
-  h += '<div id="tiebreak-list" style="display:flex;flex-direction:column;gap:8px">';
-  tiedPis.forEach(function(pi, idx){
-    var p = t.players[pi];
-    h += '<div class="row" style="gap:10px;align-items:center;background:var(--surface2);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">';
-    h += (p.img?'<img src="'+p.img+'" style="width:30px;height:30px;border-radius:50%;object-fit:cover">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+ini(p.name)+'</div>');
-    h += '<span style="flex:1;font-weight:500">'+esc(p.name)+'</span>';
-    h += '<select id="tiebreak-sel-'+pi+'" style="width:80px;margin:0">';
-    for(var r=1;r<=tiedPis.length;r++) h += '<option value="'+r+'"'+(r===idx+1?' selected':'')+'>Plats '+r+'</option>';
-    h += '</select>';
-    h += '</div>';
-  });
-  h += '</div>';
-  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">';
-  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
-  h += '<button class="btn btn-primary" onclick="saveTiebreak('+ei+','+start+','+end+')">Spara</button>';
-  h += '</div>';
-  showModal(h, false, true);
-  window._tiebreakDone = done;
-}
-
 function saveTiebreak(ei, start, end) {
   var t = getTour(), e = t.events[ei];
   var tiedPis = e.results.slice(start, end).map(function(r){ return r.pi; });
-  // Read chosen ranks
   var ranked = tiedPis.map(function(pi){
     var sel = document.getElementById('tiebreak-sel-'+pi);
-    return { pi: pi, rank: sel ? parseInt(sel.value) : 1, result: e.results.find(function(r){ return r.pi===pi; }) };
+    return { pi:pi, rank: sel ? parseInt(sel.value) : 1, result: e.results.find(function(r){ return r.pi===pi; }) };
   });
-  // Check for duplicate ranks
   var ranks = ranked.map(function(x){ return x.rank; });
-  var hasDup = ranks.some(function(r, i){ return ranks.indexOf(r) !== i; });
-  if(hasDup) { alert('Varje spelare måste ha en unik placering. Kontrollera dina val.'); return; }
-  ranked.sort(function(a,b){ return a.rank - b.rank; });
-  // Write back to results array in the resolved order
-  ranked.forEach(function(item, idx){
-    e.results[start + idx] = item.result;
-  });
+  if(ranks.some(function(r,i){ return ranks.indexOf(r)!==i; })) { alert('Varje spelare måste ha en unik placering.'); return; }
+  ranked.sort(function(a,b){ return a.rank-b.rank; });
+  ranked.forEach(function(item,idx){ e.results[start+idx] = item.result; });
   save();
   closeModal();
-  var done = window._tiebreakDone || function(){};
-  // Continue resolving from after this group
   resolveTies(ei, end, function(){ save(); closeModal(); renderEvents(); });
 }
 
-function pickW(ei, from, keep, move) {
-  var e = getTour().events[ei];
-  if(keep !== from) { var tmp = e.results[keep]; e.results[keep] = e.results[move]; e.results[move] = tmp; }
-  save(); resolveTies(ei, from+1, function(){ save(); closeModal(); renderEvents(); });
+function pickW(ei,from,keep,move){
+  var e=getTour().events[ei];
+  if(keep!==from){var tmp=e.results[keep];e.results[keep]=e.results[move];e.results[move]=tmp;}
+  save(); resolveTies(ei,from+1,function(){save();closeModal();renderEvents();});
 }
 
 function closeEvent(i){
@@ -2308,7 +2290,6 @@ function renderOomTable() {
   });
   var totals = {};
   var playerCountedIds = {};
-  // Seed all registered players so 0-round players appear in the table too
   getPlayersForTour(t).forEach(function(p, pi){
     if(p && !playerRoundsT[pi]) playerRoundsT[pi] = [];
   });
@@ -2376,7 +2357,7 @@ function renderOOM(){
       playerRounds[r.pi].push({ pts: r.points||0, eventId: e.id });
     });
   });
-  // Seed every registered tour player so they appear in the list even with 0 rounds played
+  // Seed every registered tour player so they appear even with 0 rounds
   getPlayersForTour(t).forEach(function(p, pi){
     if(p && !playerRounds[pi]) playerRounds[pi] = [];
   });
@@ -2619,27 +2600,6 @@ function importCoursesFromTours() {
   saveCourseDb();
   renderCourseDbSection();
   alert(imported + ' bana' + (imported===1?'':'nor') + ' importerades från dina tourer.');
-}
-
-function renderCourseBankSectionIn(targetId) {
-  var orig = document.getElementById('course-bank-section');
-  var target = document.getElementById(targetId);
-  if(!target) return;
-  if(orig) { target.innerHTML = orig.innerHTML; } else { renderCourseBankSection(); }
-}
-
-function renderCourseDbSectionIn(targetId) {
-  var target = document.getElementById(targetId);
-  if(!target) { renderCourseDbSection(); return; }
-  var tmp = document.createElement('div');
-  tmp.id = 'course-db-section-tmp';
-  document.body.appendChild(tmp);
-  var saved = document.getElementById('course-db-section');
-  if(saved) { target.innerHTML = saved.innerHTML; tmp.remove(); return; }
-  renderCourseDbSection();
-  var rendered = document.getElementById('course-db-section');
-  if(rendered) target.innerHTML = rendered.innerHTML;
-  tmp.remove();
 }
 
 function renderCourseDbSection() {
