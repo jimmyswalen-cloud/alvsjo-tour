@@ -805,6 +805,8 @@ function renderGlobalSettings() {
 function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
+
+  // Build courseMap from all closed non-final events
   var courseMap = {};
   (S.tours||[]).forEach(function(t){
     (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && !e.isFinal; }).forEach(function(e){
@@ -821,64 +823,120 @@ function renderCourseStatsView() {
       });
     });
   });
+
+  // Collect all districts from courseDb for the dropdown
+  var districts = [];
+  (courseDb||[]).forEach(function(c){
+    if(c.district && districts.indexOf(c.district) === -1) districts.push(c.district);
+  });
+  districts.sort(function(a,b){ return a.localeCompare(b,'sv'); });
+
+  // Read current filter values from DOM (persist across re-renders)
+  var filterName = '';
+  var filterDistrict = '';
+  var nameEl = document.getElementById('csf-name');
+  var distEl = document.getElementById('csf-district');
+  if(nameEl) filterName = nameEl.value;
+  if(distEl) filterDistrict = distEl.value;
+
+  // Filter UI
+  var filterHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
+  filterHtml += '<div style="position:relative;flex:1;min-width:160px">'+
+    '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
+    '<input id="csf-name" type="text" placeholder="Sök bana..." value="'+esc(filterName)+'" oninput="applyCourseStatsFilter()" style="padding-left:32px;width:100%;box-sizing:border-box">'+
+  '</div>';
+  filterHtml += '<select id="csf-district" onchange="applyCourseStatsFilter()" style="min-width:150px">'+
+    '<option value="">Alla distrikt</option>'+
+    districts.map(function(d){ return '<option value="'+esc(d)+'"'+(d===filterDistrict?' selected':'')+'>'+esc(d)+'</option>'; }).join('')+
+  '</select>';
+  filterHtml += '</div>';
+
   var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
-  if(!courses.length) { el.innerHTML = '<p class="empty">Inga avslutade tävlingar ännu.</p>'; return; }
-  el.innerHTML = courses.map(function(c){
-    var stabR = c.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
-    var slagR = c.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
-    var useStab = stabR.length >= slagR.length && stabR.length > 0;
-    var statR = useStab ? stabR : slagR;
-    var avg = statR.length ? (statR.reduce(function(s,r){return s+r.golfResult;},0)/statR.length).toFixed(1) : '-';
-    var best = statR.length ? (useStab ? Math.max : Math.min).apply(null, statR.map(function(r){return r.golfResult;})) : '-';
-    var avgLabel = useStab ? 'Snitt poäng' : 'Snitt netto';
-    var bestLabel = useStab ? 'Bästa runda' : 'Bästa netto';
-    var img = getCourseImage(c.name);
-    var players = Object.values(c.players).sort(function(a,b){
-      var getAvg = function(rounds, stab){
-        var rs = rounds.filter(function(r){ return r.isStab===stab && r.golfResult>0; });
-        if(!rs.length) return stab ? 0 : 999;
-        return rs.reduce(function(s,r){return s+r.golfResult;},0)/rs.length;
-      };
-      var st = b.rounds.some(function(r){ return r.isStab; });
-      return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
-    });
-    var playerRows = players.slice(0,5).map(function(p){
-      var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
-      var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
-      var pUseS = pS.length >= pL.length && pS.length > 0;
-      var pR = pUseS ? pS : pL;
-      var pAvg = pR.length ? (pR.reduce(function(s,r){return s+r.golfResult;},0)/pR.length).toFixed(1) : '-';
-      var pBest = pR.length ? (pUseS ? Math.max : Math.min).apply(null, pR.map(function(r){return r.golfResult;})) : '-';
-      var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
-      var pImg = (pUser&&pUser.img)||null;
-      var pIni = ini(p.name);
-      return '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
-        '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
-        '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvg+'</span>'+
-        '<span style="text-align:right;color:var(--green-dark)">'+pBest+'</span>'+
-      '</div>';
-    }).join('');
-    return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
-      '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)">'+
-        (img?'<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:56px;height:36px;border-radius:6px;background:var(--surface2);flex-shrink:0"></div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+esc(c.name)+'</div>'+
-        '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+' runda'+(c.rounds.length!==1?'r':'')+
-          (stabR.length&&slagR.length?' · Blandat':''+useStab?' · Stableford':' · Slag')+
-        '</div></div>'+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">'+
-        '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+avgLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avg+'</div></div>'+
-        '<div style="padding:10px 16px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+bestLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--green-dark)">'+best+'</div></div>'+
-      '</div>'+
-      '<div style="padding:0 16px">'+
-        '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
-          '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
-        '</div>'+playerRows+
-      '</div>'+
-      (players.length>5?'<div style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-3);text-align:center">+'+(players.length-5)+' fler spelare</div>':'')+
-    '</div>';
-  }).join('');
+  if(!courses.length) { el.innerHTML = filterHtml+'<p class="empty">Inga avslutade tävlingar ännu.</p>'; return; }
+
+  // Apply filters
+  var filtered = courses.filter(function(c){
+    var matchName = !filterName || c.name.toLowerCase().indexOf(filterName.toLowerCase()) !== -1;
+    var matchDistrict = true;
+    if(filterDistrict) {
+      var dbEntry = (courseDb||[]).find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+      matchDistrict = dbEntry && dbEntry.district === filterDistrict;
+    }
+    return matchName && matchDistrict;
+  });
+
+  var resultInfo = filtered.length !== courses.length
+    ? '<p style="font-size:12px;color:var(--text-3);margin:-8px 0 12px">'+filtered.length+' av '+courses.length+' banor visas</p>'
+    : '';
+
+  var cardsHtml = filtered.length === 0
+    ? '<p class="empty">Inga banor matchar filtret.</p>'
+    : filtered.map(function(c){
+        var stabR = c.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
+        var slagR = c.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
+        var useStab = stabR.length >= slagR.length && stabR.length > 0;
+        var statR = useStab ? stabR : slagR;
+        var avg = statR.length ? (statR.reduce(function(s,r){return s+r.golfResult;},0)/statR.length).toFixed(1) : '-';
+        var best = statR.length ? (useStab ? Math.max : Math.min).apply(null, statR.map(function(r){return r.golfResult;})) : '-';
+        var avgLabel = useStab ? 'Snitt poäng' : 'Snitt netto';
+        var bestLabel = useStab ? 'Bästa runda' : 'Bästa netto';
+        var typeLabel = (stabR.length&&slagR.length) ? 'Blandat' : (useStab?'Stableford':'Slag');
+        var img = getCourseImage(c.name);
+        var dbEntry = (courseDb||[]).find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+        var districtBadge = (dbEntry&&dbEntry.district)
+          ? ' &nbsp;<span style="font-size:11px;background:var(--surface2);border:1px solid var(--border);padding:1px 7px;border-radius:20px;color:var(--text-2)">'+esc(dbEntry.district)+'</span>'
+          : '';
+        var players = Object.values(c.players).sort(function(a,b){
+          var getAvg = function(rounds, stab){
+            var rs = rounds.filter(function(r){ return r.isStab===stab && r.golfResult>0; });
+            if(!rs.length) return stab ? 0 : 999;
+            return rs.reduce(function(s,r){return s+r.golfResult;},0)/rs.length;
+          };
+          var st = b.rounds.some(function(r){ return r.isStab; });
+          return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
+        });
+        var playerRows = players.slice(0,5).map(function(p){
+          var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
+          var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
+          var pUseS = pS.length >= pL.length && pS.length > 0;
+          var pR = pUseS ? pS : pL;
+          var pAvg = pR.length ? (pR.reduce(function(s,r){return s+r.golfResult;},0)/pR.length).toFixed(1) : '-';
+          var pBest = pR.length ? (pUseS ? Math.max : Math.min).apply(null, pR.map(function(r){return r.golfResult;})) : '-';
+          var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
+          var pImg = (pUser&&pUser.img)||null;
+          var pIni = ini(p.name);
+          return '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
+            '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
+            '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvg+'</span>'+
+            '<span style="text-align:right;color:var(--green-dark)">'+pBest+'</span>'+
+          '</div>';
+        }).join('');
+        return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
+          '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)">'+
+            (img?'<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:56px;height:36px;border-radius:6px;background:var(--surface2);flex-shrink:0"></div>')+
+            '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+esc(c.name)+districtBadge+'</div>'+
+            '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+' runda'+(c.rounds.length!==1?'r':'')+' · '+typeLabel+'</div></div>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">'+
+            '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+avgLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avg+'</div></div>'+
+            '<div style="padding:10px 16px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+bestLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--green-dark)">'+best+'</div></div>'+
+          '</div>'+
+          '<div style="padding:0 16px">'+
+            '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
+              '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
+            '</div>'+playerRows+
+          '</div>'+
+          (players.length>5?'<div style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-3);text-align:center">+' +(players.length-5)+' fler spelare</div>':'')+
+        '</div>';
+      }).join('');
+
+  el.innerHTML = filterHtml + resultInfo + cardsHtml;
 }
+
+function applyCourseStatsFilter() {
+  renderCourseStatsView();
+}
+
 
 function enterTour(id) {
   activeTourId = id;
@@ -2617,6 +2675,7 @@ function openAddCourse() {
     '<h3>Lägg till bana</h3>' +
     '<div class="field"><label>Bannamn</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
     '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="72" style="width:120px"></div>' +
+    '<div class="field"><label>Distrikt <span style="font-size:11px;color:var(--text-3)">(valfritt, t.ex. Stockholm)</span></label><input id="cd-district" type="text" placeholder="t.ex. Stockholm"></div>' +
     '<div id="cd-filename-hint" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;display:none">' +
       '<div style="color:var(--text-2);margin-bottom:4px">Ladda upp denna fil till GitHub för att få bild:</div>' +
       '<div style="font-family:monospace;font-weight:700;color:var(--green-dark)" id="cd-filename-value"></div>' +
@@ -2649,7 +2708,8 @@ function submitAddCourse() {
   if(courseDb.find(function(c){ return c.name.toLowerCase()===name.toLowerCase(); })) {
     alert('Banan finns redan i databasen.'); return;
   }
-  courseDb.push({ id: uid(), name: name, par: par });
+  var district = (document.getElementById('cd-district').value||'').trim();
+  courseDb.push({ id: uid(), name: name, par: par, district: district||null });
   courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
   saveCourseDb();
   // Also register the suggested filename in the course bank so getCourseImage() finds it automatically
@@ -2671,6 +2731,7 @@ function openEditCourse(id) {
     '<h3>Redigera bana</h3>' +
     '<div class="field"><label>Bannamn</label><input id="cd-name" type="text" value="'+esc(c.name)+'"></div>' +
     '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'" style="width:120px"></div>' +
+    '<div class="field"><label>Distrikt <span style="font-size:11px;color:var(--text-3)">(valfritt)</span></label><input id="cd-district" type="text" value="'+esc(c.district||'')+'" placeholder="t.ex. Stockholm"></div>' +
     '<div class="row" style="justify-content:space-between;gap:8px;margin-top:8px">' +
       '<button class="btn btn-danger" onclick="deleteCourse(\''+c.id+'\')"><i class="ti ti-trash"></i> Ta bort</button>' +
       '<div class="row" style="gap:8px">' +
@@ -2688,7 +2749,8 @@ function submitEditCourse(id) {
   var name = (document.getElementById('cd-name').value||'').trim();
   var par = parseInt(document.getElementById('cd-par').value)||72;
   if(!name) { alert('Bannamn krävs.'); return; }
-  c.name = name; c.par = par;
+  var district = (document.getElementById('cd-district').value||'').trim();
+  c.name = name; c.par = par; c.district = district||null;
   courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
   saveCourseDb();
   closeModal();
