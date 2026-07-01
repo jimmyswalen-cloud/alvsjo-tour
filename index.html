@@ -2302,6 +2302,10 @@ function renderOomTable() {
   });
   var totals = {};
   var playerCountedIds = {};
+  // Seed all registered players so 0-round players appear in the table too
+  getPlayersForTour(t).forEach(function(p, pi){
+    if(p && !playerRoundsT[pi]) playerRoundsT[pi] = [];
+  });
   Object.keys(playerRoundsT).forEach(function(pi){
     var rounds = playerRoundsT[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
     var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
@@ -2365,6 +2369,10 @@ function renderOOM(){
       if(!playerRounds[r.pi]) playerRounds[r.pi] = [];
       playerRounds[r.pi].push({ pts: r.points||0, eventId: e.id });
     });
+  });
+  // Seed every registered tour player so they appear in the list even with 0 rounds played
+  getPlayersForTour(t).forEach(function(p, pi){
+    if(p && !playerRounds[pi]) playerRounds[pi] = [];
   });
   Object.keys(playerRounds).forEach(function(pi){
     var rounds = playerRounds[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
