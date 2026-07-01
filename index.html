@@ -1231,6 +1231,7 @@ function renderToursList() {
           (finalsCount?'<span class="badge badge-gold"><i class="ti ti-flag" style="font-size:11px"></i> '+finalsCount+' final'+(finalsCount!==1?'er':'')+'</span>':'')+
           (closedCount?'<span class="badge badge-gray">'+closedCount+' av '+totalCount+' genomförda</span>':'')+
         '</div>'+
+        buildTop3HTML(t, true)+
         '<div class="row" style="gap:6px">'+
           '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();enterTour(\''+t.id+'\')"><i class="ti ti-arrow-right"></i> Öppna</button>'+
           (isAdmin() ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delTour(\''+t.id+'\')"><i class="ti ti-trash"></i></button>' : '')+
@@ -1769,7 +1770,8 @@ function renderEvents() {
   var t=getTour(), el=document.getElementById('events-list');
   var titleBlock = '<h2>Deltävlingar</h2>'+
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
-  if(!t.events.length){el.innerHTML=titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
+  var top3Html = buildTop3HTML(t, false);
+  if(!t.events.length){el.innerHTML=top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
 
   // Fee/pot card
   var feeCard = '';
@@ -1826,7 +1828,7 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = feeCard + titleBlock + html;
+  el.innerHTML = top3Html + feeCard + titleBlock + html;
 }
 
 function togglePayment(tourId, pi) {
@@ -3027,14 +3029,8 @@ function renderOomTable() {
   el.innerHTML = html;
 }
 
-function renderOOM(){
-  renderLeaderboardSection();
-  var listBtn = document.getElementById('oom-view-list-btn');
-  var tableBtn = document.getElementById('oom-view-table-btn');
-  if(listBtn && tableBtn && listBtn.className === 'btn btn-sm' && tableBtn.className === 'btn btn-sm') {
-    listBtn.className = 'btn btn-sm btn-primary';
-  }
-  var t=getTour(),el=document.getElementById('oom-list'),totals={};
+// Shared OoM standings calculation, used by renderOOM(), tour cards, and tour-view widgets.
+function computeOomStandings(t) {
   var bestN = t.bestRounds || 0;
   var closedRegular = t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;});
   var playerRounds = {};
@@ -3048,22 +3044,64 @@ function renderOOM(){
   getPlayersForTour(t).forEach(function(p, pi){
     if(p && !playerRounds[pi]) playerRounds[pi] = [];
   });
-  Object.keys(playerRounds).forEach(function(pi){
+  var totals = Object.keys(playerRounds).map(function(pi){
     var rounds = playerRounds[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
     var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
     var wins = closedRegular.filter(function(e){ return e.results&&e.results[0]&&e.results[0].pi==pi; }).length;
-    totals[pi] = {
+    return {
+      pi: parseInt(pi),
       pts: counted.reduce(function(s,r){ return s+r.pts; }, 0),
       events: rounds.length, counted: counted.length, wins: wins,
       countedIds: counted.reduce(function(o,r){ o[r.eventId]=true; return o; }, {})
     };
   });
-  var sorted=Object.entries(totals).sort(function(a,b){return b[1].pts-a[1].pts;});
+  totals.sort(function(a,b){ return b.pts-a.pts; });
+  return totals;
+}
+
+// Compact "Top 3 i ledning" / "Vinnare" widget for tour cards and the tour's Tävlingar-view.
+function buildTop3HTML(t, compact) {
+  var standings = computeOomStandings(t).filter(function(s){ return s.events > 0; });
+  if(!standings.length) return '';
+  var events = t.events || [];
+  var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
+  var top = isClosed ? standings.slice(0,1) : standings.slice(0,3);
+  var medals = ['🥇','🥈','🥉'];
+  var title = isClosed ? 'Vinnare' : 'Top 3 i ledning';
+  var avatarSize = compact ? 22 : 28;
+  var rows = top.map(function(s, idx){
+    var p = t.players[s.pi]; if(!p) return '';
+    var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
+    var pImg = (pUser&&pUser.img) || p.img || null;
+    return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border)">'+
+      '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
+      (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
+      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</span>'+
+      (!compact?'<span style="font-size:11px;color:var(--text-3)">'+s.events+' rundor</span>':'')+
+      '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.pts+' p</span>'+
+    '</div>';
+  }).join('');
+  return '<div class="card" style="margin-bottom:'+(compact?'12px':'16px')+';padding:'+(compact?'10px 12px':'14px 16px')+'">'+
+    '<div style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> '+title+'</div>'+
+    rows+
+  '</div>';
+}
+
+function renderOOM(){
+  renderLeaderboardSection();
+  var listBtn = document.getElementById('oom-view-list-btn');
+  var tableBtn = document.getElementById('oom-view-table-btn');
+  if(listBtn && tableBtn && listBtn.className === 'btn btn-sm' && tableBtn.className === 'btn btn-sm') {
+    listBtn.className = 'btn btn-sm btn-primary';
+  }
+  var t=getTour(),el=document.getElementById('oom-list');
+  var bestN = t.bestRounds || 0;
+  var sorted = computeOomStandings(t);
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
   var medals=['🥇','🥈','🥉'];
   el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
-    sorted.map(function(entry,idx){
-      var pi=entry[0],d=entry[1],p=t.players[pi]; if(!p) return '';
+    sorted.map(function(d,idx){
+      var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
       var pImg = (pUser&&pUser.img) || p.img || null;
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
