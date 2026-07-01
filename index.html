@@ -256,8 +256,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
   </div>
   <div id="view-tournament" class="view active">
-    <h2>Deltävlingar</h2>
-    <p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>
     <div id="events-list"></div>
   </div>
   <div id="view-calendar" class="view">
@@ -1769,7 +1767,9 @@ function jumpToEditUserByUsername(username) {
 // ── EVENTS (list / register / results) ─────────────────────────────────────
 function renderEvents() {
   var t=getTour(), el=document.getElementById('events-list');
-  if(!t.events.length){el.innerHTML='<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
+  var titleBlock = '<h2>Deltävlingar</h2>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
+  if(!t.events.length){el.innerHTML=titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
 
   // Fee/pot card
   var feeCard = '';
@@ -1826,7 +1826,7 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = feeCard + html;
+  el.innerHTML = feeCard + titleBlock + html;
 }
 
 function togglePayment(tourId, pi) {
