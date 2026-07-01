@@ -314,8 +314,13 @@ function getCourseImage(name) {
   if(STATIC_COURSE_IMAGES[key]) return STATIC_COURSE_IMAGES[key];
   var entry = courseBank[key];
   if(!entry) return null;
-  // Static (GitHub-hosted) images are stored as a plain filename string; uploaded ones as a data: URI.
   return entry.url || entry.img || null;
+}
+
+function getEventImage(e) {
+  if(!e) return null;
+  if(e.img) return e.img;
+  return getCourseImage(e.course) || null;
 }
 
 function saveCourseImage(name, imgData) {
@@ -379,26 +384,51 @@ var courseBank = {}; // { courseName: base64ImageData } -- loaded from Firestore
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
 var STATIC_COURSE_IMAGES = {
   'riksten': 'riksten.jpg',
+  'riksten gk': 'riksten.jpg',
   'kyssinge': 'kyssinge.jpg',
+  'kyssinge gk': 'kyssinge.jpg',
   'lindö': 'lindo.jpg',
   'lindo': 'lindo.jpg',
+  'lindö gk': 'lindo.jpg',
   'lövsättra': 'lovsattra.jpg',
   'lovsattra': 'lovsattra.jpg',
+  'lövsättra gk': 'lovsattra.jpg',
   'sofiedal': 'sofiedal.jpg',
+  'sofiedal gk': 'sofiedal.jpg',
   'waxholm': 'waxholm.jpg',
+  'waxholms gk': 'waxholm.jpg',
+  'waxholm gk': 'waxholm.jpg',
   'haninge strand': 'haninge-strand.jpg',
   'haninge strand gk': 'haninge-strand.jpg',
+  'haninge': 'haninge-strand.jpg',
   'kallfors': 'kallfors.jpg',
+  'kallfors gk': 'kallfors.jpg',
   'ågesta': 'agesta.jpg',
   'agesta': 'agesta.jpg',
+  'ågesta gk': 'agesta.jpg',
+  'agesta gk': 'agesta.jpg',
   'brollsta': 'brollsta.jpg',
+  'brollsta gk': 'brollsta.jpg',
+  'brollsta cup': 'brollsta.jpg',
   'bodaholm': 'bodaholm.jpg',
+  'bodaholm gk': 'bodaholm.jpg',
   'bromma': 'bromma.jpg',
+  'bromma gk': 'bromma.jpg',
   'gripsholm': 'gripsholm.jpg',
+  'gripsholm gk': 'gripsholm.jpg',
   'hässelby': 'hasselby.jpg',
   'hasselby': 'hasselby.jpg',
+  'hässelby gk': 'hasselby.jpg',
   'hinton': 'hinton.jpg',
-  'international': 'international.jpg'
+  'hinton gk': 'hinton.jpg',
+  'international': 'international.jpg',
+  'international gk': 'international.jpg',
+  'kungsängen': 'kungsangen.jpg',
+  'kungsangen': 'kungsangen.jpg',
+  'kungsängen gk': 'kungsangen.jpg',
+  'kungsängen queens gk': 'kungsangen.jpg',
+  'queens gk': 'kungsangen.jpg',
+  'lindo': 'lindo.jpg',
 };
 
 var S = { tours: [] };
@@ -1232,7 +1262,7 @@ function eventCardHTML(i,e) {
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
   return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
-    (e.img?'<img src="'+e.img+'" class="event-banner" alt="'+e.name+'">':'')+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
@@ -1818,7 +1848,7 @@ function renderCalendar(){
   } else {
     cel.innerHTML='<p class="section-title">Kommande tävlingar</p>'+upcoming.map(function(e){
       return '<div class="card" style="'+(e.img?'padding:0;overflow:hidden':'')+'">'+
-        (e.img?'<img src="'+e.img+'" style="width:100%;height:90px;object-fit:cover;display:block" alt="'+e.name+'"><div style="padding:.85rem 1.25rem">':'')+
+        (getEventImage(e)?'<img src="'+getEventImage(e)+'" style="width:100%;height:90px;object-fit:cover;display:block" alt="'+e.name+'"><div style="padding:.85rem 1.25rem">':'')+
         '<div class="row"><div style="flex:1"><div style="font-weight:600">'+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2)">'+e.course+' · '+e.date+'</div></div>'+
         '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'">'+(e.closed?'Avslutad':'Öppen')+'</span></div>'+
@@ -1858,7 +1888,7 @@ function renderCalendarOverview(t) {
 function showCalEvent(i){
   var t=getTour(),e=t.events[i];
   showModal('<h3>'+e.name+'</h3>'+
-    (e.img?'<img src="'+e.img+'" class="img-preview" alt="'+e.name+'">':'')+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="img-preview" alt="'+e.name+'">':'')+
     '<p style="font-size:14px;color:var(--text-2);margin-bottom:8px"><i class="ti ti-map-pin"></i> '+e.course+' · '+e.date+'</p>'+
     '<p style="font-size:13px;color:var(--text-3)">Anmälda: '+(e.registrations||[]).length+' spelare</p>'+
     '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>');
@@ -2041,7 +2071,7 @@ function renderCourseBankSection() {
     entries.forEach(function(e, idx){
       html += '<div class="row" style="justify-content:space-between;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
         '<div class="row" style="gap:10px;align-items:center">'+
-          (e.img?'<img src="'+e.img+'" style="width:44px;height:32px;object-fit:cover;border-radius:6px">':'')+
+          (getEventImage(e)?'<img src="'+getEventImage(e)+'" style="width:44px;height:32px;object-fit:cover;border-radius:6px">':'')+
           '<span style="font-weight:500">'+esc(e.displayName)+'</span>'+
         '</div>'+
         '<a class="btn btn-sm" href="'+e.img+'" download="'+esc(e.key.replace(/\s+/g,'-'))+'.jpg"><i class="ti ti-download"></i> Ladda ner</a>'+
