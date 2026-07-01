@@ -556,7 +556,8 @@ function initFirebaseSync(onFirstLoad) {
 
 function refreshCurrentView() {
   if (!activeTourId) {
-    if (document.getElementById('tours-screen').style.display !== 'none') renderToursList();
+    var toursListScreen = document.getElementById('tours-list-screen');
+    if (toursListScreen && toursListScreen.style.display !== 'none') renderToursList();
     return;
   }
   // If the tour we're viewing was deleted remotely, bounce back to the list
@@ -733,15 +734,20 @@ function showHomeScreen() {
   updateHero(null);
 }
 
-function showToursView() { showHomeScreen(); }
+function showToursView() { showToursList(); }
 
 function showToursList() {
-  document.getElementById('home-screen-content').style.display = 'none';
-  document.getElementById('tours-list-screen').style.display = '';
-  document.getElementById('course-stats-screen').style.display = 'none';
-  document.getElementById('global-settings-screen').style.display = 'none';
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  var screens = ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'];
+  screens.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
+  });
   document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
   renderToursList();
+  updateHero(null);
 }
 
 function showCourseStats() {
