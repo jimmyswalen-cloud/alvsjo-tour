@@ -238,6 +238,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div class="app-header">
     <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
     <span id="active-tour-name"></span>
+    <span id="edit-tour-btn-wrap"></span>
   </div>
   <div class="nav-wrap">
     <nav class="nav">
@@ -937,6 +938,134 @@ function applyCourseStatsFilter() {
 }
 
 
+function tourHasStarted(t) {
+  return (t.events||[]).some(function(e){ return e.closed; });
+}
+
+function renderEditTourBtn() {
+  var t = getTour();
+  var wrap = document.getElementById('edit-tour-btn-wrap');
+  if(!wrap) return;
+  if(isAdmin() && !tourHasStarted(t)) {
+    wrap.innerHTML = '<button class="btn btn-sm" onclick="openEditTour()" style="margin-left:8px"><i class="ti ti-edit"></i> Redigera</button>';
+  } else {
+    wrap.innerHTML = '';
+  }
+}
+
+function openEditTour() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  if(tourHasStarted(t)) { alert('Touren har startat och kan inte redigeras.'); return; }
+
+  var evRows = (t.events||[]).map(function(e,i){
+    return '<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center" id="edit-ev-row-'+i+'">'+
+      '<div style="flex:1">'+
+        '<input type="text" id="edit-ev-name-'+i+'" value="'+esc(e.name)+'" style="margin:0 0 4px;width:100%">'+
+        '<div class="row" style="gap:6px">'+
+          '<input type="date" id="edit-ev-date-'+i+'" value="'+e.date+'" style="margin:0;flex:1">'+
+          '<select id="edit-ev-type-'+i+'" style="margin:0;width:120px">'+
+            '<option value="stableford"'+(e.type==='stableford'?' selected':'')+'>Stableford</option>'+
+            '<option value="slag"'+(!e.type||e.type==='slag'?' selected':'')+'>Slag</option>'+
+          '</select>'+
+          (e.isFinal?'<span class="badge badge-gold" style="white-space:nowrap">Final</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<button class="btn btn-sm btn-danger" onclick="removeEventFromTour('+i+')" title="Ta bort"><i class="ti ti-trash"></i></button>'+
+    '</div>';
+  }).join('');
+
+  var h = '<h3><i class="ti ti-edit"></i> Redigera tour</h3>';
+  h += '<div class="field"><label>Tournamn</label><input id="edit-tour-name" type="text" value="'+esc(t.name)+'"></div>';
+  h += '<div class="field"><label>Säsong</label><input id="edit-tour-season" type="text" value="'+esc(t.season||'')+'" placeholder="t.ex. 2025"></div>';
+  h += '<hr class="divider">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Deltävlingar</div>';
+  h += '<div id="edit-events-list">'+evRows+'</div>';
+  h += '<button class="btn btn-sm" onclick="addEventToTour()" style="margin-top:8px"><i class="ti ti-plus"></i> Lägg till deltävling</button>';
+  h += '<hr class="divider">';
+  h += '<p style="font-size:12px;color:var(--text-3)"><i class="ti ti-info-circle"></i> När den första tävlingen stängs låses touren permanent.</p>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
+    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveEditTour()">Spara</button></div>';
+  showModal(h, true, true);
+}
+
+function addEventToTour() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  var n = (t.events||[]).length;
+  var today = new Date().toISOString().slice(0,10);
+  var newRow = document.createElement('div');
+  newRow.id = 'edit-ev-row-'+n;
+  newRow.className = 'row';
+  newRow.style.cssText = 'gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center';
+  newRow.innerHTML =
+    '<div style="flex:1">'+
+      '<input type="text" id="edit-ev-name-'+n+'" value="Ny deltävling" style="margin:0 0 4px;width:100%">'+
+      '<div class="row" style="gap:6px">'+
+        '<input type="date" id="edit-ev-date-'+n+'" value="'+today+'" style="margin:0;flex:1">'+
+        '<select id="edit-ev-type-'+n+'" style="margin:0;width:120px">'+
+          '<option value="stableford">Stableford</option>'+
+          '<option value="slag">Slag</option>'+
+        '</select>'+
+      '</div>'+
+    '</div>'+
+    '<button class="btn btn-sm btn-danger" onclick="this.closest(\'[id^=edit-ev-row]\').remove()" title="Ta bort"><i class="ti ti-trash"></i></button>';
+  document.getElementById('edit-events-list').appendChild(newRow);
+}
+
+function removeEventFromTour(i) {
+  if(!isAdmin()) return;
+  var row = document.getElementById('edit-ev-row-'+i);
+  if(row) row.remove();
+}
+
+function saveEditTour() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  var nameEl = document.getElementById('edit-tour-name');
+  var seasonEl = document.getElementById('edit-tour-season');
+  if(nameEl && nameEl.value.trim()) t.name = nameEl.value.trim();
+  if(seasonEl) t.season = seasonEl.value.trim();
+
+  // Rebuild events from modal rows
+  var newEvents = [];
+  var i = 0;
+  while(true) {
+    var nameInput = document.getElementById('edit-ev-name-'+i);
+    var dateInput = document.getElementById('edit-ev-date-'+i);
+    var typeInput = document.getElementById('edit-ev-type-'+i);
+    if(!nameInput) break;
+    var row = document.getElementById('edit-ev-row-'+i);
+    if(row && row.parentNode) { // only if not removed
+      var existing = t.events[i] || {};
+      newEvents.push({
+        id: existing.id || uid(),
+        name: nameInput.value.trim() || ('Del '+(newEvents.length+1)),
+        date: dateInput ? dateInput.value : existing.date,
+        type: typeInput ? typeInput.value : (existing.type||'stableford'),
+        course: existing.course || '',
+        periodStart: existing.periodStart || (dateInput?dateInput.value:''),
+        periodEnd: existing.periodEnd || (dateInput?dateInput.value:''),
+        isFinal: !!existing.isFinal,
+        isMajor: !!existing.isMajor,
+        img: existing.img || null,
+        registrations: existing.registrations || [],
+        results: existing.results || [],
+        closed: false
+      });
+    }
+    i++;
+  }
+  if(newEvents.length === 0) { alert('Touren måste ha minst en deltävling.'); return; }
+  t.events = newEvents;
+  document.getElementById('active-tour-name').textContent = t.name;
+  save();
+  closeModal();
+  renderEvents();
+  renderEditTourBtn();
+}
+
 function enterTour(id) {
   activeTourId = id;
   document.getElementById('tours-screen').style.display = 'none';
@@ -944,6 +1073,7 @@ function enterTour(id) {
   document.getElementById('app-screen').style.display = '';
   document.getElementById('active-tour-name').textContent = getTour().name;
   updateHero(id);
+  renderEditTourBtn();
   showView('tournament');
 }
 
@@ -1129,6 +1259,7 @@ function renderToursList() {
 }
 
 function delTour(id) {
+  if(!isAdmin()) return;
   var t=S.tours.find(function(x){return x.id===id;});
   if(confirm('Ta bort "'+t.name+'"? All data raderas.')) {
     S.tours=S.tours.filter(function(x){return x.id!==id;}); save(); renderToursList();
@@ -1496,13 +1627,99 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 // ── PLAYERS ────────────────────────────────────────────────────────────────
 function renderPlayers() {
   var t=getTour(), el=document.getElementById('players-list');
+
+  // Admin: search & add section
+  var addSection = '';
+  if(isAdmin()) {
+    var eligibleUsers = (S.users||[]).filter(function(u){
+      var wantsToPlay = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
+      return wantsToPlay && (u.tourAccess||[]).indexOf(t.id) < 0;
+    });
+    var searchVal = '';
+    var searchEl = document.getElementById('player-search-inp');
+    if(searchEl) searchVal = searchEl.value.toLowerCase();
+    var filtered = eligibleUsers.filter(function(u){
+      return !searchVal || (u.name||u.username).toLowerCase().indexOf(searchVal) !== -1;
+    });
+    var resultRows = filtered.slice(0,6).map(function(u){
+      return '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px;align-items:center">'+
+        (u.img?'<img src="'+u.img+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+ini(u.name||u.username)+'</div>')+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(u.name||u.username)+'</div>'+
+        '<div style="font-size:12px;color:var(--text-2)">HCP '+(u.hcp||'–')+'</div></div>'+
+        '<button class="btn btn-sm btn-primary" onclick="addPlayerToTour(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i> Lägg till</button>'+
+      '</div>';
+    }).join('');
+    var moreCount = filtered.length > 6 ? filtered.length - 6 : 0;
+
+    addSection = '<div class="card" style="margin-bottom:14px;padding:14px 16px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px"><i class="ti ti-user-plus" style="color:var(--green-dark)"></i> Lägg till spelare</div>'+
+      '<div style="position:relative;margin-bottom:10px">'+
+        '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
+        '<input id="player-search-inp" type="text" placeholder="Sök bland registrerade spelare..." value="'+esc(searchVal)+'" oninput="renderPlayers()" style="padding-left:34px;width:100%;box-sizing:border-box">'+
+      '</div>'+
+      (eligibleUsers.length === 0
+        ? '<p style="font-size:13px;color:var(--text-3);margin:0">Alla registrerade spelare är redan med i touren.</p>'
+        : resultRows + (moreCount ? '<p style="font-size:12px;color:var(--text-3);margin:6px 0 0">+'+moreCount+' fler – sök för att filtrera</p>' : ''))+
+    '</div>';
+  }
+
   if(!t.players.length){
-    el.innerHTML = isAdmin()
-      ? '<p class="empty">Inga spelare ännu. Ge användare åtkomst till touren under <i class="ti ti-users-group"></i> Användare.</p>'
-      : '<p class="empty">Inga spelare ännu.</p>';
+    el.innerHTML = addSection + (isAdmin()
+      ? ''
+      : '<p class="empty">Inga spelare ännu.</p>');
     return;
   }
-  el.innerHTML=t.players.map(function(p,i){
+  var playerCards = t.players.map(function(p,i){
+    if(!p) return '';
+    var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
+    var strengths  = (tourUser&&tourUser.strengths)  || [];
+    var weaknesses = (tourUser&&tourUser.weaknesses) || [];
+    var swBadges = '';
+    if(strengths.length||weaknesses.length) {
+      swBadges = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px">';
+      if(strengths.length) {
+        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<span style="font-size:11px;font-weight:700;color:#0F6E56;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-up" style="font-size:11px"></i> Styrkor</span>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+        strengths.forEach(function(s){ swBadges += '<span style="background:#E1F5EE;color:#0F6E56;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(s)+'</span>'; });
+        swBadges += '</div></div>';
+      }
+      if(weaknesses.length) {
+        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<span style="font-size:11px;font-weight:700;color:#A32D2D;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-down" style="font-size:11px"></i> Svagheter</span>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+        weaknesses.forEach(function(w){ swBadges += '<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(w)+'</span>'; });
+        swBadges += '</div></div>';
+      }
+      swBadges += '</div>';
+    }
+    return '<div class="player-card" style="flex-direction:column;align-items:flex-start">'+
+      '<div class="row" style="width:100%;gap:12px;align-items:center">'+
+        (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
+        (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
+        '</div>'+
+        (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
+      '</div>'+
+      swBadges+
+    '</div>';
+  }).join('');
+
+  el.innerHTML = addSection + playerCards;
+}
+
+function addPlayerToTour(username) {
+  if(!isAdmin()) return;
+  var u = findUser(username);
+  if(!u) return;
+  var t = getTour();
+  if(!u.tourAccess) u.tourAccess = [];
+  if(u.tourAccess.indexOf(t.id) < 0) u.tourAccess.push(t.id);
+  save();
+  renderPlayers();
+  renderOOM();
+}
     if(!p) return '';
     var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     var strengths  = (tourUser&&tourUser.strengths)  || [];
@@ -1541,8 +1758,6 @@ function renderPlayers() {
       '</div>'+
       swBadges+
     '</div>';
-  }).join('');
-}
 
 function jumpToEditUserByUsername(username) {
   var idx = getUsers().findIndex(function(u){return u.username===username;});
@@ -2234,6 +2449,7 @@ function pickW(ei,from,keep,move){
 }
 
 function changeEventType(i) {
+  if(!isAdmin()) return;
   var t = getTour(), e = t.events[i];
   if(e.closed) { alert('Kan inte ändra spelform på en stängd tävling.'); return; }
   var current = e.type === 'stableford' ? 'Stableford' : 'Slag';
@@ -2246,6 +2462,7 @@ function changeEventType(i) {
 }
 
 function closeEvent(i){
+  if(!isAdmin()) return;
   var t=getTour(),e=t.events[i];
   if(!confirm('Stäng tävlingen? Resultat låses.'+(e.isFinal?'':' Poäng delas ut.')))return;
   if(!e.results||!e.results.length){alert('Inga resultat sparade.');return;}
@@ -2257,6 +2474,7 @@ function closeEvent(i){
 }
 
 function reopenEvent(i){
+  if(!isAdmin()) return;
   var t=getTour(),e=t.events[i];
   if(!confirm('Återöppna tävlingen för redigering? Du kan sedan ändra resultaten och stänga den igen.'))return;
   e.closed=false;
@@ -2632,6 +2850,7 @@ var SW_WEAKNESSES = [
 ];
 
 function openStrengthsEdit(username) {
+  if(!isAdmin() && (!currentUser || currentUser.username !== username)) return;
   var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!u) return;
   var curStr  = u.strengths  || [];
@@ -2696,6 +2915,8 @@ function swToggleChip(prefix, idx, color) {
 }
 
 function saveStrengths(username) {
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!isAdmin() && (!currentUser || currentUser.username !== username)) { alert("Ingen behörighet."); return; }
   var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!u) return;
 
@@ -2897,6 +3118,7 @@ function renderSettings(){
 }
 
 function saveFeeSettings() {
+  if(!isAdmin()) return;
   var t = getTour();
   var val = parseInt(document.getElementById('fee-inp').value)||0;
   t.fee = val;
@@ -2907,6 +3129,7 @@ function saveFeeSettings() {
 }
 
 function savePayoutSettings() {
+  if(!isAdmin()) return;
   var t = getTour();
   var payouts = [];
   for(var i=0; document.getElementById('po-'+i); i++) {
@@ -2921,6 +3144,7 @@ function savePayoutSettings() {
 }
 
 function saveBestRounds() {
+  if(!isAdmin()) return;
   var t = getTour();
   var val = parseInt(document.getElementById('best-rounds-inp').value) || 0;
   t.bestRounds = Math.max(0, val);
@@ -2949,6 +3173,7 @@ function suggestCourseFilename(name) {
 }
 
 function openAddCourse() {
+  if(!isAdmin()) return;
   showModal(
     '<h3>Lägg till bana</h3>' +
     '<div class="field"><label>Bannamn</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
@@ -2980,6 +3205,7 @@ function updateCourseFilenameHint() {
 }
 
 function submitAddCourse() {
+  if(!isAdmin()) return;
   var name = (document.getElementById('cd-name').value||'').trim();
   var par = parseInt(document.getElementById('cd-par').value)||72;
   if(!name) { alert('Bannamn krävs.'); return; }
@@ -3003,6 +3229,7 @@ function submitAddCourse() {
 }
 
 function openEditCourse(id) {
+  if(!isAdmin()) return;
   var c = courseDb.find(function(x){ return x.id===id; });
   if(!c) return;
   showModal(
@@ -3022,6 +3249,7 @@ function openEditCourse(id) {
 }
 
 function submitEditCourse(id) {
+  if(!isAdmin()) return;
   var c = courseDb.find(function(x){ return x.id===id; });
   if(!c) return;
   var name = (document.getElementById('cd-name').value||'').trim();
@@ -3566,6 +3794,7 @@ function deleteDiagnosticImage(i) {
 var _newUserImg = null;
 var _pendingTourAccess = [];
 function openNewUser() {
+  if(!isAdmin()) return;
   _newUserImg = null;
   _pendingTourAccess = [];
   var h = '<h3>Ny användare</h3>';
@@ -3688,6 +3917,7 @@ function saveNewUser() {
 
 var _editUserImg = null;
 function openEditUser(i) {
+  if(!isAdmin()) return;
   _editUserImg = null;
   var u = getUsers()[i];
   _pendingTourAccess = (u.tourAccess||[]).slice();
