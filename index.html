@@ -2233,51 +2233,202 @@ function showPlayerProfile(pi){
 }
 
 function buildProfileHTML(pi){
-  var t=getTour(),p=t.players[pi];if(!p)return'';
-  var participated=t.events.filter(function(e){return e.closed&&e.results&&e.results.find(function(r){return r.pi==pi;});});
-  var results=participated.map(function(e){var r=e.results.find(function(x){return x.pi==pi;});var pos=e.results.findIndex(function(x){return x.pi==pi;})+1;return{event:e,result:r,pos:pos};});
-  var numEvents=results.length,podiums=results.filter(function(x){return x.pos<=3;}).length;
-  var bestPos=numEvents?Math.min.apply(null,results.map(function(x){return x.pos;})):null;
-  var worstPos=numEvents?Math.max.apply(null,results.map(function(x){return x.pos;})):null;
-  var slagR=results.filter(function(x){return !x.event.type||x.event.type==='slag';});
-  var bestNetto=slagR.length?Math.min.apply(null,slagR.map(function(x){return x.result.score;})):null;
-  var stabR=results.filter(function(x){return x.event.type==='stableford';});
-  var bestStab=stabR.length?Math.max.apply(null,stabR.map(function(x){return x.result.score;})):null;
-  var totalPts=results.reduce(function(s,x){return s+(x.result.points||0);},0);
-  var posIcon=function(pos){return pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':'<span style="font-size:13px;color:var(--text-2);font-weight:600">'+pos+'.</span>';};
-  var histRows=results.slice().sort(function(a,b){return new Date(b.event.date)-new Date(a.event.date);}).map(function(x){
-    var type=(x.event.isFinal?'Final · ':'')+(x.event.type==='stableford'?'Stableford':'Slag');
-    var sl=x.event.type==='stableford'?x.result.score+' p':x.result.score+' netto';
-    var tc=x.event.isFinal?'background:var(--gold-light);color:var(--gold)':(x.event.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11');
-    return '<tr><td style="color:var(--text-2);white-space:nowrap;font-size:12px">'+x.event.date+'</td>'+
-      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x.event.name+'</td>'+
-      '<td><span style="font-size:11px;padding:2px 7px;border-radius:20px;font-weight:500;'+tc+'">'+type+'</span></td>'+
-      '<td style="text-align:center;font-weight:600">'+sl+'</td>'+
-      '<td style="text-align:center">'+posIcon(x.pos)+'</td>'+
-      '<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(x.event.isFinal?'–':(x.result.points||0)+'p')+'</td></tr>';
+  var t=getTour(), p=t.players[pi]; if(!p) return '';
+  var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
+  var playerImg = (tourUser&&tourUser.img) || p.img || null;
+  var strengths = (tourUser&&tourUser.strengths) || [];
+  var weaknesses = (tourUser&&tourUser.weaknesses) || [];
+  var participated = t.events.filter(function(e){ return e.closed&&e.results&&e.results.find(function(r){return r.pi==pi;}); });
+  var results = participated.map(function(e){
+    var r=e.results.find(function(x){return x.pi==pi;});
+    var pos=e.results.findIndex(function(x){return x.pi==pi;})+1;
+    return {event:e, result:r, pos:pos};
+  });
+  var nonFinal = results.filter(function(x){ return !x.event.isFinal; });
+  var numEvents = results.length;
+  var wins = results.filter(function(x){ return x.pos===1; }).length;
+  var podiums = results.filter(function(x){ return x.pos<=3; }).length;
+  var bestPos = numEvents ? Math.min.apply(null,results.map(function(x){return x.pos;})) : null;
+  var worstPos = numEvents ? Math.max.apply(null,results.map(function(x){return x.pos;})) : null;
+  var slagR = results.filter(function(x){ return !x.event.isFinal && (!x.event.type||x.event.type==='slag') && x.result.score>0; });
+  var stabR = results.filter(function(x){ return !x.event.isFinal && x.event.type==='stableford' && x.result.score>0; });
+  var bestNetto = slagR.length ? Math.min.apply(null,slagR.map(function(x){return x.result.score;})) : null;
+  var bestStab  = stabR.length ? Math.max.apply(null,stabR.map(function(x){return x.result.score;})) : null;
+  var avgSlag   = slagR.length ? (slagR.reduce(function(s,x){return s+x.result.score;},0)/slagR.length).toFixed(1) : null;
+  var totalPts  = nonFinal.reduce(function(s,x){return s+(x.result.points||0);},0);
+  var bestN = t.bestRounds || 0;
+  var countedIds = {};
+  if(bestN > 0) {
+    nonFinal.slice().sort(function(a,b){return (b.result.points||0)-(a.result.points||0);}).slice(0,bestN).forEach(function(x){ countedIds[x.event.id]=true; });
+  }
+  var countedPts = bestN > 0 ? nonFinal.filter(function(x){return countedIds[x.event.id];}).reduce(function(s,x){return s+(x.result.points||0);},0) : totalPts;
+  var ptsLabel = bestN > 0
+    ? countedPts+'p OoM (bästa '+Math.min(bestN,nonFinal.length)+'/'+nonFinal.length+' rundor)'
+    : countedPts+'p totalt';
+
+  var posStr = function(pos){
+    if(pos===1) return '<span style="background:#DAA520;color:#fff;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">1:a</span>';
+    if(pos===2) return '<span style="background:#aaa;color:#fff;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">2:a</span>';
+    if(pos===3) return '<span style="background:#cd7f32;color:#fff;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">3:a</span>';
+    return '<span style="font-size:13px;color:var(--text-2)">'+pos+':a</span>';
+  };
+
+  // Stat cards row
+  var statCards = [
+    {val: countedPts+'p', lbl:'Totalt poäng',  icon:'ti-award',  color:'#0F6E56'},
+    {val: avgSlag||'–',   lbl:'Snitt slag',    icon:'ti-target', color:'#0F6E56'},
+    {val: wins,           lbl:'Segrar',         icon:'ti-trophy', color:'#BA7517'},
+    {val: podiums,        lbl:'Pallplatser',    icon:'ti-medal',  color:'#888780'},
+  ];
+  var heroStats = statCards.map(function(s){
+    return '<div style="flex:1;text-align:center;padding:14px 6px">'+
+      '<i class="ti '+s.icon+'" style="font-size:22px;color:'+s.color+';display:block;margin-bottom:4px" aria-hidden="true"></i>'+
+      '<div style="font-size:22px;font-weight:600;color:var(--text)">'+s.val+'</div>'+
+      '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+s.lbl+'</div>'+
+    '</div>';
   }).join('');
-  var lastStat=bestStab!=null?'<div class="stat-val">'+bestStab+'p</div><div class="stat-lbl">Bästa Stableford</div>':
-    '<div class="stat-val">'+(bestNetto!=null?bestNetto:'–')+'</div><div class="stat-lbl">Bästa netto</div>';
+
+  // Detail rows helper
+  var dRow = function(lbl,val,green){
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="font-size:13px;color:var(--text-2)">'+lbl+'</span>'+
+      '<span style="font-size:13px;font-weight:600;color:'+(green?'#0F6E56':'var(--text)')+'">'+val+'</span></div>';
+  };
+
+  // Strengths/weaknesses section
+  var canEditSW = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
+  var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  swHtml += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Styrkor och svagheter</div>';
+  if(strengths.length||weaknesses.length) {
+    if(strengths.length) {
+      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+      strengths.forEach(function(s){
+        swHtml += '<span style="background:#E1F5EE;color:#0F6E56;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-up" style="font-size:12px"></i>'+esc(s)+'</span>';
+      });
+      swHtml += '</div>';
+    }
+    if(weaknesses.length) {
+      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+      weaknesses.forEach(function(w){
+        swHtml += '<span style="background:#FCEBEB;color:#A32D2D;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-down" style="font-size:12px"></i>'+esc(w)+'</span>';
+      });
+      swHtml += '</div>';
+    }
+  } else {
+    swHtml += '<p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p>';
+  }
+  if(canEditSW) {
+    swHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+      '<button class="btn btn-sm" onclick="openStrengthsEdit(\''+esc(p.username||'')+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
+  }
+  swHtml += '</div>';
+
+  // OoM legend
+  var histLegend = bestN > 0
+    ? '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">'+
+        '<span style="color:#0F6E56;font-weight:600">✓</span> räknas &nbsp;&nbsp;'+
+        '<span style="color:var(--text-3)">✕</span> räknas ej (bästa '+bestN+' av '+nonFinal.length+' rundor)</p>'
+    : '';
+
+  // History rows
+  var histRows = results.slice().sort(function(a,b){return new Date(a.event.date)-new Date(b.event.date);}).map(function(x){
+    var isStab = x.event.type==='stableford';
+    var isFinal = x.event.isFinal;
+    var excluded = bestN>0 && !isFinal && !countedIds[x.event.id];
+    var typeBg = isFinal ? 'background:var(--gold-light);color:var(--gold)' : 'background:#EAF3DE;color:#3B6D11';
+    var typeLabel = isFinal ? 'Final' : (isStab ? 'Stableford' : 'Slag');
+    var slagVal = (!isStab && x.result.score>0) ? x.result.score : '–';
+    var ptsVal  = isFinal ? '–' : (x.result.points||0)+'p';
+    var countBadge = (bestN>0&&!isFinal) ? (excluded
+      ? ' <span style="color:var(--text-3);font-size:10px">✕</span>'
+      : ' <span style="color:#0F6E56;font-size:10px">✓</span>') : '';
+    return '<tr style="'+(excluded?'opacity:0.5':'')+'">'+
+      '<td style="padding:9px 16px;color:var(--text-2);white-space:nowrap;font-size:12px">'+x.event.date+'</td>'+
+      '<td style="padding:9px 8px;font-weight:600">'+esc(x.event.name)+'</td>'+
+      '<td style="padding:9px 8px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;'+typeBg+'">'+typeLabel+'</span></td>'+
+      '<td style="padding:9px 8px;text-align:right;color:var(--text-2)">'+slagVal+'</td>'+
+      '<td style="padding:9px 8px;text-align:right;font-weight:600;color:'+(excluded?'var(--text-3)':'#0F6E56')+'">'+ptsVal+countBadge+'</td>'+
+      '<td style="padding:9px 16px;text-align:right">'+posStr(x.pos)+'</td>'+
+    '</tr>';
+  }).join('');
+
   return '<div class="back-btn" onclick="showOOMMain()"><i class="ti ti-arrow-left"></i> Tillbaka till Order of Merit</div>'+
-    '<div class="profile-header">'+(p.img?'<img src="'+p.img+'" class="profile-avatar-lg" alt="'+p.name+'">':'<div class="profile-avatar-ph">'+ini(p.name)+'</div>')+
-    '<div><div style="font-size:24px;font-weight:700;margin-bottom:2px">'+p.name+'</div>'+
-    '<div style="font-size:14px;opacity:.8">HCP '+p.hcp+'</div>'+
-    '<div style="font-size:13px;opacity:.65;margin-top:4px">'+totalPts+' OoM-poäng totalt</div></div></div>'+
-    '<div class="stat-grid">'+
-      '<div class="stat-card"><div class="stat-val">'+numEvents+'</div><div class="stat-lbl">Tävlingar</div></div>'+
-      '<div class="stat-card"><div class="stat-val">'+podiums+'</div><div class="stat-lbl">Pallplatser</div></div>'+
-      '<div class="stat-card"><div class="stat-val">'+(bestPos!=null?bestPos+'.':'–')+'</div><div class="stat-lbl">Bästa placering</div></div>'+
-      '<div class="stat-card"><div class="stat-val">'+(worstPos!=null?worstPos+'.':'–')+'</div><div class="stat-lbl">Sämsta placering</div></div>'+
-      '<div class="stat-card"><div class="stat-val">'+(bestNetto!=null?bestNetto:'–')+'</div><div class="stat-lbl">Bästa netto</div></div>'+
-      '<div class="stat-card">'+lastStat+'</div>'+
+    '<div style="display:flex;align-items:center;gap:16px;padding:0 0 1.25rem">'+
+      (playerImg
+        ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
+        : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(p.name)+'</div>')+
+      '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(p.name)+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+p.hcp+' &nbsp;·&nbsp; '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+      '<div style="font-size:12px;color:var(--text-3);margin-top:2px">'+ptsLabel+'</div></div>'+
     '</div>'+
-    (numEvents?'<div class="card" style="padding:0;overflow:hidden">'+
-      '<div style="padding:.85rem 1.25rem .6rem;border-bottom:1px solid var(--border)"><h3 style="margin:0;font-size:14px">Tävlingshistorik</h3></div>'+
-      '<div style="overflow-x:auto"><table class="hist-table"><thead><tr>'+
-        '<th>Datum</th><th>Tävling</th><th>Typ</th><th style="text-align:center">Resultat</th><th style="text-align:center">Plac.</th><th style="text-align:right">Poäng</th>'+
-      '</tr></thead><tbody>'+histRows+'</tbody></table></div></div>':
-      '<p class="empty">Inga avslutade tävlingar än.</p>');
+    '<div class="card" style="margin-bottom:12px;padding:0">'+
+      '<div style="display:flex;flex-wrap:wrap">'+heroStats+'</div>'+
+    '</div>'+
+    '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
+        '<div><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Resultat</div>'+
+          dRow('Bästa placering', bestPos!=null?bestPos+':a':'–', true)+
+          dRow('Sämsta placering', worstPos!=null?worstPos+':a':'–', false)+
+          dRow('Tävlingar spelade', numEvents, false)+
+        '</div>'+
+        '<div><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Rundor</div>'+
+          dRow('Bästa slag-runda', bestNetto!=null?bestNetto+' slag':'–', false)+
+          dRow('Bästa poäng-runda', bestStab!=null?bestStab+' p':'–', true)+
+          dRow('Snitt poäng/runda', nonFinal.length?(nonFinal.reduce(function(s,x){return s+(x.result.points||0);},0)/nonFinal.length).toFixed(1)+' p':'–', false)+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    swHtml+
+    (numEvents?
+      '<div class="card" style="padding:0;overflow:hidden">'+
+        '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
+          '<div style="font-size:14px;font-weight:600;color:var(--text)">Alla tävlingar</div>'+
+          '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Resultat från alla deltävlingar och finaler</div>'+
+        '</div>'+
+        (histLegend?'<div style="padding:10px 16px 0">'+histLegend+'</div>':'')+
+        '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
+          '<th style="padding:8px 16px">Datum</th>'+
+          '<th style="padding:8px 8px">Tävling</th>'+
+          '<th style="padding:8px 8px">Typ</th>'+
+          '<th style="padding:8px 8px;text-align:right">Slag</th>'+
+          '<th style="padding:8px 8px;text-align:right">Poäng</th>'+
+          '<th style="padding:8px 16px;text-align:right">Plac.</th>'+
+        '</tr></thead><tbody>'+histRows+'</tbody></table></div>'+
+      '</div>'
+    : '<p class="empty">Inga avslutade tävlingar än.</p>');
 }
+
+function openStrengthsEdit(username) {
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!u) return;
+  var str = (u.strengths||[]).join(', ');
+  var weak = (u.weaknesses||[]).join(', ');
+  showModal(
+    '<h3><i class="ti ti-star"></i> Styrkor och svagheter – '+esc(u.name||u.username)+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">Separera med komma, t.ex. "Lång drive, Putting under press"</p>'+
+    '<div class="field"><label><i class="ti ti-arrow-up" style="color:#0F6E56"></i> Styrkor</label>'+
+    '<input id="sw-strengths" type="text" value="'+esc(str)+'" placeholder="t.ex. Lång drive, Chipping"></div>'+
+    '<div class="field"><label><i class="ti ti-arrow-down" style="color:#A32D2D"></i> Svagheter</label>'+
+    '<input id="sw-weaknesses" type="text" value="'+esc(weak)+'" placeholder="t.ex. Bunkerslag, Putting vid stress"></div>'+
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
+    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveStrengths(\''+username+'\')">Spara</button></div>',
+    false, true
+  );
+}
+
+function saveStrengths(username) {
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!u) return;
+  var strEl = document.getElementById('sw-strengths');
+  var weakEl = document.getElementById('sw-weaknesses');
+  u.strengths = strEl ? strEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+  u.weaknesses = weakEl ? weakEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+  save();
+  closeModal();
+  showPlayerProfile(getTour().players.findIndex(function(p){ return p&&p.username===username; }));
+}
+
 
 function setOomView(view) {
   document.getElementById('oom-list').style.display = view==='list' ? '' : 'none';
