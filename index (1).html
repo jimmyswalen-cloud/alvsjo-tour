@@ -1,0 +1,2616 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Älvsjö Players Tour</title>
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green:#1D9E75;--green-light:#E1F5EE;--green-dark:#0F6E56;
+  --gold:#BA7517;--gold-light:#FAEEDA;
+  --bg:#f0f4f1;--surface:#ffffff;--surface2:#f3f4f6;
+  --border:#e5e7eb;--border-strong:#d1d5db;
+  --text:#111827;--text-2:#6b7280;--text-3:#9ca3af;
+  --radius:8px;--danger-bg:#fef2f2;--danger-border:#fecaca;--danger-text:#dc2626;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.hero{position:relative;width:100%;height:280px;background:#1a2e22 center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.12) 0%,rgba(3,30,18,.70) 100%);}
+.hero-content{position:relative;text-align:center;padding:0 20px}
+.hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px;}
+.hero-title{font-size:clamp(36px,9vw,72px);font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1;text-shadow:0 3px 28px rgba(0,0,0,.5);margin-bottom:0;}
+.hero-sub{font-size:14px;color:rgba(255,255,255,.6);margin-top:8px;}
+.hero-scroll{position:absolute;bottom:0;left:0;right:0;height:48px;background:linear-gradient(0deg,var(--bg) 0%,transparent 100%);}
+.wrap{max-width:700px;margin:0 auto;padding:0 16px 4rem}
+.tours-header{display:flex;align-items:center;justify-content:space-between;margin:20px 0 16px}
+.tour-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s}
+.tour-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.10)}
+.app-header{display:flex;align-items:center;gap:10px;padding:14px 0 0;margin-bottom:4px}
+.back-to-tours{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text-2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:all .12s}
+.back-to-tours:hover{background:var(--surface2);color:var(--text)}
+#active-tour-name{font-weight:700;font-size:17px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:8px}
+.nav{display:flex;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto}
+.nav-btn{flex:1;min-width:72px;padding:8px 4px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);font-size:11px;color:var(--text-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .15s}
+.nav-btn i{font-size:19px}
+.nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
+.view{display:none;padding-top:20px}.view.active{display:block}
+h2{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px}
+h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.btn{padding:8px 16px;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);font-size:14px;cursor:pointer;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface2)}
+.btn-primary{background:var(--green);border-color:var(--green-dark);color:#fff}
+.btn-primary:hover{background:var(--green-dark)}
+.btn-danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-text)}
+.btn-sm{padding:5px 10px;font-size:12px}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],textarea,select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;background:var(--surface);color:var(--text);margin-bottom:8px;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(29,158,117,.1)}
+label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-weight:500}
+.field{margin-bottom:14px}
+.row{display:flex;gap:8px;align-items:center}
+.avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+.avatar-ph{width:44px;height:44px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--green-dark);flex-shrink:0}
+.player-card{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.player-card:last-child{border-bottom:none}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green-dark)}
+.badge-gold{background:var(--gold-light);color:var(--gold)}
+.badge-gray{background:var(--surface2);color:var(--text-2)}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+.empty{text-align:center;padding:2.5rem 1rem;color:var(--text-3);font-size:14px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:8px}
+.cal-header{font-size:11px;color:var(--text-3);text-align:center;padding:5px}
+.cal-day{font-size:12px;text-align:center;padding:7px 2px;border-radius:6px;cursor:default;color:var(--text-2)}
+.cal-day.has-event{background:var(--green-light);color:var(--green-dark);font-weight:600;cursor:pointer}
+.cal-day.today{border:2px solid var(--green)}
+.cal-day.empty-day{color:transparent}
+.section-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 10px}
+.oom-row{display:flex;align-items:center;gap:12px;padding:12px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:var(--radius);transition:background .1s}
+.oom-row:hover{background:var(--surface2)}
+.oom-row:last-child{border-bottom:none}
+.oom-pts{margin-left:auto;font-weight:600;font-size:16px;color:var(--green-dark)}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal{background:var(--surface);border-radius:14px;padding:1.5rem;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal-wide{max-width:640px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:13px;background:var(--surface2);border:1px solid var(--border);color:var(--text-2);margin:3px;cursor:pointer;transition:all .12s}
+.tag.selected{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
+.img-preview{width:100%;max-height:150px;object-fit:cover;border-radius:var(--radius);margin-bottom:8px;display:block}
+.img-preview-sm{width:100%;max-height:90px;object-fit:cover;border-radius:var(--radius);margin-bottom:4px;display:block}
+.avatar-preview{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border);display:block;margin:0 auto 10px}
+.event-banner{width:calc(100% + 2.5rem);height:110px;object-fit:cover;border-radius:11px 11px 0 0;display:block;margin:-1rem -1.25rem 14px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.stat-card{background:var(--surface2);border-radius:var(--radius);padding:12px 10px;text-align:center;border:1px solid var(--border)}
+.stat-val{font-size:24px;font-weight:600;color:var(--text);line-height:1.1}
+.stat-lbl{font-size:11px;color:var(--text-3);margin-top:3px}
+.hist-table{width:100%;border-collapse:collapse;font-size:13px}
+.hist-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.hist-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.hist-table tr:last-child td{border-bottom:none}
+.hist-table tbody tr:hover td{background:var(--surface2)}
+.profile-header{background:linear-gradient(135deg,#065f46 0%,#1D9E75 100%);border-radius:12px;padding:1.5rem;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:16px}
+.profile-avatar-lg{width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.4);flex-shrink:0}
+.profile-avatar-ph{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600;color:#fff;flex-shrink:0}
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-bottom:14px;padding:4px 0}
+.back-btn:hover{color:var(--text)}
+.result-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.result-row:last-child{border-bottom:none}
+.pos-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.pos-1{background:#FAC775;color:#633806}
+.pos-2{background:#D3D1C7;color:#2C2C2A}
+.pos-3{background:#F5C4B3;color:#4A1B0C}
+.pos-other{background:var(--surface2);color:var(--text-2)}
+.signature{position:fixed;bottom:18px;right:18px;z-index:1;pointer-events:none;opacity:.35;transition:opacity .2s}
+.signature:hover{opacity:.7;pointer-events:auto}
+.signature img{width:110px;height:auto}
+
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<div id="loading-screen" style="position:fixed;inset:0;background:#1a2e22;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff;gap:12px">
+  <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <div style="font-size:14px;opacity:.8">Ansluter till molnet...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<div class="hero" id="hero-bg">
+  <div class="hero-content">
+    <div class="hero-eyebrow" id="hero-eyebrow">&#9971; En touröversikt för Älvsjö Golf &amp; Country Club medlemmar</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:16px">
+      <img src="logo-hero.png" style="height:clamp(56px,11vw,90px);width:auto" alt="ÄGCC Tour">
+      <div class="hero-title" id="hero-title">TOURER</div>
+    </div>
+    <div class="hero-sub" id="hero-sub" style="display:none"></div>
+  </div>
+  <div class="hero-scroll"></div>
+</div>
+
+<div class="wrap">
+
+<div id="login-screen" style="display:none;position:fixed;inset:0;z-index:500;background:url('login-bg.jpg') center/cover no-repeat;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,30,18,.35) 0%,rgba(6,30,18,.65) 100%)"></div>
+  <div style="position:relative;width:100%;max-width:380px">
+    <div style="text-align:center;margin-bottom:22px">
+      <img src="logo-login.png" alt="ÄGCC Tour" style="width:70px;height:88px;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:8px">&#9971; Välkommen till</div>
+      <div style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">ÄLVSJÖ GCC TOUR</div>
+    </div>
+    <div style="background:rgba(255,255,255,.97);border-radius:16px;padding:1.75rem;box-shadow:0 12px 40px rgba(0,0,0,.25);backdrop-filter:blur(8px)">
+      <h2 style="margin-bottom:4px;text-align:center">Logga in</h2>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:20px;text-align:center">Ange dina uppgifter för att fortsätta</p>
+      <form id="login-form">
+        <div class="field"><label>Användarnamn</label><input id="login-username" type="text" autocomplete="username"></div>
+        <div class="field"><label>Lösenord</label><input id="login-password" type="password" autocomplete="current-password"></div>
+        <div id="login-error" style="color:var(--danger-text);font-size:13px;margin-bottom:10px;display:none"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px">Logga in</button>
+      </form>
+    </div>
+    <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Kontakta din admin om du saknar inloggningsuppgifter</p>
+  </div>
+</div>
+
+<div id="user-bar" style="display:none;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;color:var(--text-2)">
+  <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
+  <span style="display:flex;gap:10px">
+    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600" onclick="showUsersView()"><i class="ti ti-users-group"></i> Användare</span>
+    <span style="cursor:pointer" onclick="openMyProfile()"><i class="ti ti-user-edit"></i> Min profil</span>
+    <span style="cursor:pointer" onclick="openChangePassword()"><i class="ti ti-key"></i> Byt lösenord</span>
+    <span style="cursor:pointer" onclick="logout()"><i class="ti ti-logout"></i> Logga ut</span>
+  </span>
+</div>
+
+<div id="users-screen" style="display:none">
+  <div class="tours-header">
+    <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
+    <h2 style="margin:0;flex:1;text-align:right">Användare</h2>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-bottom:16px">
+    <button class="btn btn-primary btn-sm" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
+  </div>
+  <div id="db-diagnostics"></div>
+  <div id="users-list"></div>
+</div>
+
+<div id="tours-screen">
+  <div class="tours-header">
+    <h2 style="margin:0">Mina tourer</h2>
+    <button class="btn btn-primary btn-sm" id="new-tour-btn" onclick="openNewTourWizard()"><i class="ti ti-plus"></i> Ny tour</button>
+  </div>
+  <div id="tours-list"></div>
+</div>
+
+<div id="app-screen" style="display:none">
+  <div class="app-header">
+    <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
+    <span id="active-tour-name"></span>
+  </div>
+  <div class="nav-wrap">
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showView('tournament')" id="nav-tournament"><i class="ti ti-trophy"></i><span>Tävlingar</span></button>
+      <button class="nav-btn" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
+      <button class="nav-btn" onclick="showView('calendar')" id="nav-calendar"><i class="ti ti-calendar"></i><span>Kalender</span></button>
+      <button class="nav-btn" onclick="showView('oom')" id="nav-oom"><i class="ti ti-medal"></i><span>OoM</span></button>
+      <button class="nav-btn" onclick="showView('settings')" id="nav-settings"><i class="ti ti-settings"></i><span>Inst.</span></button>
+    </nav>
+  </div>
+  <div id="view-players" class="view">
+    <div class="row" style="justify-content:space-between;margin-bottom:16px">
+      <h2 style="margin:0">Spelare</h2>
+    </div>
+    <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
+  </div>
+  <div id="view-tournament" class="view active">
+    <h2>Deltävlingar</h2>
+    <p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>
+    <div id="events-list"></div>
+  </div>
+  <div id="view-calendar" class="view">
+    <h2>Kalender</h2>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <button class="btn btn-sm" onclick="prevMonth()"><i class="ti ti-chevron-left"></i></button>
+        <span style="font-weight:600;font-size:16px" id="cal-month-label"></span>
+        <button class="btn btn-sm" onclick="nextMonth()"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-grid" id="cal-headers"></div>
+      <div class="cal-grid" id="cal-days"></div>
+    </div>
+    <div id="cal-events-list"></div>
+    <div id="cal-overview-list"></div>
+  </div>
+  <div id="view-oom" class="view">
+    <div id="oom-main">
+      <div id="leaderboard-section"></div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">Leaderboard &amp; Order of Merit</h2>
+        <div class="row" style="gap:6px">
+          <button class="btn btn-sm" id="oom-view-list-btn" onclick="setOomView('list')"><i class="ti ti-list"></i> Lista</button>
+          <button class="btn btn-sm" id="oom-view-table-btn" onclick="setOomView('table')"><i class="ti ti-table"></i> Tabell</button>
+        </div>
+      </div>
+      <div class="card" id="oom-list"><p class="empty">Inga resultat ännu.</p></div>
+      <div id="oom-table" style="display:none"></div>
+    </div>
+    <div id="oom-profile" style="display:none"></div>
+  </div>
+  <div id="view-settings" class="view">
+    <h2>Inställningar</h2>
+    <div class="card" id="settings-readonly"></div>
+    <div id="course-bank-section"></div>
+  </div>
+</div>
+
+<div id="modal-mc"></div>
+</div>
+
+<div class="signature"><img src="signature.png" alt="By J Swalén"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+window.onerror = function(msg, url, line, col, err) {
+  alert('JS-fel: ' + msg + ' (rad ' + line + ')');
+  return false;
+};
+var activeTourId = null;
+var _tourImg = null, _eImg = null, _pImg = null, _wImg = null;
+var _editTourId = null;
+
+// Wizard state for new tour creation
+var wiz = null;
+var draftSaveTimer = null;
+
+function saveDraft() {
+  if(!wiz || !currentUser || !DRAFTS_REF) return;
+  var snapshot = JSON.stringify(wiz); // capture now, not at timer-fire time, to avoid saving stale/null state
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(function() {
+    var update = {};
+    update[currentUser.username] = snapshot;
+    DRAFTS_REF.set(update, { merge: true }).catch(function(err) {
+      console.error('Kunde inte spara utkast:', err);
+    });
+  }, 600);
+}
+
+function loadDraftIfExists(callback) {
+  if(!currentUser || !DRAFTS_REF) { callback(null); return; }
+  DRAFTS_REF.get().then(function(doc) {
+    if(!doc.exists) { callback(null); return; }
+    var raw = doc.data()[currentUser.username];
+    if(!raw) { callback(null); return; }
+    try { callback(JSON.parse(raw)); }
+    catch(e) { callback(null); }
+  }).catch(function(err) {
+    console.error('Kunde inte hämta utkast:', err);
+    callback(null);
+  });
+}
+
+function discardDraft() {
+  if(!currentUser || !DRAFTS_REF) return;
+  var update = {};
+  update[currentUser.username] = firebase.firestore.FieldValue.delete();
+  DRAFTS_REF.set(update, { merge: true }).catch(function(err) {
+    console.error('Kunde inte radera utkast:', err);
+  });
+}
+
+function courseKey(name) {
+  return (name||'').trim().toLowerCase();
+}
+
+function getCourseImage(name) {
+  var key = courseKey(name);
+  if(!key) return null;
+  if(STATIC_COURSE_IMAGES[key]) return STATIC_COURSE_IMAGES[key];
+  var entry = courseBank[key];
+  if(!entry) return null;
+  return entry.url || entry.img || null;
+}
+
+function getEventImage(e) {
+  if(!e) return null;
+  if(e.img) return e.img;
+  return getCourseImage(e.course) || null;
+}
+
+function saveCourseImage(name, imgData) {
+  if(!COURSE_BANK_REF) return;
+  var key = courseKey(name);
+  if(!key || !imgData) return;
+  var update = {};
+  update[key] = { displayName: (name||'').trim(), img: imgData };
+  COURSE_BANK_REF.set(update, { merge: true }).catch(function(err) {
+    console.error('Kunde inte spara banbild i bildbanken:', err);
+  });
+}
+
+function wizCancel() {
+  if(!confirm('Avbryta? Allt du har fyllt i för den här touren försvinner och kan inte återställas.')) return;
+  wiz = null;
+  discardDraft();
+  closeModal();
+}
+
+function wizPauseAndClose() {
+  if(!wiz) { closeModal(); return; }
+  // Persist whatever is currently on screen into wiz before snapshotting, since the visible
+  // input fields aren't written back to the wiz object until the relevant SaveCurrent runs.
+  if(wiz.stepIdx == null) {
+    wizSaveStep1Fields();
+  } else if(document.getElementById('w-pts-0')) {
+    wizStep3SaveCurrent();
+  } else {
+    wizStep2SaveCurrent();
+  }
+  if(!currentUser || !DRAFTS_REF) { wiz = null; closeModal(); return; }
+  var snapshot = JSON.stringify(wiz);
+  var update = {};
+  update[currentUser.username] = snapshot;
+  DRAFTS_REF.set(update, { merge: true }).catch(function(err) {
+    console.error('Kunde inte spara utkast:', err);
+  });
+  alert('Touren är pausad. Klicka på "Ny tour" igen när du vill fortsätta där du var.');
+  wiz = null;
+  closeModal();
+}
+
+// ── FIREBASE SETUP ───────────────────────────────────────────────────────
+var firebaseConfig = {
+  apiKey: "AIzaSyCnLVk8kqPvw51Q_ebz1ywbobyvSyiBdro",
+  authDomain: "tourapp-187b1.firebaseapp.com",
+  projectId: "tourapp-187b1",
+  storageBucket: "tourapp-187b1.firebasestorage.app",
+  messagingSenderId: "734893897025",
+  appId: "1:734893897025:web:5a710855184a36c2689dc0"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.firestore();
+var DOC_REF = db.collection('golfapp').doc('shared');
+var DRAFTS_REF = db.collection('golfapp').doc('tourDrafts');
+var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
+var courseBank = {}; // { courseName: base64ImageData } -- loaded from Firestore, kept in sync
+
+// Statically hosted course images (uploaded to the GitHub repo alongside index.html).
+// Matching is done on a normalized (lowercase, trimmed) name via courseKey().
+var STATIC_COURSE_IMAGES = {
+  'riksten': 'riksten.jpg',
+  'kyssinge': 'kyssinge.jpg',
+  'lindö': 'lindo.jpg',
+  'lindo': 'lindo.jpg',
+  'lövsättra': 'lovsattra.jpg',
+  'lovsattra': 'lovsattra.jpg',
+  'sofiedal': 'sofiedal.jpg',
+  'waxholm': 'waxholm.jpg',
+  'haninge strand': 'haninge-strand.jpg',
+  'haninge strand gk': 'haninge-strand.jpg',
+  'kallfors': 'kallfors.jpg',
+  'ågesta': 'agesta.jpg',
+  'agesta': 'agesta.jpg',
+  'brollsta': 'brollsta.jpg',
+  'bodaholm': 'bodaholm.jpg',
+  'bromma': 'bromma.jpg',
+  'gripsholm': 'gripsholm.jpg',
+  'hässelby': 'hasselby.jpg',
+  'hasselby': 'hasselby.jpg',
+  'hinton': 'hinton.jpg',
+  'international': 'international.jpg'
+};
+
+var S = { tours: [] };
+var firebaseReady = false;
+var saveTimer = null;
+
+function save() {
+  // Write the full state to Firestore. Debounced slightly so rapid edits
+  // (e.g. typing) don't spam the network with a write per keystroke.
+  // To reduce the risk of two users' concurrent edits clobbering each other,
+  // we re-read the latest server copy right before writing and only overwrite
+  // it with our current in-memory S (this narrows, but does not eliminate,
+  // the race — a proper fix would use per-document writes instead of one blob).
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(function() {
+    var payload = JSON.stringify(S);
+    var sizeKB = Math.round(payload.length / 1024);
+    if (sizeKB > 850) {
+      alert('Varning: databasen är nästan full (' + sizeKB + ' KB av max ~1000 KB). Ta bort gamla bilder eller komprimera mer för att undvika sparfel.');
+    }
+    DOC_REF.set({ data: payload }).catch(function(err) {
+      console.error('Firestore save failed', err);
+      alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
+    });
+  }, 250);
+}
+
+function initFirebaseSync(onFirstLoad) {
+  DOC_REF.onSnapshot(function(doc) {
+    if (doc.exists && doc.data().data) {
+      var incoming = JSON.parse(doc.data().data);
+      S.tours = incoming.tours || [];
+      S.users = incoming.users || [];
+    } else {
+      S.tours = [];
+      S.users = [];
+    }
+    if (!firebaseReady) {
+      firebaseReady = true;
+      if (!S.users.length) {
+        // First-ever run: seed a default admin account.
+        S.users.push({ username: 'admin', passHash: simpleHash('admin123'), role: 'admin', tourAccess: [] });
+        save();
+        setTimeout(function(){
+          alert('Första admin-kontot skapades automatiskt:\n\nAnvändarnamn: admin\nLösenord: admin123\n\nByt lösenord direkt efter inloggning!');
+        }, 500);
+      }
+      onFirstLoad();
+    } else {
+      // Data changed remotely (another visitor edited something) — re-render current view.
+      refreshCurrentView();
+    }
+  }, function(err) {
+    console.error('Firestore listen failed', err);
+    alert('Kunde inte ansluta till molndatabasen. Kontrollera internetanslutning och ladda om sidan.');
+  });
+  COURSE_BANK_REF.onSnapshot(function(doc) {
+    courseBank = (doc.exists && doc.data()) ? doc.data() : {};
+  }, function(err) {
+    console.error('Course bank listen failed', err);
+  });
+}
+
+function refreshCurrentView() {
+  if (!activeTourId) {
+    if (document.getElementById('tours-screen').style.display !== 'none') renderToursList();
+    return;
+  }
+  // If the tour we're viewing was deleted remotely, bounce back to the list
+  if (!getTour()) { showToursView(); return; }
+  if (_openCommentsEventId && document.getElementById('comments-list')) {
+    renderCommentsList(_openCommentsEventId);
+    return;
+  }
+  var visible = document.querySelector('.view.active');
+  if (!visible) return;
+  var id = visible.id;
+  if (id === 'view-players')    renderPlayers();
+  if (id === 'view-tournament') renderEvents();
+  if (id === 'view-calendar')   renderCalendar();
+  if (id === 'view-oom')        renderOOM();
+  if (id === 'view-settings')   renderSettings();
+}
+
+// ── COMMENTS / DISKUSSIONSVÄGG ──────────────────────────────────────────────
+var _openCommentsEventId = null;
+var _commentImg = null;
+
+function findEventById(eid) {
+  var t = getTour();
+  return t.events.find(function(x){ return x.id === eid; });
+}
+
+function openComments(eid) {
+  _commentImg = null;
+  var e = findEventById(eid);
+  if(!e) return;
+  if(!e.comments) e.comments = [];
+  var h = '<h3><i class="ti ti-message-circle"></i> Diskussionsvägg – '+e.name+'</h3>';
+  h += '<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2)"></div>';
+  h += '<div class="field">';
+  h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
+  h += '</div>';
+  h += '<div id="comment-img-prev"></div>';
+  h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
+  h += '<div>';
+  h += '<button type="button" class="btn btn-sm" id="comment-img-btn"><i class="ti ti-photo"></i> Bild</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="comment-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<button class="btn btn-primary btn-sm" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px">';
+  h += '<button class="btn" onclick="closeModal()">Stäng</button>';
+  h += '</div>';
+  showModal(h, true);
+  _openCommentsEventId = eid;
+  renderCommentsList(eid);
+  setTimeout(function(){
+    var b=document.getElementById('comment-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('comment-file-inp').click(); };
+    var inp=document.getElementById('comment-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onCommentImgFile(this.files[0]); };
+    enablePasteForInput('comment-img-btn', onCommentImgFile);
+  }, 30);
+}
+
+function onCommentImgFile(file) {
+  compressImage(file, 700, 700, 0.78, function(d) {
+    _commentImg = d;
+    var prev = document.getElementById('comment-img-prev');
+    if(prev) prev.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px"><img src="'+d+'" style="max-height:90px;border-radius:8px;display:block"><span onclick="_commentImg=null;document.getElementById(\'comment-img-prev\').innerHTML=\'\';" style="position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer">&times;</span></div>';
+  });
+}
+
+function renderCommentsList(eid) {
+  var e = findEventById(eid);
+  var el = document.getElementById('comments-list');
+  if(!e || !el) return;
+  var comments = e.comments || [];
+  if(!comments.length) { el.innerHTML = '<p class="empty" style="padding:1rem 0">Inga kommentarer ännu. Var först att skriva något!</p>'; return; }
+  el.innerHTML = comments.map(function(c, idx) {
+    var canDelete = isAdmin() || c.username === currentUser.username;
+    var dt = new Date(c.timestamp);
+    var dtStr = dt.toLocaleDateString('sv-SE') + ' ' + dt.toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+    return '<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border)">'+
+      '<div class="row" style="justify-content:space-between;margin-bottom:4px">'+
+        '<span style="font-weight:600;font-size:13px">'+esc(c.name||c.username)+'</span>'+
+        '<span style="display:flex;align-items:center;gap:8px">'+
+          '<span style="font-size:11px;color:var(--text-3)">'+dtStr+'</span>'+
+          (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px;padding:8px;margin:-8px" onclick="deleteComment(\''+eid+'\',\''+idx+'\')"></i>' : '')+
+        '</span>'+
+      '</div>'+
+      (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
+      (c.img ? '<img src="'+c.img+'" style="max-width:100%;border-radius:8px;margin-top:6px;display:block">' : '')+
+    '</div>';
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function submitComment(eid) {
+  var e = findEventById(eid);
+  if(!e) return;
+  var textEl = document.getElementById('comment-text');
+  var text = textEl ? textEl.value.trim() : '';
+  if(!text && !_commentImg) { alert('Skriv något eller lägg till en bild innan du skickar.'); return; }
+  if(!e.comments) e.comments = [];
+  e.comments.push({
+    username: currentUser.username,
+    name: currentUser.name || currentUser.username,
+    text: text,
+    img: _commentImg || null,
+    timestamp: Date.now()
+  });
+  _commentImg = null;
+  save();
+  if(textEl) textEl.value = '';
+  var prev = document.getElementById('comment-img-prev');
+  if(prev) prev.innerHTML = '';
+  renderCommentsList(eid);
+}
+
+function deleteComment(eid, idx) {
+  var e = findEventById(eid);
+  if(!e || !e.comments || !e.comments[idx]) return;
+  var c = e.comments[idx];
+  if(!isAdmin() && c.username !== currentUser.username) { alert('Du kan bara ta bort dina egna kommentarer.'); return; }
+  if(!confirm('Ta bort kommentaren?')) return;
+  e.comments.splice(idx, 1);
+  save();
+  renderCommentsList(eid);
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function ini(n) { return n.trim().split(/\s+/).map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
+function weekdaySv(dateStr) {
+  if(!dateStr) return '';
+  var days = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
+  var d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return '';
+  return days[d.getDay()];
+}
+
+function dateLongSv(dateStr) {
+  if(!dateStr) return '';
+  var d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('sv-SE', {day:'numeric', month:'long', year:'numeric'});
+}
+
+function compressImage(file, maxW, maxH, quality, cb) {
+  maxW=maxW||1200; maxH=maxH||900; quality=quality||0.75;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var w=img.width,h=img.height,scale=Math.min(1,maxW/w,maxH/h);
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      var c=document.createElement('canvas'); c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      cb(c.toDataURL('image/jpeg',quality));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Allow pasting images from clipboard into any file-trigger button
+function enablePasteForInput(btnId, onImage) {
+  var btn = document.getElementById(btnId);
+  if(!btn) return;
+  btn.addEventListener('paste', handlePasteEvent);
+  // also listen globally while this modal is open
+  document.addEventListener('paste', function pasteHandler(e) {
+    if(!document.getElementById(btnId)) { document.removeEventListener('paste', pasteHandler); return; }
+    handlePasteEvent(e);
+  });
+  function handlePasteEvent(e) {
+    var items = (e.clipboardData || window.clipboardData).items;
+    for(var i=0;i<items.length;i++){
+      if(items[i].type.indexOf('image')===0){
+        var file = items[i].getAsFile();
+        onImage(file);
+        e.preventDefault();
+        break;
+      }
+    }
+  }
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────────────────
+function showToursView() {
+  activeTourId = null;
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  renderToursList();
+  updateHero(null);
+}
+
+function enterTour(id) {
+  activeTourId = id;
+  document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = '';
+  document.getElementById('active-tour-name').textContent = getTour().name;
+  updateHero(id);
+  showView('tournament');
+}
+
+function showView(v) {
+  document.querySelectorAll('.view').forEach(function(e){e.classList.remove('active');});
+  document.querySelectorAll('.nav-btn').forEach(function(e){e.classList.remove('active');});
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('nav-'+v).classList.add('active');
+  if(v==='players')    renderPlayers();
+  if(v==='tournament') renderEvents();
+  if(v==='calendar')   renderCalendar();
+  if(v==='oom')        { showOOMMain(); renderOOM(); }
+  if(v==='settings')   renderSettings();
+}
+
+function getTour() {
+  var t = S.tours.find(function(x){return x.id===activeTourId;});
+  if(t) t.players = getPlayersForTour(t);
+  return t;
+}
+
+// Players for a tour = all users with access to it, sorted by username for stable indexing.
+// Admin accounts are excluded (they manage, they don't play in the OoM by default).
+function getPlayersForTour(t) {
+  if(!t.playerIndexMap) t.playerIndexMap = {};
+  var accessUsers = (S.users||[]).filter(function(u){
+    var wantsToPlay = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin'); // default: non-admins play, admins don't, unless explicitly set
+    return wantsToPlay && (u.tourAccess||[]).indexOf(t.id) >= 0;
+  });
+  // Assign a stable pi to any new user who doesn't have one yet (append-only, never reshuffle).
+  var usedIndices = Object.values(t.playerIndexMap);
+  var nextFree = usedIndices.length ? Math.max.apply(null, usedIndices) + 1 : 0;
+  accessUsers.forEach(function(u){
+    if(t.playerIndexMap[u.username] == null) {
+      t.playerIndexMap[u.username] = nextFree;
+      nextFree++;
+    }
+  });
+  // Build array sized to cover the highest assigned index, sparse entries stay undefined
+  // (e.g. a user later lost access — keep their slot empty rather than reusing the index).
+  var maxIdx = Object.values(t.playerIndexMap).length ? Math.max.apply(null, Object.values(t.playerIndexMap)) : -1;
+  var arr = new Array(maxIdx+1);
+  accessUsers.forEach(function(u){
+    var pi = t.playerIndexMap[u.username];
+    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: u.img||null, username: u.username, golfId: u.golfId||'' };
+  });
+  return arr;
+}
+
+// ── MODAL ──────────────────────────────────────────────────────────────────
+function showModal(html, wide, preventOutsideClose) {
+  closeModal();
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay'; ov.id = 'modal-mc';
+  var box = document.createElement('div');
+  box.className = 'modal' + (wide?' modal-wide':'');
+  box.innerHTML = html;
+  ov.appendChild(box);
+  ov.addEventListener('click', function(e){ if(e.target===ov && !preventOutsideClose) closeModal(); });
+  document.body.appendChild(ov);
+}
+function closeModal() { var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null; }
+
+// ── CROP ───────────────────────────────────────────────────────────────────
+var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0, drag:false, lx:0, ly:0, cb:null };
+
+function showCropModal(dataUrl, cH, cb) {
+  crop.cb = cb;
+  var h = '<h3 style="margin-bottom:6px">Välj bildutsnitt</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma &nbsp;·&nbsp; Rutan visar exakt hur bilden sparas</p>';
+  h += '<div id="crop-box" style="position:relative;width:100%;height:'+cH+'px;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" id="crop-save-btn"><i class="ti ti-check"></i> Använd utsnitt</button>';
+  h += '</div>';
+  showModal(h, true);
+  setTimeout(function() {
+    var box = document.getElementById('crop-box');
+    if(!box) return;
+    var cW = box.offsetWidth;
+    crop.cW=cW; crop.cH=cH; crop.active=true;
+    var img = new Image();
+    img.onload = function() {
+      crop.imgEl=img;
+      var s = Math.max(cW/img.naturalWidth, cH/img.naturalHeight);
+      crop.minScale=s; crop.scale=s;
+      crop.x=(cW-img.naturalWidth*s)/2;
+      crop.y=(cH-img.naturalHeight*s)/2;
+      var el=document.createElement('img');
+      el.id='crop-img-el'; el.src=dataUrl;
+      el.style.cssText='position:absolute;pointer-events:none;transform-origin:0 0;max-width:none;max-height:none';
+      box.appendChild(el);
+      cropRender();
+      box.addEventListener('mousedown', cropMD);
+      box.addEventListener('touchstart', cropTS, {passive:false});
+      box.addEventListener('wheel', cropWheel, {passive:false});
+      document.getElementById('crop-save-btn').onclick = cropCommit;
+    };
+    img.src = dataUrl;
+  }, 80);
+}
+function cropClamp(){var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;crop.x=Math.min(0,Math.max(crop.cW-iW,crop.x));crop.y=Math.min(0,Math.max(crop.cH-iH,crop.y));}
+function cropRender(){var el=document.getElementById('crop-img-el');if(!el)return;var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;el.style.width=iW+'px';el.style.height=iH+'px';el.style.left=crop.x+'px';el.style.top=crop.y+'px';}
+function cropMD(e){crop.drag=true;crop.lx=e.clientX;crop.ly=e.clientY;e.preventDefault();function mm(e){if(!crop.drag)return;crop.x+=e.clientX-crop.lx;crop.y+=e.clientY-crop.ly;crop.lx=e.clientX;crop.ly=e.clientY;cropClamp();cropRender();}function mu(){crop.drag=false;window.removeEventListener('mousemove',mm);window.removeEventListener('mouseup',mu);}window.addEventListener('mousemove',mm);window.addEventListener('mouseup',mu);}
+var _lastPinchDist=0;
+function cropTS(e){e.preventDefault();if(e.touches.length===1){crop.drag=true;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;function tm(e){if(!crop.drag)return;if(e.touches.length===2){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(_lastPinchDist){var delta=d/_lastPinchDist;cropZoom(delta,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);}_lastPinchDist=d;return;}crop.x+=e.touches[0].clientX-crop.lx;crop.y+=e.touches[0].clientY-crop.ly;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;cropClamp();cropRender();}function tu(){crop.drag=false;_lastPinchDist=0;document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);}document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu);}}
+function cropWheel(e){e.preventDefault();var box=document.getElementById('crop-box');if(!box)return;var rect=box.getBoundingClientRect();cropZoom(e.deltaY<0?1.08:0.93,e.clientX-rect.left,e.clientY-rect.top);}
+function cropZoom(factor,cx,cy){var newScale=Math.max(crop.minScale,crop.scale*factor);crop.x=cx-(cx-crop.x)*(newScale/crop.scale);crop.y=cy-(cy-crop.y)*(newScale/crop.scale);crop.scale=newScale;cropClamp();cropRender();}
+function cropCommit(){
+  // Render the output at a fixed high resolution (independent of the on-screen
+  // crop box size) so the result stays sharp even when later displayed at full
+  // container width (~700px) on high-DPI screens.
+  var OUTPUT_W = 900;
+  var aspect = crop.cH / crop.cW;
+  var outW = OUTPUT_W, outH = Math.round(OUTPUT_W * aspect);
+  var c=document.createElement('canvas');
+  c.width=outW; c.height=outH;
+  var ctx=c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  var scaleUp = outW / crop.cW;
+  ctx.drawImage(
+    crop.imgEl,
+    -crop.x/crop.scale, -crop.y/crop.scale,
+    crop.imgEl.naturalWidth, crop.imgEl.naturalHeight,
+    0, 0,
+    crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
+  );
+  var result=c.toDataURL('image/jpeg',0.92);
+  var cb=crop.cb;crop.active=false;closeModal();if(cb)cb(result);
+}
+
+// ── TOURS LIST ─────────────────────────────────────────────────────────────
+function renderToursList() {
+  var el = document.getElementById('tours-list');
+  var tours = visibleTours();
+  document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
+  if(!tours.length){
+    el.innerHTML = isAdmin()
+      ? '<p class="empty">Inga tourer ännu. Skapa din första!</p>'
+      : '<p class="empty">Du har inte fått åtkomst till någon tour ännu. Kontakta din admin.</p>';
+    return;
+  }
+  function tourCardHTML(t) {
+    var events = t.events || [];
+    var regularCount = events.filter(function(e){return !e.isFinal;}).length;
+    var finalsCount = events.filter(function(e){return e.isFinal;}).length;
+    var totalCount = events.length;
+    var closedCount = events.filter(function(e){return e.closed;}).length;
+    return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
+      (t.img?'<img src="'+t.img+'" style="width:100%;height:110px;object-fit:cover;display:block">':'')+
+      '<div style="padding:14px 16px 16px">'+
+        '<div style="font-weight:700;font-size:17px;margin-bottom:2px">'+t.name+'</div>'+
+        (t.season?'<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+t.season+'</div>':'<div style="margin-bottom:10px"></div>')+
+        '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
+          (regularCount?'<span class="badge badge-green"><i class="ti ti-calendar-event" style="font-size:11px"></i> '+regularCount+' deltävling'+(regularCount!==1?'ar':'')+'</span>':'')+
+          (finalsCount?'<span class="badge badge-gold"><i class="ti ti-flag" style="font-size:11px"></i> '+finalsCount+' final'+(finalsCount!==1?'er':'')+'</span>':'')+
+          (closedCount?'<span class="badge badge-gray">'+closedCount+' av '+totalCount+' genomförda</span>':'')+
+        '</div>'+
+        '<div class="row" style="gap:6px">'+
+          '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();enterTour(\''+t.id+'\')"><i class="ti ti-arrow-right"></i> Öppna</button>'+
+          (isAdmin() ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();delTour(\''+t.id+'\')"><i class="ti ti-trash"></i></button>' : '')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  var active = [], finished = [];
+  tours.forEach(function(t){
+    var events = t.events || [];
+    var allClosed = events.length > 0 && events.every(function(e){ return e.closed; });
+    (allClosed ? finished : active).push(t);
+  });
+
+  var html = '';
+  if(active.length) {
+    html += '<p class="section-title">Aktiva</p>' + active.map(tourCardHTML).join('');
+  }
+  if(finished.length) {
+    html += '<p class="section-title" style="margin-top:'+(active.length?'20px':'0')+'">Avslutade</p>' + finished.map(tourCardHTML).join('');
+  }
+  el.innerHTML = html;
+}
+
+function delTour(id) {
+  var t=S.tours.find(function(x){return x.id===id;});
+  if(confirm('Ta bort "'+t.name+'"? All data raderas.')) {
+    S.tours=S.tours.filter(function(x){return x.id!==id;}); save(); renderToursList();
+  }
+}
+
+// ── NEW TOUR WIZARD ──────────────────────────────────────────────────────
+// Step 1: basics (name, season, image, num regular events, num finals)
+// Step 2: fill in details for each event/final
+// Step 3: set the points->strokes handicap table
+function openNewTourWizard() {
+  loadDraftIfExists(function(draft) {
+    if(draft) {
+      if(confirm('Du har ett pausat tourutkast ("'+(draft.name||'namnlöst')+'"). Vill du fortsätta där du var?')) {
+        wiz = draft;
+        if(wiz.stepIdx != null) { wizStep2(); } else { wizStep1(); }
+        return;
+      } else {
+        discardDraft();
+      }
+    }
+    wiz = { name:'', season:'', img:null, numEvents:3, numFinals:1, events:[], pointsScale:[25,18,15,12,10,8,6,4,2,1], finalTable:[] };
+    wizStep1();
+  });
+}
+
+function wizStep1() {
+  var h = '<h3>Ny tour &ndash; grundinfo</h3>';
+  h += '<div class="field"><label>Namn</label><input id="w-name" type="text" value="'+esc(wiz.name)+'" placeholder="t.ex. Älvsjö Tour 2026"></div>';
+  h += '<div class="field"><label>Säsong (valfritt)</label><input id="w-season" type="text" value="'+esc(wiz.season)+'" placeholder="t.ex. 2026"></div>';
+  h += '<div class="field"><label>Omslagsbild (valfritt)</label>';
+  h += '<div id="w-img-prev">'+(wiz.img?'<img src="'+wiz.img+'" class="img-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-photo"></i> '+(wiz.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in (Ctrl+V)</span>';
+  h += '<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Antal deltävlingar (ej finaler)</label><input id="w-numev" type="number" min="0" value="'+wiz.numEvents+'"></div>';
+  h += '<div class="field"><label>Antal finaler</label><input id="w-numfin" type="number" min="0" value="'+wiz.numFinals+'"></div>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Du fyller i namn, bana och datum för varje tävling i nästa steg. När touren skapats kan strukturen inte ändras.</p>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap">';
+  h += '<button class="btn" style="color:var(--danger-text)" onclick="wizCancel()">Avbryt</button>';
+  h += '<button class="btn" onclick="wizPauseAndClose()"><i class="ti ti-player-pause"></i> Spara utkast</button>';
+  h += '<button class="btn btn-primary" onclick="wizToStep2()">Nästa <i class="ti ti-arrow-right"></i></button>';
+  h += '</div>';
+  showModal(h, false, true);
+  setTimeout(function(){
+    var b=document.getElementById('w-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('w-file-inp').click(); };
+    var inp=document.getElementById('w-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) handleWizImg(this.files[0]); };
+    enablePasteForInput('w-img-btn', handleWizImg);
+  }, 50);
+}
+
+function handleWizImg(file) {
+  wizSaveStep1Fields();
+  compressImage(file, 1100, 950, 0.92, function(d) {
+    showCropModal(d, 160, function(cropped) {
+      wiz.img = cropped;
+      wizStep1();
+    });
+  });
+}
+
+function wizSaveStep1Fields() {
+  var n = document.getElementById('w-name');
+  var s = document.getElementById('w-season');
+  var ne = document.getElementById('w-numev');
+  var nf = document.getElementById('w-numfin');
+  if(n) wiz.name = n.value;
+  if(s) wiz.season = s.value;
+  if(ne) wiz.numEvents = parseInt(ne.value)||0;
+  if(nf) wiz.numFinals = parseInt(nf.value)||0;
+  saveDraft();
+}
+
+function wizToStep2() {
+  wiz.name = document.getElementById('w-name').value.trim();
+  if(!wiz.name) { alert('Namn krävs.'); return; }
+  wiz.season = document.getElementById('w-season').value.trim();
+  wiz.numEvents = Math.max(0, parseInt(document.getElementById('w-numev').value)||0);
+  wiz.numFinals = Math.max(0, parseInt(document.getElementById('w-numfin').value)||0);
+  if(wiz.numEvents + wiz.numFinals === 0) { alert('Lägg till minst en deltävling eller final.'); return; }
+
+  // Build events array preserving any already-entered data
+  var total = wiz.numEvents + wiz.numFinals;
+  var newEvents = [];
+  for(var i=0;i<wiz.numEvents;i++) newEvents.push(wiz.events[i] || {name:'',course:'',date:'',type:'slag',isFinal:false});
+  for(var j=0;j<wiz.numFinals;j++) {
+    var idx = wiz.numEvents+j;
+    newEvents.push(wiz.events[idx] || {name:'Final '+(j+1),course:'',date:'',type:'slag',isFinal:true});
+  }
+  wiz.events = newEvents;
+  wiz.stepIdx = 0;
+  wizStep2();
+}
+
+function wizStep2() {
+  var i = wiz.stepIdx;
+  var ev = wiz.events[i];
+  var total = wiz.events.length;
+  var h = '<h3>'+(ev.isFinal?'Final':'Deltävling')+' '+(i+1)+' av '+total+'</h3>';
+  h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
+  h += '<div class="field"><label>Bana</label><input id="w-ev-course" type="text" list="course-bank-list" value="'+esc(ev.course)+'" placeholder="t.ex. Haninge GK" onchange="onWizCourseChange()"></div>';
+  h += '<datalist id="course-bank-list">'+Object.values(courseBank).map(function(c){ return '<option value="'+esc(c.displayName||'')+'">'; }).join('')+'</datalist>';
+  h += '<div class="field"><label>Datum (ordinarie)</label><input id="w-ev-date" type="date" value="'+ev.date+'"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  h += '<label style="margin-bottom:8px;display:block"><i class="ti ti-calendar-stats"></i> Speltidsperiod</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin-bottom:8px">Spelare kan välja vilket datum inom perioden de avser spela.</p>';
+  h += '<div class="row" style="gap:8px">';
+  h += '<div style="flex:1"><label style="font-size:11px">Från</label><input id="w-ev-pstart" type="date" value="'+(ev.periodStart||ev.date||'')+'"></div>';
+  h += '<div style="flex:1"><label style="font-size:11px">Till</label><input id="w-ev-pend" type="date" value="'+(ev.periodEnd||ev.date||'')+'"></div>';
+  h += '</div></div>';
+  h += '<div class="field"><label>Typ</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="w-etype" value="slag" '+(ev.type!=='stableford'?'checked':'')+' style="width:auto;margin:0"> Slag</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="w-etype" value="stableford" '+(ev.type==='stableford'?'checked':'')+' style="width:auto;margin:0"> Stableford</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>Banfoto (valfritt)</label>';
+  h += '<div id="w-ev-img-prev">'+(ev.img?'<img src="'+ev.img+'" class="img-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="w-ev-img-btn"><i class="ti ti-photo"></i> '+(ev.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in (Ctrl+V)</span>';
+  h += '<input type="file" id="w-ev-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  if(!ev.isFinal) {
+    h += '<div class="field" style="background:var(--gold-light);border-radius:10px;padding:10px 12px;margin-top:6px">';
+    h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600;color:var(--gold)"><input type="checkbox" id="w-ev-major" '+(ev.isMajor?'checked':'')+' style="width:auto;margin:0"> <i class="ti ti-star"></i> Major</label>';
+    h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Ger 1,5x OoM-poäng jämfört med en vanlig deltävling.</p>';
+    h += '</div>';
+  }
+  if(ev.isFinal) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px;margin-top:10px"><i class="ti ti-flag"></i> Detta är en final &ndash; spelarna startar med slagförsprång enligt OoM-tabellen som ställs in i sista steget.</p>';
+  h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:16px;flex-wrap:wrap">';
+  h += '<button class="btn" onclick="wizStep2Back()">'+(i===0?'Tillbaka':'<i class="ti ti-arrow-left"></i> Föregående')+'</button>';
+  h += '<button class="btn" style="color:var(--danger-text)" onclick="wizCancel()">Avbryt</button>';
+  h += '<button class="btn" onclick="wizPauseAndClose()"><i class="ti ti-player-pause"></i> Spara utkast</button>';
+  h += '<button class="btn btn-primary" onclick="wizStep2Next()">'+(i===total-1?'Nästa: poängtabell':'Nästa')+' <i class="ti ti-arrow-right"></i></button>';
+  h += '</div>';
+  showModal(h, false, true);
+  setTimeout(function(){
+    var b=document.getElementById('w-ev-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('w-ev-file-inp').click(); };
+    var inp=document.getElementById('w-ev-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) handleWizEvImg(this.files[0]); };
+    enablePasteForInput('w-ev-img-btn', handleWizEvImg);
+  }, 50);
+}
+
+function handleWizEvImg(file) {
+  wizStep2SaveCurrent();
+  compressImage(file, 1100, 950, 0.92, function(d) {
+    showCropModal(d, 160, function(cropped) {
+      var ev = wiz.events[wiz.stepIdx];
+      ev.img = cropped;
+      if(ev.course) saveCourseImage(ev.course, cropped);
+      wizStep2();
+    });
+  });
+}
+
+function onWizCourseChange() {
+  var courseEl = document.getElementById('w-ev-course');
+  if(!courseEl) return;
+  var courseName = courseEl.value.trim();
+  var ev = wiz.events[wiz.stepIdx];
+  ev.course = courseName;
+  if(!ev.img) {
+    var knownImg = getCourseImage(courseName);
+    if(knownImg) {
+      ev.img = knownImg;
+      wizStep2();
+    }
+  }
+  saveDraft();
+}
+
+function wizStep2SaveCurrent() {
+  var ev = wiz.events[wiz.stepIdx];
+  ev.name = document.getElementById('w-ev-name').value.trim();
+  ev.course = document.getElementById('w-ev-course').value.trim();
+  ev.date = document.getElementById('w-ev-date').value;
+  var pStartEl = document.getElementById('w-ev-pstart');
+  var pEndEl = document.getElementById('w-ev-pend');
+  if(pStartEl) ev.periodStart = pStartEl.value || ev.date;
+  if(pEndEl) ev.periodEnd = pEndEl.value || ev.date;
+  var t = document.querySelector('input[name="w-etype"]:checked');
+  ev.type = t ? t.value : 'slag';
+  var majorEl = document.getElementById('w-ev-major');
+  if(majorEl) ev.isMajor = majorEl.checked;
+  saveDraft();
+}
+
+function wizStep2Back() {
+  wizStep2SaveCurrent();
+  if(wiz.stepIdx===0) { wizStep1(); return; }
+  wiz.stepIdx--; wizStep2();
+}
+
+function wizStep2Next() {
+  wizStep2SaveCurrent();
+  var ev = wiz.events[wiz.stepIdx];
+  if(!ev.name || !ev.course || !ev.date) { alert('Namn, bana och datum krävs.'); return; }
+  if(wiz.stepIdx < wiz.events.length-1) { wiz.stepIdx++; wizStep2(); return; }
+  wizStep3();
+}
+
+function wizStep3() {
+  var hasFinal = wiz.events.some(function(e){return e.isFinal;});
+  var h = '<h3>Poängskala</h3>';
+  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Order of Merit-poäng per placering i en vanlig deltävling.</p>';
+  h += '<div id="w-points-rows">';
+  h += wiz.pointsScale.map(function(p,i){
+    return '<div class="row" style="margin-bottom:8px;gap:8px"><span style="font-size:13px;color:var(--text-2);min-width:64px">Plats '+(i+1)+'</span><input type="number" style="width:80px;margin:0" id="w-pts-'+i+'" value="'+p+'"><button class="btn btn-sm btn-danger" onclick="wizRemovePts('+i+')"><i class="ti ti-trash"></i></button></div>';
+  }).join('');
+  h += '</div>';
+  h += '<button class="btn btn-sm" onclick="wizAddPts()" style="margin-bottom:8px"><i class="ti ti-plus"></i> Lägg till placering</button>';
+
+  if(hasFinal) {
+    h += '<hr class="divider">';
+    h += '<h3>Försprångstabell till final</h3>';
+    h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Hur många slag i försprång varje OoM-placering får inför finalen (slag under par/netto).</p>';
+    var ft = wiz.finalTable.length ? wiz.finalTable : wiz.pointsScale.map(function(_,i){ return Math.max(0, wiz.pointsScale.length - i - 1); });
+    wiz.finalTable = ft;
+    h += '<div id="w-final-rows">';
+    h += ft.map(function(s,i){
+      return '<div class="row" style="margin-bottom:8px;gap:8px"><span style="font-size:13px;color:var(--text-2);min-width:64px">Plats '+(i+1)+'</span><input type="number" style="width:80px;margin:0" id="w-final-'+i+'" value="'+s+'"><span style="font-size:13px;color:var(--text-2)">slag försprång</span><button class="btn btn-sm btn-danger" onclick="wizRemoveFinalRow('+i+')"><i class="ti ti-trash"></i></button></div>';
+    }).join('');
+    h += '</div>';
+    h += '<button class="btn btn-sm" onclick="wizAddFinalRow()" style="margin-bottom:8px"><i class="ti ti-plus"></i> Lägg till placering</button>';
+  }
+
+  h += '<hr class="divider">';
+  h += '<p style="font-size:12px;color:var(--danger-text);background:var(--danger-bg);padding:8px 10px;border-radius:8px;margin-bottom:8px"><i class="ti ti-alert-triangle"></i> Touren låses efter skapande &ndash; strukturen (tävlingar/finaler) kan inte ändras senare.</p>';
+  h += '<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">';
+  h += '<button class="btn" onclick="wizStep3Back()"><i class="ti ti-arrow-left"></i> Föregående</button>';
+  h += '<button class="btn" style="color:var(--danger-text)" onclick="wizCancel()">Avbryt</button>';
+  h += '<button class="btn" onclick="wizPauseAndClose()"><i class="ti ti-player-pause"></i> Spara utkast</button>';
+  h += '<button class="btn btn-primary" onclick="wizFinish()"><i class="ti ti-check"></i> Skapa tour</button>';
+  h += '</div>';
+  showModal(h, false, true);
+}
+
+function wizStep3Back() {
+  wizStep3SaveCurrent();
+  wiz.stepIdx = wiz.events.length-1;
+  wizStep2();
+}
+function wizStep3SaveCurrent() {
+  wiz.pointsScale = wiz.pointsScale.map(function(_,i){ var el=document.getElementById('w-pts-'+i); return el?(parseInt(el.value)||0):0; });
+  if(wiz.finalTable.length) {
+    wiz.finalTable = wiz.finalTable.map(function(_,i){ var el=document.getElementById('w-final-'+i); return el?(parseInt(el.value)||0):0; });
+  }
+  saveDraft();
+}
+function wizAddPts(){ wizStep3SaveCurrent(); wiz.pointsScale.push(0); wizStep3(); }
+function wizRemovePts(i){ wizStep3SaveCurrent(); wiz.pointsScale.splice(i,1); wizStep3(); }
+function wizAddFinalRow(){ wizStep3SaveCurrent(); wiz.finalTable.push(0); wizStep3(); }
+function wizRemoveFinalRow(i){ wizStep3SaveCurrent(); wiz.finalTable.splice(i,1); wizStep3(); }
+
+function wizFinish() {
+  wizStep3SaveCurrent();
+  var events = wiz.events.map(function(ev) {
+    return { id:uid(), name:ev.name, course:ev.course, date:ev.date, type:ev.type,
+      periodStart: ev.periodStart||ev.date, periodEnd: ev.periodEnd||ev.date,
+      isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: ev.img||null, registrations:[], results:[], closed:false };
+  });
+  var tour = {
+    id: uid(), name: wiz.name, season: wiz.season, img: wiz.img,
+    locked: true,
+    players: [],
+    events: events,
+    pointsScale: wiz.pointsScale,
+    finalTable: wiz.finalTable || [],
+    calYear: new Date().getFullYear(), calMonth: new Date().getMonth()
+  };
+  S.tours.push(tour);
+  wiz = null;
+  discardDraft();
+  save(); closeModal(); renderToursList();
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── PLAYERS ────────────────────────────────────────────────────────────────
+function renderPlayers() {
+  var t=getTour(), el=document.getElementById('players-list');
+  if(!t.players.length){
+    el.innerHTML = isAdmin()
+      ? '<p class="empty">Inga spelare ännu. Ge användare åtkomst till touren under <i class="ti ti-users-group"></i> Användare.</p>'
+      : '<p class="empty">Inga spelare ännu.</p>';
+    return;
+  }
+  el.innerHTML=t.players.map(function(p,i){
+    if(!p) return '';
+    return '<div class="player-card">'+
+      (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
+      '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
+      (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
+      '</div>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(\''+p.username+'\')" title="Redigera i Användare"><i class="ti ti-edit"></i></button>' : '')+
+    '</div>';
+  }).join('');
+}
+
+function jumpToEditUserByUsername(username) {
+  var idx = getUsers().findIndex(function(u){return u.username===username;});
+  if(idx<0) return;
+  showUsersView();
+  setTimeout(function(){ openEditUser(idx); }, 60);
+}
+
+// ── EVENTS (list / register / results) ─────────────────────────────────────
+function renderEvents() {
+  var t=getTour(), el=document.getElementById('events-list');
+  if(!t.events.length){el.innerHTML='<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
+  var open=[], closed=[];
+  t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else open.push({e:e,i:i});});
+  var html='';
+  if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
+  if(closed.length) html+='<p class="section-title">Avslutade</p>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
+  el.innerHTML=html;
+}
+
+function eventCardHTML(i,e) {
+  var tl=e.type==='stableford'?'Stableford':'Slag';
+  var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
+  var t=getTour();
+  var regsRaw = e.registrations || [];
+  var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
+
+  var regsTable = '';
+  if(e.closed && e.results && e.results.length) {
+    var isStab = e.type === 'stableford';
+    var medals = ['🥇','🥈','🥉'];
+    var resultRows = e.results.map(function(r, idx){
+      var p = t.players[r.pi];
+      if(!p) return '';
+      var rawLabel = isStab ? (r.score+' p') : (r.score+' netto');
+      var scoreLabel;
+      if(e.isFinal && r.adjusted != null) {
+        scoreLabel = '<span style="font-weight:700">just. '+r.adjusted+'</span> <span style="color:var(--text-3);font-size:11px">('+rawLabel+')</span>';
+      } else {
+        scoreLabel = rawLabel;
+      }
+      return '<tr>'+
+        '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
+        '<td>'+esc(p.name)+'</td>'+
+        '<td style="text-align:right">'+scoreLabel+'</td>'+
+        (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
+      '</tr>';
+    }).join('');
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+  } else if(regs.length) {
+    var sortedRegs = regs.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+    var rows = sortedRegs.map(function(r){
+      var p = t.players[r.pi];
+      if(!p) return '';
+      var altDate = r.date !== e.date;
+      var timeStr = '';
+      if(e.teeGroups) {
+        var g = e.teeGroups.find(function(gr){ return gr.date===r.date && gr.playerPis.indexOf(r.pi)>=0; });
+        if(g && g.time) timeStr = g.time;
+      }
+      return '<tr>'+
+        '<td>'+p.name+'</td>'+
+        '<td>'+r.date+' ('+weekdaySv(r.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')+'</td>'+
+        '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  } else {
+    regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga anmälda ännu</p>';
+  }
+
+  var btns=e.closed
+    ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')
+    : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
+  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
+    '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
+      '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
+        '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
+          '<span><i class="ti ti-map-pin" style="font-size:12px"></i> '+e.course+'</span>'+
+          '<span>·</span><span>'+e.date+'</span>'+
+          '<span style="padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;'+tc+'">'+tl+'</span>'+
+          (e.isFinal?'<span class="badge badge-gold">Final</span>':'')+
+          (e.isMajor?'<span class="badge badge-gold"><i class="ti ti-star" style="font-size:10px"></i> Major 1.5x</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
+    '</div>'+
+    (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
+    '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
+    '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:space-between">'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Diskussionsvägg'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>'+
+    '</div>'+
+  '</div>';
+}
+
+// Note: events cannot be added/removed once tour is locked (locked is always true now)
+
+// ── REGISTER ───────────────────────────────────────────────────────────────
+function openRegister(i) {
+  var t=getTour(), e=t.events[i], regs=e.registrations||[];
+  if(!e.periodStart) e.periodStart = e.date;
+  if(!e.periodEnd) e.periodEnd = e.date;
+  // regs is an array of {pi, date}. Migrate old format (plain pi numbers) if present.
+  regs = regs.map(function(r){ return (typeof r === 'object') ? r : {pi:r, date:e.date}; });
+  e.registrations = regs;
+
+  var rows = t.players.length
+    ? t.players.map(function(p,pi){
+        if(!p) return '';
+        var reg = regs.find(function(r){return r.pi===pi;});
+        var checked = !!reg;
+        var dateVal = reg ? reg.date : e.date;
+        var canEdit = isAdmin() || (p.username === currentUser.username);
+        return '<div class="row" style="margin-bottom:8px;gap:8px;align-items:center'+(canEdit?'':';opacity:.55')+'">'+
+          '<label style="display:flex;align-items:center;gap:8px;flex:1;cursor:'+(canEdit?'pointer':'default')+';font-weight:400">'+
+            '<input type="checkbox" class="reg-cb" data-pi="'+pi+'" '+(checked?'checked':'')+' '+(canEdit?'':'disabled')+' style="width:auto;margin:0" onchange="onRegCbChange('+i+','+pi+',this)">'+
+            (p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover" alt="">':'<div class="avatar-ph" style="width:24px;height:24px;font-size:10px">'+ini(p.name)+'</div>')+
+            ' '+p.name+(!isAdmin()&&p.username===currentUser.username?' <span style="font-size:11px;color:var(--green-dark)">(du)</span>':'')+
+          '</label>'+
+          '<input type="date" id="reg-date-'+pi+'" style="width:140px;margin:0" min="'+e.periodStart+'" max="'+e.periodEnd+'" value="'+dateVal+'" '+((checked&&canEdit)?'':'disabled')+' onchange="onRegDateChange('+i+','+pi+',this)">'+
+        '</div>';
+      }).join('')
+    : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
+
+  var h = '<h3>Anmälningar – '+e.name+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-calendar"></i> Speltidsperiod: '+e.periodStart+' &ndash; '+e.periodEnd+' (ordinarie datum: '+e.date+')</p>';
+  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Kryssa i och välj vilket datum spelaren avser spela.</p>';
+  h += rows;
+  h += '<hr class="divider">';
+  h += buildDateGroupingHTML(e, t);
+  h += '<div class="row" style="justify-content:flex-end;margin-top:16px">';
+  h += '<button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
+  showModal(h, true);
+}
+
+function buildDateGroupingHTML(e, t) {
+  var regs = e.registrations || [];
+  if(!regs.length) return '';
+  var groups = {};
+  regs.forEach(function(r){
+    if(!groups[r.date]) groups[r.date] = [];
+    groups[r.date].push(r.pi);
+  });
+  var dates = Object.keys(groups).sort();
+  if(!dates.length) return '';
+  if(!e.teeGroups) e.teeGroups = [];
+
+  var html = '<div class="section-title">Spelare per datum</div>';
+  html += '<div style="overflow-x:auto"><table class="hist-table" style="margin-bottom:16px"><thead><tr><th>Spelare</th><th>Speldatum</th></tr></thead><tbody>';
+  dates.forEach(function(d){
+    groups[d].forEach(function(pi, idx){
+      var p = t.players[pi];
+      if(!p) return;
+      var isOfficial = d === e.date;
+      html += '<tr>'+
+        '<td>'+p.name+'</td>'+
+        '<td>'+(idx===0 ? '<span class="badge '+(isOfficial?'badge-green':'badge-gold')+'">'+d+(isOfficial?' (ordinarie)':'')+'</span>' : '')+'</td>'+
+      '</tr>';
+    });
+  });
+  html += '</tbody></table></div>';
+
+  html += '<div class="section-title">Bollar (starttider)</div>';
+  dates.forEach(function(d){
+    var pisForDate = groups[d];
+    var assigned = {}; // pi -> true if already in a tee group for this date
+    e.teeGroups.filter(function(g){return g.date===d;}).forEach(function(g){
+      g.playerPis.forEach(function(pi){ assigned[pi]=true; });
+    });
+    var unassigned = pisForDate.filter(function(pi){ return !assigned[pi]; });
+
+    html += '<div class="card" style="margin-bottom:10px">';
+    html += '<div class="row" style="justify-content:space-between;margin-bottom:8px">';
+    html += '<span style="font-weight:600;font-size:14px"><i class="ti ti-calendar"></i> '+d+'</span>';
+    if(isAdmin() && unassigned.length) {
+      html += '<button class="btn btn-sm btn-primary" onclick="autoCreateTeeGroups(\''+e.id+'\',\''+d+'\')"><i class="ti ti-wand"></i> Skapa bollar</button>';
+    }
+    html += '</div>';
+
+    var groupsForDate = e.teeGroups.filter(function(g){return g.date===d;});
+    if(groupsForDate.length) {
+      groupsForDate.forEach(function(g){
+        var gIdx = e.teeGroups.indexOf(g);
+        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">';
+        html += '<div class="row" style="justify-content:space-between;margin-bottom:6px">';
+        html += isAdmin()
+          ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
+          : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
+        if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
+        html += '</div>';
+        html += '<div style="font-size:13px;color:var(--text-2)">'+g.playerPis.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
+        html += '</div>';
+      });
+    }
+    if(unassigned.length) {
+      html += '<div style="font-size:12px;color:var(--text-3);margin-top:4px">Ej tilldelade: '+unassigned.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
+    }
+    html += '</div>';
+  });
+
+  return html;
+}
+
+function autoCreateTeeGroups(eid, date) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e) return;
+  if(!e.teeGroups) e.teeGroups = [];
+  var regs = (e.registrations||[]).filter(function(r){return r.date===date;});
+  var assigned = {};
+  e.teeGroups.filter(function(g){return g.date===date;}).forEach(function(g){
+    g.playerPis.forEach(function(pi){assigned[pi]=true;});
+  });
+  var unassigned = regs.map(function(r){return r.pi;}).filter(function(pi){return !assigned[pi];});
+  while(unassigned.length) {
+    var chunk = unassigned.splice(0,4);
+    e.teeGroups.push({ date: date, time: '', playerPis: chunk });
+  }
+  save();
+  // re-render in place
+  var ei = t.events.indexOf(e);
+  refreshRegisterModal(ei);
+}
+
+function setTeeGroupTime(eid, gIdx, time) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e || !e.teeGroups[gIdx]) return;
+  e.teeGroups[gIdx].time = time;
+  save();
+}
+
+function deleteTeeGroup(eid, gIdx) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e) return;
+  e.teeGroups.splice(gIdx,1);
+  save();
+  var ei = t.events.indexOf(e);
+  refreshRegisterModal(ei);
+}
+
+function onRegCbChange(ei, pi, cb) {
+  var t = getTour(), e = t.events[ei];
+  var p = t.players[pi];
+  if(!isAdmin() && (!p || p.username !== currentUser.username)) {
+    alert('Du kan bara anmäla dig själv, inte andra spelare.');
+    cb.checked = !cb.checked;
+    return;
+  }
+  if(!e.registrations) e.registrations = [];
+  var dateInp = document.getElementById('reg-date-'+pi);
+  if(cb.checked) {
+    dateInp.disabled = false;
+    var existing = e.registrations.find(function(r){return r.pi===pi;});
+    if(!existing) e.registrations.push({pi:pi, date: dateInp.value || e.date});
+  } else {
+    dateInp.disabled = true;
+    e.registrations = e.registrations.filter(function(r){return r.pi!==pi;});
+  }
+  save();
+  refreshRegisterModal(ei);
+}
+
+function onRegDateChange(ei, pi, inp) {
+  var t = getTour(), e = t.events[ei];
+  var p = t.players[pi];
+  if(!isAdmin() && (!p || p.username !== currentUser.username)) {
+    alert('Du kan bara ändra ditt eget datum.');
+    refreshRegisterModal(ei);
+    return;
+  }
+  var reg = (e.registrations||[]).find(function(r){return r.pi===pi;});
+  if(reg) { reg.date = inp.value; save(); refreshRegisterModal(ei); }
+}
+
+function refreshRegisterModal(ei) {
+  // Re-render just the date grouping section without closing the modal / losing focus
+  var t = getTour(), e = t.events[ei];
+  var groupEl = document.querySelector('#modal-mc .section-title');
+  var container = groupEl ? groupEl.parentElement : null;
+  // Simplicity: just rebuild the whole modal content (cheap), but keep scroll position acceptable for this list size
+  var scrollTop = document.querySelector('#modal-mc .modal') ? document.querySelector('#modal-mc .modal').scrollTop : 0;
+  openRegister(ei);
+  var modalEl = document.querySelector('#modal-mc .modal');
+  if(modalEl) modalEl.scrollTop = scrollTop;
+}
+
+// ── RESULTS INPUT ──────────────────────────────────────────────────────────
+// Get a player's accumulated stroke head-start going into this event (finals only)
+function getHeadStart(t, e, pi) {
+  if(!e.isFinal) return 0;
+  var finals = t.events.filter(function(x){return x.isFinal;});
+  var thisFinalIdx = finals.indexOf(e);
+  if(thisFinalIdx === 0) {
+    // First final: head start from current OoM standing using finalTable
+    var oom = computeOOM(t);
+    var rank = oom.findIndex(function(o){return o.pi===pi;});
+    if(rank<0) return 0;
+    return t.finalTable[rank] || 0;
+  } else {
+    // Subsequent final: head start = how many strokes/points behind the previous
+    // final's leader this player finished (0 for the leader, positive for everyone else).
+    var prevFinal = finals[thisFinalIdx-1];
+    if(!prevFinal.results || !prevFinal.results.length) return 0;
+    var r = prevFinal.results.find(function(x){return x.pi===pi;});
+    if(!r || r.adjusted == null) return 0;
+    var prevIsStab = prevFinal.type === 'stableford';
+    var adjustedVals = prevFinal.results.map(function(x){return x.adjusted;});
+    var bestAdjusted = prevIsStab ? Math.max.apply(null, adjustedVals) : Math.min.apply(null, adjustedVals);
+    return prevIsStab ? (bestAdjusted - r.adjusted) : (r.adjusted - bestAdjusted); // always >= 0, 0 for the leader
+  }
+}
+
+function computeOOM(t) {
+  var totals={};
+  t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;}).forEach(function(e){
+    e.results.forEach(function(r){
+      if(!totals[r.pi]) totals[r.pi]={pi:r.pi,pts:0};
+      totals[r.pi].pts+=(r.points||0);
+    });
+  });
+  return Object.values(totals).sort(function(a,b){return b.pts-a.pts;});
+}
+
+function findRelevantFinal(t) {
+  var finals = t.events.filter(function(e){ return e.isFinal; });
+  if(!finals.length) return null;
+  // Prefer the first still-open final; otherwise fall back to the most recently closed one.
+  var open = finals.find(function(e){ return !e.closed; });
+  if(open) return open;
+  var closedFinals = finals.filter(function(e){ return e.closed; });
+  return closedFinals.length ? closedFinals[closedFinals.length-1] : finals[0];
+}
+
+function renderLeaderboardSection() {
+  var t = getTour();
+  var el = document.getElementById('leaderboard-section');
+  if(!el) return;
+  var final = findRelevantFinal(t);
+  if(!final) { el.innerHTML = ''; return; }
+
+  var regsRaw = final.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var pis = regPis.filter(function(pi){ return t.players[pi]; });
+  if(!pis.length) { el.innerHTML = ''; return; }
+
+  var isStab = final.type === 'stableford';
+  var rows = pis.map(function(pi){
+    var hs = getHeadStart(t, final, pi);
+    var liveResult = final.results ? final.results.find(function(r){return r.pi===pi;}) : null;
+    return { pi:pi, headStart:hs, result:liveResult };
+  });
+  // Sort by head start descending: a HIGHER head start means a bigger advantage (better position).
+  rows.sort(function(a,b){ return b.headStart - a.headStart; });
+
+  var finalLabel = final.closed ? 'Resultat' : (final.name);
+  var html = '<div class="card" style="border-color:var(--gold);box-shadow:0 0 0 1px var(--gold);margin-bottom:20px">';
+  html += '<div class="row" style="justify-content:space-between;margin-bottom:10px">';
+  html += '<h3 style="margin:0;display:flex;align-items:center;gap:6px"><i class="ti ti-flag" style="color:var(--gold)"></i> Leaderboard – '+esc(final.name)+'</h3>';
+  html += '<span class="badge '+(final.closed?'badge-gray':'badge-gold')+'">'+(final.closed?'Färdigspelad':'Kommande/pågående')+'</span>';
+  html += '</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+(final.closed?'Slutställning för finalen.':'Startläge inför finalen, baserat på ställningen i föregående OoM/final. Uppdateras inte under spelets gång.')+'</p>';
+  html += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr><th>Plac.</th><th>Spelare</th><th style="text-align:right">'+(final.closed?'Resultat':'Startläge')+'</th></tr></thead><tbody>';
+  rows.forEach(function(r, idx){
+    var p = t.players[r.pi];
+    var hsLabel = r.headStart > 0 ? ('-'+r.headStart) : 'Scratch';
+    var cell;
+    if(final.closed && r.result) {
+      var rawLabel = isStab ? (r.result.score+' p') : (r.result.score+' netto');
+      cell = '<span style="font-weight:700;font-size:15px">just. '+r.result.adjusted+'</span> <span style="color:var(--text-3);font-size:11px">('+rawLabel+')</span>';
+    } else {
+      cell = '<span style="font-weight:700;'+(r.headStart===0?'color:var(--gold)':'')+'">'+hsLabel+'</span>';
+    }
+    html += '<tr>'+
+      '<td>'+(idx+1)+'</td>'+
+      '<td>'+(p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px">':'')+esc(p.name)+'</td>'+
+      '<td style="text-align:right">'+cell+'</td>'+
+    '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function recalcNet(pi) {
+  var bruttoEl = document.getElementById('brutto-'+pi);
+  var shcpEl = document.getElementById('shcp-'+pi);
+  var resEl = document.getElementById('res-'+pi);
+  if(!bruttoEl || !shcpEl || !resEl) return;
+  var brutto = parseFloat(bruttoEl.value);
+  var shcp = parseFloat(shcpEl.value);
+  if(isNaN(brutto) || isNaN(shcp)) { resEl.value = ''; return; }
+  resEl.value = Math.round((brutto - shcp) * 10) / 10;
+}
+
+function openResults(i) {
+  var t=getTour(), e=t.events[i]; _wImg=null;
+  var regsRaw = e.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var regs = regPis.filter(function(pi){return t.players[pi];});
+  if(!regs.length){alert('Inga anmälda spelare.');return;}
+  var isStab=e.type==='stableford';
+  var rows=regs.map(function(pi){
+    var ex=e.results?e.results.find(function(r){return r.pi===pi;}):null;
+    var p=t.players[pi];
+    var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
+    var shcpVal = (ex&&ex.shcp!=null) ? ex.shcp : (p.hcp!=null?p.hcp:0);
+    return '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center">'+
+      (p.img?'<img src="'+p.img+'" class="avatar" style="width:30px;height:30px" alt="">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+ini(p.name)+'</div>')+
+      '<span style="flex:1;font-size:14px;font-weight:500">'+p.name+(e.isFinal?' <span style="font-size:11px;color:var(--gold);font-weight:600">('+(hs>0?'-':'')+hs+' förspr.)</span>':'')+'</span>'+
+      (!isStab?
+        '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+(ex&&ex.brutto!=null?ex.brutto:'')+'" oninput="recalcNet('+pi+')">'+
+        '<input type="number" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
+        :'')+
+      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+(ex?ex.score:'')+'" '+(!isStab?'readonly':'')+'>'+
+    '</div>';
+  }).join('');
+  var h='<h3>'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+'Resultatinmatning – '+e.name+'</h3>';
+  h+='<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">'+(isStab?'Stableford-poäng per spelare':'Nettoresultat per spelare (brutto valfritt)')+'</p>';
+  if(e.isFinal) h+='<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-info-circle"></i> Förspr&aring;nget r&auml;knas automatiskt in i slutst&auml;llningen n&auml;r tävlingen st&auml;ngs.</p>';
+  h+=rows;
+  h+='<hr class="divider">';
+  h+='<div class="field"><label><i class="ti ti-star" style="color:#BA7517"></i> Foto på vinnaren (valfritt)</label>';
+  h+='<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" class="img-preview-sm">':'')+'</div>';
+  h+='<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-camera"></i> Välj foto</button>';
+  h+=' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h+='<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
+  h+='</div>';
+  h+='<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h+='<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h+='<button class="btn btn-primary" onclick="saveResults('+i+')">Spara resultat</button>';
+  h+='</div>';
+  showModal(h);
+  setTimeout(function(){
+    var b=document.getElementById('w-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('w-file-inp').click(); };
+    var inp=document.getElementById('w-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onWinnerImgFile(this.files[0]); };
+    enablePasteForInput('w-img-btn', onWinnerImgFile);
+  },50);
+}
+
+function onWinnerImgFile(file) {
+  compressImage(file, 1000, 800, 0.92, function(d) {
+    showCropModal(d, 220, function(cropped) {
+      _wImg=cropped;
+      var prev=document.getElementById('w-img-prev');
+      if(prev) prev.innerHTML='<img src="'+cropped+'" class="img-preview-sm">';
+    });
+  });
+}
+
+function saveResults(i) {
+  var t=getTour(), e=t.events[i], isStab=e.type==='stableford';
+  var regsRaw = e.registrations || [];
+  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  var regs = regPis.filter(function(pi){return t.players[pi];});
+  var results=[];
+  for(var k=0;k<regs.length;k++){
+    var pi=regs[k];
+    var v=document.getElementById('res-'+pi).value;
+    if(v==='') continue;
+    var score=parseFloat(v);
+    var bruttoEl=document.getElementById('brutto-'+pi);
+    var brutto=bruttoEl&&bruttoEl.value!==''?parseFloat(bruttoEl.value):null;
+    var shcpEl=document.getElementById('shcp-'+pi);
+    var shcp=shcpEl&&shcpEl.value!==''?parseFloat(shcpEl.value):null;
+    var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
+    if(e.isFinal) {
+      var hs = getHeadStart(t,e,pi);
+      entry.headStart = hs;
+      // Lower adjusted = better (stroke play). adjusted = score - headStart
+      entry.adjusted = isStab ? (score + hs) : (score - hs);
+    }
+    results.push(entry);
+  }
+  if(e.isFinal) {
+    results.sort(function(a,b){
+      var diff = isStab ? (b.adjusted-a.adjusted) : (a.adjusted-b.adjusted);
+      if(diff !== 0) return diff;
+      // Tiebreak: lower HCP wins, since they needed sharper play to reach the same adjusted result.
+      return (t.players[a.pi].hcp||0) - (t.players[b.pi].hcp||0);
+    });
+  } else {
+    results.sort(function(a,b){ return isStab?(b.score-a.score||t.players[a.pi].hcp-t.players[b.pi].hcp):(a.score-b.score||t.players[a.pi].hcp-t.players[b.pi].hcp); });
+  }
+  if(_wImg) e.winnerImg=_wImg;
+  e.results=results; save();
+  if(!e.isFinal) {
+    resolveTies(i,0,function(){ save(); closeModal(); renderEvents(); });
+  } else {
+    closeModal(); renderEvents();
+  }
+  _wImg=null;
+}
+
+function resolveTies(ei,from,done) {
+  var t=getTour(), e=t.events[ei];
+  for(var i=from;i<e.results.length-1;i++){
+    var a=e.results[i],b=e.results[i+1];
+    if(a.score===b.score&&t.players[a.pi].hcp===t.players[b.pi].hcp){
+      var na=t.players[a.pi].name,nb=t.players[b.pi].name,ii=i;
+      showModal('<h3>Lika resultat!</h3>'+
+        '<p style="font-size:14px;color:var(--text-2);margin-bottom:16px">'+na+' och '+nb+' är lika. Vem ska få plats '+(i+1)+'?</p>'+
+        '<div class="row" style="gap:8px;justify-content:center">'+
+        '<button class="btn btn-primary" onclick="pickW('+ei+','+ii+','+ii+','+(ii+1)+')">'+na+'</button>'+
+        '<button class="btn btn-primary" onclick="pickW('+ei+','+ii+','+(ii+1)+','+ii+')">'+nb+'</button>'+
+        '</div>');
+      return;
+    }
+  }
+  done();
+}
+
+function pickW(ei,from,keep,move){
+  var e=getTour().events[ei];
+  if(keep!==from){var tmp=e.results[keep];e.results[keep]=e.results[move];e.results[move]=tmp;}
+  save(); resolveTies(ei,from+1,function(){save();closeModal();renderEvents();});
+}
+
+function closeEvent(i){
+  var t=getTour(),e=t.events[i];
+  if(!confirm('Stäng tävlingen? Resultat låses.'+(e.isFinal?'':' Poäng delas ut.')))return;
+  if(!e.results||!e.results.length){alert('Inga resultat sparade.');return;}
+  if(!e.isFinal) {
+    var mult = e.isMajor ? 1.5 : 1;
+    e.results.forEach(function(r,idx){r.points=Math.round((t.pointsScale[idx]||0)*mult*10)/10;});
+  }
+  e.closed=true; save(); renderEvents(); renderOOM();
+}
+
+function reopenEvent(i){
+  var t=getTour(),e=t.events[i];
+  if(!confirm('Återöppna tävlingen för redigering? Du kan sedan ändra resultaten och stänga den igen.'))return;
+  e.closed=false;
+  if(!e.isFinal) {
+    // Clear previously awarded OoM points so they don't get double-counted if results change and the event is closed again.
+    (e.results||[]).forEach(function(r){ delete r.points; });
+  }
+  save(); renderEvents(); renderOOM();
+}
+
+// ── RESULTS VIEW ───────────────────────────────────────────────────────────
+function openResultsView(i){
+  var t=getTour(),e=t.events[i];
+  if(!e.results||!e.results.length){alert('Inga resultat.');return;}
+  var winner=t.players[e.results[0].pi];
+  var winnerImg=e.winnerImg||(winner&&winner.img?winner.img:null);
+  var isStab=e.type==='stableford';
+  var h='<div style="text-align:center;margin-bottom:14px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px">'+(e.isFinal?'Final':(e.isMajor?'Major · 1.5x poäng':'Resultattavla'))+'</div>'+
+    '<div style="font-size:20px;font-weight:700">'+e.name+'</div>'+
+    '<div style="font-size:13px;color:var(--text-3)">'+e.course+' · '+e.date+'</div></div>';
+  if(winnerImg) h+='<img src="'+winnerImg+'" style="width:100%;height:300px;object-fit:cover;border-radius:10px;margin-bottom:16px" alt="">';
+  h+=buildPodiumHTML(e,t);
+  var rest=e.results.slice(3).map(function(r,idx){
+    var p=t.players[r.pi];
+    var sl=isStab?r.score+' p':r.score+' slag netto';
+    if(e.isFinal) sl = 'just. '+r.adjusted+' <span style="color:var(--text-3)">('+sl+')</span>';
+    return '<div class="result-row">'+
+      '<div class="pos-badge pos-other">'+(idx+4)+'</div>'+
+      (p&&p.img?'<img src="'+p.img+'" class="avatar" style="width:30px;height:30px" alt="">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+(p?ini(p.name):'?')+'</div>')+
+      '<div style="flex:1"><div style="font-size:14px;font-weight:600">'+(p?p.name:'?')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-3)">'+sl+'</div></div>'+
+      (e.isFinal?'':'<span class="badge badge-gold">'+(r.points||0)+' pts</span>')+
+      '</div>';
+  }).join('');
+  if(rest) h+='<div style="margin-top:8px">'+rest+'</div>';
+  h+='<div class="row" style="gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">'+
+    '<button class="btn btn-primary" onclick="exportResultCard('+i+')"><i class="ti ti-download"></i> Exportera</button>'+
+    '<button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h);
+}
+
+function buildPodiumHTML(e,t){
+  var top=e.results.slice(0,3),isStab=e.type==='stableford';
+  var slots=[
+    {resultIdx:1, height:'85px',  color:'#D3D1C7', tc:'#2C2C2A', label:'2:a'},
+    {resultIdx:0, height:'108px', color:'#FAC775', tc:'#633806', label:'1:a'},
+    {resultIdx:2, height:'65px',  color:'#F5C4B3', tc:'#4A1B0C', label:'3:a'}
+  ];
+  var cols=slots.map(function(slot){
+    var r=top[slot.resultIdx];
+    if(!r) return '<div></div>';
+    var p=t.players[r.pi],score=isStab?r.score+'p':r.score+' slag';
+    var sub = e.isFinal ? ('just. '+r.adjusted+' · '+score) : (score+' · '+(r.points||0)+'p');
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">'+
+      (p&&p.img?'<img src="'+p.img+'" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:3px solid '+slot.color+'" alt="">':
+        '<div style="width:52px;height:52px;border-radius:50%;background:'+slot.color+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;color:'+slot.tc+'">'+(p?ini(p.name):'?')+'</div>')+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(p?p.name:'?')+'</div>'+
+      '<div style="font-size:11px;color:var(--text-2)">'+sub+'</div>'+
+      '<div style="width:88px;height:'+slot.height+';background:'+slot.color+';border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:'+slot.tc+'">'+slot.label+'</div>'+
+    '</div>';
+  });
+  return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;align-items:end;margin-bottom:16px">'+cols.join('')+'</div>';
+}
+
+function exportResultCard(i){
+  var t=getTour(),e=t.events[i];
+  var winner=t.players[e.results[0].pi];
+  var winnerImg=e.winnerImg||(winner&&winner.img?winner.img:null);
+  var isStab=e.type==='stableford';
+  var rows=e.results.map(function(r,idx){
+    var p=t.players[r.pi],medal=idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':'';
+    var bg=idx===0?'#fffbeb':idx===1?'#f9fafb':idx===2?'#fff7f5':'#ffffff';
+    var sl=isStab?r.score+' p':r.score+' netto';
+    var av=p&&p.img?'<img src="'+p.img+'" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #e5e7eb;flex-shrink:0" crossorigin="anonymous">':
+      '<div style="width:38px;height:38px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#166534;flex-shrink:0">'+(p?ini(p.name):'?')+'</div>';
+    var ptsLabel = e.isFinal ? ('just. '+r.adjusted) : ((r.points||0)+' pts');
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:'+bg+';border-bottom:1px solid #f0f0f0">'+
+      '<div style="font-size:20px;min-width:26px;text-align:center">'+(medal||idx+1)+'</div>'+av+
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(p?p.name:'?')+'</div>'+
+      '<div style="font-size:11px;color:#9ca3af">'+sl+'</div></div>'+
+      '<div style="font-size:14px;font-weight:800;color:#065f46">'+ptsLabel+'</div></div>';
+  }).join('');
+  var card=document.createElement('div');
+  card.style.cssText='position:fixed;left:-9999px;top:0;width:500px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:system-ui,sans-serif;';
+  card.innerHTML='<div style="background:linear-gradient(135deg,#065f46 0%,#1D9E75 100%);padding:22px 22px 18px;color:#fff">'+
+    '<div style="font-size:11px;font-weight:600;opacity:.7;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">'+t.name+'</div>'+
+    '<div style="font-size:24px;font-weight:800;margin-bottom:3px">'+e.name+'</div>'+
+    '<div style="font-size:13px;opacity:.8">'+e.course+' · '+e.date+'</div></div>'+
+    (winnerImg?'<img src="'+winnerImg+'" style="width:100%;height:420px;object-fit:cover;display:block" crossorigin="anonymous">':'')+
+    '<div>'+rows+'</div>'+
+    '<div style="padding:12px 16px;background:#f9fafb;text-align:center;font-size:11px;color:#9ca3af;border-top:1px solid #f0f0f0">⛳ '+t.name+'</div>';
+  document.body.appendChild(card);
+  setTimeout(function(){
+    html2canvas(card,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false}).then(function(canvas){
+      document.body.removeChild(card);
+      var link=document.createElement('a');
+      link.download='resultat-'+e.name.replace(/\s+/g,'-').toLowerCase()+'.png';
+      link.href=canvas.toDataURL('image/png'); link.click();
+    }).catch(function(){document.body.removeChild(card);alert('Export misslyckades.');});
+  },300);
+}
+
+// ── CALENDAR ───────────────────────────────────────────────────────────────
+function renderCalendar(){
+  var t=getTour(),y=t.calYear,m=t.calMonth;
+  document.getElementById('cal-month-label').textContent=new Date(y,m,1).toLocaleDateString('sv-SE',{month:'long',year:'numeric'});
+  document.getElementById('cal-headers').innerHTML=['Mån','Tis','Ons','Tor','Fre','Lör','Sön'].map(function(d){return '<div class="cal-header">'+d+'</div>';}).join('');
+  var first=new Date(y,m,1).getDay(),offset=(first+6)%7,dim=new Date(y,m+1,0).getDate();
+  var today=new Date(),evDays={};
+  t.events.forEach(function(e,i){var d=new Date(e.date);if(d.getFullYear()===y&&d.getMonth()===m)evDays[d.getDate()]=i;});
+  var html='';
+  for(var k=0;k<offset;k++) html+='<div class="cal-day empty-day">0</div>';
+  for(var d=1;d<=dim;d++){
+    var isT=today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
+    var hasE=evDays[d]!=null;
+    html+='<div class="cal-day'+(hasE?' has-event':'')+(isT?' today':'')+'"'+(hasE?' onclick="showCalEvent('+evDays[d]+')"':'')+'>'+d+'</div>';
+  }
+  document.getElementById('cal-days').innerHTML=html;
+  var now=new Date();now.setHours(0,0,0,0);
+  var upcoming=t.events.filter(function(e){return new Date(e.date)>=now;}).sort(function(a,b){return new Date(a.date)-new Date(b.date);}).slice(0,3);
+  var cel=document.getElementById('cal-events-list');
+  if(!upcoming.length){
+    cel.innerHTML='';
+  } else {
+    cel.innerHTML='<p class="section-title">Kommande tävlingar</p>'+upcoming.map(function(e){
+      return '<div class="card" style="'+(e.img?'padding:0;overflow:hidden':'')+'">'+
+        (getEventImage(e)?'<img src="'+getEventImage(e)+'" style="width:100%;height:90px;object-fit:cover;display:block" alt="'+e.name+'"><div style="padding:.85rem 1.25rem">':'')+
+        '<div class="row"><div style="flex:1"><div style="font-weight:600">'+e.name+'</div>'+
+        '<div style="font-size:13px;color:var(--text-2)">'+e.course+' · '+e.date+'</div></div>'+
+        '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'">'+(e.closed?'Avslutad':'Öppen')+'</span></div>'+
+        (e.img?'</div>':'')+
+      '</div>';
+    }).join('');
+  }
+  renderCalendarOverview(t);
+}
+
+function renderCalendarOverview(t) {
+  var el = document.getElementById('cal-overview-list');
+  if(!el) return;
+  if(!t.events.length) { el.innerHTML = ''; return; }
+  var sorted = t.events.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+  var html = '<p class="section-title" style="margin-top:20px"><i class="ti ti-list"></i> Tävlingsöversikt</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Alla tävlingar i denna tour</p>';
+  html += '<div class="card" style="padding:0">';
+  html += sorted.map(function(e, idx){
+    var origIdx = t.events.indexOf(e);
+    return '<div class="row" style="justify-content:space-between;padding:12px 16px;cursor:pointer;'+(idx<sorted.length-1?'border-bottom:1px solid var(--border)':'')+'" onclick="showCalEvent('+origIdx+')">'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;min-width:0">'+
+        '<span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</span>'+
+        (e.isMajor?'<span class="badge badge-gold" style="flex-shrink:0">Major</span>':'')+
+        (e.isFinal?'<span class="badge badge-gold" style="flex-shrink:0"><i class="ti ti-flag" style="font-size:10px"></i> Final</span>':'')+
+      '</div>'+
+      '<div class="row" style="gap:8px;flex-shrink:0;align-items:center">'+
+        '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="font-size:10px">'+(e.closed?'Avslutad':'Öppen')+'</span>'+
+        '<span style="font-size:13px;color:var(--text-2);white-space:nowrap"><i class="ti ti-calendar" style="color:var(--green-dark);font-size:13px"></i> '+dateLongSv(e.date)+'</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function showCalEvent(i){
+  var t=getTour(),e=t.events[i];
+  showModal('<h3>'+e.name+'</h3>'+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="img-preview" alt="'+e.name+'">':'')+
+    '<p style="font-size:14px;color:var(--text-2);margin-bottom:8px"><i class="ti ti-map-pin"></i> '+e.course+' · '+e.date+'</p>'+
+    '<p style="font-size:13px;color:var(--text-3)">Anmälda: '+(e.registrations||[]).length+' spelare</p>'+
+    '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>');
+}
+
+function prevMonth(){var t=getTour();t.calMonth--;if(t.calMonth<0){t.calMonth=11;t.calYear--;}save();renderCalendar();}
+function nextMonth(){var t=getTour();t.calMonth++;if(t.calMonth>11){t.calMonth=0;t.calYear++;}save();renderCalendar();}
+
+// ── ORDER OF MERIT ─────────────────────────────────────────────────────────
+function showOOMMain(){document.getElementById('oom-main').style.display='';document.getElementById('oom-profile').style.display='none';}
+
+function showPlayerProfile(pi){
+  document.getElementById('oom-main').style.display='none';
+  var el=document.getElementById('oom-profile');
+  el.style.display=''; el.innerHTML=buildProfileHTML(pi);
+}
+
+function buildProfileHTML(pi){
+  var t=getTour(),p=t.players[pi];if(!p)return'';
+  var participated=t.events.filter(function(e){return e.closed&&e.results&&e.results.find(function(r){return r.pi==pi;});});
+  var results=participated.map(function(e){var r=e.results.find(function(x){return x.pi==pi;});var pos=e.results.findIndex(function(x){return x.pi==pi;})+1;return{event:e,result:r,pos:pos};});
+  var numEvents=results.length,podiums=results.filter(function(x){return x.pos<=3;}).length;
+  var bestPos=numEvents?Math.min.apply(null,results.map(function(x){return x.pos;})):null;
+  var worstPos=numEvents?Math.max.apply(null,results.map(function(x){return x.pos;})):null;
+  var slagR=results.filter(function(x){return !x.event.type||x.event.type==='slag';});
+  var bestNetto=slagR.length?Math.min.apply(null,slagR.map(function(x){return x.result.score;})):null;
+  var stabR=results.filter(function(x){return x.event.type==='stableford';});
+  var bestStab=stabR.length?Math.max.apply(null,stabR.map(function(x){return x.result.score;})):null;
+  var totalPts=results.reduce(function(s,x){return s+(x.result.points||0);},0);
+  var posIcon=function(pos){return pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':'<span style="font-size:13px;color:var(--text-2);font-weight:600">'+pos+'.</span>';};
+  var histRows=results.slice().sort(function(a,b){return new Date(b.event.date)-new Date(a.event.date);}).map(function(x){
+    var type=(x.event.isFinal?'Final · ':'')+(x.event.type==='stableford'?'Stableford':'Slag');
+    var sl=x.event.type==='stableford'?x.result.score+' p':x.result.score+' netto';
+    var tc=x.event.isFinal?'background:var(--gold-light);color:var(--gold)':(x.event.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11');
+    return '<tr><td style="color:var(--text-2);white-space:nowrap;font-size:12px">'+x.event.date+'</td>'+
+      '<td style="font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x.event.name+'</td>'+
+      '<td><span style="font-size:11px;padding:2px 7px;border-radius:20px;font-weight:500;'+tc+'">'+type+'</span></td>'+
+      '<td style="text-align:center;font-weight:600">'+sl+'</td>'+
+      '<td style="text-align:center">'+posIcon(x.pos)+'</td>'+
+      '<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(x.event.isFinal?'–':(x.result.points||0)+'p')+'</td></tr>';
+  }).join('');
+  var lastStat=bestStab!=null?'<div class="stat-val">'+bestStab+'p</div><div class="stat-lbl">Bästa Stableford</div>':
+    '<div class="stat-val">'+(bestNetto!=null?bestNetto:'–')+'</div><div class="stat-lbl">Bästa netto</div>';
+  return '<div class="back-btn" onclick="showOOMMain()"><i class="ti ti-arrow-left"></i> Tillbaka till Order of Merit</div>'+
+    '<div class="profile-header">'+(p.img?'<img src="'+p.img+'" class="profile-avatar-lg" alt="'+p.name+'">':'<div class="profile-avatar-ph">'+ini(p.name)+'</div>')+
+    '<div><div style="font-size:24px;font-weight:700;margin-bottom:2px">'+p.name+'</div>'+
+    '<div style="font-size:14px;opacity:.8">HCP '+p.hcp+'</div>'+
+    '<div style="font-size:13px;opacity:.65;margin-top:4px">'+totalPts+' OoM-poäng totalt</div></div></div>'+
+    '<div class="stat-grid">'+
+      '<div class="stat-card"><div class="stat-val">'+numEvents+'</div><div class="stat-lbl">Tävlingar</div></div>'+
+      '<div class="stat-card"><div class="stat-val">'+podiums+'</div><div class="stat-lbl">Pallplatser</div></div>'+
+      '<div class="stat-card"><div class="stat-val">'+(bestPos!=null?bestPos+'.':'–')+'</div><div class="stat-lbl">Bästa placering</div></div>'+
+      '<div class="stat-card"><div class="stat-val">'+(worstPos!=null?worstPos+'.':'–')+'</div><div class="stat-lbl">Sämsta placering</div></div>'+
+      '<div class="stat-card"><div class="stat-val">'+(bestNetto!=null?bestNetto:'–')+'</div><div class="stat-lbl">Bästa netto</div></div>'+
+      '<div class="stat-card">'+lastStat+'</div>'+
+    '</div>'+
+    (numEvents?'<div class="card" style="padding:0;overflow:hidden">'+
+      '<div style="padding:.85rem 1.25rem .6rem;border-bottom:1px solid var(--border)"><h3 style="margin:0;font-size:14px">Tävlingshistorik</h3></div>'+
+      '<div style="overflow-x:auto"><table class="hist-table"><thead><tr>'+
+        '<th>Datum</th><th>Tävling</th><th>Typ</th><th style="text-align:center">Resultat</th><th style="text-align:center">Plac.</th><th style="text-align:right">Poäng</th>'+
+      '</tr></thead><tbody>'+histRows+'</tbody></table></div></div>':
+      '<p class="empty">Inga avslutade tävlingar än.</p>');
+}
+
+function setOomView(view) {
+  document.getElementById('oom-list').style.display = view==='list' ? '' : 'none';
+  document.getElementById('oom-table').style.display = view==='table' ? '' : 'none';
+  document.getElementById('oom-view-list-btn').className = 'btn btn-sm' + (view==='list' ? ' btn-primary' : '');
+  document.getElementById('oom-view-table-btn').className = 'btn btn-sm' + (view==='table' ? ' btn-primary' : '');
+  if(view==='table') renderOomTable();
+}
+
+function renderOomTable() {
+  var t = getTour();
+  var el = document.getElementById('oom-table');
+  if(!el) return;
+  var regularEvents = t.events.filter(function(e){ return !e.isFinal; });
+  var closedEvents = regularEvents.filter(function(e){ return e.closed && e.results && e.results.length; });
+  if(!closedEvents.length) { el.innerHTML = '<p class="empty">Inga resultat ännu.</p>'; return; }
+
+  // Build per-player totals across all closed regular events, to determine row order
+  var totals = {};
+  closedEvents.forEach(function(e){
+    e.results.forEach(function(r){
+      if(!totals[r.pi]) totals[r.pi] = 0;
+      totals[r.pi] += (r.points||0);
+    });
+  });
+  var playerPis = Object.keys(totals).map(Number).sort(function(a,b){ return totals[b]-totals[a]; });
+  if(!playerPis.length) { el.innerHTML = '<p class="empty">Inga resultat ännu.</p>'; return; }
+
+  var medals = ['🥇','🥈','🥉'];
+  var html = '<div class="card" style="padding:14px 0 4px">';
+  html += '<div style="padding:0 16px 10px"><p style="font-size:12px;color:var(--text-2)">Varje spelares poäng per deltävling &nbsp; <span style="color:var(--gold)">★</span> markerar vinnare av tävling &nbsp; <span class="badge badge-gold" style="font-size:10px">M</span> markerar major-tävling</p></div>';
+  html += '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>';
+  html += '<th style="position:sticky;left:0;background:var(--surface2);z-index:1">Pos</th>';
+  html += '<th style="position:sticky;left:36px;background:var(--surface2);z-index:1;min-width:130px">Spelare</th>';
+  closedEvents.forEach(function(e){
+    html += '<th>'+esc(e.name)+(e.isMajor?' <span class="badge badge-gold" style="font-size:9px">M</span>':'')+'</th>';
+  });
+  html += '<th style="position:sticky;right:0;background:var(--surface2);z-index:1">Poäng totalt</th>';
+  html += '</tr></thead><tbody>';
+
+  playerPis.forEach(function(pi, idx){
+    var p = t.players[pi];
+    if(!p) return;
+    html += '<tr onclick="showPlayerProfile('+pi+')" style="cursor:pointer">';
+    html += '<td style="position:sticky;left:0;background:var(--surface)">'+(medals[idx]||(idx+1))+'</td>';
+    html += '<td style="position:sticky;left:36px;background:var(--surface);font-weight:600">'+esc(p.name)+'</td>';
+    closedEvents.forEach(function(e){
+      var r = e.results.find(function(x){ return x.pi==pi; });
+      if(!r) { html += '<td style="text-align:center;color:var(--text-3)">-</td>'; return; }
+      var isWinner = e.results[0] && e.results[0].pi == pi;
+      html += '<td style="text-align:center;color:var(--green-dark);font-weight:600">'+(r.points||0)+(isWinner?' <span style="color:var(--gold)">★</span>':'')+'</td>';
+    });
+    html += '<td style="position:sticky;right:0;background:var(--surface);font-weight:700;text-align:right">'+totals[pi]+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function renderOOM(){
+  renderLeaderboardSection();
+  var listBtn = document.getElementById('oom-view-list-btn');
+  var tableBtn = document.getElementById('oom-view-table-btn');
+  if(listBtn && tableBtn && listBtn.className === 'btn btn-sm' && tableBtn.className === 'btn btn-sm') {
+    listBtn.className = 'btn btn-sm btn-primary';
+  }
+  var t=getTour(),el=document.getElementById('oom-list'),totals={};
+  t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;}).forEach(function(e){
+    e.results.forEach(function(r){
+      if(!totals[r.pi]) totals[r.pi]={pts:0,events:0,wins:0};
+      totals[r.pi].pts+=(r.points||0); totals[r.pi].events++;
+      if(e.results[0].pi===r.pi) totals[r.pi].wins++;
+    });
+  });
+  var sorted=Object.entries(totals).sort(function(a,b){return b[1].pts-a[1].pts;});
+  if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
+  var medals=['🥇','🥈','🥉'];
+  el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
+    sorted.map(function(entry,idx){
+      var pi=entry[0],d=entry[1],p=t.players[pi]; if(!p) return '';
+      return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
+        '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
+        (p.img?'<img src="'+p.img+'" class="avatar" style="width:40px;height:40px" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+'</div></div>'+
+        '<div class="oom-pts">'+d.pts+' pts</div>'+
+        '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
+    }).join('');
+}
+
+// ── SETTINGS (read-only since tours are locked) ─────────────────────────────
+function renderSettings(){
+  var t=getTour();
+  var html = '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Poängskalan och försprångstabellen sattes vid skapandet och kan inte ändras.</p>';
+  html += '<div class="section-title">Poäng per placering</div>';
+  html += t.pointsScale.map(function(p,i){return '<div class="row" style="margin-bottom:6px;gap:8px"><span style="font-size:13px;color:var(--text-2);min-width:64px">Plats '+(i+1)+'</span><span style="font-weight:600">'+p+' p</span></div>';}).join('');
+  if(t.finalTable && t.finalTable.length) {
+    html += '<div class="section-title">Försprång till final (slag)</div>';
+    html += t.finalTable.map(function(s,i){return '<div class="row" style="margin-bottom:6px;gap:8px"><span style="font-size:13px;color:var(--text-2);min-width:64px">Plats '+(i+1)+'</span><span style="font-weight:600">'+s+' slag</span></div>';}).join('');
+  }
+  document.getElementById('settings-readonly').innerHTML = html;
+  renderCourseBankSection();
+}
+
+function renderCourseBankSection() {
+  var el = document.getElementById('course-bank-section');
+  if(!el) return;
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  var entries = Object.keys(courseBank).map(function(key){ return { key:key, displayName: courseBank[key].displayName || key, img: courseBank[key].img }; });
+  var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-photo"></i> Bildbank för banor</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banbilder sparas automatiskt här första gången de laddas upp i en tour, så samma bana inte behöver laddas upp igen nästa gång. Vill du flytta en bild till GitHub (för att avlasta databasen) – ladda ner den här, ladda upp filen till ditt repo, och uppdatera bilden i en kommande tour med samma filnamn.</p>';
+  if(!entries.length) {
+    html += '<p class="empty">Inga banor sparade ännu.</p>';
+  } else {
+    html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn btn-sm btn-primary" onclick="downloadAllCourseImages()"><i class="ti ti-download"></i> Ladda ner alla ('+entries.length+')</button></div>';
+    html += '<div class="card" style="padding:0">';
+    entries.forEach(function(e, idx){
+      html += '<div class="row" style="justify-content:space-between;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+        '<div class="row" style="gap:10px;align-items:center">'+
+          (getEventImage(e)?'<img src="'+getEventImage(e)+'" style="width:44px;height:32px;object-fit:cover;border-radius:6px">':'')+
+          '<span style="font-weight:500">'+esc(e.displayName)+'</span>'+
+        '</div>'+
+        '<a class="btn btn-sm" href="'+e.img+'" download="'+esc(e.key.replace(/\s+/g,'-'))+'.jpg"><i class="ti ti-download"></i> Ladda ner</a>'+
+      '</div>';
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+var DEFAULT_BG = "url('hero-bg.jpg')";
+
+function updateHero(tourId) {
+  var heroBg=document.getElementById('hero-bg'), heroTitle=document.getElementById('hero-title'),
+      heroSub=document.getElementById('hero-sub'), heroEye=document.getElementById('hero-eyebrow');
+  if(!heroBg) return;
+  if(!tourId) {
+    heroBg.style.backgroundImage = DEFAULT_BG;
+    heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
+    heroEye.textContent='\u26f3 En tour\u00f6versikt f\u00f6r \u00c4lvsj\u00f6 Golf & Country Club medlemmar';
+  } else {
+    var t=S.tours.find(function(x){return x.id===tourId;});
+    if(!t) return;
+    heroBg.style.backgroundImage = t.img ? "url('"+t.img+"')" : DEFAULT_BG;
+    heroTitle.textContent=t.name; heroSub.textContent=t.season||''; heroSub.style.display='';
+    heroEye.textContent='\u26f3 '+(t.season?t.season:'Tour');
+  }
+}
+
+// ── AUTH STATE ─────────────────────────────────────────────────────────────
+var currentUser = null; // { username, role: 'admin'|'user', tourAccess: [tourId,...] }
+var impersonatorAdmin = null; // set to the real admin's username while impersonating another user
+var USERS_DOC_REF = null; // set after db init
+
+function simpleHash(str) {
+  // Lightweight non-cryptographic hash, sufficient for a private friends' tour site.
+  // Not meant to withstand serious attack — adequate for casual protection.
+  var h = 0;
+  for (var i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return 'h' + (h >>> 0).toString(36) + '_' + str.length;
+}
+
+function getUsers() { return S.users || []; }
+function findUser(username) {
+  return getUsers().find(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
+}
+
+// ── LOGIN SCREEN ───────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('hero-bg').style.display = 'none';
+  setTimeout(function(){
+    var f = document.getElementById('login-form');
+    if(f) f.onsubmit = function(e){ e.preventDefault(); doLogin(); return false; };
+  }, 30);
+}
+
+function doLogin() {
+  var u = document.getElementById('login-username').value.trim();
+  var p = document.getElementById('login-password').value;
+  var errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if(!u || !p) { errEl.textContent = 'Fyll i användarnamn och lösenord.'; errEl.style.display=''; return; }
+  var user = findUser(u);
+  if(!user || user.passHash !== simpleHash(p)) {
+    errEl.textContent = 'Fel användarnamn eller lösenord.';
+    errEl.style.display = '';
+    return;
+  }
+  currentUser = user;
+  sessionStorage.setItem('tourapp_session', JSON.stringify({username:user.username}));
+  afterLogin();
+}
+
+function tryAutoLogin() {
+  var raw = sessionStorage.getItem('tourapp_session');
+  if(!raw) return false;
+  try {
+    var sess = JSON.parse(raw);
+    var user = findUser(sess.username);
+    if(user) { currentUser = user; return true; }
+  } catch(e) {}
+  return false;
+}
+
+function logout() {
+  sessionStorage.removeItem('tourapp_session');
+  currentUser = null;
+  location.reload();
+}
+
+function afterLogin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('hero-bg').style.display = '';
+  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+  document.getElementById('user-bar').style.display = 'flex';
+  if(currentUser.role === 'admin') {
+    document.getElementById('nav-users-btn').style.display = '';
+  }
+  showToursView();
+  renderImpersonationBanner();
+  if(!currentUser.golfId || currentUser.golfId.length !== 10) {
+    setTimeout(function(){
+      alert('Du saknar ett giltigt Golf-ID (10 tecken). Fyll i det i din profil för att kunna fortsätta.');
+      openMyProfile();
+    }, 200);
+  }
+}
+
+function impersonateUser(username) {
+  var target = findUser(username);
+  if(!target) return;
+  if(target.role === 'admin') { alert('Du kan inte logga in som en annan admin.'); return; }
+  if(!confirm('Logga in som '+(target.name||target.username)+'? Du kan gå tillbaka till ditt eget konto när du vill.')) return;
+  impersonatorAdmin = currentUser.username;
+  currentUser = target;
+  document.getElementById('user-badge').textContent = currentUser.username;
+  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'none';
+  renderImpersonationBanner();
+  showToursView();
+}
+
+function stopImpersonating() {
+  if(!impersonatorAdmin) return;
+  var admin = findUser(impersonatorAdmin);
+  impersonatorAdmin = null;
+  if(!admin) { logout(); return; }
+  currentUser = admin;
+  document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
+  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = '';
+  renderImpersonationBanner();
+  showToursView();
+}
+
+function renderImpersonationBanner() {
+  var existing = document.getElementById('impersonation-banner');
+  if(existing) existing.remove();
+  if(!impersonatorAdmin) return;
+  var bar = document.createElement('div');
+  bar.id = 'impersonation-banner';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:600;background:#BA7517;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  bar.innerHTML = '<i class="ti ti-user-shield"></i> Du är inloggad som '+esc(currentUser.name||currentUser.username)+' <button class="btn btn-sm" style="background:#fff;color:#BA7517;border:none" onclick="stopImpersonating()">Avsluta</button>';
+  document.body.insertBefore(bar, document.body.firstChild);
+}
+
+// ── PASSWORD CHANGE (self-service) ──────────────────────────────────────────
+var _myProfileImg = null;
+function openMyProfile() {
+  _myProfileImg = null;
+  var u = currentUser;
+  var h = '<h3>Min profil</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Den här informationen visas i resultatlistor, OoM och anmälningar.</p>';
+  h += '<div class="field"><label>Namn</label><input id="mp-name" type="text" value="'+esc(u.name||u.username)+'" placeholder="För- och efternamn"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="mp-golfid" type="text" value="'+esc(u.golfId||'')+'" maxlength="10" placeholder="10 tecken"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="mp-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="mp-gender" value="kvinna" '+(u.gender==='kvinna'?'checked':'')+' style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="mp-hcp" type="number" step="0.1" value="'+(u.hcp!=null?u.hcp:0)+'"></div>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin-top:-6px;margin-bottom:12px">Uppdatera manuellt när ditt HCP ändras, t.ex. i Min Golf/GIT.</p>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="mp-img-prev">'+(u.img?'<img src="'+u.img+'" class="avatar-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="mp-img-btn"><i class="ti ti-upload"></i> '+(u.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="mp-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="submitMyProfile()">Spara</button>';
+  h += '</div>';
+  showModal(h, true);
+  setTimeout(function(){
+    var b=document.getElementById('mp-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('mp-file-inp').click(); };
+    var inp=document.getElementById('mp-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onMyProfileImgFile(this.files[0]); };
+    enablePasteForInput('mp-img-btn', onMyProfileImgFile);
+  }, 30);
+}
+
+function onMyProfileImgFile(file) {
+  compressImage(file, 480, 480, 0.92, function(d) {
+    _myProfileImg = d;
+    var prev = document.getElementById('mp-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
+}
+
+function submitMyProfile() {
+  var u = findUser(currentUser.username);
+  var golfId = document.getElementById('mp-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
+  u.name = document.getElementById('mp-name').value.trim() || u.username;
+  u.golfId = golfId;
+  var genderEl = document.querySelector('input[name="mp-gender"]:checked');
+  u.gender = genderEl ? genderEl.value : 'man';
+  u.hcp = parseFloat(document.getElementById('mp-hcp').value) || 0;
+  if(_myProfileImg) u.img = _myProfileImg;
+  currentUser = u;
+  save(); closeModal();
+  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+  refreshCurrentView();
+}
+
+function openChangePassword() {
+  var h = '<h3>Byt lösenord</h3>';
+  h += '<div class="field"><label>Nuvarande lösenord</label><input id="cp-old" type="password"></div>';
+  h += '<div class="field"><label>Nytt lösenord</label><input id="cp-new" type="password"></div>';
+  h += '<div class="field"><label>Bekräfta nytt lösenord</label><input id="cp-new2" type="password"></div>';
+  h += '<div id="cp-error" style="color:var(--danger-text);font-size:13px;margin-bottom:8px;display:none"></div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="submitChangePassword()">Byt lösenord</button>';
+  h += '</div>';
+  showModal(h);
+}
+
+function submitChangePassword() {
+  var oldP = document.getElementById('cp-old').value;
+  var newP = document.getElementById('cp-new').value;
+  var newP2 = document.getElementById('cp-new2').value;
+  var err = document.getElementById('cp-error');
+  if(simpleHash(oldP) !== currentUser.passHash) { err.textContent='Fel nuvarande lösenord.'; err.style.display=''; return; }
+  if(!newP || newP.length < 4) { err.textContent='Nytt lösenord måste vara minst 4 tecken.'; err.style.display=''; return; }
+  if(newP !== newP2) { err.textContent='Lösenorden matchar inte.'; err.style.display=''; return; }
+  var u = findUser(currentUser.username);
+  u.passHash = simpleHash(newP);
+  currentUser.passHash = u.passHash;
+  save();
+  closeModal();
+  alert('Lösenord ändrat!');
+}
+
+// ── ADMIN: USER MANAGEMENT ─────────────────────────────────────────────────
+function showUsersView() {
+  document.getElementById('tours-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = '';
+  updateHero(null);
+  renderUsersList();
+}
+
+function renderUsersList() {
+  renderDbDiagnostics();
+  var el = document.getElementById('users-list');
+  var users = getUsers();
+  if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
+  el.innerHTML = users.map(function(u, i) {
+    var tourNames = (u.tourAccess||[]).map(function(tid){
+      var t = S.tours.find(function(x){return x.id===tid;});
+      return t ? t.name : null;
+    }).filter(Boolean);
+    var isPlayer = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
+    return '<div class="card">'+
+      '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
+        '<div>'+
+          '<div style="font-weight:600;font-size:16px">'+u.username+'</div>'+
+          '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>'+
+          (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
+        '</div>'+
+        '<div class="row" style="gap:6px">'+
+          (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
+          '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
+          (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
+        '</div>'+
+      '</div>'+
+      (u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-bottom:2px">Admin ser alltid alla tourer i översikten</div>' : '')+
+      '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+var _dbDiagnosticItems = [];
+
+function renderDbDiagnostics() {
+  var el = document.getElementById('db-diagnostics');
+  if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
+
+  var totalSize = JSON.stringify(S).length;
+  var items = [];
+
+  (S.users||[]).forEach(function(u){
+    if(u.img) items.push({ label: 'Profilbild: ' + (u.name||u.username), size: u.img.length, type:'profile', ref:u });
+  });
+
+  (S.tours||[]).forEach(function(t){
+    if(t.img) items.push({ label: 'Tour-omslag: ' + t.name, size: t.img.length, type:'tourimg', ref:t });
+    (t.events||[]).forEach(function(e){
+      if(e.img) items.push({ label: t.name + ' – ' + e.name + ' (banfoto)', size: e.img.length, type:'eventimg', ref:e });
+      if(e.winnerImg) items.push({ label: t.name + ' – ' + e.name + ' (vinnarfoto)', size: e.winnerImg.length, type:'winnerimg', ref:e });
+      (e.comments||[]).forEach(function(c){
+        if(c.img) items.push({ label: t.name + ' – ' + e.name + ' (kommentarsbild)', size: c.img.length, type:'commentimg', ref:c });
+      });
+    });
+  });
+
+  items.sort(function(a,b){ return b.size - a.size; });
+  _dbDiagnosticItems = items;
+  var totalKB = Math.round(totalSize/1024);
+  var pct = Math.min(100, Math.round(totalKB/1000*100));
+  var barColor = totalKB > 850 ? 'var(--danger-text)' : (totalKB > 600 ? 'var(--gold)' : 'var(--green)');
+
+  var html = '<div class="card" style="margin-bottom:16px">';
+  html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
+  html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
+  if(!items.length) {
+    html += '<p style="font-size:13px;color:var(--text-2)">Inga bilder hittades. Storleken kommer från text-data (resultat, namn, etc).</p>';
+  } else {
+    html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Största bidragsgivarna (bilder), störst först:</p>';
+    items.slice(0,15).forEach(function(it, i){
+      html += '<div class="row" style="justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)"><span>'+esc(it.label)+'</span><span class="row" style="gap:8px;align-items:center"><span style="color:var(--text-2)">'+Math.round(it.size/1024)+' KB</span><i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer" onclick="deleteDiagnosticImage('+i+')" title="Ta bort denna bild"></i></span></div>';
+    });
+    if(items.length > 15) html += '<p style="font-size:11px;color:var(--text-3);margin-top:6px">+ '+(items.length-15)+' fler bilder, mindre storlek</p>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function deleteDiagnosticImage(i) {
+  var it = _dbDiagnosticItems[i];
+  if(!it) return;
+  if(!confirm('Ta bort denna bild ("'+it.label+'")? Det går inte att ångra.')) return;
+  if(it.type === 'profile' || it.type === 'tourimg') it.ref.img = null;
+  else if(it.type === 'eventimg') it.ref.img = null;
+  else if(it.type === 'winnerimg') it.ref.winnerImg = null;
+  else if(it.type === 'commentimg') it.ref.img = null;
+  save();
+  renderDbDiagnostics();
+}
+
+var _newUserImg = null;
+var _pendingTourAccess = [];
+function openNewUser() {
+  _newUserImg = null;
+  _pendingTourAccess = [];
+  var h = '<h3>Ny användare</h3>';
+  h += '<div class="field"><label>Användarnamn (för inloggning)</label><input id="u-username" type="text" placeholder="t.ex. namn eller e-post"></div>';
+  h += '<div class="field"><label>Lösenord</label><input id="u-password" type="text" placeholder="Ange ett lösenord"></div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" placeholder="t.ex. För- och efternamn"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="u-golfid" type="text" maxlength="10" placeholder="10 tecken"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" checked style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" placeholder="t.ex. 12.4"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600"><input type="checkbox" id="u-isplayer" checked style="width:auto;margin:0"> Spelare i tourer</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Avgör om kontot syns som spelare (i resultat, OoM, anmälningar) i de tourer det har åtkomst till.</p>';
+  h += '</div>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="u-img-prev"></div>';
+  h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> Välj bild</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="u-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" checked style="width:auto;margin:0"> Användare</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" style="width:auto;margin:0"> Admin</label>';
+  h += '</div></div>';
+  h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
+  h += buildTourAccessPickerHTML();
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveNewUser()">Skapa användare</button>';
+  h += '</div>';
+  showModal(h, true);
+  setTimeout(function(){
+    var roleRadios = document.querySelectorAll('input[name="u-role"]');
+    // Tour access field stays visible for all roles now, since admins can also be marked as players.
+    var b=document.getElementById('u-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
+    var inp=document.getElementById('u-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onNewUserImgFile(this.files[0]); };
+    enablePasteForInput('u-img-btn', onNewUserImgFile);
+    var addBtn = document.getElementById('tour-access-add-btn');
+    if(addBtn) addBtn.onclick = addPendingTourAccess;
+  }, 30);
+}
+
+function buildTourAccessPickerHTML() {
+  var available = S.tours.filter(function(t){ return _pendingTourAccess.indexOf(t.id) < 0; });
+  var h = '<div class="row" style="gap:8px;margin-bottom:10px">';
+  h += '<select id="tour-access-select" style="margin:0;flex:1">';
+  h += available.length
+    ? available.map(function(t){ return '<option value="'+t.id+'">'+t.name+'</option>'; }).join('')
+    : '<option value="">Inga fler tourer</option>';
+  h += '</select>';
+  h += '<button type="button" class="btn btn-sm btn-primary" id="tour-access-add-btn" '+(available.length?'':'disabled')+'><i class="ti ti-plus"></i> Lägg till</button>';
+  h += '</div>';
+  h += '<div id="tour-access-tags">';
+  h += _pendingTourAccess.length
+    ? _pendingTourAccess.map(function(tid){
+        var t = S.tours.find(function(x){return x.id===tid;});
+        if(!t) return '';
+        return '<span class="tag selected">'+t.name+' <i class="ti ti-x" style="cursor:pointer" onclick="removePendingTourAccess(\''+tid+'\')"></i></span>';
+      }).join('')
+    : '<p style="font-size:12px;color:var(--text-3)">Ingen tour vald ännu.</p>';
+  h += '</div>';
+  return h;
+}
+
+function addPendingTourAccess() {
+  var sel = document.getElementById('tour-access-select');
+  if(!sel || !sel.value) return;
+  _pendingTourAccess.push(sel.value);
+  refreshTourAccessPicker();
+}
+
+function removePendingTourAccess(tid) {
+  _pendingTourAccess = _pendingTourAccess.filter(function(x){return x!==tid;});
+  refreshTourAccessPicker();
+}
+
+function refreshTourAccessPicker() {
+  var field = document.getElementById('u-tour-access-field');
+  if(!field) return;
+  field.innerHTML = '<label>Tour-åtkomst</label>' + buildTourAccessPickerHTML();
+  var addBtn = document.getElementById('tour-access-add-btn');
+  if(addBtn) addBtn.onclick = addPendingTourAccess;
+}
+
+function onNewUserImgFile(file) {
+  compressImage(file, 480, 480, 0.92, function(d) {
+    _newUserImg = d;
+    var prev = document.getElementById('u-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
+}
+
+function saveNewUser() {
+  var username = document.getElementById('u-username').value.trim();
+  var password = document.getElementById('u-password').value;
+  if(!username || !password) { alert('Användarnamn och lösenord krävs.'); return; }
+  if(findUser(username)) { alert('Användarnamnet finns redan.'); return; }
+  var golfId = document.getElementById('u-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
+  var name = document.getElementById('u-name').value.trim();
+  var genderEl = document.querySelector('input[name="u-gender"]:checked');
+  var hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
+  var role = document.querySelector('input[name="u-role"]:checked').value;
+  var isPlayer = document.getElementById('u-isplayer').checked;
+  var tourAccess = _pendingTourAccess.slice();
+  if(!S.users) S.users = [];
+  S.users.push({
+    username: username, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
+    name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: _newUserImg||null, isPlayer: isPlayer
+  });
+  save(); closeModal(); renderUsersList();
+}
+
+var _editUserImg = null;
+function openEditUser(i) {
+  _editUserImg = null;
+  var u = getUsers()[i];
+  _pendingTourAccess = (u.tourAccess||[]).slice();
+  var h = '<h3>Redigera ' + u.username + '</h3>';
+  h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Namn (visas i resultatlistor)</label><input id="u-name" type="text" value="'+esc(u.name||u.username)+'"></div>';
+  h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="u-golfid" type="text" value="'+esc(u.golfId||'')+'" maxlength="10" placeholder="10 tecken"></div>';
+  h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-gender" value="kvinna" '+(u.gender==='kvinna'?'checked':'')+' style="width:auto;margin:0"> Kvinna</label>';
+  h += '</div></div>';
+  h += '<div class="field"><label>HCP</label><input id="u-hcp" type="number" step="0.1" value="'+(u.hcp!=null?u.hcp:0)+'"></div>';
+  h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
+  var isPlayerDefault = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600"><input type="checkbox" id="u-isplayer" '+(isPlayerDefault?'checked':'')+' style="width:auto;margin:0"> Spelare i tourer</label>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Avgör om kontot syns som spelare (i resultat, OoM, anmälningar) i de tourer det har åtkomst till.</p>';
+  h += '</div>';
+  h += '<div class="field"><label>Profilbild</label>';
+  h += '<div id="u-img-prev">'+(u.img?'<img src="'+u.img+'" class="avatar-preview">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="u-img-btn"><i class="ti ti-upload"></i> '+(u.img?'Byt bild':'Välj bild')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="u-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Roll</label><div class="row" style="gap:16px;margin-bottom:8px">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" '+(u.role!=='admin'?'checked':'')+' style="width:auto;margin:0"> Användare</label>';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
+  h += '</div></div>';
+  h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
+  h += buildTourAccessPickerHTML();
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveEditUser('+i+')">Spara</button>';
+  h += '</div>';
+  showModal(h, true);
+  setTimeout(function(){
+    var roleRadios = document.querySelectorAll('input[name="u-role"]');
+    // Tour access field stays visible for all roles now, since admins can also be marked as players.
+    var b=document.getElementById('u-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('u-file-inp').click(); };
+    var inp=document.getElementById('u-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onEditUserImgFile(this.files[0]); };
+    enablePasteForInput('u-img-btn', onEditUserImgFile);
+    var addBtn = document.getElementById('tour-access-add-btn');
+    if(addBtn) addBtn.onclick = addPendingTourAccess;
+  }, 30);
+}
+
+function onEditUserImgFile(file) {
+  compressImage(file, 480, 480, 0.92, function(d) {
+    _editUserImg = d;
+    var prev = document.getElementById('u-img-prev');
+    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+  });
+}
+
+function saveEditUser(i) {
+  var u = getUsers()[i];
+  var golfId = document.getElementById('u-golfid').value.trim();
+  if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
+  var newPass = document.getElementById('u-password').value;
+  if(newPass) u.passHash = simpleHash(newPass);
+  u.name = document.getElementById('u-name').value.trim() || u.username;
+  u.golfId = golfId;
+  var genderEl = document.querySelector('input[name="u-gender"]:checked');
+  u.gender = genderEl ? genderEl.value : 'man';
+  u.hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
+  if(_editUserImg) u.img = _editUserImg;
+  u.isPlayer = document.getElementById('u-isplayer').checked;
+  u.role = document.querySelector('input[name="u-role"]:checked').value;
+  u.tourAccess = _pendingTourAccess.slice();
+  if(currentUser.username === u.username) currentUser = u;
+  save(); closeModal(); renderUsersList();
+}
+
+function delUser(i) {
+  var u = getUsers()[i];
+  if(u.username === currentUser.username) { alert('Du kan inte ta bort dig själv.'); return; }
+  if(!confirm('Ta bort användaren "'+u.username+'"?')) return;
+  S.users.splice(i,1);
+  save(); renderUsersList();
+}
+
+// ── ACCESS CONTROL HELPERS ──────────────────────────────────────────────────
+function visibleTours() {
+  if(currentUser.role === 'admin') return S.tours;
+  return S.tours.filter(function(t){ return (currentUser.tourAccess||[]).indexOf(t.id) >= 0; });
+}
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+
+
+initFirebaseSync(function() {
+  var ls = document.getElementById('loading-screen');
+  if (ls) ls.style.display = 'none';
+  if (tryAutoLogin()) {
+    afterLogin();
+  } else {
+    showLoginScreen();
+  }
+});
+
+</script>
+</body>
+</html>
