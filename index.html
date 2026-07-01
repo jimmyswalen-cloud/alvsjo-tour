@@ -1124,7 +1124,7 @@ function renderToursList() {
     html += '<p class="section-title">Aktiva</p>' + active.map(tourCardHTML).join('');
   }
   if(finished.length) {
-    html += '<p class="section-title" style="margin-top:'+(active.length?'20px':'0')+'">Avslutade</p>' + finished.map(tourCardHTML).join('');
+    html += '<div style="display:flex;align-items:center;gap:12px;margin:'+(active.length?'24px':'0')+' 0 14px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE TOURER</span><div style="flex:1;height:2px;background:var(--border)"></div></div>' + finished.map(tourCardHTML).join('');
   }
   el.innerHTML = html;
 }
@@ -1505,7 +1505,7 @@ function renderEvents() {
   t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else open.push({e:e,i:i});});
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  if(closed.length) html+='<p class="section-title">Avslutade</p>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
+  if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   el.innerHTML=html;
 }
 
@@ -1605,23 +1605,36 @@ function openRegister(i) {
     ? t.players.map(function(p,pi){
         if(!p) return '';
         var reg = regs.find(function(r){return r.pi===pi;});
-        var checked = !!reg;
+        var status = reg ? (reg.declined ? 'declined' : 'registered') : 'unknown';
         var dateVal = reg ? reg.date : e.date;
         var canEdit = isAdmin() || (p.username === currentUser.username);
-        return '<div class="row" style="margin-bottom:8px;gap:8px;align-items:center'+(canEdit?'':';opacity:.55')+'">'+
-          '<label style="display:flex;align-items:center;gap:8px;flex:1;cursor:'+(canEdit?'pointer':'default')+';font-weight:400">'+
-            '<input type="checkbox" class="reg-cb" data-pi="'+pi+'" '+(checked?'checked':'')+' '+(canEdit?'':'disabled')+' style="width:auto;margin:0" onchange="onRegCbChange('+i+','+pi+',this)">'+
-            (p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover" alt="">':'<div class="avatar-ph" style="width:24px;height:24px;font-size:10px">'+ini(p.name)+'</div>')+
-            ' '+p.name+(!isAdmin()&&p.username===currentUser.username?' <span style="font-size:11px;color:var(--green-dark)">(du)</span>':'')+
-          '</label>'+
-          '<input type="date" id="reg-date-'+pi+'" style="width:140px;margin:0" min="'+e.periodStart+'" max="'+e.periodEnd+'" value="'+dateVal+'" '+((checked&&canEdit)?'':'disabled')+' onchange="onRegDateChange('+i+','+pi+',this)">'+
+        var avatar = p.img
+          ? '<img src="'+p.img+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover">'
+          : '<div class="avatar-ph" style="width:28px;height:28px;font-size:10px">'+ini(p.name)+'</div>';
+        var nameLabel = p.name + (!isAdmin()&&p.username===currentUser.username?' <span style="font-size:11px;color:var(--green-dark)">(du)</span>':'');
+        var btnStyle = function(active, color){ return 'border:1px solid '+(active?color:'var(--border)')+';background:'+(active?color:'transparent')+';color:'+(active?'#fff':'var(--text-2)')+';padding:4px 10px;border-radius:20px;font-size:12px;cursor:'+(canEdit?'pointer':'default')+';font-weight:'+(active?'600':'400'); };
+                var btns = canEdit
+          ? '<button style="'+btnStyle(status==='registered','#1D9E75')+'" onclick="setRegStatus('+i+','+pi+',0)"><i class="ti ti-check" style="font-size:11px"></i> Anmäld</button>'+
+            '<button style="'+btnStyle(status==='unknown','#888')+'" onclick="setRegStatus('+i+','+pi+',1)">Oklart</button>'+
+            '<button style="'+btnStyle(status==='declined','#dc2626')+'" onclick="setRegStatus('+i+','+pi+',2)"><i class="ti ti-x" style="font-size:11px"></i> Deltar ej</button>'
+          : '<span style="font-size:12px;padding:4px 10px;border-radius:20px;background:'+(status==='registered'?'#E1F5EE':status==='declined'?'#FCEBEB':'var(--surface2)')+';color:'+(status==='registered'?'#0F6E56':status==='declined'?'#A32D2D':'var(--text-3)')+'">'+
+              (status==='registered'?'Anmäld':status==='declined'?'Deltar ej':'Oklart')+'</span>';
+        var dateRow = status==='registered'
+          ? '<div style="margin-top:6px"><input type="date" id="reg-date-'+pi+'" style="width:160px;margin:0;font-size:12px" min="'+e.periodStart+'" max="'+e.periodEnd+'" value="'+dateVal+'" '+(canEdit?'':'disabled')+' onchange="onRegDateChange('+i+','+pi+',this)"></div>'
+          : '';
+        return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">'+
+          '<div class="row" style="gap:10px;align-items:center">'+
+            avatar+
+            '<div style="flex:1;font-size:13px;font-weight:500">'+nameLabel+'</div>'+
+            '<div class="row" style="gap:4px">'+btns+'</div>'+
+          '</div>'+dateRow+
         '</div>';
       }).join('')
     : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
 
   var h = '<h3>Anmälningar – '+e.name+'</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-calendar"></i> Speltidsperiod: '+e.periodStart+' &ndash; '+e.periodEnd+' (ordinarie datum: '+e.date+')</p>';
-  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Kryssa i och välj vilket datum spelaren avser spela.</p>';
+  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Markera din status för tävlingen. "Anmäld" inkluderar dig i startlistan.</p>';
   h += rows;
   h += '<hr class="divider">';
   h += buildDateGroupingHTML(e, t);
@@ -1735,6 +1748,31 @@ function deleteTeeGroup(eid, gIdx) {
   save();
   var ei = t.events.indexOf(e);
   refreshRegisterModal(ei);
+}
+
+function setRegStatus(ei, pi, statusCode) {
+  var status = statusCode === 0 ? 'registered' : statusCode === 1 ? 'unknown' : 'declined';
+  var t = getTour(), e = t.events[ei];
+  var p = t.players[pi];
+  if(!isAdmin() && (!p || p.username !== currentUser.username)) {
+    alert('Du kan bara ändra din egen anmälningsstatus.');
+    return;
+  }
+  if(!e.registrations) e.registrations = [];
+  var existing = e.registrations.find(function(r){ return r.pi===pi; });
+  if(status === 'unknown') {
+    e.registrations = e.registrations.filter(function(r){ return r.pi!==pi; });
+  } else if(status === 'registered') {
+    var dateInp = document.getElementById('reg-date-'+pi);
+    var dateVal = dateInp ? dateInp.value : e.date;
+    if(existing) { existing.declined = false; existing.date = dateVal||e.date; }
+    else e.registrations.push({ pi:pi, date: dateVal||e.date, declined: false });
+  } else if(status === 'declined') {
+    if(existing) { existing.declined = true; }
+    else e.registrations.push({ pi:pi, date: e.date, declined: true });
+  }
+  save();
+  openRegister(ei);
 }
 
 function onRegCbChange(ei, pi, cb) {
@@ -1894,7 +1932,7 @@ function openResults(i) {
   var t=getTour(), e=t.events[i]; _wImg=null;
   var regsRaw = e.registrations || [];
   var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
-  var regs = regPis.filter(function(pi){return t.players[pi];});
+  var regs = regPis.filter(function(pi){ return t.players[pi] && !e.registrations.find(function(r){return r.pi==pi&&r.declined;}); });
   if(!regs.length){alert('Inga anmälda spelare.');return;}
   var isStab=e.type==='stableford';
   var rows=regs.map(function(pi){
