@@ -245,6 +245,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <h2>Inställningar</h2>
     <div class="card" id="settings-readonly"></div>
     <div id="course-bank-section"></div>
+    <div id="course-db-section"></div>
   </div>
 </div>
 
@@ -378,7 +379,9 @@ var db = firebase.firestore();
 var DOC_REF = db.collection('golfapp').doc('shared');
 var DRAFTS_REF = db.collection('golfapp').doc('tourDrafts');
 var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
-var courseBank = {}; // { courseName: base64ImageData } -- loaded from Firestore, kept in sync
+var COURSE_DB_REF = db.collection('golfapp').doc('courseDb');
+var courseBank = {}; // { courseKey: {displayName, img} } -- image cache, loaded from Firestore
+var courseDb = []; // [ {name, par, id} ] -- admin-managed course database
 
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
@@ -490,6 +493,11 @@ function initFirebaseSync(onFirstLoad) {
   }, function(err) {
     console.error('Course bank listen failed', err);
   });
+  COURSE_DB_REF.onSnapshot(function(doc) {
+    courseDb = (doc.exists && doc.data() && doc.data().courses) ? doc.data().courses : [];
+  }, function(err) {
+    console.error('Course DB listen failed', err);
+  });
 }
 
 function refreshCurrentView() {
@@ -523,7 +531,7 @@ function findEventById(eid) {
 }
 
 function openComments(eid) {
-  _commentImg = null;
+
   var e = findEventById(eid);
   if(!e) return;
   if(!e.comments) e.comments = [];
@@ -532,37 +540,15 @@ function openComments(eid) {
   h += '<div class="field">';
   h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
   h += '</div>';
-  h += '<div id="comment-img-prev"></div>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
-  h += '<div>';
-  h += '<button type="button" class="btn btn-sm" id="comment-img-btn"><i class="ti ti-photo"></i> Bild</button>';
-  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
-  h += '<input type="file" id="comment-file-inp" accept="image/*" style="display:none">';
-  h += '</div>';
   h += '<button class="btn btn-primary btn-sm" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
-  h += '</div>';
-  h += '<div class="row" style="justify-content:flex-end;margin-top:12px">';
   h += '<button class="btn" onclick="closeModal()">Stäng</button>';
   h += '</div>';
   showModal(h, true);
   _openCommentsEventId = eid;
   renderCommentsList(eid);
-  setTimeout(function(){
-    var b=document.getElementById('comment-img-btn');
-    if(b) b.onclick=function(){ document.getElementById('comment-file-inp').click(); };
-    var inp=document.getElementById('comment-file-inp');
-    if(inp) inp.onchange=function(){ if(this.files[0]) onCommentImgFile(this.files[0]); };
-    enablePasteForInput('comment-img-btn', onCommentImgFile);
-  }, 30);
 }
 
-function onCommentImgFile(file) {
-  compressImage(file, 700, 700, 0.78, function(d) {
-    _commentImg = d;
-    var prev = document.getElementById('comment-img-prev');
-    if(prev) prev.innerHTML = '<div style="position:relative;display:inline-block;margin-top:6px"><img src="'+d+'" style="max-height:90px;border-radius:8px;display:block"><span onclick="_commentImg=null;document.getElementById(\'comment-img-prev\').innerHTML=\'\';" style="position:absolute;top:-8px;right:-8px;background:#dc2626;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer">&times;</span></div>';
-  });
-}
 
 function renderCommentsList(eid) {
   var e = findEventById(eid);
@@ -583,7 +569,7 @@ function renderCommentsList(eid) {
         '</span>'+
       '</div>'+
       (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
-      (c.img ? '<img src="'+c.img+'" style="max-width:100%;border-radius:8px;margin-top:6px;display:block">' : '')+
+
     '</div>';
   }).join('');
   el.scrollTop = el.scrollHeight;
@@ -594,13 +580,13 @@ function submitComment(eid) {
   if(!e) return;
   var textEl = document.getElementById('comment-text');
   var text = textEl ? textEl.value.trim() : '';
-  if(!text && !_commentImg) { alert('Skriv något eller lägg till en bild innan du skickar.'); return; }
+  if(!text) { alert('Skriv något innan du skickar.'); return; }
   if(!e.comments) e.comments = [];
   e.comments.push({
     username: currentUser.username,
     name: currentUser.name || currentUser.username,
     text: text,
-    img: _commentImg || null,
+    img: null,
     timestamp: Date.now()
   });
   _commentImg = null;
@@ -985,8 +971,25 @@ function wizStep2() {
   var total = wiz.events.length;
   var h = '<h3>'+(ev.isFinal?'Final':'Deltävling')+' '+(i+1)+' av '+total+'</h3>';
   h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
-  h += '<div class="field"><label>Bana</label><input id="w-ev-course" type="text" list="course-bank-list" value="'+esc(ev.course)+'" placeholder="t.ex. Haninge GK" onchange="onWizCourseChange()"></div>';
-  h += '<datalist id="course-bank-list">'+Object.values(courseBank).map(function(c){ return '<option value="'+esc(c.displayName||'')+'">'; }).join('')+'</datalist>';
+  var courseField = '';
+  if(courseDb.length) {
+    var manualSelected = ev.course && !courseDb.find(function(c){ return c.name.toLowerCase()===ev.course.toLowerCase(); });
+    courseField = '<div class="field"><label>Bana</label>' +
+      '<select id="w-ev-course-sel" onchange="onWizCourseSelChange()" style="margin-bottom:4px">' +
+        '<option value="">-- Välj bana ur databas --</option>' +
+        courseDb.map(function(c){
+          var sel = c.name.toLowerCase()===(ev.course||'').toLowerCase() ? ' selected' : '';
+          return '<option value="'+esc(c.name)+'"'+sel+'>'+esc(c.name)+' (Par '+c.par+')</option>';
+        }).join('') +
+        '<option value="__manual__"'+(manualSelected?' selected':'')+'> ✏ Skriv in manuellt...</option>' +
+      '</select>' +
+      '<input id="w-ev-course" type="text" placeholder="Bannamn" value="'+esc(ev.course||'')+'" style="display:'+(manualSelected||!ev.course?'':'none')+';" oninput="saveDraft()">' +
+    '</div>';
+  } else {
+    courseField = '<div class="field"><label>Bana</label><input id="w-ev-course" type="text" list="course-bank-list" value="'+esc(ev.course)+'" placeholder="t.ex. Haninge GK" onchange="onWizCourseChange()"></div>' +
+      '<datalist id="course-bank-list">'+Object.values(courseBank).map(function(c){ return '<option value="'+esc(c.displayName||'')+'">'; }).join('')+'</datalist>';
+  }
+  h += courseField;
   h += '<div class="field"><label>Datum (ordinarie)</label><input id="w-ev-date" type="date" value="'+ev.date+'"></div>';
   h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
   h += '<label style="margin-bottom:8px;display:block"><i class="ti ti-calendar-stats"></i> Speltidsperiod</label>';
@@ -1040,6 +1043,26 @@ function handleWizEvImg(file) {
   });
 }
 
+function onWizCourseSelChange() {
+  var sel = document.getElementById('w-ev-course-sel');
+  var inp = document.getElementById('w-ev-course');
+  if(!sel) return;
+  var val = sel.value;
+  var ev = wiz.events[wiz.stepIdx];
+  if(val === '__manual__') {
+    if(inp) { inp.style.display = ''; inp.value = ''; inp.focus(); }
+    ev.course = '';
+  } else if(val) {
+    if(inp) inp.style.display = 'none';
+    ev.course = val;
+    if(!ev.img) {
+      var img = getCourseImage(val);
+      if(img) { ev.img = img; wizStep2(); return; }
+    }
+    saveDraft();
+  }
+}
+
 function onWizCourseChange() {
   var courseEl = document.getElementById('w-ev-course');
   if(!courseEl) return;
@@ -1048,10 +1071,7 @@ function onWizCourseChange() {
   ev.course = courseName;
   if(!ev.img) {
     var knownImg = getCourseImage(courseName);
-    if(knownImg) {
-      ev.img = knownImg;
-      wizStep2();
-    }
+    if(knownImg) { ev.img = knownImg; wizStep2(); return; }
   }
   saveDraft();
 }
@@ -1059,7 +1079,29 @@ function onWizCourseChange() {
 function wizStep2SaveCurrent() {
   var ev = wiz.events[wiz.stepIdx];
   ev.name = document.getElementById('w-ev-name').value.trim();
-  ev.course = document.getElementById('w-ev-course').value.trim();
+  var selEl = document.getElementById('w-ev-course-sel');
+  var inpEl = document.getElementById('w-ev-course');
+  var wasManual = false;
+  if(selEl && selEl.value && selEl.value !== '__manual__') {
+    ev.course = selEl.value;
+  } else if(inpEl) {
+    ev.course = inpEl.value.trim();
+    wasManual = true;
+  }
+  // If a course was typed manually, add it to courseDb automatically
+  if(wasManual && ev.course && !courseDb.find(function(c){ return c.name.toLowerCase()===ev.course.toLowerCase(); })) {
+    courseDb.push({ id: uid(), name: ev.course, par: 72 });
+    courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
+    saveCourseDb();
+    // Register suggested filename in course bank for future image lookups
+    var suggested = suggestCourseFilename(ev.course);
+    var key = courseKey(ev.course);
+    if(key && !STATIC_COURSE_IMAGES[key] && suggested && COURSE_BANK_REF) {
+      var update = {};
+      update[key] = { displayName: ev.course, url: suggested };
+      COURSE_BANK_REF.set(update, { merge: true });
+    }
+  }
   ev.date = document.getElementById('w-ev-date').value;
   var pStartEl = document.getElementById('w-ev-pstart');
   var pEndEl = document.getElementById('w-ev-pend');
@@ -1969,13 +2011,22 @@ function renderOomTable() {
   var closedEvents = regularEvents.filter(function(e){ return e.closed && e.results && e.results.length; });
   if(!closedEvents.length) { el.innerHTML = '<p class="empty">Inga resultat ännu.</p>'; return; }
 
-  // Build per-player totals across all closed regular events, to determine row order
-  var totals = {};
+  var bestN = t.bestRounds || 0;
+  // Build per-player totals with bestRounds filtering
+  var playerRoundsT = {};
   closedEvents.forEach(function(e){
     e.results.forEach(function(r){
-      if(!totals[r.pi]) totals[r.pi] = 0;
-      totals[r.pi] += (r.points||0);
+      if(!playerRoundsT[r.pi]) playerRoundsT[r.pi] = [];
+      playerRoundsT[r.pi].push({ pts: r.points||0, eventId: e.id });
     });
+  });
+  var totals = {};
+  var playerCountedIds = {};
+  Object.keys(playerRoundsT).forEach(function(pi){
+    var rounds = playerRoundsT[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
+    var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
+    totals[pi] = counted.reduce(function(s,r){ return s+r.pts; }, 0);
+    playerCountedIds[pi] = counted.reduce(function(o,r){ o[r.eventId]=true; return o; }, {});
   });
   var playerPis = Object.keys(totals).map(Number).sort(function(a,b){ return totals[b]-totals[a]; });
   if(!playerPis.length) { el.innerHTML = '<p class="empty">Inga resultat ännu.</p>'; return; }
@@ -1995,6 +2046,7 @@ function renderOomTable() {
   playerPis.forEach(function(pi, idx){
     var p = t.players[pi];
     if(!p) return;
+    var countedIds = playerCountedIds[pi] || {};
     html += '<tr onclick="showPlayerProfile('+pi+')" style="cursor:pointer">';
     html += '<td style="position:sticky;left:0;background:var(--surface)">'+(medals[idx]||(idx+1))+'</td>';
     html += '<td style="position:sticky;left:36px;background:var(--surface);font-weight:600">'+esc(p.name)+'</td>';
@@ -2002,7 +2054,13 @@ function renderOomTable() {
       var r = e.results.find(function(x){ return x.pi==pi; });
       if(!r) { html += '<td style="text-align:center;color:var(--text-3)">-</td>'; return; }
       var isWinner = e.results[0] && e.results[0].pi == pi;
-      html += '<td style="text-align:center;color:var(--green-dark);font-weight:600">'+(r.points||0)+(isWinner?' <span style="color:var(--gold)">★</span>':'')+'</td>';
+      var pts = r.points||0;
+      var excluded = (bestN > 0) && !countedIds[e.id];
+      if(excluded) {
+        html += '<td style="text-align:center;color:var(--text-3);text-decoration:line-through">'+pts+'</td>';
+      } else {
+        html += '<td style="text-align:center;color:var(--green-dark);font-weight:600">'+pts+(isWinner?' <span style="color:var(--gold)">★</span>':'')+'</td>';
+      }
     });
     html += '<td style="position:sticky;right:0;background:var(--surface);font-weight:700;text-align:right">'+totals[pi]+'</td>';
     html += '</tr>';
@@ -2019,12 +2077,24 @@ function renderOOM(){
     listBtn.className = 'btn btn-sm btn-primary';
   }
   var t=getTour(),el=document.getElementById('oom-list'),totals={};
-  t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;}).forEach(function(e){
+  var bestN = t.bestRounds || 0;
+  var closedRegular = t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;});
+  var playerRounds = {};
+  closedRegular.forEach(function(e){
     e.results.forEach(function(r){
-      if(!totals[r.pi]) totals[r.pi]={pts:0,events:0,wins:0};
-      totals[r.pi].pts+=(r.points||0); totals[r.pi].events++;
-      if(e.results[0].pi===r.pi) totals[r.pi].wins++;
+      if(!playerRounds[r.pi]) playerRounds[r.pi] = [];
+      playerRounds[r.pi].push({ pts: r.points||0, eventId: e.id });
     });
+  });
+  Object.keys(playerRounds).forEach(function(pi){
+    var rounds = playerRounds[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
+    var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
+    var wins = closedRegular.filter(function(e){ return e.results&&e.results[0]&&e.results[0].pi==pi; }).length;
+    totals[pi] = {
+      pts: counted.reduce(function(s,r){ return s+r.pts; }, 0),
+      events: rounds.length, counted: counted.length, wins: wins,
+      countedIds: counted.reduce(function(o,r){ o[r.eventId]=true; return o; }, {})
+    };
   });
   var sorted=Object.entries(totals).sort(function(a,b){return b[1].pts-a[1].pts;});
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
@@ -2036,7 +2106,7 @@ function renderOOM(){
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (p.img?'<img src="'+p.img+'" class="avatar" style="width:40px;height:40px" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
-        '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+'</div></div>'+
+        '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · <span style="color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</span>':'')+       '</div></div>'+
         '<div class="oom-pts">'+d.pts+' pts</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
     }).join('');
@@ -2052,8 +2122,183 @@ function renderSettings(){
     html += '<div class="section-title">Försprång till final (slag)</div>';
     html += t.finalTable.map(function(s,i){return '<div class="row" style="margin-bottom:6px;gap:8px"><span style="font-size:13px;color:var(--text-2);min-width:64px">Plats '+(i+1)+'</span><span style="font-weight:600">'+s+' slag</span></div>';}).join('');
   }
+  // Best rounds setting (editable by admin)
+  var regularCount = (t.events||[]).filter(function(e){return !e.isFinal;}).length;
+  var bestN = t.bestRounds || 0;
+  html += '<div class="section-title" style="margin-top:20px">Bästa rundor (OoM)</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Hur många av spelarens bästa rundor räknas i OoM-totalen. 0 = räkna alla.</p>';
+  html += '<div class="row" style="gap:10px;align-items:center;margin-bottom:6px">';
+  html += '<input type="number" id="best-rounds-inp" min="0" max="'+regularCount+'" value="'+bestN+'" style="width:90px;margin:0">';
+  html += '<span style="font-size:13px;color:var(--text-2)">av '+regularCount+' deltävlingar</span>';
+  html += '<button class="btn btn-sm btn-primary" onclick="saveBestRounds()">Spara</button>';
+  html += '</div>';
+  if(bestN > 0) html += '<p style="font-size:12px;color:var(--green-dark);font-weight:600">Aktiv: de '+bestN+' bästa rundorna räknas.</p>';
+  else html += '<p style="font-size:12px;color:var(--text-3)">Inaktiv: alla rundor räknas.</p>';
+
   document.getElementById('settings-readonly').innerHTML = html;
   renderCourseBankSection();
+  renderCourseDbSection();
+}
+
+function saveBestRounds() {
+  var t = getTour();
+  var val = parseInt(document.getElementById('best-rounds-inp').value) || 0;
+  t.bestRounds = Math.max(0, val);
+  save();
+  renderSettings();
+  renderOOM();
+}
+
+function saveCourseDb() {
+  if(!COURSE_DB_REF) return;
+  COURSE_DB_REF.set({ courses: courseDb }).catch(function(err) {
+    console.error('Kunde inte spara bandatabasen:', err);
+    alert('Kunde inte spara. Försök igen.');
+  });
+}
+
+function suggestCourseFilename(name) {
+  if(!name || !name.trim()) return '';
+  return name.trim()
+    .toLowerCase()
+    .replace(/å/g, 'a').replace(/ä/g, 'a').replace(/ö/g, 'o')
+    .replace(/é/g, 'e').replace(/ü/g, 'u').replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-') + '.jpg';
+}
+
+function openAddCourse() {
+  showModal(
+    '<h3>Lägg till bana</h3>' +
+    '<div class="field"><label>Bannamn</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
+    '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="72" style="width:120px"></div>' +
+    '<div id="cd-filename-hint" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;display:none">' +
+      '<div style="color:var(--text-2);margin-bottom:4px">Ladda upp denna fil till GitHub för att få bild:</div>' +
+      '<div style="font-family:monospace;font-weight:700;color:var(--green-dark)" id="cd-filename-value"></div>' +
+      '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Lägg filen i samma mapp som index.html i ditt repo.</div>' +
+    '</div>' +
+    '<div class="row" style="justify-content:flex-end;gap:8px">' +
+      '<button class="btn" onclick="closeModal()">Avbryt</button>' +
+      '<button class="btn btn-primary" onclick="submitAddCourse()"><i class="ti ti-plus"></i> Lägg till</button>' +
+    '</div>',
+    false, true
+  );
+}
+
+function updateCourseFilenameHint() {
+  var nameEl = document.getElementById('cd-name');
+  var hintEl = document.getElementById('cd-filename-hint');
+  var valEl  = document.getElementById('cd-filename-value');
+  if(!nameEl || !hintEl || !valEl) return;
+  var name = nameEl.value.trim();
+  if(!name) { hintEl.style.display = 'none'; return; }
+  var fname = suggestCourseFilename(name);
+  valEl.textContent = fname;
+  hintEl.style.display = '';
+}
+
+function submitAddCourse() {
+  var name = (document.getElementById('cd-name').value||'').trim();
+  var par = parseInt(document.getElementById('cd-par').value)||72;
+  if(!name) { alert('Bannamn krävs.'); return; }
+  if(courseDb.find(function(c){ return c.name.toLowerCase()===name.toLowerCase(); })) {
+    alert('Banan finns redan i databasen.'); return;
+  }
+  courseDb.push({ id: uid(), name: name, par: par });
+  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
+  saveCourseDb();
+  // Also register the suggested filename in the course bank so getCourseImage() finds it automatically
+  var suggested = suggestCourseFilename(name);
+  var key = courseKey(name);
+  if(key && !STATIC_COURSE_IMAGES[key] && suggested) {
+    var update = {};
+    update[key] = { displayName: name, url: suggested };
+    COURSE_BANK_REF && COURSE_BANK_REF.set(update, { merge: true });
+  }
+  closeModal();
+  renderCourseDbSection();
+}
+
+function openEditCourse(id) {
+  var c = courseDb.find(function(x){ return x.id===id; });
+  if(!c) return;
+  showModal(
+    '<h3>Redigera bana</h3>' +
+    '<div class="field"><label>Bannamn</label><input id="cd-name" type="text" value="'+esc(c.name)+'"></div>' +
+    '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'" style="width:120px"></div>' +
+    '<div class="row" style="justify-content:space-between;gap:8px;margin-top:8px">' +
+      '<button class="btn btn-danger" onclick="deleteCourse(\''+c.id+'\')"><i class="ti ti-trash"></i> Ta bort</button>' +
+      '<div class="row" style="gap:8px">' +
+        '<button class="btn" onclick="closeModal()">Avbryt</button>' +
+        '<button class="btn btn-primary" onclick="submitEditCourse(\''+c.id+'\')">Spara</button>' +
+      '</div>' +
+    '</div>',
+    false, true
+  );
+}
+
+function submitEditCourse(id) {
+  var c = courseDb.find(function(x){ return x.id===id; });
+  if(!c) return;
+  var name = (document.getElementById('cd-name').value||'').trim();
+  var par = parseInt(document.getElementById('cd-par').value)||72;
+  if(!name) { alert('Bannamn krävs.'); return; }
+  c.name = name; c.par = par;
+  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
+  saveCourseDb();
+  closeModal();
+  renderCourseDbSection();
+}
+
+function deleteCourse(id) {
+  if(!confirm('Ta bort banan? Det påverkar inte tävlingar som redan skapats.')) return;
+  courseDb = courseDb.filter(function(x){ return x.id!==id; });
+  saveCourseDb();
+  closeModal();
+  renderCourseDbSection();
+}
+
+function renderCourseDbSection() {
+  var el = document.getElementById('course-db-section');
+  if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
+  var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
+  html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button></div>';
+  if(!courseDb.length) {
+    html += '<p class="empty">Inga banor inlagda ännu.</p>';
+  } else {
+    var withImg = courseDb.filter(function(c){ return !!getCourseImage(c.name); }).length;
+    html += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">'+courseDb.length+' banor &nbsp;·&nbsp; '+withImg+' med bild &nbsp;·&nbsp; '+(courseDb.length-withImg)+' saknar bild</p>';
+    html += '<div class="card" style="padding:0">';
+    courseDb.forEach(function(c, idx){
+      var img = getCourseImage(c.name);
+      var suggested = suggestCourseFilename(c.name);
+      var border = idx < courseDb.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+      html += '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;'+border+'">';
+      // Left: thumbnail or missing indicator
+      if(img) {
+        html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0">' +
+          '<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
+          '<div><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
+          '<div style="font-size:12px;color:var(--text-2)">Par '+c.par+' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-check" style="font-size:11px"></i> Bild OK</span></div></div>' +
+        '</div>';
+      } else {
+        html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0">' +
+          '<div style="width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:16px"></i></div>' +
+          '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
+          '<div style="font-size:12px;color:var(--danger-text)">Ingen bild &nbsp;·&nbsp; Par '+c.par+'</div>' +
+          '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
+          '</div>' +
+        '</div>';
+      }
+      // Right: edit button
+      html += '<button class="btn btn-sm" style="flex-shrink:0;margin-left:8px" onclick="openEditCourse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
 }
 
 function renderCourseBankSection() {
@@ -2066,7 +2311,7 @@ function renderCourseBankSection() {
   if(!entries.length) {
     html += '<p class="empty">Inga banor sparade ännu.</p>';
   } else {
-    html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn btn-sm btn-primary" onclick="downloadAllCourseImages()"><i class="ti ti-download"></i> Ladda ner alla ('+entries.length+')</button></div>';
+
     html += '<div class="card" style="padding:0">';
     entries.forEach(function(e, idx){
       html += '<div class="row" style="justify-content:space-between;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
