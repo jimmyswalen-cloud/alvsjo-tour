@@ -474,6 +474,7 @@ var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
 var COURSE_DB_REF = db.collection('golfapp').doc('courseDb');
 var courseBank = {}; // { courseKey: {displayName, img} } -- image cache, loaded from Firestore
 var courseDb = []; // [ {name, par, id} ] -- admin-managed course database
+var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara körs en gång per sidladdning
 
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
@@ -609,6 +610,10 @@ function initFirebaseSync(onFirstLoad) {
   COURSE_DB_REF.onSnapshot(function(doc) {
     courseDb = (doc.exists && doc.data() && doc.data().courses) ? doc.data().courses : [];
     if(!courseDb.length && isAdmin()) seedCourseDb();
+    if(!_bulkCoursesAutoImported) {
+      _bulkCoursesAutoImported = true;
+      importBulkCourseDataSilent();
+    }
   }, function(err) {
     console.error('Course DB listen failed', err);
   });
@@ -917,6 +922,7 @@ function renderCourseStatsView() {
   '</select>';
   filterHtml += '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Karta</button>';
   filterHtml += '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-map-pin-search"></i> Nära mig</button>';
+  filterHtml += '<button class="btn btn-sm" onclick="openGolfHeatmaps()"><i class="ti ti-chart-bar"></i> Heatmaps</button>';
   filterHtml += '</div>';
 
   var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
@@ -4583,9 +4589,7 @@ var BULK_GOLF_COURSES = [
   { name: "Gotska Golfklubben", lat: 57.7333, lng: 18.9833, region: "gotland" }
 ];
 
-function importBulkCourseData() {
-  if(!isAdmin()) return;
-  if(!confirm('Importera '+BULK_GOLF_COURSES.length+' banor från listan? Banor som redan finns i databasen (samma namn) hoppas över.')) return;
+function importBulkCourseDataSilent() {
   var added = 0, skipped = 0;
   BULK_GOLF_COURSES.forEach(function(c){
     var exists = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
@@ -4598,10 +4602,20 @@ function importBulkCourseData() {
     });
     added++;
   });
-  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
-  saveCourseDb();
+  if(added) {
+    courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+    saveCourseDb();
+    if(document.getElementById('course-db-section')) renderCourseDbSection();
+  }
+  return { added: added, skipped: skipped };
+}
+
+function importBulkCourseData() {
+  if(!isAdmin()) return;
+  if(!confirm('Importera '+BULK_GOLF_COURSES.length+' banor från listan? Banor som redan finns i databasen (samma namn) hoppas över.')) return;
+  var result = importBulkCourseDataSilent();
   renderCourseDbSection();
-  alert(added+' banor importerade.'+(skipped?' '+skipped+' hoppades över (fanns redan).':''));
+  alert(result.added+' banor importerade.'+(result.skipped?' '+result.skipped+' hoppades över (fanns redan).':''));
 }
 
 function seedCourseDb() {
@@ -4849,6 +4863,93 @@ function initTourMap(t) {
   }
 }
 
+// ── HEATMAPS (GIS Version 6) ────────────────────────────────────────────────
+function computeGolfHeatmaps() {
+  var courseRounds = {}; // key(lower) -> {name, rounds:[{score,isStab}], district}
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && e.course && !e.isFinal; }).forEach(function(e){
+      var key = e.course.trim().toLowerCase();
+      if(!key) return;
+      if(!courseRounds[key]) {
+        var dbEntry = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===key; });
+        courseRounds[key] = { name: e.course.trim(), rounds: [], district: dbEntry?dbEntry.district:null };
+      }
+      var isStab = e.type==='stableford';
+      e.results.forEach(function(r){
+        if(r.score>0) courseRounds[key].rounds.push({ score:r.score, isStab:isStab });
+      });
+    });
+  });
+
+  var courses = Object.keys(courseRounds).map(function(k){ return courseRounds[k]; });
+  var mostPlayed = courses.slice().sort(function(a,b){ return b.rounds.length-a.rounds.length; })
+    .filter(function(c){ return c.rounds.length>0; }).slice(0,10)
+    .map(function(c){ return { name:c.name, value:c.rounds.length, label: c.rounds.length+' rundor' }; });
+
+  var withStabAvg = courses.map(function(c){
+    var stabR = c.rounds.filter(function(r){ return r.isStab; });
+    if(stabR.length < 3) return null; // kräver minst 3 rundor för att vara statistiskt meningsfullt
+    var avg = stabR.reduce(function(s,r){ return s+r.score; }, 0)/stabR.length;
+    return { name:c.name, avg:avg, rounds:stabR.length };
+  }).filter(Boolean);
+
+  var highestAvg = withStabAvg.slice().sort(function(a,b){ return b.avg-a.avg; }).slice(0,10)
+    .map(function(c){ return { name:c.name, value:c.avg, label: c.avg.toFixed(1)+' p snitt ('+c.rounds+' rundor)' }; });
+
+  var hardest = withStabAvg.slice().sort(function(a,b){ return a.avg-b.avg; }).slice(0,10)
+    .map(function(c){ return { name:c.name, value:c.avg, label: c.avg.toFixed(1)+' p snitt ('+c.rounds+' rundor)' }; });
+
+  var districtRounds = {};
+  courses.forEach(function(c){
+    if(!c.district) return;
+    districtRounds[c.district] = (districtRounds[c.district]||0) + c.rounds.length;
+  });
+  var topDistricts = Object.keys(districtRounds).map(function(d){ return { name:d, value:districtRounds[d], label:districtRounds[d]+' rundor' }; })
+    .sort(function(a,b){ return b.value-a.value; }).slice(0,10);
+
+  return { mostPlayed: mostPlayed, highestAvg: highestAvg, hardest: hardest, topDistricts: topDistricts };
+}
+
+function buildHeatmapBarsHTML(items, barColor) {
+  if(!items.length) return '<p style="font-size:13px;color:var(--text-3)">Inte tillräckligt med data ännu.</p>';
+  var max = Math.max.apply(null, items.map(function(i){ return i.value; }));
+  return items.map(function(item, idx){
+    var pct = max>0 ? Math.max(6, Math.round((item.value/max)*100)) : 0;
+    return '<div style="margin-bottom:8px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'+
+        '<span style="font-weight:600;color:var(--text)">'+(idx+1)+'. '+esc(item.name)+'</span>'+
+        '<span style="color:var(--text-3)">'+esc(item.label)+'</span>'+
+      '</div>'+
+      '<div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>'+
+    '</div>';
+  }).join('');
+}
+
+function openGolfHeatmaps() {
+  var hm = computeGolfHeatmaps();
+  var h = '<h3><i class="ti ti-chart-bar" style="color:#0F6E56"></i> Heatmaps</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:16px">Baserat på alla avslutade tävlingar över samtliga tourer.</p>';
+
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-flame" style="color:#BA7517"></i> Mest spelade banorna</div>';
+  h += buildHeatmapBarsHTML(hm.mostPlayed, '#1D9E75')+'<hr class="divider">';
+
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-trending-up" style="color:#0F6E56"></i> Högst snittscore (Stableford)</div>';
+  h += buildHeatmapBarsHTML(hm.highestAvg, '#0F6E56')+'<hr class="divider">';
+
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-skull" style="color:#A32D2D"></i> Svåraste banorna (lägst snitt-poäng)</div>';
+  h += buildHeatmapBarsHTML(hm.hardest, '#A32D2D')+'<hr class="divider">';
+
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin" style="color:#185FA5"></i> Mest besökta distrikten</div>';
+  h += buildHeatmapBarsHTML(hm.topDistricts, '#185FA5')+'<hr class="divider">';
+
+  h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+    '<div style="font-size:12px;color:var(--text-2)"><i class="ti ti-info-circle"></i> <b>Flest birdies</b> och <b>flest hole-in-one</b> kräver hål-för-hål-registrering av resultat, vilket appen inte samlar in idag (bara totalresultat per runda). Säg till om du vill att jag bygger ut resultatinmatningen till att stödja det – då blir de här måtten möjliga också.</div>'+
+  '</div>';
+
+  h += '<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true);
+}
+
 function openCourseMap() {
   var h = '<h3><i class="ti ti-map"></i> Bankarta</h3>';
   var districts = [];
@@ -5038,6 +5139,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (13)',
+    items: [
+      { type: 'improved', text: 'Bandata (103 banor) importeras nu automatiskt vid inloggning istället för att kräva ett manuellt klick. Banor som redan finns hoppas alltid över, så det går inte att få dubbletter.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (12)',
+    items: [
+      { type: 'new', text: 'Nya Heatmaps i Banstatistik – mest spelade banorna, högst snittscore, svåraste banorna och mest besökta distrikten, baserat på alla tourer.' }
+    ]
+  },
   {
     date: '2 juli 2026 (11)',
     items: [
