@@ -2994,6 +2994,9 @@ function saveResults(i) {
     var shcpEl=document.getElementById('shcp-'+pi);
     var shcp=shcpEl&&shcpEl.value!==''?parseFloat(shcpEl.value):null;
     var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
+    // Bevara hål-för-hål-slag från en godkänd spelarinskickning, så statistik (birdies, hio m.m.) går att räkna senare.
+    var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+    if(sub && sub.holes && isSubmissionApproved(sub)) entry.holes = sub.holes;
     if(e.isFinal) {
       var hs = getHeadStart(t,e,pi);
       entry.headStart = hs;
@@ -3986,6 +3989,119 @@ function initPlayerGolfMap(stats) {
   }
 }
 
+// ── HÅLSTATISTIK (hio, albatross, eagle, birdie, par, bogey, dubbelbogey+) ──
+var HOLE_CATEGORY_META = [
+  { key:'hio',        label:'Hole-in-one',            icon:'🎯', color:'#BA7517' },
+  { key:'albatross',  label:'Albatross eller bättre',  icon:'🦅', color:'#5B2C8C' },
+  { key:'eagle',      label:'Eagle',                  icon:'🦅', color:'#0F6E56' },
+  { key:'birdie',     label:'Birdie',                 icon:'🐦', color:'#1D9E75' },
+  { key:'par',        label:'Par',                    icon:'⚪', color:'var(--text-2)' },
+  { key:'bogey',      label:'Bogey',                  icon:'🟠', color:'#BA7517' },
+  { key:'doubleplus', label:'Dubbelbogey eller sämre', icon:'🔴', color:'#A32D2D' }
+];
+
+function categorizeHoleScore(gross, par) {
+  if(gross==null || isNaN(gross) || par==null) return null;
+  if(gross === 1) return 'hio';
+  var diff = gross - par;
+  if(diff <= -3) return 'albatross';
+  if(diff === -2) return 'eagle';
+  if(diff === -1) return 'birdie';
+  if(diff === 0) return 'par';
+  if(diff === 1) return 'bogey';
+  return 'doubleplus';
+}
+
+function emptyHoleCounts() {
+  return { hio:0, albatross:0, eagle:0, birdie:0, par:0, bogey:0, doubleplus:0 };
+}
+
+function computeCourseHoleStats(courseName) {
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(courseName||'').trim().toLowerCase(); });
+  var counts = emptyHoleCounts();
+  var totalHolesPlayed = 0;
+  if(course && course.holePars && course.holePars.length) {
+    (S.tours||[]).forEach(function(t){
+      (t.events||[]).forEach(function(e){
+        if(!e.closed || !e.results || (e.course||'').trim().toLowerCase()!==courseName.trim().toLowerCase()) return;
+        e.results.forEach(function(r){
+          if(!r.holes) return;
+          r.holes.forEach(function(gross, idx){
+            var cat = categorizeHoleScore(gross, course.holePars[idx]);
+            if(cat) { counts[cat]++; totalHolesPlayed++; }
+          });
+        });
+      });
+    });
+  }
+  return { counts: counts, totalHolesPlayed: totalHolesPlayed, hasData: totalHolesPlayed>0 };
+}
+
+function computePlayerHoleStats(username) {
+  var counts = emptyHoleCounts();
+  var totalHolesPlayed = 0;
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var pi = players.findIndex(function(p){ return p && p.username===username; });
+    if(pi < 0) return;
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || !e.results) return;
+      var r = e.results.find(function(x){ return x.pi===pi; });
+      if(!r || !r.holes) return;
+      var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
+      if(!course || !course.holePars) return;
+      r.holes.forEach(function(gross, idx){
+        var cat = categorizeHoleScore(gross, course.holePars[idx]);
+        if(cat) { counts[cat]++; totalHolesPlayed++; }
+      });
+    });
+  });
+  return { counts: counts, totalHolesPlayed: totalHolesPlayed, hasData: totalHolesPlayed>0 };
+}
+
+function computePlayerHoleCategoryLeaders(categoryKey) {
+  var counts = {}; // username -> {name, count}
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || !e.results) return;
+      var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
+      if(!course || !course.holePars) return;
+      e.results.forEach(function(r){
+        if(!r.holes) return;
+        var p = players[r.pi];
+        if(!p) return;
+        r.holes.forEach(function(gross, idx){
+          var cat = categorizeHoleScore(gross, course.holePars[idx]);
+          if(cat===categoryKey) {
+            if(!counts[p.username]) counts[p.username] = { name:p.name, count:0 };
+            counts[p.username].count++;
+          }
+        });
+      });
+    });
+  });
+  return Object.keys(counts).map(function(u){ return counts[u]; }).sort(function(a,b){ return b.count-a.count; }).slice(0,10);
+}
+
+function buildHoleStatsHTML(stats, title) {
+  if(!stats.hasData) return '';
+  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-target-arrow"></i> '+esc(title)+'</div>';
+  h += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Baserat på '+stats.totalHolesPlayed+' registrerade hål</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:2px">';
+  HOLE_CATEGORY_META.forEach(function(cat){
+    var count = stats.counts[cat.key];
+    var pct = stats.totalHolesPlayed ? ((count/stats.totalHolesPlayed)*100).toFixed(1) : '0.0';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="font-size:13px;color:var(--text-2)">'+cat.icon+' '+cat.label+'</span>'+
+      '<span style="font-size:13px;font-weight:700;color:'+cat.color+'">'+count+' <span style="font-weight:400;color:var(--text-3);font-size:11px">('+pct+'%)</span></span>'+
+    '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
 function buildProfileHTML(pi){
   var t=getTour(), p=t.players[pi]; if(!p) return '';
   var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
@@ -4134,6 +4250,7 @@ function buildProfileHTML(pi){
       '</div>'+
     '</div>'+
     buildCareerStatsHTML(p.username)+
+    buildHoleStatsHTML(computePlayerHoleStats(p.username), 'Hålstatistik')+
     buildPlayerGolfMapStatsHTML(p.username, p.name)+
     swHtml+
     buildBagDisplayHTML(p, tourUser)+
@@ -4684,6 +4801,8 @@ function buildCourseProfileHTML(courseId) {
     }
     h += '</tbody></table></div>';
   }
+
+  h += buildHoleStatsHTML(computeCourseHoleStats(c.name), 'Hålstatistik för banan');
 
   // Tourstatistik
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:14px"><i class="ti ti-chart-bar"></i> Statistik från spelade tävlingar</div>';
@@ -5425,7 +5544,12 @@ function computeGolfHeatmaps() {
   var topDistricts = Object.keys(districtRounds).map(function(d){ return { name:d, value:districtRounds[d], label:districtRounds[d]+' rundor' }; })
     .sort(function(a,b){ return b.value-a.value; }).slice(0,10);
 
-  return { mostPlayed: mostPlayed, highestAvg: highestAvg, hardest: hardest, topDistricts: topDistricts };
+  var mostBirdies = computePlayerHoleCategoryLeaders('birdie')
+    .map(function(x){ return { name:x.name, value:x.count, label:x.count+' birdies' }; });
+  var mostHio = computePlayerHoleCategoryLeaders('hio')
+    .map(function(x){ return { name:x.name, value:x.count, label:x.count+' hole-in-one' }; });
+
+  return { mostPlayed: mostPlayed, highestAvg: highestAvg, hardest: hardest, topDistricts: topDistricts, mostBirdies: mostBirdies, mostHio: mostHio };
 }
 
 function buildHeatmapBarsHTML(items, barColor) {
@@ -5460,11 +5584,19 @@ function openGolfHeatmaps() {
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin" style="color:#185FA5"></i> Mest besökta distrikten</div>';
   h += buildHeatmapBarsHTML(hm.topDistricts, '#185FA5')+'<hr class="divider">';
 
-  h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
-    '<div style="font-size:12px;color:var(--text-2)"><i class="ti ti-info-circle"></i> <b>Flest birdies</b> och <b>flest hole-in-one</b> kräver hål-för-hål-registrering av resultat, vilket appen inte samlar in idag (bara totalresultat per runda). Säg till om du vill att jag bygger ut resultatinmatningen till att stödja det – då blir de här måtten möjliga också.</div>'+
-  '</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-feather" style="color:#1D9E75"></i> Flest birdies</div>';
+  h += buildHeatmapBarsHTML(hm.mostBirdies, '#1D9E75')+'<hr class="divider">';
 
-  h += '<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-target-arrow" style="color:#BA7517"></i> Flest hole-in-one</div>';
+  h += buildHeatmapBarsHTML(hm.mostHio, '#BA7517');
+
+  if(!hm.mostBirdies.length && !hm.mostHio.length) {
+    h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:10px">'+
+      '<div style="font-size:12px;color:var(--text-2)"><i class="ti ti-info-circle"></i> Birdies och hole-in-ones räknas nu automatiskt från hål-för-hål-resultat, men ingen sådan data finns registrerad ännu. Den fylls på i takt med att spelare fyller i "Mitt resultat" hål för hål och tävlingar stängs.</div>'+
+    '</div>';
+  }
+
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
   showModal(h, true);
 }
 
@@ -5767,6 +5899,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (26)',
+    items: [
+      { type: 'new', text: 'Ny hålstatistik (hole-in-one, albatross, eagle, birdie, par, bogey, dubbelbogey eller sämre) – visas på både banprofiler och spelarprofiler, byggd på den hål-för-hål-data som samlas in via "Mitt resultat".' },
+      { type: 'new', text: 'Heatmaps visar nu även "Flest birdies" och "Flest hole-in-one" per spelare, som tidigare inte var möjligt att räkna ut.' },
+      { type: 'fixed', text: 'Hål-för-hål-resultat sparas nu permanent när en tävling stängs (tidigare försvann den detaljerade datan när admin bekräftade resultaten).' }
+    ]
+  },
   {
     date: '2 juli 2026 (25)',
     items: [
@@ -6451,6 +6591,7 @@ function buildGlobalPlayerProfileHTML(username) {
   h += '</div>';
 
   h += buildCareerStatsHTML(u.username);
+  h += buildHoleStatsHTML(computePlayerHoleStats(u.username), 'Hålstatistik');
 
   // Styrkor och svagheter
   var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
