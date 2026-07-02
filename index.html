@@ -212,6 +212,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 
 <div id="tours-screen">
   <div id="home-screen-content">
+    <div id="home-approvals-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
         <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
@@ -798,6 +799,7 @@ function showHomeScreen() {
   });
   renderHomeUserBar();
   updateHero(null);
+  renderHomeApprovalWidget();
 }
 
 function showToursView() { showToursList(); }
@@ -1996,13 +1998,32 @@ function togglePayment(tourId, pi) {
 
 // ── SPELARENS EGEN RESULTATINMATNING (markör-/admin-godkännande) ───────────
 function getMyPi(t) {
-  return t.players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
+  var players = getPlayersForTour(t);
+  return players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
 }
 
 function getEventRegPis(e) {
   var regsRaw = e.registrations || [];
   return (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
 }
+
+// Beräknar hur många handicapslag en spelare får på ett visst hål, baserat på SHCP och hålets hcp-index.
+function computeHcpStrokesForHole(shcp, hcpIndex, totalHoles) {
+  if(shcp==null || hcpIndex==null || !totalHoles) return 0;
+  var base = Math.floor(shcp / totalHoles);
+  var rest = shcp - base*totalHoles;
+  return base + (hcpIndex <= rest ? 1 : 0);
+}
+
+// Standard stableford-poäng: 2 poäng för netto-par, +1 per slag under, -1 per slag över, lägst 0.
+function computeHoleStablefordPoints(gross, par, strokesReceived) {
+  if(gross==null || isNaN(gross)) return null;
+  var net = gross - strokesReceived;
+  var diff = net - par;
+  return Math.max(0, 2 - diff);
+}
+
+var _myScorecardCtx = null; // { isStab, holePars, holeHcpIndex, totalHoles }
 
 function openMyScoreSubmission(ei) {
   var t = getTour(), e = t.events[ei];
@@ -2016,6 +2037,11 @@ function openMyScoreSubmission(ei) {
     return '<option value="'+pi+'"'+(existing&&existing.markerPi===pi?' selected':'')+'>'+esc(t.players[pi].name)+'</option>';
   }).join('');
 
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
+  var hasScorecard = !!(course && course.holePars && course.holePars.length);
+  var myHcp = t.players[myPi].hcp!=null ? t.players[myPi].hcp : 0;
+  var shcpVal = existing&&existing.shcp!=null ? existing.shcp : myHcp;
+
   var h = '<h3><i class="ti ti-edit"></i> Mitt resultat – '+esc(e.name)+'</h3>';
   if(existing) {
     var statusLabel = existing.dispens
@@ -2023,11 +2049,44 @@ function openMyScoreSubmission(ei) {
       : ((existing.markerApproved||existing.adminApproved) ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på godkännande från '+esc(t.players[existing.markerPi]?t.players[existing.markerPi].name:'markör')+'</span>');
     h += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px">'+statusLabel+'</div>';
   }
-  if(!isStab) {
-    h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
-    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+(existing&&existing.shcp!=null?existing.shcp:(t.players[myPi].hcp||0))+'" oninput="recalcMyNet()"></div>';
+
+  if(!hasScorecard) {
+    // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning.
+    h += '<p style="font-size:12px;color:#854F0B;background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Banan "'+esc(e.course)+'" saknar scorekortsdata (par/hcp per hål) i Bandatabasen ännu. Be admin fylla i det, eller ange totalresultat direkt här under.</p>';
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+shcpVal+'"></div>';
+    if(!isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
+    h += '<div class="field"><label>'+(isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!isStab?'readonly':'')+'></div>';
+    _myScorecardCtx = null;
+  } else {
+    var n = course.holePars.length;
+    _myScorecardCtx = { isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex, totalHoles: n };
+    h += '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+shcpVal+'" oninput="recalcMyScorecard()"></div>';
+    h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. Poäng räknas ut automatiskt utifrån ditt SHCP.</p>';
+    h += '<div style="overflow-x:auto;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    h += '<thead><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
+      '<th style="padding:4px;text-align:left">Hål</th>'+
+      course.holePars.map(function(p,idx){ return '<th style="padding:4px;text-align:center">'+(idx+1)+'</th>'; }).join('')+
+      '<th style="padding:4px;text-align:center;white-space:nowrap">Totalt</th>'+
+    '</tr></thead><tbody>';
+    h += '<tr><td style="padding:4px;color:var(--text-2)">Par</td>'+course.holePars.map(function(p){ return '<td style="padding:4px;text-align:center">'+p+'</td>'; }).join('')+'<td style="padding:4px;text-align:center;font-weight:700">'+course.holePars.reduce(function(a,b){return a+b;},0)+'</td></tr>';
+    if(course.holeHcpIndex && course.holeHcpIndex.length) {
+      h += '<tr><td style="padding:4px;color:var(--text-2)">Hcp</td>'+course.holeHcpIndex.map(function(hc){ return '<td style="padding:4px;text-align:center;color:var(--text-3)">'+(hc!=null?hc:'–')+'</td>'; }).join('')+'<td></td></tr>';
+    }
+    h += '<tr><td style="padding:4px;font-weight:600">Slag</td>'+course.holePars.map(function(p,idx){
+      var existingGross = (existing && existing.holes && existing.holes[idx]!=null) ? existing.holes[idx] : '';
+      return '<td style="padding:2px"><input type="number" min="1" max="15" class="my-hole-inp" data-idx="'+idx+'" value="'+existingGross+'" oninput="recalcMyScorecard()" style="width:38px;margin:0;padding:3px;text-align:center;font-size:12px"></td>';
+    }).join('')+'<td style="padding:4px;text-align:center;font-weight:700" id="my-total-brutto">–</td></tr>';
+    if(isStab) {
+      h += '<tr><td style="padding:4px;color:var(--green-dark);font-weight:600">Poäng</td>'+
+        course.holePars.map(function(p,idx){ return '<td style="padding:4px;text-align:center;color:var(--green-dark)" id="my-hole-pts-'+idx+'">–</td>'; }).join('')+
+        '<td style="padding:4px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-total-points">–</td></tr>';
+    }
+    h += '</tbody></table></div>';
+    h += '<div id="my-scorecard-summary" style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px"></div>';
+    h += '<input type="hidden" id="my-score" value="'+(existing?existing.score:'')+'">';
+    h += '<input type="hidden" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'">';
   }
-  h += '<div class="field"><label>'+(isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!isStab?'readonly':'')+'></div>';
+
   h += '<hr class="divider">';
   h += '<div class="field"><label>Markör <span style="font-size:11px;color:var(--text-3)">(spelaren du spelat med)</span></label>';
   h += '<select id="my-marker" onchange="onMyMarkerChange()">'+markerOpts+'</select></div>';
@@ -2037,7 +2096,50 @@ function openMyScoreSubmission(ei) {
     '<button class="btn" onclick="closeModal()">Avbryt</button>'+
     '<button class="btn btn-primary" onclick="submitMyScore('+ei+','+myPi+')"><i class="ti ti-send"></i> Skicka in</button>'+
   '</div>';
-  showModal(h, false, true);
+  showModal(h, hasScorecard, true);
+  if(hasScorecard) setTimeout(function(){ recalcMyScorecard(); }, 30);
+}
+
+function recalcMyScorecard() {
+  var ctx = _myScorecardCtx;
+  if(!ctx) return;
+  var shcpEl = document.getElementById('my-shcp');
+  var shcp = parseFloat(shcpEl.value)||0;
+  var inputs = document.querySelectorAll('.my-hole-inp');
+  var totalGross = 0, totalPoints = 0, filledCount = 0;
+  inputs.forEach(function(inp){
+    var idx = parseInt(inp.getAttribute('data-idx'));
+    var gross = parseInt(inp.value);
+    if(isNaN(gross)) return;
+    filledCount++;
+    totalGross += gross;
+    if(ctx.isStab) {
+      var hcpIdx = (ctx.holeHcpIndex && ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+      var strokesRecv = computeHcpStrokesForHole(shcp, hcpIdx, ctx.totalHoles);
+      var pts = computeHoleStablefordPoints(gross, ctx.holePars[idx], strokesRecv);
+      totalPoints += pts;
+      var ptsEl = document.getElementById('my-hole-pts-'+idx);
+      if(ptsEl) ptsEl.textContent = pts;
+    }
+  });
+  var totalBruttoEl = document.getElementById('my-total-brutto');
+  if(totalBruttoEl) totalBruttoEl.textContent = filledCount ? totalGross : '–';
+  var totalPointsEl = document.getElementById('my-total-points');
+  if(totalPointsEl) totalPointsEl.textContent = filledCount ? totalPoints : '–';
+
+  var scoreEl = document.getElementById('my-score');
+  var bruttoEl = document.getElementById('my-brutto');
+  if(bruttoEl) bruttoEl.value = totalGross;
+  if(scoreEl) scoreEl.value = ctx.isStab ? totalPoints : Math.round((totalGross-shcp)*10)/10;
+
+  var summaryEl = document.getElementById('my-scorecard-summary');
+  if(summaryEl) {
+    var allFilled = filledCount === ctx.totalHoles;
+    summaryEl.innerHTML = (allFilled
+        ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Alla '+ctx.totalHoles+' hål ifyllda.</span> '
+        : '<span style="color:var(--gold)"><i class="ti ti-alert-triangle"></i> '+filledCount+' av '+ctx.totalHoles+' hål ifyllda – alla hål måste fyllas i innan du kan skicka in.</span> ')+
+      'Brutto: <b>'+totalGross+'</b>'+(ctx.isStab ? (' · Poäng: <b>'+totalPoints+'</b>') : (' · Netto: <b>'+Math.round((totalGross-shcp)*10)/10+'</b>'));
+  }
 }
 
 function onMyMarkerChange() {
@@ -2059,6 +2161,24 @@ function recalcMyNet() {
 
 function submitMyScore(ei, pi) {
   var t = getTour(), e = t.events[ei];
+  var ctx = _myScorecardCtx;
+  var shcpEl = document.getElementById('my-shcp');
+  var shcp = shcpEl && shcpEl.value!=='' ? parseFloat(shcpEl.value) : null;
+  var holes = null;
+
+  if(ctx) {
+    var inputs = document.querySelectorAll('.my-hole-inp');
+    holes = new Array(ctx.totalHoles).fill(null);
+    var filled = 0;
+    inputs.forEach(function(inp){
+      var idx = parseInt(inp.getAttribute('data-idx'));
+      var v = parseInt(inp.value);
+      if(!isNaN(v)) { holes[idx] = v; filled++; }
+    });
+    if(filled < ctx.totalHoles) { alert('Fyll i slag för alla '+ctx.totalHoles+' hål innan du skickar in.'); return; }
+    recalcMyScorecard(); // säkerställ att totalerna är uppdaterade innan vi läser ut dem
+  }
+
   var scoreEl = document.getElementById('my-score');
   var score = parseFloat(scoreEl.value);
   if(isNaN(score)) { alert('Ange ett resultat.'); return; }
@@ -2068,14 +2188,13 @@ function submitMyScore(ei, pi) {
   var markerPi = (!dispens && markerSel.value!=='') ? parseInt(markerSel.value) : null;
   if(!dispens && markerPi==null) { alert('Välj en markör, eller kryssa i att du har dispens.'); return; }
 
-  var isStab = e.type==='stableford';
-  var bruttoEl = document.getElementById('my-brutto'), shcpEl = document.getElementById('my-shcp');
+  var bruttoEl = document.getElementById('my-brutto');
   if(!e.scoreSubmissions) e.scoreSubmissions = [];
   var existing = e.scoreSubmissions.find(function(s){ return s.pi===pi; });
   var entry = {
     pi: pi, score: score,
-    brutto: (!isStab && bruttoEl && bruttoEl.value!=='') ? parseFloat(bruttoEl.value) : null,
-    shcp: (!isStab && shcpEl && shcpEl.value!=='') ? parseFloat(shcpEl.value) : null,
+    brutto: (bruttoEl && bruttoEl.value!=='') ? parseFloat(bruttoEl.value) : null,
+    shcp: shcp, holes: holes,
     markerPi: markerPi, dispens: dispens,
     markerApproved: false, adminApproved: false,
     submittedAt: new Date().toISOString()
@@ -2084,32 +2203,33 @@ function submitMyScore(ei, pi) {
   else e.scoreSubmissions.push(entry);
   save();
   closeModal();
+  _myScorecardCtx = null;
   renderEvents();
+  renderHomeApprovalWidget();
   alert(dispens
     ? 'Resultat inskickat. Väntar på godkännande av admin.'
     : 'Resultat inskickat. Väntar på godkännande av '+(t.players[markerPi]?t.players[markerPi].name:'din markör')+'.');
 }
 
 // Godkänn ett inskickat resultat, antingen som vald markör eller som admin (admin kan godkänna åt andra).
-function approveScoreSubmission(ei, submitterPi, viaAdmin) {
-  var t = getTour(), e = t.events[ei];
+function approveScoreSubmissionCore(t, e, submitterPi, viaAdmin) {
   var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===submitterPi; });
   if(!sub) return;
+  var players = getPlayersForTour(t);
   if(viaAdmin) {
     if(!isAdmin()) return;
     sub.adminApproved = true;
   } else {
     var myPi = getMyPi(t);
     if(sub.markerPi !== myPi) { alert('Du är inte vald som markör för det här resultatet.'); return; }
-    if(!confirm('Bekräfta att '+(t.players[submitterPi]?t.players[submitterPi].name:'spelaren')+' fick '+sub.score+(e.type==='stableford'?' poäng':' i netto')+'?')) return;
+    if(!confirm('Bekräfta att '+(players[submitterPi]?players[submitterPi].name:'spelaren')+' fick '+sub.score+(e.type==='stableford'?' poäng':' i netto')+'?')) return;
     sub.markerApproved = true;
   }
   save();
-  renderEvents();
+  renderHomeApprovalWidget();
 }
 
-function rejectScoreSubmission(ei, submitterPi) {
-  var t = getTour(), e = t.events[ei];
+function rejectScoreSubmissionCore(t, e, submitterPi) {
   var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===submitterPi; });
   if(!sub) return;
   var myPi = getMyPi(t);
@@ -2117,12 +2237,104 @@ function rejectScoreSubmission(ei, submitterPi) {
   if(!confirm('Neka detta resultat? Spelaren får då skicka in på nytt.')) return;
   e.scoreSubmissions = e.scoreSubmissions.filter(function(s){ return s.pi!==submitterPi; });
   save();
+  renderHomeApprovalWidget();
+}
+
+function approveScoreSubmission(ei, submitterPi, viaAdmin) {
+  var t = getTour(), e = t.events[ei];
+  approveScoreSubmissionCore(t, e, submitterPi, viaAdmin);
   renderEvents();
+}
+
+function rejectScoreSubmission(ei, submitterPi) {
+  var t = getTour(), e = t.events[ei];
+  rejectScoreSubmissionCore(t, e, submitterPi);
+  renderEvents();
+}
+
+// Tour-oberoende varianter, för användning t.ex. från hemskärmens godkännandewidget.
+function approveScoreSubmissionGlobal(tourId, eventId, submitterPi, viaAdmin) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  approveScoreSubmissionCore(t, e, submitterPi, viaAdmin);
+  if(activeTourId === tourId) renderEvents();
+}
+
+function rejectScoreSubmissionGlobal(tourId, eventId, submitterPi) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  rejectScoreSubmissionCore(t, e, submitterPi);
+  if(activeTourId === tourId) renderEvents();
 }
 
 function isSubmissionApproved(sub) {
   if(!sub) return false;
   return sub.dispens ? !!sub.adminApproved : !!(sub.markerApproved || sub.adminApproved);
+}
+
+// ── HEMSKÄRMENS GODKÄNNANDEWIDGET ───────────────────────────────────────────
+// Visar resultat som väntar på godkännande, tvärs över alla tourer, direkt på förstasidan.
+function computeHomeApprovalTasks() {
+  var asMarker = [], asAdminAll = [];
+  var admin = isAdmin();
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var myPi = players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
+    (t.events||[]).forEach(function(e){
+      if(e.closed || !e.scoreSubmissions || !e.scoreSubmissions.length) return;
+      e.scoreSubmissions.forEach(function(s){
+        if(isSubmissionApproved(s)) return;
+        var item = {
+          tourId: t.id, tourName: t.name+(t.season?' '+t.season:''),
+          eventId: e.id, eventName: e.name, isStab: e.type==='stableford',
+          pi: s.pi, playerName: players[s.pi] ? players[s.pi].name : '?',
+          score: s.score, dispens: !!s.dispens,
+          markerName: (!s.dispens && s.markerPi!=null && players[s.markerPi]) ? players[s.markerPi].name : null
+        };
+        if(!s.dispens && myPi>=0 && s.markerPi===myPi) asMarker.push(item);
+        if(admin) asAdminAll.push(item);
+      });
+    });
+  });
+  return { asMarker: asMarker, asAdminAll: asAdminAll };
+}
+
+function renderApprovalItemRow(item, showApproveAsAdmin) {
+  return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);gap:8px">'+
+    '<div style="min-width:0"><span style="font-size:13px;font-weight:600">'+esc(item.playerName)+'</span> '+
+      '<span style="font-size:12px;color:var(--text-2)">– '+item.score+(item.isStab?' p':' netto')+'</span>'+
+      '<div style="font-size:11px;color:var(--text-3)">'+esc(item.eventName)+' · '+esc(item.tourName)+(item.dispens?' · dispens':(item.markerName?' · markör: '+esc(item.markerName):''))+'</div>'+
+    '</div>'+
+    '<div class="row" style="gap:4px;flex-shrink:0">'+
+      '<button class="btn btn-sm btn-primary" style="padding:3px 10px" onclick="approveScoreSubmissionGlobal(\''+item.tourId+'\',\''+item.eventId+'\','+item.pi+','+(showApproveAsAdmin?'true':'false')+')"><i class="ti ti-check"></i></button>'+
+      (showApproveAsAdmin?'':'<button class="btn btn-sm" style="padding:3px 10px;color:#dc2626" onclick="rejectScoreSubmissionGlobal(\''+item.tourId+'\',\''+item.eventId+'\','+item.pi+')"><i class="ti ti-x"></i></button>')+
+    '</div>'+
+  '</div>';
+}
+
+function renderHomeApprovalWidget() {
+  var el = document.getElementById('home-approvals-widget');
+  if(!el) return;
+  if(!currentUser) { el.innerHTML = ''; return; }
+  var tasks = computeHomeApprovalTasks();
+  var html = '';
+  if(tasks.asMarker.length) {
+    html += '<div class="card" style="margin-bottom:12px;padding:14px 16px;border-color:var(--gold)">'+
+      '<div style="font-size:13px;font-weight:600;color:#854F0B;margin-bottom:6px"><i class="ti ti-clipboard-check"></i> Du är vald som markör – bekräfta resultat ('+tasks.asMarker.length+')</div>'+
+      tasks.asMarker.map(function(item){ return renderApprovalItemRow(item, false); }).join('')+
+    '</div>';
+  }
+  if(isAdmin() && tasks.asAdminAll.length) {
+    html += '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px"><i class="ti ti-shield-check"></i> Resultat som väntar på godkännande ('+tasks.asAdminAll.length+')</div>'+
+      tasks.asAdminAll.map(function(item){ return renderApprovalItemRow(item, true); }).join('')+
+    '</div>';
+  }
+  el.innerHTML = html;
 }
 
 function eventCardHTML(i,e) {
@@ -3946,6 +4158,11 @@ var SW_WEAKNESSES = [
   'Tre puttar i överflöd'
 ];
 
+// Skjuter upp den obligatoriska styrkor/svagheter-rutan - dyker upp igen vid nästa inloggning.
+function deferStrengthsReminder() {
+  closeModal();
+}
+
 function openStrengthsEdit(username, mandatory) {
   if(!mandatory && !isAdmin() && (!currentUser || currentUser.username !== username)) return;
   var u = (S.users||[]).find(function(x){ return x.username===username; });
@@ -3980,7 +4197,7 @@ function openStrengthsEdit(username, mandatory) {
   h += '<input id="sw-custom-weak" type="text" placeholder="Lägg till egen svaghet (en åt gången)..." style="margin-bottom:16px">';
 
   h += '<div class="row" style="justify-content:flex-end;gap:8px">'+
-    (mandatory?'':'<button class="btn" onclick="closeModal()">Avbryt</button>')+
+    (mandatory?'<button class="btn" onclick="deferStrengthsReminder()"><i class="ti ti-clock-pause"></i> Avbryt och påminn mig igen</button>':'<button class="btn" onclick="closeModal()">Avbryt</button>')+
     '<button class="btn btn-primary" onclick="saveStrengths(\''+esc(username)+'\','+(mandatory?'true':'false')+')">Spara</button></div>';
 
   showModal(h, true, true);
@@ -5356,6 +5573,9 @@ async function geocodeMissingCourses() {
   showModal(resultHtml, true);
 }
 
+var _courseDbSearch = '';
+var _courseDbFilter = 'all'; // all | no-image | no-coords | no-scorecard | complete
+
 function renderCourseDbSection() {
   var el = document.getElementById('course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
@@ -5370,42 +5590,90 @@ function renderCourseDbSection() {
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
-  if(!courseDb.length) {
-    html += '<p class="empty">Inga banor inlagda ännu.</p>';
-  } else {
-    var withImg = courseDb.filter(function(c){ return !!getCourseImage(c.name); }).length;
-    html += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">'+courseDb.length+' banor &nbsp;·&nbsp; '+withImg+' med bild &nbsp;·&nbsp; '+(courseDb.length-withImg)+' saknar bild</p>';
-    html += '<div class="card" style="padding:0">';
-    courseDb.forEach(function(c, idx){
-      var img = getCourseImage(c.name);
-      var suggested = suggestCourseFilename(c.name);
-      var border = idx < courseDb.length-1 ? 'border-bottom:1px solid var(--border)' : '';
-      html += '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;'+border+'">';
-      // Left: thumbnail or missing indicator
-      if(img) {
-        html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer" onclick="openCourseProfile(\''+c.id+'\')">' +
-          '<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
-          '<div><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
-          '<div style="font-size:12px;color:var(--text-2)">Par '+c.par+' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-check" style="font-size:11px"></i> Bild OK</span>'+
-          (c.lat!=null?' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-map-pin" style="font-size:11px"></i> Karta OK</span>':' &nbsp;·&nbsp; <span style="color:var(--text-3)">Ingen koordinat</span>')+
-          '</div></div>' +
-        '</div>';
-      } else {
-        html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer" onclick="openCourseProfile(\''+c.id+'\')">' +
-          '<div style="width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:16px"></i></div>' +
-          '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
-          '<div style="font-size:12px;color:var(--danger-text)">Ingen bild &nbsp;·&nbsp; Par '+c.par+'</div>' +
-          '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
-          (c.lat==null?'<div style="font-size:11px;color:var(--text-3);margin-top:2px"><i class="ti ti-map-pin-off" style="font-size:11px"></i> Ingen koordinat satt</div>':'') +
-          '</div>' +
-        '</div>';
-      }
-      // Right: edit button
-      html += '<button class="btn btn-sm" style="flex-shrink:0;margin-left:8px" onclick="openEditCourse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>';
-      html += '</div>';
-    });
+  if(courseDb.length) {
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
+    html += '<div style="position:relative;flex:1;min-width:180px">'+
+      '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
+      '<input id="course-db-search" type="text" placeholder="Sök bana, klubb eller distrikt..." value="'+esc(_courseDbSearch)+'" oninput="_courseDbSearch=this.value;renderCourseDbList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0">'+
+    '</div>';
+    html += '<select id="course-db-filter" onchange="_courseDbFilter=this.value;renderCourseDbList()" style="margin:0;min-width:170px">'+
+      '<option value="all"'+(_courseDbFilter==='all'?' selected':'')+'>Alla banor</option>'+
+      '<option value="no-image"'+(_courseDbFilter==='no-image'?' selected':'')+'>Saknar bild</option>'+
+      '<option value="no-coords"'+(_courseDbFilter==='no-coords'?' selected':'')+'>Saknar koordinater</option>'+
+      '<option value="no-scorecard"'+(_courseDbFilter==='no-scorecard'?' selected':'')+'>Saknar scorekort</option>'+
+      '<option value="complete"'+(_courseDbFilter==='complete'?' selected':'')+'>Bild + koordinater klart</option>'+
+    '</select>';
     html += '</div>';
   }
+  html += '<div id="course-db-list"></div>';
+  el.innerHTML = html;
+  renderCourseDbList();
+}
+
+function renderCourseDbList() {
+  var el = document.getElementById('course-db-list');
+  if(!el) return;
+  if(!courseDb.length) { el.innerHTML = '<p class="empty">Inga banor inlagda ännu.</p>'; return; }
+
+  var term = (_courseDbSearch||'').trim().toLowerCase();
+  var filtered = courseDb.filter(function(c){
+    if(term) {
+      var haystack = (c.name+' '+(c.klubb||'')+' '+(c.district||'')).toLowerCase();
+      if(haystack.indexOf(term) === -1) return false;
+    }
+    var hasImg = !!getCourseImage(c.name);
+    var hasCoords = c.lat!=null && c.lng!=null;
+    if(_courseDbFilter==='no-image' && hasImg) return false;
+    if(_courseDbFilter==='no-coords' && hasCoords) return false;
+    if(_courseDbFilter==='no-scorecard' && (c.holePars && c.holePars.length)) return false;
+    if(_courseDbFilter==='complete' && !(hasImg && hasCoords)) return false;
+    return true;
+  });
+
+  var withImg = courseDb.filter(function(c){ return !!getCourseImage(c.name); }).length;
+  var html = '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">'+courseDb.length+' banor &nbsp;·&nbsp; '+withImg+' med bild &nbsp;·&nbsp; '+(courseDb.length-withImg)+' saknar bild'+
+    (term || _courseDbFilter!=='all' ? ' &nbsp;·&nbsp; visar '+filtered.length : '')+'</p>';
+
+  if(!filtered.length) {
+    html += '<p class="empty">Inga banor matchar sökningen/filtret.</p>';
+    el.innerHTML = html;
+    return;
+  }
+
+  html += '<div class="card" style="padding:0">';
+  filtered.forEach(function(c, idx){
+    var img = getCourseImage(c.name);
+    var suggested = suggestCourseFilename(c.name);
+    var hasScorecard = !!(c.holePars && c.holePars.length);
+    var scorecardBadge = hasScorecard
+      ? ' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Scorekort OK</span>'
+      : ' &nbsp;·&nbsp; <span style="color:var(--text-3)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Inget scorekort</span>';
+    var border = idx < filtered.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+    html += '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;'+border+'">';
+    if(img) {
+      html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer" onclick="openCourseProfile(\''+c.id+'\')">' +
+        '<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
+        '<div><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
+        '<div style="font-size:12px;color:var(--text-2)">Par '+c.par+' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-check" style="font-size:11px"></i> Bild OK</span>'+
+        (c.lat!=null?' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-map-pin" style="font-size:11px"></i> Karta OK</span>':' &nbsp;·&nbsp; <span style="color:var(--text-3)">Ingen koordinat</span>')+
+        scorecardBadge+
+        '</div></div>' +
+      '</div>';
+    } else {
+      html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer" onclick="openCourseProfile(\''+c.id+'\')">' +
+        '<div style="width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:16px"></i></div>' +
+        '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
+        '<div style="font-size:12px;color:var(--danger-text)">Ingen bild &nbsp;·&nbsp; Par '+c.par+'</div>' +
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
+        (c.lat==null?'<div style="font-size:11px;color:var(--text-3);margin-top:2px"><i class="ti ti-map-pin-off" style="font-size:11px"></i> Ingen koordinat satt</div>':'') +
+        '<div style="font-size:11px;margin-top:2px">'+(hasScorecard?'<span style="color:var(--green-dark)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Scorekort OK</span>':'<span style="color:var(--text-3)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Inget scorekort</span>')+'</div>' +
+        '</div>' +
+      '</div>';
+    }
+    html += '<button class="btn btn-sm" style="flex-shrink:0;margin-left:8px" onclick="openEditCourse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>';
+    html += '</div>';
+  });
+  html += '</div>';
   el.innerHTML = html;
 }
 
@@ -5478,6 +5746,37 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (23)',
+    items: [
+      { type: 'improved', text: 'Styrkor/svagheter-popupen vid inloggning har fått en "Avbryt och påminn mig igen"-knapp – man kan skjuta upp den till nästa inloggning istället för att behöva fylla i direkt.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (22)',
+    items: [
+      { type: 'new', text: 'Bandatabasen visar nu "Scorekort OK"/"Inget scorekort" per bana, samt ett nytt filter "Saknar scorekort" för att snabbt hitta banor som behöver kompletteras.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (21)',
+    items: [
+      { type: 'new', text: 'Resultat som väntar på godkännande visas nu direkt på hemskärmen (första sidan efter inloggning) – både för markören som ska bekräfta och för admin, tvärs över alla tourer.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (20)',
+    items: [
+      { type: 'new', text: '"Mitt resultat" kräver nu SHCP och hela scorekortet hål för hål (om banan har scorekortsdata). Stableford-poäng räknas ut automatiskt per hål utifrån SHCP och banans hcp-index.' },
+      { type: 'improved', text: 'Om en bana saknar scorekortsdata i Bandatabasen faller inmatningen tillbaka på enkel totalinmatning, med en tydlig notis om att be admin komplettera banan.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (19)',
+    items: [
+      { type: 'new', text: 'Bandatabasen har fått sökfält (namn/klubb/distrikt) och filter (saknar bild/koordinater, eller helt klara) – mycket enklare att hitta rätt bana bland 100+.' }
+    ]
+  },
   {
     date: '2 juli 2026 (18)',
     items: [
