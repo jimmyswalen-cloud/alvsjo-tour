@@ -131,6 +131,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
 
@@ -1883,26 +1884,43 @@ function eventCardHTML(i,e) {
       '</tr>';
     }).join('');
     regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
-  } else if(regs.length) {
-    var sortedRegs = regs.slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-    var rows = sortedRegs.map(function(r){
-      var p = t.players[r.pi];
-      if(!p) return '';
-      var altDate = r.date !== e.date;
+  } else if(t.players.length) {
+    var rowsData = t.players.map(function(p, pi){
+      if(!p) return null;
+      var reg = regs.find(function(r){ return r.pi===pi; });
+      var status = reg ? (reg.declined ? 'declined' : 'registered') : 'unknown';
+      return { p:p, pi:pi, reg:reg, status:status };
+    }).filter(Boolean);
+    var statusOrder = { registered:0, unknown:1, declined:2 };
+    rowsData.sort(function(a,b){
+      if(statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status]-statusOrder[b.status];
+      if(a.status==='registered') return new Date(a.reg.date)-new Date(b.reg.date);
+      return (a.p.name||'').localeCompare(b.p.name||'');
+    });
+    var STATUS_DOT = { registered:'#1D9E75', declined:'#dc2626', unknown:'#D9A62E' };
+    var rows = rowsData.map(function(x){
+      var dot = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+STATUS_DOT[x.status]+';margin-right:8px;vertical-align:middle;flex-shrink:0"></span>';
+      var altDate = x.reg && x.reg.date !== e.date;
       var timeStr = '';
-      if(e.teeGroups) {
-        var g = e.teeGroups.find(function(gr){ return gr.date===r.date && gr.playerPis.indexOf(r.pi)>=0; });
+      if(x.status==='registered' && e.teeGroups) {
+        var g = e.teeGroups.find(function(gr){ return gr.date===x.reg.date && gr.playerPis.indexOf(x.pi)>=0; });
         if(g && g.time) timeStr = g.time;
       }
-      return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
-        '<td>'+esc(p.name)+'</td>'+
-        '<td>'+r.date+' ('+weekdaySv(r.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')+'</td>'+
+      return '<tr onclick="showPlayerProfile('+x.pi+')" style="cursor:pointer'+(x.status==='declined'?';opacity:0.55':'')+'">'+
+        '<td>'+dot+esc(x.p.name)+'</td>'+
+        '<td>'+(x.status==='registered' ? (x.reg.date+' ('+weekdaySv(x.reg.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')) : '<span style="color:var(--text-3)">–</span>')+'</td>'+
         '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
     }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px">'+
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-3);padding:0 2px 8px">'+
+        '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1D9E75;margin-right:4px"></span>Anmäld</span>'+
+        '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D9A62E;margin-right:4px"></span>Osäker</span>'+
+        '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Deltar ej</span>'+
+      '</div>'+
+      '<table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   } else {
-    regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga anmälda ännu</p>';
+    regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
   }
 
   var btns=e.closed
@@ -4456,32 +4474,39 @@ function exportAllPlayerPhotos() {
   if(!isAdmin()) return;
   var users = (S.users||[]).filter(function(u){ return u.img; });
   if(!users.length) { alert('Inga profilbilder att exportera.'); return; }
-  if(!confirm('Detta laddar ner '+users.length+' bildfiler till din nedladdningsmapp, en i taget. Fortsätt?')) return;
+  if(typeof JSZip === 'undefined') { alert('Kunde inte ladda zip-biblioteket (kontrollera internetanslutningen) och försök igen.'); return; }
 
   var mapLines = [];
-  var jobs = users.map(function(u){
+  var zip = new JSZip();
+  var folder = zip.folder('player-photos');
+  users.forEach(function(u){
     var blob = dataUriToBlob(u.img);
     var ext = extFromMime(blob.type);
     var filename = u.username.toLowerCase()+'.'+ext;
+    folder.file(filename, blob);
     mapLines.push("  '"+u.username.toLowerCase()+"': 'player-photos/"+filename+"',");
-    return { blob:blob, filename:filename };
   });
-  jobs.forEach(function(job, i){
-    setTimeout(function(){ downloadBlob(job.blob, job.filename); }, i*350);
-  });
+  var snippet = "var STATIC_PLAYER_PHOTOS = {\n"+mapLines.join('\n')+"\n};";
+  zip.file('player-photos/LÄS-MIG.txt',
+    'Ladda upp hela "player-photos"-mappen till ditt GitHub-repo, bredvid index.html.\n\n'+
+    'Klistra sedan in koden nedan i index.html (den ersätter STATIC_PLAYER_PHOTOS-objektet):\n\n'+snippet
+  );
 
-  setTimeout(function(){
-    var snippet = "var STATIC_PLAYER_PHOTOS = {\n"+mapLines.join('\n')+"\n};";
+  zip.generateAsync({ type: 'blob' }).then(function(zipBlob){
+    downloadBlob(zipBlob, 'spelarbilder.zip');
     showModal(
       '<h3><i class="ti ti-download"></i> Profilbilder exporterade</h3>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+users.length+' bilder har laddats ner till din nedladdningsmapp.</p>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px"><b>Nästa steg:</b> Skapa en mapp som heter <code>player-photos</code> i ditt GitHub-repo (bredvid index.html) och ladda upp de nedladdade filerna dit.</p>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:6px">Skicka sedan tillbaka den här kodsnutten till mig (eller klistra in den själv i index.html, den ersätter <code>STATIC_PLAYER_PHOTOS</code>-objektet högst upp i koden):</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+users.length+' bilder har packats i <code>spelarbilder.zip</code> och laddats ner.</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px"><b>Nästa steg:</b> Packa upp zip-filen och ladda upp hela <code>player-photos</code>-mappen till ditt GitHub-repo, bredvid index.html (en <code>LÄS-MIG.txt</code> med instruktioner + koden finns med i mappen).</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:6px">Skicka sedan tillbaka den här kodsnutten till mig (eller klistra in den själv i index.html):</p>'+
       '<textarea readonly onclick="this.select()" style="width:100%;height:180px;font-family:monospace;font-size:11px;box-sizing:border-box">'+esc(snippet)+'</textarea>'+
       '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>',
       true
     );
-  }, jobs.length*350 + 200);
+  }).catch(function(err){
+    console.error('Zip-fel', err);
+    alert('Något gick fel när zip-filen skulle skapas. Försök igen.');
+  });
 }
 
 function clearBackedUpProfilePhotos() {
