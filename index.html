@@ -300,7 +300,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="events-list"></div>
   </div>
   <div id="view-calendar" class="view">
-    <h2>Kalender</h2>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="margin:0">Kalender</h2>
+      <button class="btn btn-sm" onclick="openTourMap()"><i class="ti ti-map"></i> Tourkarta</button>
+    </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:12px">
         <button class="btn btn-sm" onclick="prevMonth()"><i class="ti ti-chevron-left"></i></button>
@@ -4210,6 +4213,146 @@ function deleteCourse(id) {
   renderCourseDbSection();
 }
 
+// ── BULK-IMPORT AV BANDATA (svenska golfdistrikt + koordinater) ────────────
+var DISTRICT_LABELS = {
+  skane: "Skånes Golfdistrikt", blekinge: "Blekinge Golfdistrikt", smaland: "Smålands Golfdistrikt",
+  goteborg: "Göteborgs Golfdistrikt", bohusdal: "Bohuslän-Dals Golfdistrikt", vastragotaland: "Västergötlands Golfdistrikt",
+  halland: "Hallands Golfdistrikt", ostergotland: "Östergötlands Golfdistrikt", gotland: "Gotlands Golfdistrikt",
+  varmland: "Värmlands Golfdistrikt", orebro: "Örebro Läns Golfdistrikt", vastmanland: "Västmanlands Golfdistrikt",
+  uppland: "Upplands Golfdistrikt", sodermanland: "Södermanlands Golfdistrikt", stockholm: "Stockholms Golfdistrikt",
+  gavleborg: "Gästrike-Hälsinge Golfdistrikt", dalarna: "Dalarnas Golfdistrikt", medelpad: "Medelpads Golfdistrikt",
+  angermanland: "Ångermanlands Golfdistrikt", jamtland: "Jämtland-Härjedalens Golfdistrikt",
+  vasterbotten: "Västerbottens Golfdistrikt", norrbotten: "Norrbottens Golfdistrikt",
+  spain: "Spanien", canary: "Kanarieöarna", germany: "Tyskland", hungary: "Ungern", oland: "Öland"
+};
+
+var BULK_GOLF_COURSES = [
+  { name: "Landskrona GK – Erikstorp", lat: 55.908, lng: 12.812, region: "skane" },
+  { name: "Landskrona GK – Hildesborg", lat: 55.905, lng: 12.805, region: "skane" },
+  { name: "Rya GK", lat: 55.97606, lng: 12.75662, region: "skane" },
+  { name: "Vasatorp GK – Tournament Course", lat: 56.073, lng: 12.79, region: "skane" },
+  { name: "Rönnebäck GK", lat: 55.53176, lng: 13.10184, region: "skane" },
+  { name: "Vasatorp GK (övriga)", lat: 56.071, lng: 12.79, region: "skane" },
+  { name: "Ängelholms GK", lat: 56.245, lng: 12.862, region: "skane" },
+  { name: "Lydinge GK", lat: 56.073, lng: 12.86, region: "skane" },
+  { name: "Söderåsens GK", lat: 56.046, lng: 13.219, region: "skane" },
+  { name: "Glumslövs GK", lat: 55.933, lng: 12.82, region: "skane" },
+  { name: "Flommens GK", lat: 55.392, lng: 12.84, region: "skane" },
+  { name: "Sofiedals GK", lat: 55.53681, lng: 13.06304, region: "skane" },
+  { name: "Kvarnby GK", lat: 55.58625, lng: 13.11164, region: "skane" },
+  { name: "Öresunds GK", lat: 55.85384, lng: 12.90307, region: "skane" },
+  { name: "Barsebäck – Ocean Course", lat: 55.79252, lng: 12.94199, region: "skane" },
+  { name: "Kävlinge GK", lat: 55.79, lng: 13.11, region: "skane" },
+  { name: "Kristianstads GK", lat: 56.04, lng: 14.18, region: "skane" },
+  { name: "Malmö Burlöv Golfklubb", lat: 55.6170833, lng: 13.0664521, region: "skane" },
+  { name: "Hylliekrokens Golf Center", lat: 55.5933021, lng: 12.9462561, region: "skane" },
+  { name: "Hintons Golf Club - Rönnebäck", lat: 55.5312630, lng: 13.1018449, region: "skane" },
+  { name: "Oxie GK", lat: 55.5501446, lng: 13.0630326, region: "skane" },
+  { name: "Vasatorps GK", lat: 56.0577150, lng: 12.7886340, region: "skane" },
+  { name: "Rya Golf Club", lat: 55.9759626, lng: 12.7567058, region: "skane" },
+  { name: "Helsingborg Golf Club", lat: 56.1598742, lng: 12.5669830, region: "skane" },
+  { name: "Glumsövs Golfklubb", lat: 55.9466026, lng: 12.8163102, region: "skane" },
+  { name: "Lunds Akademiska GK", lat: 55.7127093, lng: 13.2758076, region: "skane" },
+  { name: "Vellinge GK", lat: 55.4945468, lng: 13.0988438, region: "skane" },
+  { name: "Trelleborgs Golf Club", lat: 55.3697222, lng: 13.0813889, region: "skane" },
+  { name: "Ljunghusens Golf Club", lat: 55.3905380, lng: 12.9073050, region: "skane" },
+  { name: "Tegelberga Golfklubb", lat: 55.4601569, lng: 13.2330794, region: "skane" },
+  { name: "Välinge Golfklubb", lat: 55.7115873, lng: 13.1566999, region: "skane" },
+  { name: "Åkarp Golf Course", lat: 55.6510163, lng: 13.1285228, region: "skane" },
+  { name: "Söderslätt Golfklubb", lat: 55.4670806, lng: 13.0813513, region: "skane" },
+  { name: "Eslöv Golf Club", lat: 55.8118378, lng: 13.3158702, region: "skane" },
+  { name: "Kristianstad Golf Club i Åhus", lat: 55.9237075, lng: 14.2737487, region: "skane" },
+  { name: "Skepparsövs Golf Club", lat: 56.0126610, lng: 14.0489998, region: "skane" },
+  { name: "Göteborgs Golf Klubb", lat: 57.6140106, lng: 11.9325230, region: "goteborg" },
+  { name: "St. Jörgen Golf Club", lat: 57.7452406, lng: 11.9456256, region: "goteborg" },
+  { name: "Delsjö Golf Club", lat: 57.6818487, lng: 12.0249029, region: "goteborg" },
+  { name: "Albatross Golf Club", lat: 57.7781480, lng: 11.9552513, region: "goteborg" },
+  { name: "Lerjedalens GK", lat: 57.7941472, lng: 12.1033677, region: "goteborg" },
+  { name: "Hills Golf Club", lat: 57.6213953, lng: 12.0125269, region: "goteborg" },
+  { name: "Sisjö Golf", lat: 57.6424404, lng: 11.9607817, region: "goteborg" },
+  { name: "Partille Golfklubb", lat: 57.6905556, lng: 12.1105556, region: "goteborg" },
+  { name: "Torrekulla Golf Club", lat: 57.6209584, lng: 12.0309306, region: "goteborg" },
+  { name: "Delsjö GK", lat: 57.708, lng: 12.063, region: "vastragotaland" },
+  { name: "Borås Golfklubb", lat: 57.6690230, lng: 12.9389240, region: "vastragotaland" },
+  { name: "Skövde Golf Club", lat: 58.3696450, lng: 13.8074615, region: "vastragotaland" },
+  { name: "Koberg Golfklubb", lat: 58.1657092, lng: 12.3947266, region: "vastragotaland" },
+  { name: "Hörlycke GK", lat: 58.2487271, lng: 12.2596774, region: "vastragotaland" },
+  { name: "Uddevalla Golf Club", lat: 58.3697719, lng: 11.7695783, region: "bohusdal" },
+  { name: "Halmstad Golf Club", lat: 56.6495363, lng: 12.7380413, region: "halland" },
+  { name: "Falkenbergs Golfklubb", lat: 56.8913464, lng: 12.5704178, region: "halland" },
+  { name: "Varberg Golf Club", lat: 57.0642840, lng: 12.3498985, region: "halland" },
+  { name: "Björnhults Golf Club", lat: 56.9287776, lng: 12.4336495, region: "halland" },
+  { name: "Vinbergs Golfklubb", lat: 56.9613424, lng: 12.5573335, region: "halland" },
+  { name: "Varbergs GK Östra", lat: 57.1199648, lng: 12.4665544, region: "halland" },
+  { name: "Harabäckens Golfklubb", lat: 57.1335219, lng: 12.3994752, region: "halland" },
+  { name: "Blixtorps Golf AB", lat: 57.0834377, lng: 12.3155504, region: "halland" },
+  { name: "Karlshamns Golfklubb", lat: 56.2093832, lng: 14.7585528, region: "blekinge" },
+  { name: "Leråkra Golfklubb", lat: 56.1940040, lng: 15.3565645, region: "blekinge" },
+  { name: "Carlskrona Golf Club", lat: 56.1571027, lng: 15.4521278, region: "blekinge" },
+  { name: "Boa Olofströms Golfklubb", lat: 56.2091369, lng: 14.6047811, region: "blekinge" },
+  { name: "Jönåker GK", lat: 58.75, lng: 16.85, region: "ostergotland" },
+  { name: "Bråviken GK", lat: 58.65, lng: 16.35, region: "ostergotland" },
+  { name: "Omberg GK", lat: 58.35, lng: 14.75, region: "ostergotland" },
+  { name: "Landeryds GK", lat: 58.35, lng: 15.7, region: "ostergotland" },
+  { name: "Linköping Golf Club", lat: 58.4015531, lng: 15.5699010, region: "ostergotland" },
+  { name: "NSGK - Klinga", lat: 58.5556293, lng: 16.0997035, region: "ostergotland" },
+  { name: "Norrköping Söderköping GC - Hylinge", lat: 58.4962303, lng: 16.1689871, region: "ostergotland" },
+  { name: "Motala Golf Club", lat: 58.5083343, lng: 15.0431243, region: "ostergotland" },
+  { name: "Örebro City Golf & Country Club", lat: 59.2504493, lng: 15.2112311, region: "orebro" },
+  { name: "Örebro City Golf & Country Club Mosjö", lat: 59.1889145, lng: 15.1485345, region: "orebro" },
+  { name: "Kårsta Golf Club", lat: 59.3486240, lng: 15.1958427, region: "orebro" },
+  { name: "Mosjö Golf Country Club", lat: 59.1856433, lng: 15.1466804, region: "orebro" },
+  { name: "Reftele GK", lat: 57.183, lng: 13.6, region: "smaland" },
+  { name: "Kalmar GK", lat: 56.7, lng: 16.333, region: "smaland" },
+  { name: "Jönköping Golf Club", lat: 57.7509948, lng: 14.1406505, region: "smaland" },
+  { name: "A6 Golf Club", lat: 57.7623520, lng: 14.2136719, region: "smaland" },
+  { name: "Kalmar Golfklubb", lat: 56.7165527, lng: 16.3479561, region: "smaland" },
+  { name: "Västervik Golfklubb", lat: 57.7739214, lng: 16.6523916, region: "smaland" },
+  { name: "Växjö Golf Club", lat: 56.9048565, lng: 14.7710753, region: "smaland" },
+  { name: "Glasrikets Golf Club", lat: 56.9026170, lng: 14.8644805, region: "smaland" },
+  { name: "Upsala Golf Club", lat: 59.8413941, lng: 17.4956097, region: "uppland" },
+  { name: "Söderby Golf", lat: 59.8121505, lng: 17.4979819, region: "uppland" },
+  { name: "Västerås Golf Club", lat: 59.6289407, lng: 16.5037417, region: "vastmanland" },
+  { name: "Skerike Golf Club", lat: 59.6462830, lng: 16.4732356, region: "vastmanland" },
+  { name: "Fullerö Golf Club", lat: 59.5644598, lng: 16.5068994, region: "vastmanland" },
+  { name: "Frösåkers Golf Club", lat: 59.5387645, lng: 16.7506823, region: "vastmanland" },
+  { name: "Karlstad Golf Course", lat: 59.4336224, lng: 13.5211174, region: "varmland" },
+  { name: "Falun-Borlänge Golfklubb", lat: 60.5483807, lng: 15.5137622, region: "dalarna" },
+  { name: "Samuelsdals Golfklubb", lat: 60.5827714, lng: 15.6173150, region: "dalarna" },
+  { name: "Gävle Golfklubb", lat: 60.7001974, lng: 17.1778308, region: "gavleborg" },
+  { name: "Umeå Golf Club", lat: 63.7157928, lng: 20.4001714, region: "vasterbotten" },
+  { name: "Umeå Sörfors Golf Course", lat: 63.8538733, lng: 20.0161903, region: "vasterbotten" },
+  { name: "Umeå Norrmjöle Golf Club", lat: 63.6602904, lng: 20.1308377, region: "vasterbotten" },
+  { name: "Sundsvall Golf Club", lat: 62.2846757, lng: 17.3883881, region: "medelpad" },
+  { name: "Luleå Golfklubb", lat: 65.6853000, lng: 22.0922999, region: "norrbotten" },
+  { name: "Bodens Golfklubb", lat: 65.7507137, lng: 21.7580619, region: "norrbotten" },
+  { name: "Kiruna Golf Club", lat: 67.8558297, lng: 20.3026702, region: "norrbotten" },
+  { name: "Östersund Frösön Golf", lat: 63.1840504, lng: 14.4970837, region: "jamtland" },
+  { name: "Visby Golfklubb", lat: 57.4409271, lng: 18.1199837, region: "gotland" },
+  { name: "Gotska Golfklubben", lat: 57.7333, lng: 18.9833, region: "gotland" }
+];
+
+function importBulkCourseData() {
+  if(!isAdmin()) return;
+  if(!confirm('Importera '+BULK_GOLF_COURSES.length+' banor från listan? Banor som redan finns i databasen (samma namn) hoppas över.')) return;
+  var added = 0, skipped = 0;
+  BULK_GOLF_COURSES.forEach(function(c){
+    var exists = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+    if(exists) { skipped++; return; }
+    courseDb.push({
+      id: uid(), name: c.name, par: 72, holes: 18,
+      lat: c.lat, lng: c.lng,
+      district: DISTRICT_LABELS[c.region] || c.region || null,
+      land: 'Sverige'
+    });
+    added++;
+  });
+  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+  saveCourseDb();
+  renderCourseDbSection();
+  alert(added+' banor importerade.'+(skipped?' '+skipped+' hoppades över (fanns redan).':''));
+}
+
 function seedCourseDb() {
   var defaultCourses = [
     { name: 'Ågesta GK',              par: 71 },
@@ -4391,6 +4534,68 @@ function calcCourseDistance() {
   resEl.innerHTML = esc(a.name)+' &harr; '+esc(b.name)+': <span style="color:var(--green-dark)">'+km.toFixed(1)+' km fågelvägen</span>';
 }
 
+// ── TOURKARTA (GIS Version 3) ───────────────────────────────────────────────
+function openTourMap() {
+  var t = getTour();
+  if(!t) return;
+  var h = '<h3><i class="ti ti-map"></i> Tourens banor</h3>';
+  h += '<div class="row" style="gap:14px;margin-bottom:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap">'+
+    '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#888780;margin-right:4px"></span>Avslutad</span>'+
+    '<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#1D9E75;margin-right:4px"></span>Kommande</span>'+
+  '</div>';
+  h += '<div id="course-map-el" style="width:100%;height:420px;border-radius:10px;overflow:hidden;background:var(--surface2)"></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeCourseMapModal()">Stäng</button></div>';
+  showModal(h, true, true);
+  setTimeout(function(){ initTourMap(t); }, 60);
+}
+
+function initTourMap(t) {
+  var el = document.getElementById('course-map-el');
+  if(!el || typeof L === 'undefined') return;
+  if(_courseMapInstance) { _courseMapInstance.remove(); _courseMapInstance = null; }
+  _courseMapInstance = L.map(el).setView([62.0, 15.0], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap-bidragsgivare',
+    maxZoom: 18
+  }).addTo(_courseMapInstance);
+
+  var grouped = {}; // course id -> { course, events:[] }
+  (t.events||[]).forEach(function(e){
+    var courseName = (e.course||'').trim();
+    if(!courseName) return;
+    var dbEntry = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===courseName.toLowerCase(); });
+    if(!dbEntry || dbEntry.lat==null || dbEntry.lng==null) return;
+    if(!grouped[dbEntry.id]) grouped[dbEntry.id] = { course: dbEntry, events: [] };
+    grouped[dbEntry.id].events.push(e);
+  });
+
+  var bounds = [];
+  Object.keys(grouped).forEach(function(key){
+    var entry = grouped[key], c = entry.course;
+    var anyOpen = entry.events.some(function(e){ return !e.closed; });
+    var color = anyOpen ? '#1D9E75' : '#888780';
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:'+color+';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+      iconSize: [16,16], iconAnchor: [8,8]
+    });
+    var marker = L.marker([c.lat, c.lng], { icon: icon }).addTo(_courseMapInstance);
+    var eventsHtml = entry.events.slice().sort(function(a,b){ return new Date(a.date)-new Date(b.date); }).map(function(e){
+      return '<div style="font-size:12px;margin-top:2px">'+
+        (e.closed?'<span style="color:#888">✓ Spelad</span>':'<span style="color:#1D9E75">○ Kommande</span>')+' – '+esc(e.name)+' ('+e.date+')'+
+      '</div>';
+    }).join('');
+    marker.bindPopup('<div style="min-width:180px"><div style="font-weight:700;font-size:14px">'+esc(c.name)+'</div>'+eventsHtml+'</div>');
+    bounds.push([c.lat, c.lng]);
+  });
+
+  if(bounds.length) {
+    _courseMapInstance.fitBounds(bounds, { padding:[30,30], maxZoom: 12 });
+  } else {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-3);font-size:13px;padding:20px;text-align:center">Inga av tourens banor har koordinater registrerade ännu i Bandatabasen.</div>';
+  }
+}
+
 function openCourseMap() {
   var h = '<h3><i class="ti ti-map"></i> Bankarta</h3>';
   var districts = [];
@@ -4465,6 +4670,7 @@ function renderCourseDbSection() {
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
     '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Visa karta ('+withCoords+'/'+courseDb.length+' med koordinater)</button>'+
     '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
+    '<button class="btn btn-sm" onclick="importBulkCourseData()"><i class="ti ti-map-plus"></i> Importera bandata ('+BULK_GOLF_COURSES.length+' st)</button>'+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
@@ -4576,6 +4782,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (9)',
+    items: [
+      { type: 'new', text: 'Bandatabasen kan nu massimportera 100+ svenska golfbanor med koordinater och distrikt i ett klick.' },
+      { type: 'new', text: 'Ny Tourkarta i Kalender-fliken – visar var tourens tävlingar spelas, färgkodat grönt (kommande) och grått (avslutad).' }
+    ]
+  },
   {
     date: '2 juli 2026 (8)',
     items: [
