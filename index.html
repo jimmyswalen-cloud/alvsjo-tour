@@ -6127,6 +6127,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (36)',
+    items: [
+      { type: 'improved', text: 'Användare-vyn (admin) visar nu inloggningsnamnet (@användarnamn) tydligt under visningsnamnet, istället för att det gömdes bakom det riktiga namnet.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (35)',
     items: [
       { type: 'improved', text: 'Admin-kontot är nu en dold systemanvändare och visas inte längre i Spelare-listor (varken globalt eller i en specifik tour) för vanliga spelare – bara andra admins ser det.' },
@@ -6981,6 +6987,7 @@ function renderUsersList() {
           avatar+
           '<div>'+
             '<div style="font-weight:600;font-size:16px">'+esc(displayName)+'</div>'+
+            (admin && displayName !== u.username ? '<div style="font-size:12px;color:var(--text-3)">@'+esc(u.username)+'</div>' : '')+
             (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
             (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
             (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
