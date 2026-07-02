@@ -1014,10 +1014,13 @@ function renderEditTourBtn() {
   }
 }
 
+var _editTourDraft = null; // { name, season, img } - håller ändringar medan redigera-tour-modalen är öppen
+
 function openEditTour() {
   if(!isAdmin()) return;
   var t = getTour();
   if(tourHasStarted(t)) { alert('Touren har startat och kan inte redigeras.'); return; }
+  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null };
 
   var evRows = (t.events||[]).map(function(e,i){
     return '<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center" id="edit-ev-row-'+i+'">'+
@@ -1037,8 +1040,17 @@ function openEditTour() {
   }).join('');
 
   var h = '<h3><i class="ti ti-edit"></i> Redigera tour</h3>';
-  h += '<div class="field"><label>Tournamn</label><input id="edit-tour-name" type="text" value="'+esc(t.name)+'"></div>';
-  h += '<div class="field"><label>Säsong</label><input id="edit-tour-season" type="text" value="'+esc(t.season||'')+'" placeholder="t.ex. 2025"></div>';
+  h += '<div class="field"><label>Tournamn</label><input id="edit-tour-name" type="text" value="'+esc(_editTourDraft.name)+'"></div>';
+  h += '<div class="field"><label>Säsong</label><input id="edit-tour-season" type="text" value="'+esc(_editTourDraft.season)+'" placeholder="t.ex. 2025"></div>';
+  h += '<div class="field"><label>Omslagsbild</label>';
+  h += '<div id="edit-tour-img-prev">'+(_editTourDraft.img?'<img src="'+_editTourDraft.img+'" class="img-preview">':'<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Ingen bild vald</p>')+'</div>';
+  h += '<div class="row" style="gap:6px;flex-wrap:wrap">';
+  h += '<button type="button" class="btn btn-sm" id="edit-tour-img-btn"><i class="ti ti-photo"></i> Ladda upp</button>';
+  h += '<button type="button" class="btn btn-sm" onclick="pickEditTourCover()"><i class="ti ti-library-photo"></i> Bildbibliotek</button>';
+  if(_editTourDraft.img) h += '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="clearEditTourCover()"><i class="ti ti-trash"></i> Ta bort</button>';
+  h += '</div>';
+  h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
+  h += '</div>';
   h += '<hr class="divider">';
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Deltävlingar</div>';
   h += '<div id="edit-events-list">'+evRows+'</div>';
@@ -1046,9 +1058,43 @@ function openEditTour() {
   h += '<hr class="divider">';
   h += '<p style="font-size:12px;color:var(--text-3)"><i class="ti ti-info-circle"></i> När den första tävlingen stängs låses touren permanent.</p>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
-    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn" onclick="_editTourDraft=null;closeModal()">Avbryt</button>'+
     '<button class="btn btn-primary" onclick="saveEditTour()">Spara</button></div>';
   showModal(h, true, true);
+  setTimeout(function(){
+    var b=document.getElementById('edit-tour-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('edit-tour-img-inp').click(); };
+    var inp=document.getElementById('edit-tour-img-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) handleEditTourImg(this.files[0]); };
+  }, 50);
+}
+
+function syncEditTourDraftFields() {
+  if(!_editTourDraft) return;
+  var n=document.getElementById('edit-tour-name'), s=document.getElementById('edit-tour-season');
+  if(n) _editTourDraft.name = n.value;
+  if(s) _editTourDraft.season = s.value;
+}
+
+function handleEditTourImg(file) {
+  syncEditTourDraftFields();
+  compressImage(file, 1100, 950, 0.92, function(d) {
+    showCropModal(d, 160, function(cropped) {
+      _editTourDraft.img = cropped;
+      openEditTour();
+    });
+  });
+}
+
+function pickEditTourCover() {
+  syncEditTourDraftFields();
+  openTourCoverPicker(function(url){ _editTourDraft.img = url; openEditTour(); }, function(){ openEditTour(); });
+}
+
+function clearEditTourCover() {
+  syncEditTourDraftFields();
+  _editTourDraft.img = null;
+  openEditTour();
 }
 
 function addEventToTour() {
@@ -1084,10 +1130,11 @@ function removeEventFromTour(i) {
 function saveEditTour() {
   if(!isAdmin()) return;
   var t = getTour();
-  var nameEl = document.getElementById('edit-tour-name');
-  var seasonEl = document.getElementById('edit-tour-season');
-  if(nameEl && nameEl.value.trim()) t.name = nameEl.value.trim();
-  if(seasonEl) t.season = seasonEl.value.trim();
+  syncEditTourDraftFields();
+  if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
+  if(_editTourDraft) t.season = _editTourDraft.season.trim();
+  t.img = _editTourDraft ? _editTourDraft.img : t.img;
+  _editTourDraft = null;
 
   // Rebuild events from modal rows
   var newEvents = [];
@@ -1333,6 +1380,53 @@ function delTour(id) {
 // Step 1: basics (name, season, image, num regular events, num finals)
 // Step 2: fill in details for each event/final
 // Step 3: set the points->strokes handicap table
+// ── TOUR-OMSLAGSBIBLIOTEK ───────────────────────────────────────────────────
+// Färdiga omslagsbilder, hostade som filer i GitHub-repot (t.ex. i en "tour-covers"-mapp).
+// Lägg till fler rader här när du laddat upp fler bilder - ge mig filnamnen så fyller jag i.
+var TOUR_COVER_LIBRARY = [
+  { key:'1', label:'Omslag 1', url:'tour-photos/1.jpg' },
+  { key:'2', label:'Omslag 2', url:'tour-photos/2.jpg' },
+  { key:'3', label:'Omslag 3', url:'tour-photos/3.jpg' },
+  { key:'4', label:'Omslag 4', url:'tour-photos/4.jpg' },
+  { key:'5', label:'Omslag 5', url:'tour-photos/5.jpg' }
+];
+
+var _coverPickerOnSelect = null;
+var _coverPickerOnCancel = null;
+
+function openTourCoverPicker(onSelect, onCancel) {
+  _coverPickerOnSelect = onSelect;
+  _coverPickerOnCancel = onCancel;
+  var h = '<h3><i class="ti ti-photo"></i> Välj omslagsbild</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">Klicka på en bild för att välja den.</p>';
+  if(!TOUR_COVER_LIBRARY.length) {
+    h += '<p style="font-size:13px;color:var(--text-3)">Inga bilder i biblioteket ännu.</p>';
+  } else {
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:420px;overflow-y:auto">';
+    TOUR_COVER_LIBRARY.forEach(function(c){
+      h += '<div style="cursor:pointer;border-radius:8px;overflow:hidden;border:1px solid var(--border)" onclick="selectTourCover(\''+esc(c.url)+'\')">'+
+        '<img src="'+esc(c.url)+'" style="width:100%;height:90px;object-fit:cover;display:block">'+
+        '<div style="padding:6px 8px;font-size:12px;font-weight:600;background:var(--surface2)">'+esc(c.label)+'</div>'+
+      '</div>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="cancelTourCoverPicker()">Avbryt</button></div>';
+  showModal(h, true, true);
+}
+
+function selectTourCover(url) {
+  var cb = _coverPickerOnSelect;
+  _coverPickerOnSelect = null; _coverPickerOnCancel = null;
+  if(cb) cb(url);
+}
+
+function cancelTourCoverPicker() {
+  var cb = _coverPickerOnCancel;
+  _coverPickerOnSelect = null; _coverPickerOnCancel = null;
+  if(cb) cb();
+}
+
 function openNewTourWizard() {
   loadDraftIfExists(function(draft) {
     if(draft) {
@@ -1355,8 +1449,12 @@ function wizStep1() {
   h += '<div class="field"><label>Säsong (valfritt)</label><input id="w-season" type="text" value="'+esc(wiz.season)+'" placeholder="t.ex. 2026"></div>';
   h += '<div class="field"><label>Omslagsbild (valfritt)</label>';
   h += '<div id="w-img-prev">'+(wiz.img?'<img src="'+wiz.img+'" class="img-preview">':'')+'</div>';
-  h += '<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-photo"></i> '+(wiz.img?'Byt bild':'Välj bild')+'</button>';
-  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in (Ctrl+V)</span>';
+  h += '<div class="row" style="gap:6px;flex-wrap:wrap">';
+  h += '<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-photo"></i> '+(wiz.img?'Byt bild':'Ladda upp')+'</button>';
+  h += '<button type="button" class="btn btn-sm" onclick="pickWizCover()"><i class="ti ti-library-photo"></i> Bildbibliotek</button>';
+  if(wiz.img) h += '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="clearWizCover()"><i class="ti ti-trash"></i> Ta bort</button>';
+  h += '</div>';
+  h += '<span style="font-size:11px;color:var(--text-3)">eller klistra in (Ctrl+V)</span>';
   h += '<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
   h += '</div>';
   h += '<hr class="divider">';
@@ -1376,6 +1474,17 @@ function wizStep1() {
     if(inp) inp.onchange=function(){ if(this.files[0]) handleWizImg(this.files[0]); };
     enablePasteForInput('w-img-btn', handleWizImg);
   }, 50);
+}
+
+function pickWizCover() {
+  wizSaveStep1Fields();
+  openTourCoverPicker(function(url){ wiz.img = url; wizStep1(); }, function(){ wizStep1(); });
+}
+
+function clearWizCover() {
+  wizSaveStep1Fields();
+  wiz.img = null;
+  wizStep1();
 }
 
 function handleWizImg(file) {
@@ -4151,6 +4260,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (4)',
+    items: [
+      { type: 'new', text: 'Nytt bildbibliotek för touromslag – välj en färdig bild istället för att ladda upp egen.' },
+      { type: 'new', text: 'Omslagsbild kan nu även ändras på en redan skapad tour (gick tidigare bara att sätta vid skapandet).' }
+    ]
+  },
   {
     date: '2 juli 2026 (3)',
     items: [
