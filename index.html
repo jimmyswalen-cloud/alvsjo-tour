@@ -98,6 +98,20 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .hist-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
 .hist-table tr:last-child td{border-bottom:none}
 .hist-table tbody tr:hover td{background:var(--surface2)}
+.stk-pos{position:sticky;left:0;z-index:1;width:36px}
+.stk-name{position:sticky;left:36px;z-index:1;min-width:130px}
+.stk-total{position:sticky;right:0;z-index:1}
+.leaderboard-table th.stk-pos,.leaderboard-table th.stk-name,.leaderboard-table th.stk-total{background:var(--surface2)}
+.leaderboard-table td.stk-pos,.leaderboard-table td.stk-name,.leaderboard-table td.stk-total{background:var(--surface)}
+.lb-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px}
+@media (max-width:600px){
+  .leaderboard-table{font-size:11px}
+  .leaderboard-table th{font-size:9px;padding:5px 6px;white-space:nowrap}
+  .leaderboard-table td{padding:6px 6px}
+  .leaderboard-table .stk-pos{width:26px}
+  .leaderboard-table .stk-name{left:26px;min-width:88px}
+  .leaderboard-table .lb-avatar{width:19px;height:19px;margin-right:4px}
+}
 .profile-header{background:linear-gradient(135deg,#065f46 0%,#1D9E75 100%);border-radius:12px;padding:1.5rem;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:16px}
 .profile-avatar-lg{width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.4);flex-shrink:0}
 .profile-avatar-ph{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600;color:#fff;flex-shrink:0}
@@ -159,6 +173,14 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
       </form>
     </div>
     <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Kontakta din admin om du saknar inloggningsuppgifter</p>
+
+    <div style="margin-top:14px;text-align:center">
+      <button type="button" id="release-notes-toggle" onclick="toggleReleaseNotes()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:6px 10px">
+        <i class="ti ti-sparkles" style="font-size:14px"></i> Nyheter i appen
+        <i class="ti ti-chevron-down" id="release-notes-chevron" style="font-size:13px;transition:transform .2s"></i>
+      </button>
+      <div id="release-notes-panel" style="display:none;text-align:left;background:rgba(255,255,255,.97);border-radius:12px;padding:14px 16px;margin-top:8px;max-height:280px;overflow-y:auto;box-shadow:0 8px 28px rgba(0,0,0,.25)"></div>
+    </div>
   </div>
 </div>
 
@@ -1693,13 +1715,13 @@ function renderPlayers() {
       swBadges += '</div>';
     }
     return '<div class="player-card" style="flex-direction:column;align-items:flex-start">'+
-      '<div class="row" style="width:100%;gap:12px;align-items:center">'+
+      '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
-        (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
+        (isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
       '</div>'+
       swBadges+
     '</div>';
@@ -1823,7 +1845,7 @@ function eventCardHTML(i,e) {
       } else {
         scoreLabel = rawLabel;
       }
-      return '<tr>'+
+      return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
         '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
         '<td>'+esc(p.name)+'</td>'+
         '<td style="text-align:right">'+scoreLabel+'</td>'+
@@ -1842,8 +1864,8 @@ function eventCardHTML(i,e) {
         var g = e.teeGroups.find(function(gr){ return gr.date===r.date && gr.playerPis.indexOf(r.pi)>=0; });
         if(g && g.time) timeStr = g.time;
       }
-      return '<tr>'+
-        '<td>'+p.name+'</td>'+
+      return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
+        '<td>'+esc(p.name)+'</td>'+
         '<td>'+r.date+' ('+weekdaySv(r.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')+'</td>'+
         '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
@@ -2189,7 +2211,7 @@ function renderLeaderboardSection() {
   html += '<span class="badge '+(final.closed?'badge-gray':'badge-gold')+'">'+(final.closed?'Färdigspelad':'Kommande/pågående')+'</span>';
   html += '</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+(final.closed?'Slutställning för finalen.':'Startläge inför finalen, baserat på ställningen i föregående OoM/final. Uppdateras inte under spelets gång.')+'</p>';
-  html += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr><th>Plac.</th><th>Spelare</th><th style="text-align:right">'+(final.closed?'Resultat':'Startläge')+'</th></tr></thead><tbody>';
+  html += '<div style="overflow-x:auto"><table class="hist-table leaderboard-table"><thead><tr><th>Plac.</th><th>Spelare</th><th style="text-align:right">'+(final.closed?'Resultat':'Startläge')+'</th></tr></thead><tbody>';
   rows.forEach(function(r, idx){
     var p = t.players[r.pi];
     var hsLabel = r.headStart > 0 ? ('-'+r.headStart) : 'Scratch';
@@ -2200,9 +2222,9 @@ function renderLeaderboardSection() {
     } else {
       cell = '<span style="font-weight:700;'+(r.headStart===0?'color:var(--gold)':'')+'">'+hsLabel+'</span>';
     }
-    html += '<tr>'+
+    html += '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
       '<td>'+(idx+1)+'</td>'+
-      '<td>'+(p.img?'<img src="'+p.img+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px">':'')+esc(p.name)+'</td>'+
+      '<td>'+(p.img?'<img src="'+p.img+'" class="lb-avatar">':'')+esc(p.name)+'</td>'+
       '<td style="text-align:right">'+cell+'</td>'+
     '</tr>';
   });
@@ -2466,7 +2488,7 @@ function openResultsView(i){
     var p=t.players[r.pi];
     var sl=isStab?r.score+' p':r.score+' slag netto';
     if(e.isFinal) sl = 'just. '+r.adjusted+' <span style="color:var(--text-3)">('+sl+')</span>';
-    return '<div class="result-row">'+
+    return '<div class="result-row" onclick="goToProfileFromModal('+r.pi+')" style="cursor:pointer">'+
       '<div class="pos-badge pos-other">'+(idx+4)+'</div>'+
       (p&&p.img?'<img src="'+p.img+'" class="avatar" style="width:30px;height:30px" alt="">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+(p?ini(p.name):'?')+'</div>')+
       '<div style="flex:1"><div style="font-size:14px;font-weight:600">'+(p?p.name:'?')+'</div>'+
@@ -2493,7 +2515,7 @@ function buildPodiumHTML(e,t){
     if(!r) return '<div></div>';
     var p=t.players[r.pi],score=isStab?r.score+'p':r.score+' slag';
     var sub = e.isFinal ? ('just. '+r.adjusted+' · '+score) : (score+' · '+(r.points||0)+'p');
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">'+
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer" onclick="goToProfileFromModal('+r.pi+')">'+
       (p&&p.img?'<img src="'+p.img+'" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:3px solid '+slot.color+'" alt="">':
         '<div style="width:52px;height:52px;border-radius:50%;background:'+slot.color+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;color:'+slot.tc+'">'+(p?ini(p.name):'?')+'</div>')+
       '<div style="font-size:13px;font-weight:600;color:var(--text);text-align:center;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(p?p.name:'?')+'</div>'+
@@ -2619,9 +2641,16 @@ function nextMonth(){var t=getTour();t.calMonth++;if(t.calMonth>11){t.calMonth=0
 function showOOMMain(){document.getElementById('oom-main').style.display='';document.getElementById('oom-profile').style.display='none';}
 
 function showPlayerProfile(pi){
+  showView('oom');
   document.getElementById('oom-main').style.display='none';
   var el=document.getElementById('oom-profile');
   el.style.display=''; el.innerHTML=buildProfileHTML(pi);
+}
+
+// Used when navigating to a profile from inside an open modal (results, podium etc).
+function goToProfileFromModal(pi){
+  closeModal();
+  showPlayerProfile(pi);
 }
 
 function buildProfileHTML(pi){
@@ -2956,13 +2985,13 @@ function renderOomTable() {
   var medals = ['🥇','🥈','🥉'];
   var html = '<div class="card" style="padding:14px 0 4px">';
   html += '<div style="padding:0 16px 10px"><p style="font-size:12px;color:var(--text-2)">Varje spelares poäng per deltävling &nbsp; <span style="color:var(--gold)">★</span> markerar vinnare av tävling &nbsp; <span class="badge badge-gold" style="font-size:10px">M</span> markerar major-tävling</p></div>';
-  html += '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>';
-  html += '<th style="position:sticky;left:0;background:var(--surface2);z-index:1">Pos</th>';
-  html += '<th style="position:sticky;left:36px;background:var(--surface2);z-index:1;min-width:130px">Spelare</th>';
+  html += '<div style="overflow-x:auto"><table class="hist-table leaderboard-table" style="white-space:nowrap"><thead><tr>';
+  html += '<th class="stk-pos">Pos</th>';
+  html += '<th class="stk-name">Spelare</th>';
   closedEvents.forEach(function(e){
     html += '<th>'+esc(e.name)+(e.isMajor?' <span class="badge badge-gold" style="font-size:9px">M</span>':'')+'</th>';
   });
-  html += '<th style="position:sticky;right:0;background:var(--surface2);z-index:1">Poäng totalt</th>';
+  html += '<th class="stk-total">Poäng totalt</th>';
   html += '</tr></thead><tbody>';
 
   playerPis.forEach(function(pi, idx){
@@ -2970,8 +2999,8 @@ function renderOomTable() {
     if(!p) return;
     var countedIds = playerCountedIds[pi] || {};
     html += '<tr onclick="showPlayerProfile('+pi+')" style="cursor:pointer">';
-    html += '<td style="position:sticky;left:0;background:var(--surface)">'+(medals[idx]||(idx+1))+'</td>';
-    html += '<td style="position:sticky;left:36px;background:var(--surface);font-weight:600">'+esc(p.name)+'</td>';
+    html += '<td class="stk-pos">'+(medals[idx]||(idx+1))+'</td>';
+    html += '<td class="stk-name" style="font-weight:600">'+esc(p.name)+'</td>';
     closedEvents.forEach(function(e){
       var r = e.results.find(function(x){ return x.pi==pi; });
       if(!r) { html += '<td style="text-align:center;color:var(--text-3)">-</td>'; return; }
@@ -2984,7 +3013,7 @@ function renderOomTable() {
         html += '<td style="text-align:center;color:var(--green-dark);font-weight:600">'+pts+(isWinner?' <span style="color:var(--gold)">★</span>':'')+'</td>';
       }
     });
-    html += '<td style="position:sticky;right:0;background:var(--surface);font-weight:700;text-align:right">'+totals[pi]+'</td>';
+    html += '<td class="stk-total" style="font-weight:700;text-align:right">'+totals[pi]+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
@@ -3036,7 +3065,7 @@ function buildTop3HTML(t, compact) {
     var p = players[s.pi]; if(!p) return '';
     var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     var pImg = (pUser&&pUser.img) || p.img || null;
-    return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border)">'+
+    return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
       '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</span>'+
@@ -3446,6 +3475,61 @@ function findUser(username) {
   return getUsers().find(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
 }
 
+// ── RELEASE NOTES ────────────────────────────────────────────────────────
+// Newest first. Add a new entry at the top whenever a batch of changes ships.
+var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026',
+    items: [
+      { type: 'new', text: '"Top 3 i ledning" visas nu i tourlistan och i tourns tävlingsvy – när touren är helt avslutad visas istället bara vinnaren.' },
+      { type: 'new', text: 'Admin kan markera spelares betalstatus (betalt/ej betalt) direkt i avgifts- och prispottvyn.' },
+      { type: 'improved', text: '"Deltävlingar"-rubriken har flyttats för en tydligare vy.' },
+      { type: 'fixed', text: 'Flera stabilitetsfixar, bland annat en krasch vid inloggning.' }
+    ]
+  }
+];
+
+var RELEASE_TYPE_META = {
+  new:      { label: 'Nytt',        color: '#0F6E56', bg: '#E1F5EE', icon: 'ti-sparkles' },
+  improved: { label: 'Förbättrat',  color: '#185FA5', bg: '#E3EFFB', icon: 'ti-arrow-up-circle' },
+  fixed:    { label: 'Buggfix',     color: '#854F0B', bg: '#FCEFDA', icon: 'ti-bug' },
+  perf:     { label: 'Prestanda',   color: '#5F5E5A', bg: '#EDECE8', icon: 'ti-bolt' }
+};
+
+function renderReleaseNotesPanel() {
+  var el = document.getElementById('release-notes-panel');
+  if(!el) return;
+  if(!RELEASE_NOTES.length){ el.innerHTML = '<p style="font-size:13px;color:var(--text-3);margin:0">Inga nyheter ännu.</p>'; return; }
+  el.innerHTML = RELEASE_NOTES.map(function(entry){
+    var rows = entry.items.map(function(it){
+      var meta = RELEASE_TYPE_META[it.type] || RELEASE_TYPE_META.new;
+      return '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">'+
+        '<span style="flex-shrink:0;font-size:10px;font-weight:700;color:'+meta.color+';background:'+meta.bg+';padding:2px 8px;border-radius:20px;white-space:nowrap;margin-top:1px"><i class="ti '+meta.icon+'" style="font-size:10px"></i> '+meta.label+'</span>'+
+        '<span style="font-size:13px;color:var(--text);line-height:1.4">'+esc(it.text)+'</span>'+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:16px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+esc(entry.date)+'</div>'+
+      rows+
+    '</div>';
+  }).join('<div style="height:1px;background:var(--border);margin:4px 0 12px"></div>');
+}
+
+function toggleReleaseNotes() {
+  var panel = document.getElementById('release-notes-panel');
+  var chevron = document.getElementById('release-notes-chevron');
+  if(!panel) return;
+  var showing = panel.style.display !== 'none';
+  if(showing) {
+    panel.style.display = 'none';
+    if(chevron) chevron.style.transform = 'rotate(0deg)';
+  } else {
+    if(!panel.innerHTML) renderReleaseNotesPanel();
+    panel.style.display = 'block';
+    if(chevron) chevron.style.transform = 'rotate(180deg)';
+  }
+}
+
 // ── LOGIN SCREEN ───────────────────────────────────────────────────────────
 function showLoginScreen() {
   document.getElementById('loading-screen').style.display = 'none';
@@ -3508,7 +3592,54 @@ function afterLogin() {
       alert('Du saknar ett giltigt Golf-ID (10 tecken). Fyll i det i din profil för att kunna fortsätta.');
       openMyProfile();
     }, 200);
+  } else {
+    setTimeout(checkHcpConfirmation, 200);
   }
+}
+
+// ── HCP-BEKRÄFTELSE VID INLOGGNING ──────────────────────────────────────────
+// Visas varje inloggning för vanliga spelare (ej admin) - men är medvetet
+// gjord jättesnabb att klicka förbi (stor bekräfta-knapp, går att klicka utanför).
+function checkHcpConfirmation() {
+  if(!currentUser || currentUser.role === 'admin') return;
+  var hcpVal = (currentUser.hcp!=null ? currentUser.hcp : 0);
+  showModal(
+    '<h3 style="margin-bottom:4px">Stämmer ditt HCP?</h3>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Ditt senast registrerade handicap är <strong>'+hcpVal+'</strong>. Håll det aktuellt så blir tävlingsresultaten korrekta.</p>'+
+    '<div style="display:flex;flex-direction:column;gap:8px">'+
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="confirmHcpCorrect()"><i class="ti ti-check"></i> Ja, stämmer</button>'+
+      '<button class="btn btn-sm" style="width:100%;justify-content:center" onclick="showHcpUpdateForm()"><i class="ti ti-edit"></i> Uppdatera HCP</button>'+
+    '</div>',
+    false, false
+  );
+}
+
+function confirmHcpCorrect() {
+  currentUser.hcpLastConfirmed = new Date().toISOString();
+  save();
+  closeModal();
+}
+
+function showHcpUpdateForm() {
+  var hcpVal = (currentUser.hcp!=null ? currentUser.hcp : 0);
+  showModal(
+    '<h3 style="margin-bottom:4px">Uppdatera HCP</h3>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Ange ditt aktuella handicap.</p>'+
+    '<div class="field"><label>HCP</label><input id="hcp-update-inp" type="number" step="0.1" value="'+hcpVal+'"></div>'+
+    '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveHcpUpdate()"><i class="ti ti-device-floppy"></i> Spara</button>',
+    false, false
+  );
+  setTimeout(function(){ var inp=document.getElementById('hcp-update-inp'); if(inp) inp.focus(); }, 30);
+}
+
+function saveHcpUpdate() {
+  var inp = document.getElementById('hcp-update-inp');
+  var val = parseFloat(inp.value);
+  if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
+  currentUser.hcp = val;
+  currentUser.hcpLastConfirmed = new Date().toISOString();
+  save();
+  closeModal();
 }
 
 function impersonateUser(username) {
