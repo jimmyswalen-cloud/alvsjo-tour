@@ -417,8 +417,11 @@ function getBrandLogo(name) {
   if(!key) return null;
   if(STATIC_BRAND_LOGOS[key]) return STATIC_BRAND_LOGOS[key];
   var entry = logoBank[key];
-  if(!entry) return null;
-  return entry.url || null;
+  if(entry && entry.url) return entry.url;
+  // Ingen explicit registrering – gissa standardsökvägen utifrån namnkonventionen.
+  // brandLogoTag() provar redan både .jpg och .png och döljer sig snyggt om filen ändå inte finns,
+  // så detta gör att uppladdade loggor fungerar direkt utan att varje märke behöver registreras separat.
+  return suggestBrandLogoFilename(name);
 }
 
 function suggestBrandLogoFilename(name) {
@@ -921,26 +924,59 @@ function renderGlobalSettings() {
 function renderLogoManagerSection() {
   var el = document.getElementById('logo-manager-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
-  var withLogo = ALL_BRANDS.filter(function(b){ return !!getBrandLogo(b); }).length;
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-tags"></i> Märkeslogotyper (What\'s in the Bag)</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Ladda upp loggor till mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> i GitHub-repot med filnamnen nedan, så kopplas de automatiskt in i "What\'s in the Bag" – samma princip som banbilderna. Både <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.jpg</code> och <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.png</code> funkar (appen provar båda automatiskt).</p>';
-  html += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">'+withLogo+' av '+ALL_BRANDS.length+' märken har logotyp.</p>';
-  html += '<div class="card" style="padding:0;max-height:420px;overflow-y:auto">';
+  html += '<p id="logo-manager-count" style="font-size:12px;color:var(--text-3);margin-bottom:10px">Kontrollerar vilka loggor som finns uppladdade...</p>';
+  html += '<div class="card" id="logo-manager-list" style="padding:0;max-height:420px;overflow-y:auto">';
   ALL_BRANDS.forEach(function(b, idx){
-    var logo = getBrandLogo(b);
     var suggested = suggestBrandLogoFilename(b);
     var suggestedAlt = suggested.replace(/\.jpg$/i, '.png');
-    html += '<div class="row" style="justify-content:space-between;align-items:center;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+    var slug = brandKey(b).replace(/[^a-z0-9]/g,'-');
+    html += '<div class="row" data-brand="'+esc(b)+'" style="justify-content:space-between;align-items:center;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
       '<div class="row" style="gap:10px;align-items:center;min-width:0">'+
-        (logo ? brandLogoTag(b, 36) : '<div style="width:36px;height:36px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--text-3);font-size:16px"></i></div>')+
+        '<div id="logo-thumb-'+slug+'" style="width:36px;height:36px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--text-3);font-size:16px"></i></div>'+
         '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(b)+'</div>'+
-        (logo ? '<div style="font-size:11px;color:var(--green-dark)"><i class="ti ti-check"></i> Logga OK</div>' : '<div style="font-size:11px;color:var(--text-3)">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code> <span style="color:var(--text-3)">eller</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggestedAlt)+'</code></div>')+
+        '<div id="logo-status-'+slug+'" style="font-size:11px;color:var(--text-3)">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code> <span style="color:var(--text-3)">eller</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggestedAlt)+'</code></div>'+
         '</div>'+
       '</div>'+
     '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
+  setTimeout(function(){ detectBrandLogos(); }, 20);
+}
+
+// Försöker faktiskt ladda varje märkes logga (jpg, sedan png) i bakgrunden för att ge en korrekt status,
+// eftersom vi inte kan veta om en fil finns på GitHub utan att försöka hämta den.
+function detectBrandLogos() {
+  var foundCount = 0;
+  var total = ALL_BRANDS.length;
+  var updateCounter = function() {
+    var el = document.getElementById('logo-manager-count');
+    if(el) el.textContent = foundCount+' av '+total+' märken har logotyp uppladdad.';
+  };
+  ALL_BRANDS.forEach(function(b){
+    var slug = brandKey(b).replace(/[^a-z0-9]/g,'-');
+    var primary = getBrandLogo(b);
+    var alt = /\.png$/i.test(primary) ? primary.replace(/\.png$/i,'.jpg') : primary.replace(/\.jpg$/i,'.png');
+    var markFound = function(url) {
+      var thumb = document.getElementById('logo-thumb-'+slug);
+      var status = document.getElementById('logo-status-'+slug);
+      if(thumb) thumb.innerHTML = '<img src="'+url+'" style="width:36px;height:36px;object-fit:contain;border-radius:6px;background:var(--surface2)">';
+      if(status) { status.innerHTML = '<i class="ti ti-check"></i> Logga OK'; status.style.color = 'var(--green-dark)'; }
+      foundCount++; updateCounter();
+    };
+    var img1 = new Image();
+    img1.onload = function(){ markFound(primary); };
+    img1.onerror = function(){
+      var img2 = new Image();
+      img2.onload = function(){ markFound(alt); };
+      img2.onerror = function(){};
+      img2.src = alt;
+    };
+    img1.src = primary;
+  });
+  updateCounter();
 }
 
 function renderCourseStatsView() {
@@ -1956,7 +1992,7 @@ function renderPlayers() {
     return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
       '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px;display:flex;align-items:center">'+p.name+playerBrandLogoTag(p.username, 15)+'</div>'+
         '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
@@ -2449,7 +2485,7 @@ function eventCardHTML(i,e) {
       }
       return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
         '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
-        '<td>'+esc(p.name)+'</td>'+
+        '<td><span style="display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, 13)+'</span></td>'+
         '<td style="text-align:right">'+scoreLabel+'</td>'+
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
@@ -3552,6 +3588,25 @@ function findLongestClub(clubs) {
   return bestDist > 0 ? { club: best, dist: bestDist } : null;
 }
 
+function getPlayerBrand(username) {
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!u || !u.bag) return null;
+  return u.bag.favoriteBrand || computeDominantBrand(u.bag) || null;
+}
+
+// Variant av brandLogoTag anpassad för att stå bredvid ett spelarnamn – rörlig bredd istället för fyrkant,
+// eftersom de flesta märkesloggor är ordmärken (brett format) snarare än ikoner.
+function playerBrandLogoTag(username, height) {
+  var brand = getPlayerBrand(username);
+  if(!brand) return '';
+  var logo = getBrandLogo(brand);
+  if(!logo) return '';
+  height = height || 15;
+  var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
+  return '<img src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
+    'style="height:'+height+'px;width:auto;max-width:70px;object-fit:contain;vertical-align:middle;margin-left:6px">';
+}
+
 function brandLogoTag(brand, size) {
   var logo = getBrandLogo(brand);
   if(!logo) return '';
@@ -4647,7 +4702,7 @@ function buildTop3HTML(t, compact) {
     return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
-      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</span>'+
+      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?13:15)+'</span>'+
       (!compact?'<span style="font-size:11px;color:var(--text-3)">'+s.events+' rundor</span>':'')+
       '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.pts+' p</span>'+
     '</div>';
@@ -4678,7 +4733,7 @@ function renderOOM(){
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px;display:flex;align-items:center">'+p.name+playerBrandLogoTag(p.username, 15)+'</div>'+
         '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · <span style="color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</span>':'')+       '</div></div>'+
         '<div class="oom-pts">'+d.pts+' pts</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
@@ -6047,6 +6102,20 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (32)',
+    items: [
+      { type: 'new', text: 'Spelarens märke (favoritmärke eller vanligaste klubbmärke) visas nu som logotyp bredvid namnet i Order of Merit, Top 3-widgeten, resultatlistor, Spelare-vyerna och profilsidorna.' },
+      { type: 'improved', text: 'Nyhetslistan i Idéer & nyheter visar nu bara de 3 senaste uppdateringarna med en "Visa alla nyheter"-knapp, så förbättringsförslagen längre ner på sidan blir lättare att nå.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (31)',
+    items: [
+      { type: 'fixed', text: 'Fixat bugg där uppladdade märkeslogotyper inte visades i appen – getBrandLogo() sökte bara i en hårdkodad lista (bara Titleist) istället för att falla tillbaka på det gissade filnamnet. Alla korrekt namngivna loggor i brand-logos/ fungerar nu direkt utan att behöva registreras separat.' },
+      { type: 'improved', text: 'Loggo-hanteraren i Inställningar kontrollerar nu faktiskt om varje bild finns uppladdad (istället för att bara läsa registreringsstatus), så "X av Y har logotyp" stämmer med verkligheten.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (30)',
     items: [
       { type: 'improved', text: 'Märkeslogotyper stödjer nu både .jpg och .png – appen provar automatiskt den andra filändelsen om den registrerade inte hittas, så det spelar ingen roll vilket format loggan laddas upp i.' }
@@ -6329,12 +6398,22 @@ function showIdeaWall() {
   renderIdeaWall();
 }
 
+var _releaseNotesInlineExpanded = false;
+var RELEASE_NOTES_PREVIEW_COUNT = 3;
+
+function toggleReleaseNotesInline() {
+  _releaseNotesInlineExpanded = !_releaseNotesInlineExpanded;
+  renderReleaseNotesInline();
+}
+
 function renderReleaseNotesInline() {
   var el = document.getElementById('release-notes-inline');
   if(!el) return;
+  var hasMore = RELEASE_NOTES.length > RELEASE_NOTES_PREVIEW_COUNT;
+  var entriesToShow = _releaseNotesInlineExpanded ? RELEASE_NOTES : RELEASE_NOTES.slice(0, RELEASE_NOTES_PREVIEW_COUNT);
   el.innerHTML = '<div class="card" style="padding:14px 16px">'+
     '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:var(--gold)"></i> Nyheter i appen</div>'+
-    RELEASE_NOTES.map(function(entry){
+    entriesToShow.map(function(entry){
       var rows = entry.items.map(function(it){
         var meta = RELEASE_TYPE_META[it.type] || RELEASE_TYPE_META.new;
         return '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">'+
@@ -6344,6 +6423,11 @@ function renderReleaseNotesInline() {
       }).join('');
       return '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+esc(entry.date)+'</div>'+rows+'</div>';
     }).join('')+
+    (hasMore ? '<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px" onclick="toggleReleaseNotesInline()">'+
+      (_releaseNotesInlineExpanded
+        ? '<i class="ti ti-chevron-up"></i> Visa färre'
+        : '<i class="ti ti-chevron-down"></i> Visa alla nyheter ('+RELEASE_NOTES.length+')')+
+    '</button>' : '')+
   '</div>';
 }
 
@@ -6756,7 +6840,7 @@ function buildGlobalPlayerProfileHTML(username) {
     (playerImg
       ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
-    '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
+    '<div><div style="font-size:22px;font-weight:700;color:var(--text);display:flex;align-items:center">'+esc(displayName)+playerBrandLogoTag(u.username, 20)+'</div>'+
     (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
@@ -6849,7 +6933,7 @@ function renderUsersList() {
         '<div class="row" style="gap:10px;align-items:center">'+
           avatar+
           '<div>'+
-            '<div style="font-weight:600;font-size:16px">'+esc(displayName)+'</div>'+
+            '<div style="font-weight:600;font-size:16px;display:flex;align-items:center">'+esc(displayName)+playerBrandLogoTag(u.username, 14)+'</div>'+
             (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
             (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
           '</div>'+
