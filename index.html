@@ -517,6 +517,17 @@ var STATIC_COURSE_IMAGES = {
   'lindo': 'lindo.jpg',
 };
 
+// Statically hosted player profile photos (uploaded to the GitHub repo alongside
+// index.html, in a "player-photos" folder). Key = username (lowercase).
+// Use "Exportera alla profilbilder" i Inställningar > Databasdiagnostik för att
+// generera filerna + denna mappning automatiskt.
+var STATIC_PLAYER_PHOTOS = {
+};
+function playerPhoto(username, fallbackImg) {
+  if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
+  return fallbackImg || null;
+}
+
 var S = { tours: [], ideas: [] };
 var firebaseReady = false;
 var saveTimer = null;
@@ -816,8 +827,9 @@ function renderHomeUserBar() {
   if(!el || !currentUser) return;
   var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; }) || currentUser;
   var initials = ini(u.name||u.username);
+  var uImg = playerPhoto(u.username, u.img);
   el.innerHTML =
-    (u.img ? '<img src="'+u.img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
+    (uImg ? '<img src="'+uImg+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
       '<div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
     '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(u.name||u.username)+'</div>' +
     '<div style="font-size:12px;color:var(--text-3)">'+(isAdmin()?'Admin':'Spelare')+'</div></div>' +
@@ -940,7 +952,7 @@ function renderCourseStatsView() {
           var pAvg = pR.length ? (pR.reduce(function(s,r){return s+r.golfResult;},0)/pR.length).toFixed(1) : '-';
           var pBest = pR.length ? (pUseS ? Math.max : Math.min).apply(null, pR.map(function(r){return r.golfResult;})) : '-';
           var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
-          var pImg = (pUser&&pUser.img)||null;
+          var pImg = playerPhoto(p.username, pUser&&pUser.img);
           var pIni = ini(p.name);
           return '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
             '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
@@ -1155,7 +1167,7 @@ function getPlayersForTour(t) {
   var arr = new Array(maxIdx+1);
   accessUsers.forEach(function(u){
     var pi = t.playerIndexMap[u.username];
-    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: u.img||null, username: u.username, golfId: u.golfId||'' };
+    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: playerPhoto(u.username, u.img), username: u.username, golfId: u.golfId||'' };
   });
   return arr;
 }
@@ -1680,8 +1692,9 @@ function renderPlayers() {
       return !searchVal || (u.name||u.username).toLowerCase().indexOf(searchVal) !== -1;
     });
     var resultRows = filtered.slice(0,6).map(function(u){
+      var uImg = playerPhoto(u.username, u.img);
       return '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px;align-items:center">'+
-        (u.img?'<img src="'+u.img+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+ini(u.name||u.username)+'</div>')+
+        (uImg?'<img src="'+uImg+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+ini(u.name||u.username)+'</div>')+
         '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(u.name||u.username)+'</div>'+
         '<div style="font-size:12px;color:var(--text-2)">HCP '+(u.hcp||'–')+'</div></div>'+
         '<button class="btn btn-sm btn-primary" onclick="addPlayerToTour(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i> Lägg till</button>'+
@@ -2966,7 +2979,7 @@ function saveBagEdit() {
 function buildProfileHTML(pi){
   var t=getTour(), p=t.players[pi]; if(!p) return '';
   var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
-  var playerImg = (tourUser&&tourUser.img) || p.img || null;
+  var playerImg = playerPhoto(p.username, (tourUser&&tourUser.img) || p.img || null);
   var strengths = (tourUser&&tourUser.strengths) || [];
   var weaknesses = (tourUser&&tourUser.weaknesses) || [];
   var participated = t.events.filter(function(e){ return e.closed&&e.results&&e.results.find(function(r){return r.pi==pi;}); });
@@ -3377,7 +3390,7 @@ function buildTop3HTML(t, compact) {
   var rows = top.map(function(s, idx){
     var p = players[s.pi]; if(!p) return '';
     var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
-    var pImg = (pUser&&pUser.img) || p.img || null;
+    var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
     return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
@@ -3408,7 +3421,7 @@ function renderOOM(){
     sorted.map(function(d,idx){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
-      var pImg = (pUser&&pUser.img) || p.img || null;
+      var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
@@ -4378,6 +4391,17 @@ function renderDbDiagnostics() {
   var html = '<div class="card" style="margin-bottom:16px">';
   html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
   html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
+  var profileImgCount = (S.users||[]).filter(function(u){ return u.img; }).length;
+  var backedUpCount = (S.users||[]).filter(function(u){ return u.img && STATIC_PLAYER_PHOTOS[u.username.toLowerCase()]; }).length;
+  if(profileImgCount) {
+    html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:14px">'+
+      '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px"><i class="ti ti-golf"></i> '+profileImgCount+' profilbilder lagras just nu i databasen'+(backedUpCount?' ('+backedUpCount+' finns redan statiskt på GitHub)':'')+'.</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap">'+
+        '<button class="btn btn-sm btn-primary" onclick="exportAllPlayerPhotos()"><i class="ti ti-download"></i> Exportera alla profilbilder</button>'+
+        (backedUpCount?'<button class="btn btn-sm" onclick="clearBackedUpProfilePhotos()"><i class="ti ti-trash"></i> Rensa '+backedUpCount+' som redan finns statiskt</button>':'')+
+      '</div>'+
+    '</div>';
+  }
   if(!items.length) {
     html += '<p style="font-size:13px;color:var(--text-2)">Inga bilder hittades. Storleken kommer från text-data (resultat, namn, etc).</p>';
   } else {
@@ -4401,6 +4425,74 @@ function deleteDiagnosticImage(i) {
   else if(it.type === 'commentimg') it.ref.img = null;
   save();
   renderDbDiagnostics();
+}
+
+// ── EXPORT AV PROFILBILDER (för statisk hosting på GitHub) ─────────────────
+function dataUriToBlob(dataUri) {
+  var parts = dataUri.split(',');
+  var mimeMatch = parts[0].match(/data:([^;]+);base64/);
+  var mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  var binary = atob(parts[1]);
+  var arr = new Uint8Array(binary.length);
+  for(var i=0; i<binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function extFromMime(mime) {
+  if(mime.indexOf('png') !== -1) return 'png';
+  if(mime.indexOf('webp') !== -1) return 'webp';
+  return 'jpg';
+}
+
+function downloadBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+}
+
+function exportAllPlayerPhotos() {
+  if(!isAdmin()) return;
+  var users = (S.users||[]).filter(function(u){ return u.img; });
+  if(!users.length) { alert('Inga profilbilder att exportera.'); return; }
+  if(!confirm('Detta laddar ner '+users.length+' bildfiler till din nedladdningsmapp, en i taget. Fortsätt?')) return;
+
+  var mapLines = [];
+  var jobs = users.map(function(u){
+    var blob = dataUriToBlob(u.img);
+    var ext = extFromMime(blob.type);
+    var filename = u.username.toLowerCase()+'.'+ext;
+    mapLines.push("  '"+u.username.toLowerCase()+"': 'player-photos/"+filename+"',");
+    return { blob:blob, filename:filename };
+  });
+  jobs.forEach(function(job, i){
+    setTimeout(function(){ downloadBlob(job.blob, job.filename); }, i*350);
+  });
+
+  setTimeout(function(){
+    var snippet = "var STATIC_PLAYER_PHOTOS = {\n"+mapLines.join('\n')+"\n};";
+    showModal(
+      '<h3><i class="ti ti-download"></i> Profilbilder exporterade</h3>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+users.length+' bilder har laddats ner till din nedladdningsmapp.</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px"><b>Nästa steg:</b> Skapa en mapp som heter <code>player-photos</code> i ditt GitHub-repo (bredvid index.html) och ladda upp de nedladdade filerna dit.</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:6px">Skicka sedan tillbaka den här kodsnutten till mig (eller klistra in den själv i index.html, den ersätter <code>STATIC_PLAYER_PHOTOS</code>-objektet högst upp i koden):</p>'+
+      '<textarea readonly onclick="this.select()" style="width:100%;height:180px;font-family:monospace;font-size:11px;box-sizing:border-box">'+esc(snippet)+'</textarea>'+
+      '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>',
+      true
+    );
+  }, jobs.length*350 + 200);
+}
+
+function clearBackedUpProfilePhotos() {
+  if(!isAdmin()) return;
+  var users = (S.users||[]).filter(function(u){ return u.img && STATIC_PLAYER_PHOTOS[u.username.toLowerCase()]; });
+  if(!users.length) { alert('Inga profilbilder är redo att rensas ännu. Lägg till dem i STATIC_PLAYER_PHOTOS i koden först (se "Exportera alla profilbilder").'); return; }
+  if(!confirm('Ta bort den gamla bild-datan för '+users.length+' spelare från databasen? Bilderna fortsätter visas (nu från GitHub istället). Går inte att ångra.')) return;
+  users.forEach(function(u){ u.img = null; });
+  save();
+  renderDbDiagnostics();
+  alert('Klart! Databasen krympt med bilddata för '+users.length+' spelare.');
 }
 
 var _newUserImg = null;
