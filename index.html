@@ -2653,6 +2653,299 @@ function goToProfileFromModal(pi){
   showPlayerProfile(pi);
 }
 
+// ── KARRIÄRSTATISTIK (alla tourer & säsonger) ───────────────────────────────
+function computeCareerStats(username) {
+  var perTour = [];
+  var totalWins = 0, totalPodiums = 0, totalEvents = 0, bestPosEver = null, totalPts = 0;
+  var allSlagScores = [], allStabScores = [];
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var pi = players.findIndex(function(p){ return p && p.username === username; });
+    if(pi < 0) return; // spelaren har inte access till denna tour
+    var participated = (t.events||[]).filter(function(e){ return e.closed&&e.results&&e.results.find(function(r){return r.pi==pi;}); });
+    if(!participated.length) { perTour.push({ tour:t, events:0, wins:0, podiums:0, bestPos:null, pts:0 }); return; }
+    var results = participated.map(function(e){
+      var r = e.results.find(function(x){ return x.pi==pi; });
+      var pos = e.results.findIndex(function(x){ return x.pi==pi; })+1;
+      return { event:e, result:r, pos:pos };
+    });
+    var nonFinal = results.filter(function(x){ return !x.event.isFinal; });
+    var wins = results.filter(function(x){ return x.pos===1; }).length;
+    var podiums = results.filter(function(x){ return x.pos<=3; }).length;
+    var bestPos = Math.min.apply(null, results.map(function(x){ return x.pos; }));
+    var tourPts = nonFinal.reduce(function(s,x){ return s+(x.result.points||0); }, 0);
+    nonFinal.forEach(function(x){
+      var isStab = x.event.type==='stableford';
+      if(isStab && x.result.score>0) allStabScores.push(x.result.score);
+      if(!isStab && x.result.score>0) allSlagScores.push(x.result.score);
+    });
+    totalWins += wins; totalPodiums += podiums; totalEvents += results.length; totalPts += tourPts;
+    if(bestPosEver===null || bestPos<bestPosEver) bestPosEver = bestPos;
+    perTour.push({ tour:t, events:results.length, wins:wins, podiums:podiums, bestPos:bestPos, pts:tourPts });
+  });
+  return {
+    perTour: perTour,
+    toursPlayed: perTour.filter(function(x){ return x.events>0; }).length,
+    totalEvents: totalEvents, totalWins: totalWins, totalPodiums: totalPodiums,
+    bestPosEver: bestPosEver, totalPts: totalPts,
+    avgSlag: allSlagScores.length ? (allSlagScores.reduce(function(a,b){return a+b;},0)/allSlagScores.length).toFixed(1) : null,
+    avgStab: allStabScores.length ? (allStabScores.reduce(function(a,b){return a+b;},0)/allStabScores.length).toFixed(1) : null
+  };
+}
+
+function buildCareerStatsHTML(username) {
+  var c = computeCareerStats(username);
+  if(!c.toursPlayed) return '';
+  var cards = [
+    { val:c.toursPlayed,  lbl:'Tourer spelade',  icon:'ti-calendar-event', color:'#185FA5' },
+    { val:c.totalEvents,  lbl:'Tävlingar totalt', icon:'ti-flag',           color:'#0F6E56' },
+    { val:c.totalWins,    lbl:'Segrar totalt',    icon:'ti-trophy',         color:'#BA7517' },
+    { val:c.totalPodiums, lbl:'Pallplatser totalt',icon:'ti-medal',         color:'#888780' }
+  ];
+  var statHtml = cards.map(function(s){
+    return '<div style="flex:1;text-align:center;padding:14px 6px;min-width:70px">'+
+      '<i class="ti '+s.icon+'" style="font-size:22px;color:'+s.color+';display:block;margin-bottom:4px" aria-hidden="true"></i>'+
+      '<div style="font-size:22px;font-weight:600;color:var(--text)">'+s.val+'</div>'+
+      '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+s.lbl+'</div>'+
+    '</div>';
+  }).join('');
+  var dRow2 = function(lbl,val){
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="font-size:13px;color:var(--text-2)">'+lbl+'</span>'+
+      '<span style="font-size:13px;font-weight:600;color:var(--text)">'+val+'</span></div>';
+  };
+  var rows = c.perTour.filter(function(x){ return x.events>0; })
+    .sort(function(a,b){ return (b.tour.season||'').localeCompare(a.tour.season||''); })
+    .map(function(x){
+      return '<tr>'+
+        '<td style="padding:9px 16px;font-weight:600">'+esc(x.tour.name)+(x.tour.season?' <span style="color:var(--text-3);font-weight:400">'+esc(x.tour.season)+'</span>':'')+'</td>'+
+        '<td style="padding:9px 8px;text-align:right">'+x.events+'</td>'+
+        '<td style="padding:9px 8px;text-align:right;color:#BA7517;font-weight:600">'+x.wins+'</td>'+
+        '<td style="padding:9px 8px;text-align:right">'+x.podiums+'</td>'+
+        '<td style="padding:9px 16px;text-align:right;font-weight:600;color:#0F6E56">'+x.pts+'p</td>'+
+      '</tr>';
+    }).join('');
+  return '<div class="card" style="margin-bottom:12px;padding:0;border-color:var(--gold)">'+
+      '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">'+
+        '<i class="ti ti-history" style="color:var(--gold)"></i>'+
+        '<div><div style="font-size:14px;font-weight:600;color:var(--text)">Karriärstatistik</div>'+
+        '<div style="font-size:12px;color:var(--text-3);margin-top:1px">Sammanlagt över alla tourer och säsonger</div></div>'+
+      '</div>'+
+      '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid var(--border)">'+statHtml+'</div>'+
+      '<div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
+        '<div>'+
+          dRow2('Bästa placering någonsin', c.bestPosEver!=null?c.bestPosEver+':a':'–')+
+          dRow2('Snitt slag-runda', c.avgSlag||'–')+
+          dRow2('Snitt poäng-runda', c.avgStab||'–')+
+        '</div>'+
+        '<div>'+
+          dRow2('OoM-poäng totalt (alla tourer)', c.totalPts+'p')+
+        '</div>'+
+      '</div>'+
+      (rows ? '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
+        '<th style="padding:8px 16px">Tour</th><th style="padding:8px 8px;text-align:right">Tävl.</th>'+
+        '<th style="padding:8px 8px;text-align:right">Segrar</th><th style="padding:8px 8px;text-align:right">Pall</th>'+
+        '<th style="padding:8px 16px;text-align:right">Poäng</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '')+
+    '</div>';
+}
+
+// ── WHAT'S IN THE BAG? ───────────────────────────────────────────────────────
+var BAG_CLUB_TYPES = ['Driver','Fairwayträ','Hybrid','Järn','Wedge','Putter','Annat'];
+var _editingBag = null;   // { username, clubs:[...], ball, glove, putterGrip, notes }
+var _bagClubDraft = null; // klubban som just nu läggs till/redigeras, eller null
+
+function buildBagDisplayHTML(p, tourUser) {
+  var bag = (tourUser&&tourUser.bag) || {};
+  var clubs = bag.clubs || [];
+  var canEdit = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
+  var hasAnything = clubs.length || bag.ball || bag.glove || bag.putterGrip || bag.notes;
+  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  h += '<div class="row" style="justify-content:space-between;margin-bottom:10px">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text)"><i class="ti ti-golf" style="color:#0F6E56"></i> What\'s in the Bag?</div>';
+  if(canEdit) h += '<button class="btn btn-sm" onclick="openBagEdit(\''+esc(p.username||'')+'\')"><i class="ti ti-edit"></i> Redigera</button>';
+  h += '</div>';
+  if(!hasAnything) {
+    h += '<p style="font-size:13px;color:var(--text-3);margin:0">Ingen utrustning registrerad ännu.</p>';
+  } else {
+    if(clubs.length) {
+      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:'+((bag.ball||bag.glove||bag.putterGrip||bag.notes)?'10px':'0')+'">';
+      clubs.forEach(function(c){
+        h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">'+
+          '<div style="min-width:0"><span style="font-size:13px;font-weight:600">'+esc(c.type||'Klubba')+'</span> '+
+            '<span style="font-size:12px;color:var(--text-2)">'+esc(((c.maker||'')+' '+(c.model||'')).trim())+'</span>'+
+            (c.loft?' <span style="font-size:11px;color:var(--text-3)">· '+esc(c.loft)+'</span>':'')+
+          '</div>'+
+          '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;flex-shrink:0">'+
+            (c.carry?esc(c.carry)+'m carry':'')+(c.carry&&c.total?' / ':'')+(c.total?esc(c.total)+'m totalt':'')+
+          '</div>'+
+        '</div>';
+      });
+      h += '</div>';
+    }
+    var extras = [];
+    if(bag.ball) extras.push('<b>Boll:</b> '+esc(bag.ball));
+    if(bag.glove) extras.push('<b>Handske:</b> '+esc(bag.glove));
+    if(bag.putterGrip) extras.push('<b>Puttergrepp:</b> '+esc(bag.putterGrip));
+    if(extras.length) h += '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+extras.join(' &nbsp;·&nbsp; ')+'</div>';
+    if(bag.notes) h += '<div style="font-size:12px;color:var(--text-3);margin-top:6px;font-style:italic">"'+esc(bag.notes)+'"</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function openBagEdit(username) {
+  if(!isAdmin() && (!currentUser || currentUser.username !== username)) return;
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!u) return;
+  var bag = u.bag || {};
+  _editingBag = {
+    username: username,
+    clubs: (bag.clubs||[]).map(function(c){ var o={}; for(var k in c) o[k]=c[k]; return o; }),
+    ball: bag.ball||'', glove: bag.glove||'', putterGrip: bag.putterGrip||'', notes: bag.notes||''
+  };
+  _bagClubDraft = null;
+  renderBagModal();
+}
+
+function syncBagOtherFields() {
+  if(!_editingBag) return;
+  var ball=document.getElementById('bag-ball'), glove=document.getElementById('bag-glove'),
+      pg=document.getElementById('bag-puttergrip'), notes=document.getElementById('bag-notes');
+  if(ball) _editingBag.ball = ball.value;
+  if(glove) _editingBag.glove = glove.value;
+  if(pg) _editingBag.putterGrip = pg.value;
+  if(notes) _editingBag.notes = notes.value;
+}
+
+function renderBagModal() {
+  var b = _editingBag, u = findUser(b.username);
+  var h = '<h3><i class="ti ti-golf" style="color:#0F6E56"></i> What\'s in the Bag? – '+esc((u&&u.name)||b.username)+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Registrera utrustningen i bagen.</p>';
+  if(!b.clubs.length) {
+    h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:12px">Inga klubbor registrerade ännu.</p>';
+  } else {
+    h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">';
+    b.clubs.forEach(function(c, idx){
+      h += '<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:8px;padding:10px 12px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:600">'+esc(c.type||'Klubba')+' — '+esc(((c.maker||'')+' '+(c.model||'')).trim())+'</div>'+
+          '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+
+            (c.loft?'Loft '+esc(c.loft)+' · ':'')+(c.carry?'Carry '+esc(c.carry)+'m · ':'')+(c.total?'Totalt '+esc(c.total)+'m':'')+
+          '</div>'+
+        '</div>'+
+        '<button class="btn btn-sm" onclick="editBagClub('+idx+')" title="Redigera"><i class="ti ti-edit"></i></button>'+
+        '<button class="btn btn-sm" onclick="deleteBagClub('+idx+')" title="Ta bort" style="color:#dc2626"><i class="ti ti-trash"></i></button>'+
+      '</div>';
+    });
+    h += '</div>';
+  }
+  h += '<button class="btn btn-sm btn-primary" onclick="addBagClub()" style="margin-bottom:20px"><i class="ti ti-plus"></i> Lägg till klubba</button>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;border-top:1px solid var(--border);padding-top:14px">Övrig utrustning</div>';
+  h += '<div class="field"><label>Golfboll</label><input id="bag-ball" value="'+esc(b.ball)+'"></div>';
+  h += '<div class="field"><label>Handske</label><input id="bag-glove" value="'+esc(b.glove)+'"></div>';
+  h += '<div class="field"><label>Puttergrepp</label><input id="bag-puttergrip" value="'+esc(b.putterGrip)+'"></div>';
+  h += '<div class="field"><label>Övriga kommentarer</label><textarea id="bag-notes" rows="3" style="width:100%;box-sizing:border-box">'+esc(b.notes)+'</textarea></div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
+    '<button class="btn" onclick="closeModal()">Stäng</button>'+
+    '<button class="btn btn-primary" onclick="saveBagEdit()">Spara bagen</button></div>';
+  showModal(h, true, true);
+}
+
+function addBagClub() {
+  syncBagOtherFields();
+  _bagClubDraft = { idx:null, maker:'', model:'', type:BAG_CLUB_TYPES[0], loft:'', shaftModel:'', shaftFlex:'', shaftLength:'', lie:'', gripModel:'', gripSize:'', gripWraps:'', carry:'', total:'' };
+  renderBagClubForm();
+}
+
+function editBagClub(idx) {
+  syncBagOtherFields();
+  var c = _editingBag.clubs[idx];
+  var d = { idx:idx };
+  for(var k in c) d[k]=c[k];
+  _bagClubDraft = d;
+  renderBagClubForm();
+}
+
+function deleteBagClub(idx) {
+  syncBagOtherFields();
+  _editingBag.clubs.splice(idx,1);
+  renderBagModal();
+}
+
+function renderBagClubForm() {
+  var d = _bagClubDraft;
+  var typeOpts = BAG_CLUB_TYPES.map(function(t){ return '<option value="'+esc(t)+'"'+(t===d.type?' selected':'')+'>'+esc(t)+'</option>'; }).join('');
+  var h = '<h3><i class="ti ti-golf"></i> '+(d.idx!=null?'Redigera klubba':'Lägg till klubba')+'</h3>';
+  h += '<div class="field"><label>Typ av klubba</label><select id="bc-type">'+typeOpts+'</select></div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="field"><label>Tillverkare</label><input id="bc-maker" value="'+esc(d.maker)+'"></div>'+
+    '<div class="field"><label>Modell</label><input id="bc-model" value="'+esc(d.model)+'"></div>'+
+  '</div>';
+  h += '<div class="field"><label>Loft</label><input id="bc-loft" value="'+esc(d.loft)+'" placeholder="t.ex. 10.5°"></div>';
+  h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin:12px 0 6px">Skaft</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    '<div class="field"><label>Modell</label><input id="bc-shaftmodel" value="'+esc(d.shaftModel)+'"></div>'+
+    '<div class="field"><label>Flex</label><input id="bc-shaftflex" value="'+esc(d.shaftFlex)+'" placeholder="t.ex. Stiff"></div>'+
+    '<div class="field"><label>Längd</label><input id="bc-shaftlength" value="'+esc(d.shaftLength)+'" placeholder="t.ex. 45.5 tum"></div>'+
+  '</div>';
+  h += '<div class="field"><label>Lie-vinkel</label><input id="bc-lie" value="'+esc(d.lie)+'" placeholder="t.ex. 60°"></div>';
+  h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin:12px 0 6px">Grepp</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
+    '<div class="field"><label>Modell</label><input id="bc-gripmodel" value="'+esc(d.gripModel)+'"></div>'+
+    '<div class="field"><label>Storlek</label><input id="bc-gripsize" value="'+esc(d.gripSize)+'" placeholder="t.ex. Standard"></div>'+
+    '<div class="field"><label>Lager tejp</label><input id="bc-gripwraps" type="number" min="0" value="'+esc(d.gripWraps)+'"></div>'+
+  '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">'+
+    '<div class="field"><label>Carry-distans (m)</label><input id="bc-carry" type="number" value="'+esc(d.carry)+'"></div>'+
+    '<div class="field"><label>Totaldistans (m)</label><input id="bc-total" type="number" value="'+esc(d.total)+'"></div>'+
+  '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">'+
+    '<button class="btn" onclick="cancelBagClubForm()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveBagClubForm()">Spara klubba</button></div>';
+  showModal(h, true, true);
+  setTimeout(function(){ var el=document.getElementById('bc-maker'); if(el) el.focus(); }, 30);
+}
+
+function cancelBagClubForm() {
+  _bagClubDraft = null;
+  renderBagModal();
+}
+
+function saveBagClubForm() {
+  var d = _bagClubDraft;
+  var get = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  var club = {
+    type: get('bc-type'), maker: get('bc-maker'), model: get('bc-model'), loft: get('bc-loft'),
+    shaftModel: get('bc-shaftmodel'), shaftFlex: get('bc-shaftflex'), shaftLength: get('bc-shaftlength'),
+    lie: get('bc-lie'), gripModel: get('bc-gripmodel'), gripSize: get('bc-gripsize'), gripWraps: get('bc-gripwraps'),
+    carry: get('bc-carry'), total: get('bc-total')
+  };
+  if(!club.maker && !club.model) { alert('Ange minst tillverkare eller modell.'); return; }
+  if(d.idx != null) { _editingBag.clubs[d.idx] = club; } else { _editingBag.clubs.push(club); }
+  _bagClubDraft = null;
+  renderBagModal();
+}
+
+function saveBagEdit() {
+  syncBagOtherFields();
+  var u = (S.users||[]).find(function(x){ return x.username===_editingBag.username; });
+  if(!u) return;
+  u.bag = { clubs:_editingBag.clubs, ball:_editingBag.ball, glove:_editingBag.glove, putterGrip:_editingBag.putterGrip, notes:_editingBag.notes };
+  save();
+  closeModal();
+  var savedUsername = _editingBag.username;
+  _editingBag = null;
+  // Om profilsidan för den här spelaren är öppen, rita om den så bagen syns direkt.
+  var profileEl = document.getElementById('oom-profile');
+  if(profileEl && profileEl.style.display !== 'none') {
+    var t = getTour();
+    if(t) {
+      var pi = t.players.findIndex(function(p){ return p && p.username===savedUsername; });
+      if(pi>=0) showPlayerProfile(pi);
+    }
+  }
+}
+
 function buildProfileHTML(pi){
   var t=getTour(), p=t.players[pi]; if(!p) return '';
   var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
@@ -2782,6 +3075,7 @@ function buildProfileHTML(pi){
       '<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+p.hcp+' &nbsp;·&nbsp; '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
       '<div style="font-size:12px;color:var(--text-3);margin-top:2px">'+ptsLabel+'</div></div>'+
     '</div>'+
+    '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px">Denna tour – '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
     '<div class="card" style="margin-bottom:12px;padding:0">'+
       '<div style="display:flex;flex-wrap:wrap">'+heroStats+'</div>'+
     '</div>'+
@@ -2799,7 +3093,9 @@ function buildProfileHTML(pi){
         '</div>'+
       '</div>'+
     '</div>'+
+    buildCareerStatsHTML(p.username)+
     swHtml+
+    buildBagDisplayHTML(p, tourUser)+
     (numEvents?
       '<div class="card" style="padding:0;overflow:hidden">'+
         '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
@@ -3585,7 +3881,7 @@ function afterLogin() {
   if(currentUser.role === 'admin') {
     document.getElementById('nav-users-btn').style.display = '';
   }
-  showToursView();
+  showHomeScreen();
   renderImpersonationBanner();
   if(!currentUser.golfId || currentUser.golfId.length !== 10) {
     setTimeout(function(){
