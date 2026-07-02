@@ -1244,7 +1244,11 @@ function showModal(html, wide, preventOutsideClose) {
   ov.addEventListener('click', function(e){ if(e.target===ov && !preventOutsideClose) closeModal(); });
   document.body.appendChild(ov);
 }
-function closeModal() { var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null; }
+var _afterModalClose = null; // engångs-callback som körs nästa gång closeModal() anropas
+function closeModal() {
+  var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null;
+  if(_afterModalClose) { var cb=_afterModalClose; _afterModalClose=null; cb(); }
+}
 
 // ── CROP ───────────────────────────────────────────────────────────────────
 var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0, drag:false, lx:0, ly:0, cb:null };
@@ -1866,7 +1870,7 @@ function renderPlayers() {
       }
       swBadges += '</div>';
     }
-    return '<div class="player-card" style="flex-direction:column;align-items:flex-start">'+
+    return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
       '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
@@ -3624,8 +3628,8 @@ var SW_WEAKNESSES = [
   'Tre puttar i överflöd'
 ];
 
-function openStrengthsEdit(username) {
-  if(!isAdmin() && (!currentUser || currentUser.username !== username)) return;
+function openStrengthsEdit(username, mandatory) {
+  if(!mandatory && !isAdmin() && (!currentUser || currentUser.username !== username)) return;
   var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!u) return;
   var curStr  = u.strengths  || [];
@@ -3643,20 +3647,23 @@ function openStrengthsEdit(username) {
     }).join('');
   };
 
-  var h = '<h3><i class="ti ti-star" style="color:#BA7517"></i> Styrkor och svagheter – '+esc(u.name||u.username)+'</h3>';
-  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Klicka för att välja. Lägg till egna längst ner.</p>';
+  var h = mandatory
+    ? '<h3><i class="ti ti-star" style="color:#BA7517"></i> Berätta om ditt spel!</h3>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Innan du kör igång, välj minst en styrka och en svaghet så de andra spelarna lär känna din spelstil.</p>'
+    : '<h3><i class="ti ti-star" style="color:#BA7517"></i> Styrkor och svagheter – '+esc(u.name||u.username)+'</h3>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Klicka för att välja. Max 3 av vardera. Lägg till egna längst ner.</p>';
 
-  h += '<div style="font-size:13px;font-weight:600;color:#0F6E56;margin-bottom:8px"><i class="ti ti-arrow-up"></i> Styrkor</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:#0F6E56;margin-bottom:8px"><i class="ti ti-arrow-up"></i> Styrkor <span id="sw-str-count" style="font-weight:400;color:var(--text-3)">('+curStr.length+'/3)</span></div>';
   h += '<div id="sw-str-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+makeChips(SW_STRENGTHS, curStr, 'str', 'green')+'</div>';
   h += '<input id="sw-custom-str" type="text" placeholder="Lägg till egen styrka..." style="margin-bottom:16px">';
 
-  h += '<div style="font-size:13px;font-weight:600;color:#A32D2D;margin-bottom:8px"><i class="ti ti-arrow-down"></i> Svagheter</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:#A32D2D;margin-bottom:8px"><i class="ti ti-arrow-down"></i> Svagheter <span id="sw-weak-count" style="font-weight:400;color:var(--text-3)">('+curWeak.length+'/3)</span></div>';
   h += '<div id="sw-weak-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+makeChips(SW_WEAKNESSES, curWeak, 'weak', 'red')+'</div>';
-  h += '<input id="sw-custom-weak" type="text" placeholder="Lägg till egen svaghet..." style="margin-bottom:16px">';
+  h += '<input id="sw-custom-weak" type="text" placeholder="Lägg till egen svaghet (en åt gången)..." style="margin-bottom:16px">';
 
   h += '<div class="row" style="justify-content:flex-end;gap:8px">'+
-    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
-    '<button class="btn btn-primary" onclick="saveStrengths(\''+esc(username)+'\')">Spara</button></div>';
+    (mandatory?'':'<button class="btn" onclick="closeModal()">Avbryt</button>')+
+    '<button class="btn btn-primary" onclick="saveStrengths(\''+esc(username)+'\','+(mandatory?'true':'false')+')">Spara</button></div>';
 
   showModal(h, true, true);
 
@@ -3673,10 +3680,24 @@ function openStrengthsEdit(username) {
   }, 30);
 }
 
+function swCountActive(prefix, list) {
+  var n = 0;
+  list.forEach(function(item, i){
+    var el = document.getElementById('sw-chip-'+prefix+'-'+i);
+    if(el && el.style.background && el.style.background !== 'transparent' && el.style.background !== '') n++;
+  });
+  return n;
+}
+
 function swToggleChip(prefix, idx, color) {
   var el = document.getElementById('sw-chip-'+prefix+'-'+idx);
   if(!el) return;
+  var list = prefix==='str' ? SW_STRENGTHS : SW_WEAKNESSES;
   var active = el.style.background !== 'transparent' && el.style.background !== '';
+  if(!active && swCountActive(prefix, list) >= 3) {
+    alert('Du kan max välja 3 st. Avmarkera en annan först.');
+    return;
+  }
   if(active) {
     el.style.background = 'transparent';
     el.style.color = 'var(--text-2)';
@@ -3687,11 +3708,13 @@ function swToggleChip(prefix, idx, color) {
     el.style.color = '#fff';
     el.style.borderColor = bg;
   }
+  var countEl = document.getElementById('sw-'+prefix+'-count');
+  if(countEl) countEl.textContent = '('+swCountActive(prefix, list)+'/3)';
 }
 
-function saveStrengths(username) {
+function saveStrengths(username, mandatory) {
   var u = (S.users||[]).find(function(x){ return x.username===username; });
-  if(!isAdmin() && (!currentUser || currentUser.username !== username)) { alert("Ingen behörighet."); return; }
+  if(!mandatory && !isAdmin() && (!currentUser || currentUser.username !== username)) { alert("Ingen behörighet."); return; }
   var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!u) return;
 
@@ -3717,11 +3740,35 @@ function saveStrengths(username) {
     customWeak.value.split(',').forEach(function(s){ var t=s.trim(); if(t) weaknesses.push(t); });
   }
 
+  if(strengths.length > 3) { alert('Max 3 styrkor är tillåtet. Ta bort '+(strengths.length-3)+' st innan du sparar.'); return; }
+  if(weaknesses.length > 3) { alert('Max 3 svagheter är tillåtet. Ta bort '+(weaknesses.length-3)+' st innan du sparar.'); return; }
+  if(mandatory && (!strengths.length || !weaknesses.length)) {
+    alert('Välj minst en styrka och en svaghet innan du fortsätter.');
+    return;
+  }
+
   u.strengths = strengths;
   u.weaknesses = weaknesses;
   save();
   closeModal();
-  showPlayerProfile(getTour().players.findIndex(function(p){ return p&&p.username===username; }));
+  if(activeTourId) {
+    var t = getTour();
+    if(t) {
+      var pi = t.players.findIndex(function(p){ return p&&p.username===username; });
+      if(pi>=0) showPlayerProfile(pi);
+    }
+  }
+}
+
+// Visas vid inloggning om spelaren varken har styrkor eller svagheter ifyllda.
+function checkStrengthsWeaknessesConfirmation() {
+  if(!currentUser || currentUser.role === 'admin') return;
+  var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; });
+  if(!u) return;
+  var hasStr = u.strengths && u.strengths.length;
+  var hasWeak = u.weaknesses && u.weaknesses.length;
+  if(hasStr && hasWeak) return;
+  openStrengthsEdit(currentUser.username, true);
 }
 
 
@@ -4261,6 +4308,14 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (5)',
+    items: [
+      { type: 'improved', text: 'Styrkor och svagheter visas nu tydligt tillhörande rätt spelare i Spelare-listan (varje spelare har fått ett eget avgränsat kort).' },
+      { type: 'new', text: 'Max 3 styrkor och max 3 svagheter kan väljas per spelare.' },
+      { type: 'new', text: 'Precis som med HCP visas nu en obligatorisk ruta vid inloggning om spelaren saknar styrkor eller svagheter – minst en av varje krävs för att gå vidare.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (4)',
     items: [
       { type: 'new', text: 'Nytt bildbibliotek för touromslag – välj en färdig bild istället för att ladda upp egen.' },
@@ -4593,6 +4648,8 @@ function checkHcpConfirmation() {
     '</div>',
     false, false
   );
+  // Körs oavsett hur rutan stängs (bekräfta/uppdatera/klicka utanför) - fångar upp nästa steg i inloggningsflödet.
+  _afterModalClose = checkStrengthsWeaknessesConfirmation;
 }
 
 function confirmHcpCorrect() {
@@ -4602,6 +4659,7 @@ function confirmHcpCorrect() {
 }
 
 function showHcpUpdateForm() {
+  _afterModalClose = null; // vi byter bara undervy i samma flöde - callbacken ska inte trigga här
   var hcpVal = (currentUser.hcp!=null ? currentUser.hcp : 0);
   showModal(
     '<h3 style="margin-bottom:4px">Uppdatera HCP</h3>'+
@@ -4610,6 +4668,7 @@ function showHcpUpdateForm() {
     '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveHcpUpdate()"><i class="ti ti-device-floppy"></i> Spara</button>',
     false, false
   );
+  _afterModalClose = checkStrengthsWeaknessesConfirmation;
   setTimeout(function(){ var inp=document.getElementById('hcp-update-inp'); if(inp) inp.focus(); }, 30);
 }
 
