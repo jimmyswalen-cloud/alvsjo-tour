@@ -346,6 +346,8 @@ window.onerror = function(msg, url, line, col, err) {
   return false;
 };
 var activeTourId = null;
+var _currentAppView = 'tournament'; // spårar vilken flik som är aktiv inne i en tour (Tävlingar/Spelare/Kalender/OoM)
+var _profileReturnView = 'tournament'; // vilken flik man kom ifrån när man öppnade en spelarprofil
 var _tourImg = null, _eImg = null, _pImg = null, _wImg = null;
 var _editTourId = null;
 
@@ -523,6 +525,14 @@ var STATIC_COURSE_IMAGES = {
 // Use "Exportera alla profilbilder" i Inställningar > Databasdiagnostik för att
 // generera filerna + denna mappning automatiskt.
 var STATIC_PLAYER_PHOTOS = {
+  'swalle': 'player-photos/swalle.jpg',
+  'josu': 'player-photos/josu.jpg',
+  'anjo': 'player-photos/anjo.jpg',
+  'anja': 'player-photos/anja.jpg',
+  'kape': 'player-photos/kape.jpg',
+  'nilu': 'player-photos/nilu.jpg',
+  'toli': 'player-photos/toli.jpg',
+  'daka': 'player-photos/daka.jpg'
 };
 function playerPhoto(username, fallbackImg) {
   if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
@@ -770,7 +780,7 @@ function showHomeScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
@@ -784,7 +794,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -797,7 +807,7 @@ function showCourseStats() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
@@ -805,7 +815,7 @@ function showCourseStats() {
 }
 
 function showGlobalPlayers() {
-  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
   });
@@ -816,7 +826,7 @@ function showGlobalSettings() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
@@ -1132,6 +1142,7 @@ function showView(v) {
   document.querySelectorAll('.nav-btn').forEach(function(e){e.classList.remove('active');});
   document.getElementById('view-'+v).classList.add('active');
   document.getElementById('nav-'+v).classList.add('active');
+  _currentAppView = v;
   if(v==='players')    renderPlayers();
   if(v==='tournament') renderEvents();
   if(v==='calendar')   renderCalendar();
@@ -1985,12 +1996,34 @@ function openRegister(i) {
         var dateRow = status==='registered'
           ? '<div style="margin-top:6px"><input type="date" id="reg-date-'+pi+'" style="width:160px;margin:0;font-size:12px" min="'+e.periodStart+'" max="'+e.periodEnd+'" value="'+dateVal+'" '+(canEdit?'':'disabled')+' onchange="onRegDateChange('+i+','+pi+',this)"></div>'
           : '';
+        var bollRow = '';
+        if(status==='registered') {
+          if(!e.teeGroups) e.teeGroups = [];
+          var myGroup = e.teeGroups.find(function(g){ return g.date===dateVal && g.playerPis.indexOf(pi)>=0; });
+          if(myGroup) {
+            var gIdx = e.teeGroups.indexOf(myGroup);
+            var mates = myGroup.playerPis.filter(function(x){ return x!==pi; }).map(function(x){ var pp=t.players[x]; return pp?pp.name:'?'; });
+            bollRow = '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-2)">'+
+              '<i class="ti ti-clock" style="font-size:13px"></i>'+
+              (canEdit
+                ? '<input type="time" value="'+(myGroup.time||'')+'" style="width:100px;margin:0;font-size:12px" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
+                : '<span>'+(myGroup.time||'Tid ej satt')+'</span>')+
+              '<span>'+(mates.length ? '· med '+esc(mates.join(', ')) : '· spelar i egen boll')+'</span>'+
+              (canEdit ? '<button class="btn btn-sm" style="padding:2px 8px;font-size:11px" onclick="leaveTeeGroup(\''+e.id+'\','+gIdx+','+pi+','+i+')">Lämna bollen</button>' : '')+
+            '</div>';
+          } else if(canEdit) {
+            bollRow = '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
+              '<input type="time" id="new-boll-time-'+pi+'" style="width:100px;margin:0;font-size:12px" placeholder="Starttid">'+
+              '<button class="btn btn-sm" style="padding:2px 8px;font-size:11px" onclick="createOwnTeeGroup('+i+','+pi+',\''+dateVal+'\')"><i class="ti ti-plus"></i> Skapa boll</button>'+
+            '</div>';
+          }
+        }
         return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">'+
           '<div class="row" style="gap:10px;align-items:center">'+
             avatar+
             '<div style="flex:1;font-size:13px;font-weight:500">'+nameLabel+'</div>'+
             '<div class="row" style="gap:4px">'+btns+'</div>'+
-          '</div>'+dateRow+
+          '</div>'+dateRow+bollRow+
         '</div>';
       }).join('')
     : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
@@ -2099,8 +2132,49 @@ function setTeeGroupTime(eid, gIdx, time) {
   var t = getTour();
   var e = t.events.find(function(x){return x.id===eid;});
   if(!e || !e.teeGroups[gIdx]) return;
-  e.teeGroups[gIdx].time = time;
+  var group = e.teeGroups[gIdx];
+  var myPi = t.players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
+  if(!isAdmin() && group.playerPis.indexOf(myPi) === -1) {
+    alert('Du kan bara sätta tid för en boll du själv är med i.');
+    return;
+  }
+  group.time = time;
   save();
+}
+
+function createOwnTeeGroup(ei, pi, date) {
+  var t = getTour(), e = t.events[ei];
+  var p = t.players[pi];
+  if(!isAdmin() && (!p || !currentUser || p.username !== currentUser.username)) {
+    alert('Du kan bara skapa en boll åt dig själv.');
+    return;
+  }
+  if(!e.teeGroups) e.teeGroups = [];
+  // Ta bort spelaren från ev. tidigare boll för samma datum (man kan bara vara i en boll åt gången per datum).
+  e.teeGroups.forEach(function(g){
+    if(g.date===date) g.playerPis = g.playerPis.filter(function(x){ return x!==pi; });
+  });
+  e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
+  var timeInp = document.getElementById('new-boll-time-'+pi);
+  var time = timeInp ? timeInp.value : '';
+  e.teeGroups.push({ date: date, time: time, playerPis: [pi] });
+  save();
+  refreshRegisterModal(ei);
+}
+
+function leaveTeeGroup(eid, gIdx, pi, ei) {
+  var t = getTour();
+  var e = t.events.find(function(x){return x.id===eid;});
+  if(!e || !e.teeGroups[gIdx]) return;
+  var p = t.players[pi];
+  if(!isAdmin() && (!p || !currentUser || p.username !== currentUser.username)) {
+    alert('Du kan bara lämna en boll du själv är med i.');
+    return;
+  }
+  e.teeGroups[gIdx].playerPis = e.teeGroups[gIdx].playerPis.filter(function(x){ return x!==pi; });
+  if(!e.teeGroups[gIdx].playerPis.length) e.teeGroups.splice(gIdx,1);
+  save();
+  refreshRegisterModal(ei);
 }
 
 function deleteTeeGroup(eid, gIdx) {
@@ -2689,10 +2763,20 @@ function nextMonth(){var t=getTour();t.calMonth++;if(t.calMonth>11){t.calMonth=0
 function showOOMMain(){document.getElementById('oom-main').style.display='';document.getElementById('oom-profile').style.display='none';}
 
 function showPlayerProfile(pi){
+  _profileReturnView = _currentAppView;
   showView('oom');
   document.getElementById('oom-main').style.display='none';
   var el=document.getElementById('oom-profile');
   el.style.display=''; el.innerHTML=buildProfileHTML(pi);
+}
+
+// Tar tillbaka till fliken man faktiskt kom ifrån (Tävlingar/Spelare/Kalender), inte alltid OoM.
+function goBackFromProfile() {
+  if(_profileReturnView && _profileReturnView !== 'oom') {
+    showView(_profileReturnView);
+  } else {
+    showOOMMain();
+  }
 }
 
 // Used when navigating to a profile from inside an open modal (results, podium etc).
@@ -3114,7 +3198,7 @@ function buildProfileHTML(pi){
     '</tr>';
   }).join('');
 
-  return '<div class="back-btn" onclick="showOOMMain()"><i class="ti ti-arrow-left"></i> Tillbaka till Order of Merit</div>'+
+  return '<div class="back-btn" onclick="goBackFromProfile()"><i class="ti ti-arrow-left"></i> Tillbaka</div>'+
     '<div style="display:flex;align-items:center;gap:16px;padding:0 0 1.25rem">'+
       (playerImg
         ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
@@ -3823,11 +3907,28 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (2)',
+    items: [
+      { type: 'new', text: 'Spelare kan nu själva skapa en boll med starttid vid anmälan, utan att behöva be admin om hjälp.' },
+      { type: 'improved', text: 'Tillbaka-knappen på spelarprofilen tar dig nu till fliken du faktiskt kom ifrån (Tävlingar/Spelare/Kalender), inte alltid till Order of Merit.' },
+      { type: 'fixed', text: 'Idévägg-vyn kunde tidigare hänga kvar synlig när man navigerade till en annan sida.' }
+    ]
+  },
+  {
     date: '2 juli 2026',
     items: [
       { type: 'new', text: '"Top 3 i ledning" visas nu i tourlistan och i tourns tävlingsvy – när touren är helt avslutad visas istället bara vinnaren.' },
       { type: 'new', text: 'Admin kan markera spelares betalstatus (betalt/ej betalt) direkt i avgifts- och prispottvyn.' },
+      { type: 'new', text: 'Spelarnamn är nu klickbara i stort sett överallt (leaderboard, resultat, startlistor) och leder till spelarens profil.' },
+      { type: 'new', text: 'Ny karriärstatistik på profilsidan – sammanlagd historik över alla tourer och säsonger, inte bara aktuell tour.' },
+      { type: 'new', text: 'HCP-bekräftelse vid inloggning, så handicap hålls aktuellt.' },
+      { type: 'new', text: '"What\'s in the Bag?" – registrera din utrustning (klubbor, boll, handske m.m.) på din profil.' },
+      { type: 'new', text: 'Idévägg – föreslå funktioner, rösta på andras förslag och följ statusen på varje idé.' },
+      { type: 'new', text: 'Startlistan i varje tävling visar nu färgkodat vilka som är anmälda, osäkra eller inte deltar.' },
       { type: 'improved', text: '"Deltävlingar"-rubriken har flyttats för en tydligare vy.' },
+      { type: 'improved', text: 'Efter inloggning hamnar man nu på hemskärmen istället för direkt i Tourer.' },
+      { type: 'improved', text: 'OoM- och finaltabeller är mer kompakta och lättlästa på mobil i porträttläge.' },
+      { type: 'improved', text: 'Profilbilder kan nu hostas som vanliga bildfiler istället för att ta plats i databasen.' },
       { type: 'fixed', text: 'Flera stabilitetsfixar, bland annat en krasch vid inloggning.' }
     ]
   }
