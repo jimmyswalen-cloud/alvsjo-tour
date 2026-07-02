@@ -402,6 +402,37 @@ function discardDraft() {
   });
 }
 
+// ── MÄRKESLOGOTYPER (What's in the Bag) – samma mönster som banbilder ──────
+// Fyll på listan i takt med att fler loggor laddas upp till GitHub-repot (samma mapp-princip som banbilder).
+var STATIC_BRAND_LOGOS = {
+  'titleist': 'brand-logos/titleist.jpg'
+};
+
+function brandKey(name) {
+  return (name||'').trim().toLowerCase();
+}
+
+function getBrandLogo(name) {
+  var key = brandKey(name);
+  if(!key) return null;
+  if(STATIC_BRAND_LOGOS[key]) return STATIC_BRAND_LOGOS[key];
+  var entry = logoBank[key];
+  if(!entry) return null;
+  return entry.url || null;
+}
+
+function suggestBrandLogoFilename(name) {
+  if(!name || !name.trim()) return '';
+  return 'brand-logos/' + name.trim()
+    .toLowerCase()
+    .replace(/å/g, 'a').replace(/ä/g, 'a').replace(/ö/g, 'o')
+    .replace(/é/g, 'e').replace(/ü/g, 'u').replace(/\//g, '-').replace(/\./g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-') + '.jpg';
+}
+
 function courseKey(name) {
   return (name||'').trim().toLowerCase();
 }
@@ -477,7 +508,9 @@ var DOC_REF = db.collection('golfapp').doc('shared');
 var DRAFTS_REF = db.collection('golfapp').doc('tourDrafts');
 var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
 var COURSE_DB_REF = db.collection('golfapp').doc('courseDb');
+var LOGO_BANK_REF = db.collection('golfapp').doc('logoBank');
 var courseBank = {}; // { courseKey: {displayName, img} } -- image cache, loaded from Firestore
+var logoBank = {}; // { brandKey: {displayName, url} } -- märkeslogotyper, laddade från Firestore
 var courseDb = []; // [ {name, par, id} ] -- admin-managed course database
 var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara körs en gång per sidladdning
 
@@ -611,6 +644,11 @@ function initFirebaseSync(onFirstLoad) {
     courseBank = (doc.exists && doc.data()) ? doc.data() : {};
   }, function(err) {
     console.error('Course bank listen failed', err);
+  });
+  LOGO_BANK_REF.onSnapshot(function(doc) {
+    logoBank = (doc.exists && doc.data()) ? doc.data() : {};
+  }, function(err) {
+    console.error('Logo bank listen failed', err);
   });
   COURSE_DB_REF.onSnapshot(function(doc) {
     courseDb = (doc.exists && doc.data() && doc.data().courses) ? doc.data().courses : [];
@@ -873,10 +911,35 @@ function renderGlobalSettings() {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
   }
-  html += '<div id="course-bank-section"></div><div id="course-db-section"></div>';
+  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div>';
   el.innerHTML = html;
   renderCourseBankSection();
   renderCourseDbSection();
+  renderLogoManagerSection();
+}
+
+function renderLogoManagerSection() {
+  var el = document.getElementById('logo-manager-section');
+  if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
+  var withLogo = ALL_BRANDS.filter(function(b){ return !!getBrandLogo(b); }).length;
+  var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-tags"></i> Märkeslogotyper (What\'s in the Bag)</div>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Ladda upp loggor till mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> i GitHub-repot med filnamnen nedan, så kopplas de automatiskt in i "What\'s in the Bag" – samma princip som banbilderna.</p>';
+  html += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">'+withLogo+' av '+ALL_BRANDS.length+' märken har logotyp.</p>';
+  html += '<div class="card" style="padding:0;max-height:420px;overflow-y:auto">';
+  ALL_BRANDS.forEach(function(b, idx){
+    var logo = getBrandLogo(b);
+    var suggested = suggestBrandLogoFilename(b);
+    html += '<div class="row" style="justify-content:space-between;align-items:center;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+      '<div class="row" style="gap:10px;align-items:center;min-width:0">'+
+        (logo ? '<img src="'+logo+'" style="width:36px;height:36px;object-fit:contain;border-radius:6px;background:var(--surface2)">' : '<div style="width:36px;height:36px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--text-3);font-size:16px"></i></div>')+
+        '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(b)+'</div>'+
+        (logo ? '<div style="font-size:11px;color:var(--green-dark)"><i class="ti ti-check"></i> Logga OK</div>' : '<div style="font-size:11px;color:var(--text-3)">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 function renderCourseStatsView() {
@@ -3455,7 +3518,7 @@ var SHOE_BRANDS = ['FootJoy','Adidas','Nike','Puma','Ecco','G/FORE','Under Armou
 var CLOTHING_BRANDS = ['Galvin Green','J.Lindeberg','FootJoy','Adidas','Nike','Puma','TravisMathew','Under Armour','Greyson','RLX Ralph Lauren','Malbon','Peter Millar','Original Penguin','Kjus','Ping Apparel'];
 var GPS_BRANDS = ['Garmin','Bushnell','Shot Scope','SkyCaddie','GolfBuddy','Voice Caddie','Precision Pro'];
 var RANGEFINDER_BRANDS = ['Bushnell','Nikon','Garmin','Blue Tees','Precision Pro','Voice Caddie'];
-var ALL_BRANDS = Array.from(new Set([].concat(CLUB_BRANDS,PUTTER_BRANDS,BALL_BRANDS,BAG_BRANDS,SHOE_BRANDS,CLOTHING_BRANDS))).sort();
+var ALL_BRANDS = Array.from(new Set([].concat(CLUB_BRANDS,PUTTER_BRANDS,BALL_BRANDS,BAG_BRANDS,SHOE_BRANDS,CLOTHING_BRANDS,SHAFT_BRANDS,GRIP_BRANDS,GPS_BRANDS,RANGEFINDER_BRANDS))).sort();
 
 function buildDatalist(id, list) {
   return '<datalist id="'+id+'">'+list.map(function(b){ return '<option value="'+esc(b)+'">'; }).join('')+'</datalist>';
@@ -3488,6 +3551,13 @@ function findLongestClub(clubs) {
   return bestDist > 0 ? { club: best, dist: bestDist } : null;
 }
 
+function brandLogoTag(brand, size) {
+  var logo = getBrandLogo(brand);
+  if(!logo) return '';
+  size = size || 16;
+  return '<img src="'+logo+'" style="width:'+size+'px;height:'+size+'px;object-fit:contain;vertical-align:middle;margin-right:4px;border-radius:3px;background:#fff">';
+}
+
 function buildBagDisplayHTML(p, tourUser) {
   var bag = (tourUser&&tourUser.bag) || {};
   var clubs = bag.clubs || [];
@@ -3502,7 +3572,7 @@ function buildBagDisplayHTML(p, tourUser) {
   h += '<div style="font-size:13px;font-weight:600;'+(teamBrand?'color:#fff':'color:var(--text)')+'"><i class="ti ti-golf"></i> What\'s in the Bag?</div>';
   if(canEdit) h += '<button class="btn btn-sm" style="'+(teamBrand?'background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5);color:#fff':'')+'" onclick="openBagEdit(\''+esc(p.username||'')+'\')"><i class="ti ti-edit"></i> Redigera</button>';
   h += '</div>';
-  if(teamBrand) h += '<div style="font-size:20px;font-weight:800;color:#fff;margin-top:6px">🏌️ Team '+esc(teamBrand)+'</div>';
+  if(teamBrand) h += '<div style="font-size:20px;font-weight:800;color:#fff;margin-top:6px;display:flex;align-items:center">'+brandLogoTag(teamBrand,26)+'🏌️ Team '+esc(teamBrand)+'</div>';
   h += '</div>';
 
   h += '<div style="padding:14px 16px">';
@@ -3513,17 +3583,17 @@ function buildBagDisplayHTML(p, tourUser) {
     var irons = clubs.filter(function(c){ return c.type==='Järn'; });
     var putter = clubs.find(function(c){ return c.type==='Putter'; });
     var highlights = [];
-    if(bag.ball) highlights.push({ icon:'⚪', label:'Boll', val: esc(bag.ball) });
-    if(driver) highlights.push({ icon:'🏌️', label:'Driver', val: esc(((driver.maker||'')+' '+(driver.model||'')).trim())||'–',
+    if(bag.ball) highlights.push({ icon:'⚪', label:'Boll', val: brandLogoTag(bag.ball)+esc(bag.ball) });
+    if(driver) highlights.push({ icon:'🏌️', label:'Driver', val: brandLogoTag(driver.maker)+(esc(((driver.maker||'')+' '+(driver.model||'')).trim())||'–'),
       sub: driver.shaftModel ? esc(driver.shaftModel)+(driver.shaftFlex?' '+esc(driver.shaftFlex):'') : '' });
     if(irons.length) highlights.push({ icon:'🏌️', label: irons.length>1?'Järnset':'Järn',
-      val: (esc(((irons[0].maker||'')+' '+(irons[0].model||'')).trim())||'–')+(irons.length>1?' <span style="color:var(--text-3);font-weight:400;font-size:11px">+'+(irons.length-1)+' till</span>':'') });
-    if(putter) highlights.push({ icon:'⛳', label:'Putter', val: esc(((putter.maker||'')+' '+(putter.model||'')).trim())||'–' });
+      val: brandLogoTag(irons[0].maker)+(esc(((irons[0].maker||'')+' '+(irons[0].model||'')).trim())||'–')+(irons.length>1?' <span style="color:var(--text-3);font-weight:400;font-size:11px">+'+(irons.length-1)+' till</span>':'') });
+    if(putter) highlights.push({ icon:'⛳', label:'Putter', val: brandLogoTag(putter.maker)+(esc(((putter.maker||'')+' '+(putter.model||'')).trim())||'–') });
     if(highlights.length) {
       h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">';
       highlights.forEach(function(hi){
         h += '<div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em">'+hi.icon+' '+hi.label+'</div>'+
-          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-top:2px">'+hi.val+'</div>'+
+          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-top:2px;display:flex;align-items:center">'+hi.val+'</div>'+
           (hi.sub?'<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+hi.sub+'</div>':'')+
         '</div>';
       });
@@ -3535,7 +3605,7 @@ function buildBagDisplayHTML(p, tourUser) {
       h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">';
       clubs.forEach(function(c){
         h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">'+
-          '<div style="min-width:0"><span style="font-size:13px;font-weight:600">'+esc(c.type||'Klubba')+'</span> '+
+          '<div style="min-width:0;display:flex;align-items:center">'+brandLogoTag(c.maker,14)+'<span style="font-size:13px;font-weight:600">'+esc(c.type||'Klubba')+'</span>&nbsp;'+
             '<span style="font-size:12px;color:var(--text-2)">'+esc(((c.maker||'')+' '+(c.model||'')).trim())+'</span>'+
             (c.loft?' <span style="font-size:11px;color:var(--text-3)">· '+esc(c.loft)+'</span>':'')+
           '</div>'+
@@ -5972,6 +6042,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (29)',
+    items: [
+      { type: 'new', text: 'What\'s in the Bag visar nu märkeslogotyper (Boll, Driver, Järn, Putter, klubblista) – samma princip som banbilder: ladda upp till brand-logos/-mappen i GitHub-repot så kopplas de in automatiskt.' },
+      { type: 'new', text: 'Ny hanterare "Märkeslogotyper" i Inställningar visar status för alla märken i systemet och vilket filnamn varje logga ska ha.' }
+    ]
+  },
   {
     date: '2 juli 2026 (28)',
     items: [
