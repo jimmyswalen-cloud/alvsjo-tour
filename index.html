@@ -1994,10 +1994,142 @@ function togglePayment(tourId, pi) {
   renderEvents();
 }
 
+// ── SPELARENS EGEN RESULTATINMATNING (markör-/admin-godkännande) ───────────
+function getMyPi(t) {
+  return t.players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
+}
+
+function getEventRegPis(e) {
+  var regsRaw = e.registrations || [];
+  return (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+}
+
+function openMyScoreSubmission(ei) {
+  var t = getTour(), e = t.events[ei];
+  var myPi = getMyPi(t);
+  if(myPi < 0) { alert('Du är inte registrerad som spelare i den här touren.'); return; }
+  var isStab = e.type==='stableford';
+  var existing = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
+  var otherPis = getEventRegPis(e).filter(function(pi){ return pi!==myPi && t.players[pi]; });
+
+  var markerOpts = '<option value="">Välj markör...</option>'+otherPis.map(function(pi){
+    return '<option value="'+pi+'"'+(existing&&existing.markerPi===pi?' selected':'')+'>'+esc(t.players[pi].name)+'</option>';
+  }).join('');
+
+  var h = '<h3><i class="ti ti-edit"></i> Mitt resultat – '+esc(e.name)+'</h3>';
+  if(existing) {
+    var statusLabel = existing.dispens
+      ? (existing.adminApproved ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt av admin</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på admin-godkännande</span>')
+      : ((existing.markerApproved||existing.adminApproved) ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på godkännande från '+esc(t.players[existing.markerPi]?t.players[existing.markerPi].name:'markör')+'</span>');
+    h += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px">'+statusLabel+'</div>';
+  }
+  if(!isStab) {
+    h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+(existing&&existing.shcp!=null?existing.shcp:(t.players[myPi].hcp||0))+'" oninput="recalcMyNet()"></div>';
+  }
+  h += '<div class="field"><label>'+(isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!isStab?'readonly':'')+'></div>';
+  h += '<hr class="divider">';
+  h += '<div class="field"><label>Markör <span style="font-size:11px;color:var(--text-3)">(spelaren du spelat med)</span></label>';
+  h += '<select id="my-marker" onchange="onMyMarkerChange()">'+markerOpts+'</select></div>';
+  h += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:6px"><input type="checkbox" id="my-dispens" style="width:auto;margin:0" onchange="onMyDispensChange()"'+(existing&&existing.dispens?' checked':'')+'> Jag har dispens att spela utan markör</label>';
+  h += '<p id="my-dispens-note" style="font-size:12px;color:var(--gold);margin-bottom:8px;display:'+(existing&&existing.dispens?'block':'none')+'"><i class="ti ti-info-circle"></i> Ditt resultat måste då godkännas av admin istället.</p>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
+    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="submitMyScore('+ei+','+myPi+')"><i class="ti ti-send"></i> Skicka in</button>'+
+  '</div>';
+  showModal(h, false, true);
+}
+
+function onMyMarkerChange() {
+  var sel = document.getElementById('my-marker');
+  var dispensChk = document.getElementById('my-dispens');
+  if(sel.value !== '') { dispensChk.checked = false; document.getElementById('my-dispens-note').style.display='none'; }
+}
+function onMyDispensChange() {
+  var chk = document.getElementById('my-dispens');
+  var sel = document.getElementById('my-marker');
+  var note = document.getElementById('my-dispens-note');
+  if(chk.checked) { sel.value=''; note.style.display='block'; } else note.style.display='none';
+}
+function recalcMyNet() {
+  var bEl = document.getElementById('my-brutto'), sEl = document.getElementById('my-shcp'), scoreEl = document.getElementById('my-score');
+  var b = parseFloat(bEl.value), s = parseFloat(sEl.value);
+  if(!isNaN(b) && !isNaN(s)) scoreEl.value = Math.round((b-s)*10)/10;
+}
+
+function submitMyScore(ei, pi) {
+  var t = getTour(), e = t.events[ei];
+  var scoreEl = document.getElementById('my-score');
+  var score = parseFloat(scoreEl.value);
+  if(isNaN(score)) { alert('Ange ett resultat.'); return; }
+  var markerSel = document.getElementById('my-marker');
+  var dispensChk = document.getElementById('my-dispens');
+  var dispens = dispensChk.checked;
+  var markerPi = (!dispens && markerSel.value!=='') ? parseInt(markerSel.value) : null;
+  if(!dispens && markerPi==null) { alert('Välj en markör, eller kryssa i att du har dispens.'); return; }
+
+  var isStab = e.type==='stableford';
+  var bruttoEl = document.getElementById('my-brutto'), shcpEl = document.getElementById('my-shcp');
+  if(!e.scoreSubmissions) e.scoreSubmissions = [];
+  var existing = e.scoreSubmissions.find(function(s){ return s.pi===pi; });
+  var entry = {
+    pi: pi, score: score,
+    brutto: (!isStab && bruttoEl && bruttoEl.value!=='') ? parseFloat(bruttoEl.value) : null,
+    shcp: (!isStab && shcpEl && shcpEl.value!=='') ? parseFloat(shcpEl.value) : null,
+    markerPi: markerPi, dispens: dispens,
+    markerApproved: false, adminApproved: false,
+    submittedAt: new Date().toISOString()
+  };
+  if(existing) { for(var k in entry) existing[k] = entry[k]; }
+  else e.scoreSubmissions.push(entry);
+  save();
+  closeModal();
+  renderEvents();
+  alert(dispens
+    ? 'Resultat inskickat. Väntar på godkännande av admin.'
+    : 'Resultat inskickat. Väntar på godkännande av '+(t.players[markerPi]?t.players[markerPi].name:'din markör')+'.');
+}
+
+// Godkänn ett inskickat resultat, antingen som vald markör eller som admin (admin kan godkänna åt andra).
+function approveScoreSubmission(ei, submitterPi, viaAdmin) {
+  var t = getTour(), e = t.events[ei];
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===submitterPi; });
+  if(!sub) return;
+  if(viaAdmin) {
+    if(!isAdmin()) return;
+    sub.adminApproved = true;
+  } else {
+    var myPi = getMyPi(t);
+    if(sub.markerPi !== myPi) { alert('Du är inte vald som markör för det här resultatet.'); return; }
+    if(!confirm('Bekräfta att '+(t.players[submitterPi]?t.players[submitterPi].name:'spelaren')+' fick '+sub.score+(e.type==='stableford'?' poäng':' i netto')+'?')) return;
+    sub.markerApproved = true;
+  }
+  save();
+  renderEvents();
+}
+
+function rejectScoreSubmission(ei, submitterPi) {
+  var t = getTour(), e = t.events[ei];
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===submitterPi; });
+  if(!sub) return;
+  var myPi = getMyPi(t);
+  if(sub.markerPi !== myPi && !isAdmin()) return;
+  if(!confirm('Neka detta resultat? Spelaren får då skicka in på nytt.')) return;
+  e.scoreSubmissions = e.scoreSubmissions.filter(function(s){ return s.pi!==submitterPi; });
+  save();
+  renderEvents();
+}
+
+function isSubmissionApproved(sub) {
+  if(!sub) return false;
+  return sub.dispens ? !!sub.adminApproved : !!(sub.markerApproved || sub.adminApproved);
+}
+
 function eventCardHTML(i,e) {
   var tl=e.type==='stableford'?'Stableford':'Slag';
   var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
   var t=getTour();
+  var myPi = getMyPi(t);
   var regsRaw = e.registrations || [];
   var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
 
@@ -2062,10 +2194,55 @@ function eventCardHTML(i,e) {
     regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
   }
 
+  var mySub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
+  var myApproved = isSubmissionApproved(mySub);
+  var myResultBtnLabel = !mySub ? 'Mitt resultat'
+    : (myApproved ? 'Mitt resultat ✓' : 'Mitt resultat (väntar)');
+  var myResultBtn = (!e.closed && myPi>=0)
+    ? '<button class="btn btn-sm'+(myApproved?'':' btn-primary')+'" onclick="openMyScoreSubmission('+i+')"><i class="ti ti-edit"></i> '+myResultBtnLabel+'</button>'
+    : '';
+
+  var pendingAsMarker = (e.scoreSubmissions||[]).filter(function(s){ return !isSubmissionApproved(s) && !s.dispens && s.markerPi===myPi; });
+  var markerApprovalHtml = '';
+  if(!e.closed && pendingAsMarker.length) {
+    markerApprovalHtml = '<div style="background:var(--gold-light);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+      '<div style="font-size:12px;font-weight:600;color:#854F0B;margin-bottom:6px"><i class="ti ti-clipboard-check"></i> Du är vald som markör – bekräfta resultat</div>'+
+      pendingAsMarker.map(function(s){
+        var p = t.players[s.pi];
+        return '<div class="row" style="justify-content:space-between;align-items:center;padding:4px 0">'+
+          '<span style="font-size:13px">'+esc(p?p.name:'?')+' – <b>'+s.score+(e.type==='stableford'?' p':' netto')+'</b></span>'+
+          '<div class="row" style="gap:4px">'+
+            '<button class="btn btn-sm btn-primary" style="padding:3px 10px" onclick="approveScoreSubmission('+i+','+s.pi+',false)"><i class="ti ti-check"></i></button>'+
+            '<button class="btn btn-sm" style="padding:3px 10px;color:#dc2626" onclick="rejectScoreSubmission('+i+','+s.pi+')"><i class="ti ti-x"></i></button>'+
+          '</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+
+  var adminApprovalHtml = '';
+  if(!e.closed && isAdmin() && e.scoreSubmissions && e.scoreSubmissions.length) {
+    var pendingAll = e.scoreSubmissions.filter(function(s){ return !isSubmissionApproved(s); });
+    if(pendingAll.length) {
+      adminApprovalHtml = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px"><i class="ti ti-shield-check"></i> Väntar på godkännande ('+pendingAll.length+')</div>'+
+        pendingAll.map(function(s){
+          var p = t.players[s.pi];
+          var markerName = s.dispens ? 'Dispens – kräver admin' : (t.players[s.markerPi]?t.players[s.markerPi].name:'okänd markör');
+          return '<div class="row" style="justify-content:space-between;align-items:center;padding:4px 0">'+
+            '<span style="font-size:13px">'+esc(p?p.name:'?')+' – <b>'+s.score+(e.type==='stableford'?' p':' netto')+'</b> <span style="color:var(--text-3);font-size:11px">('+esc(markerName)+')</span></span>'+
+            '<button class="btn btn-sm btn-primary" style="padding:3px 10px" onclick="approveScoreSubmission('+i+','+s.pi+',true)"><i class="ti ti-check"></i> Godkänn</button>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    }
+  }
+
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
+      myResultBtn+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
@@ -2084,6 +2261,7 @@ function eventCardHTML(i,e) {
       '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
     '</div>'+
     (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
+    markerApprovalHtml+adminApprovalHtml+
     '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
     '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:space-between">'+
       '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
@@ -2502,20 +2680,31 @@ function openResults(i) {
   var isStab=e.type==='stableford';
   var rows=regs.map(function(pi){
     var ex=e.results?e.results.find(function(r){return r.pi===pi;}):null;
+    var sub=(e.scoreSubmissions||[]).find(function(s){return s.pi===pi;});
+    var approved = isSubmissionApproved(sub);
+    // Förifyll från godkänt inskickat resultat om admin inte redan sparat något eget.
+    var prefillScore = ex ? ex.score : (approved && sub ? sub.score : '');
+    var prefillBrutto = ex&&ex.brutto!=null ? ex.brutto : (approved && sub && sub.brutto!=null ? sub.brutto : '');
+    var prefillShcp = ex&&ex.shcp!=null ? ex.shcp : (approved && sub && sub.shcp!=null ? sub.shcp : null);
     var p=t.players[pi];
     var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
-    var shcpVal = (ex&&ex.shcp!=null) ? ex.shcp : (p.hcp!=null?p.hcp:0);
-    return '<div class="row" style="margin-bottom:10px;gap:8px;align-items:center">'+
+    var shcpVal = (prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0);
+    var statusBadge = !sub ? '<span style="font-size:10px;color:var(--text-3)">Ej inskickat</span>'
+      : approved ? '<span style="font-size:10px;color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>'
+      : '<span style="font-size:10px;color:var(--gold)"><i class="ti ti-clock"></i> Väntar</span><button type="button" class="btn btn-sm" style="padding:1px 6px;margin-left:4px" onclick="approveScoreSubmission('+i+','+pi+',true);openResults('+i+')" title="Godkänn"><i class="ti ti-check" style="font-size:11px"></i></button>';
+    return '<div class="row" style="margin-bottom:4px;gap:8px;align-items:center">'+
       (p.img?'<img src="'+p.img+'" class="avatar" style="width:30px;height:30px" alt="">':'<div class="avatar-ph" style="width:30px;height:30px;font-size:11px">'+ini(p.name)+'</div>')+
       '<span style="flex:1;font-size:14px;font-weight:500">'+p.name+(e.isFinal?' <span style="font-size:11px;color:var(--gold);font-weight:600">('+(hs>0?'-':'')+hs+' förspr.)</span>':'')+'</span>'+
       (!isStab?
-        '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+(ex&&ex.brutto!=null?ex.brutto:'')+'" oninput="recalcNet('+pi+')">'+
+        '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+prefillBrutto+'" oninput="recalcNet('+pi+')">'+
         '<input type="number" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
         :'')+
-      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+(ex?ex.score:'')+'" '+(!isStab?'readonly':'')+'>'+
-    '</div>';
+      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+prefillScore+'" '+(!isStab?'readonly':'')+'>'+
+    '</div>'+
+    '<div style="margin:0 0 8px 38px">'+statusBadge+'</div>';
   }).join('');
   var h='<h3>'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+'Resultatinmatning – '+e.name+'</h3>';
+  h+='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px"><i class="ti ti-info-circle"></i> Godkända resultat som spelarna skickat in är redan ifyllda. Du kan alltid skriva över manuellt.</p>';
   if(!isStab) {
     h+='<div class="row" style="gap:8px;align-items:center;margin-bottom:12px;padding:8px 10px;background:var(--surface2);border-radius:8px">';
     h+='<input type="checkbox" id="netto-only-chk" onchange="toggleNettoOnly('+i+')" style="width:18px;height:18px;margin:0;flex-shrink:0">';
@@ -4240,6 +4429,18 @@ function buildCourseProfileHTML(courseId) {
 
   if(c.historik) h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">'+esc(c.historik)+'</p>';
 
+  if(c.holePars && c.holePars.length) {
+    h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-list-numbers"></i> Scorekort</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-bottom:14px">';
+    c.holePars.forEach(function(p, idx){
+      h += '<div style="text-align:center;background:var(--surface2);border-radius:6px;padding:4px 2px">'+
+        '<div style="font-size:9px;color:var(--text-3)">'+(idx+1)+'</div>'+
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">'+p+'</div>'+
+      '</div>';
+    });
+    h += '</div>';
+  }
+
   // Tourstatistik
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin:14px 0 8px;border-top:1px solid var(--border);padding-top:14px"><i class="ti ti-chart-bar"></i> Statistik från spelade tävlingar</div>';
   if(!hist.rounds) {
@@ -4280,13 +4481,17 @@ function openAddCourse() {
     '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
     '<div class="field"><label>Klubb <span style="font-size:11px;color:var(--text-3)">(om annat än bannamnet)</span></label><input id="cd-klubb" type="text" placeholder="t.ex. Riksten Golfklubb"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-      '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="18"></div>' +
-      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="72"></div>' +
+      '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="18" onchange="renderScorecardGrid()"></div>' +
+      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="72" oninput="updateScorecardTotal()"></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Slope</label><input id="cd-slope" type="number" min="55" max="155" placeholder="t.ex. 130"></div>' +
       '<div class="field"><label>Course Rating</label><input id="cd-rating" type="number" step="0.1" placeholder="t.ex. 71.5"></div>' +
     '</div>' +
+    '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
+    '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
+    '<div id="cd-scorecard-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px"></div>' +
+    '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin"></i> Plats</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -4334,15 +4539,47 @@ function openAddCourse() {
     '</div>',
     true, true
   );
+  setTimeout(function(){ renderScorecardGrid(); }, 30);
+}
+
+function renderScorecardGrid(existingPars) {
+  var holesEl = document.getElementById('cd-holes');
+  var grid = document.getElementById('cd-scorecard-grid');
+  if(!holesEl || !grid) return;
+  var n = parseInt(holesEl.value) || 18;
+  var html = '';
+  for(var i=0; i<n; i++) {
+    var val = (existingPars && existingPars[i]!=null) ? existingPars[i] : 4;
+    html += '<div style="text-align:center"><label style="font-size:10px;color:var(--text-3);display:block">Hål '+(i+1)+'</label>'+
+      '<input type="number" min="3" max="6" value="'+val+'" class="cd-holepar-inp" data-idx="'+i+'" style="margin:0;padding:4px;text-align:center;font-size:12px" oninput="updateScorecardTotal()"></div>';
+  }
+  grid.innerHTML = html;
+  updateScorecardTotal();
+}
+
+function updateScorecardTotal() {
+  var inputs = document.querySelectorAll('.cd-holepar-inp');
+  var totalEl = document.getElementById('cd-scorecard-total');
+  var parInp = document.getElementById('cd-par');
+  if(!totalEl || !inputs.length) { if(totalEl) totalEl.innerHTML=''; return; }
+  var sum = 0;
+  inputs.forEach(function(inp){ sum += parseInt(inp.value)||0; });
+  var declaredPar = parInp ? (parseInt(parInp.value)||0) : 0;
+  var match = sum === declaredPar;
+  totalEl.innerHTML = 'Summa par per hål: <b style="color:'+(match?'var(--green-dark)':'#dc2626')+'">'+sum+'</b>'+
+    (declaredPar ? (match ? ' ✓ stämmer med totalpar' : ' – matchar inte totalpar ('+declaredPar+')') : '');
 }
 
 function readCourseFormFields() {
   var get = function(id){ var el=document.getElementById(id); return el ? el.value.trim() : ''; };
   var getNum = function(id){ var v = get(id); return v===''?null:parseFloat(v); };
   var getBool = function(id){ var el=document.getElementById(id); return el ? !!el.checked : false; };
+  var holeParInputs = document.querySelectorAll('.cd-holepar-inp');
+  var holePars = holeParInputs.length ? Array.prototype.map.call(holeParInputs, function(inp){ return parseInt(inp.value)||4; }) : null;
   return {
     name: get('cd-name'), klubb: get('cd-klubb')||null,
     holes: parseInt(get('cd-holes'))||18, par: parseInt(get('cd-par'))||72,
+    holePars: holePars,
     slope: getNum('cd-slope'), rating: getNum('cd-rating'),
     kommun: get('cd-kommun')||null, lan: get('cd-lan')||null,
     district: get('cd-district')||null, land: get('cd-land')||null,
@@ -4400,13 +4637,17 @@ function openEditCourse(id) {
     '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" value="'+esc(c.name)+'"></div>' +
     '<div class="field"><label>Klubb</label><input id="cd-klubb" type="text" value="'+esc(c.klubb||'')+'"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-      '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="'+(c.holes||18)+'"></div>' +
-      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'"></div>' +
+      '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="'+(c.holes||18)+'" onchange="renderScorecardGrid()"></div>' +
+      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'" oninput="updateScorecardTotal()"></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Slope</label><input id="cd-slope" type="number" min="55" max="155" value="'+(c.slope!=null?c.slope:'')+'"></div>' +
       '<div class="field"><label>Course Rating</label><input id="cd-rating" type="number" step="0.1" value="'+(c.rating!=null?c.rating:'')+'"></div>' +
     '</div>' +
+    '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
+    '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
+    '<div id="cd-scorecard-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px"></div>' +
+    '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin"></i> Plats</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -4452,6 +4693,7 @@ function openEditCourse(id) {
     '</div>',
     true, true
   );
+  setTimeout(function(){ renderScorecardGrid(c.holePars); }, 30);
 }
 
 function submitEditCourse(id) {
@@ -5144,6 +5386,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (16)',
+    items: [
+      { type: 'new', text: 'Spelare kan nu registrera sitt eget resultat i varje deltävling, med val av markör (spelaren man spelat med).' },
+      { type: 'new', text: 'Markören måste bekräfta resultatet innan det räknas som godkänt. Har man dispens att spela utan markör godkänns resultatet av admin istället.' },
+      { type: 'new', text: 'Admin kan alltid godkänna resultat direkt, även på andra markörers vägnar, från både tävlingskortet och resultatinmatningen.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (15)',
+    items: [
+      { type: 'new', text: 'Banor kan nu få ett scorekort (par per hål) i Bandatabasen – grunden för att kunna räkna birdies och hole-in-ones framöver. Visas även på banans profilsida.' }
+    ]
+  },
   {
     date: '2 juli 2026 (14)',
     items: [
