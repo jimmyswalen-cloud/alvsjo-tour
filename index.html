@@ -304,7 +304,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="view-calendar" class="view">
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="margin:0">Kalender</h2>
-      <button class="btn btn-sm" onclick="openTourMap()"><i class="ti ti-map"></i> Tourkarta</button>
+      <div class="row" style="gap:6px">
+        <button class="btn btn-sm" onclick="openTourCourseOverview()"><i class="ti ti-list-details"></i> Banöversikt</button>
+        <button class="btn btn-sm" onclick="openTourMap()"><i class="ti ti-map"></i> Tourkarta</button>
+      </div>
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:12px">
@@ -4853,6 +4856,11 @@ function openAddCourse() {
     '</div>' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
+    '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
+      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata (t.ex. "Par 4 - Index 9" per rad, en per hål)</label>' +
+      '<textarea id="cd-scorecard-paste" rows="3" placeholder="Par 5 - Index 7&#10;Par 4 - Index 9&#10;Par 3 - Index 17 ..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
+      '<button type="button" class="btn btn-sm" onclick="parseScorecardPaste()"><i class="ti ti-wand"></i> Tolka & fyll i</button>' +
+    '</div>' +
     '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
     '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
@@ -4903,6 +4911,34 @@ function openAddCourse() {
     true, true
   );
   setTimeout(function(){ renderScorecardGrid(); }, 30);
+}
+
+// Tolkar inklistrad scorekortstext (t.ex. kopierad från Caddee.se: "Par 5 - Index 7" per hål)
+// och fyller automatiskt i par/hcp-index-rutnätet. Ordningen i texten avgör hålordningen.
+function parseScorecardPaste() {
+  var textEl = document.getElementById('cd-scorecard-paste');
+  if(!textEl) return;
+  var text = textEl.value;
+  var matches = text.match(/par\s*(\d)\s*[-–]\s*index\s*(\d+)/gi);
+  if(!matches || !matches.length) {
+    alert('Kunde inte tolka texten. Förväntat format per hål: "Par 4 - Index 9" (en rad/förekomst per hål, i hålordning).');
+    return;
+  }
+  var pars = [], hcps = [];
+  matches.forEach(function(m){
+    var mm = m.match(/par\s*(\d)\s*[-–]\s*index\s*(\d+)/i);
+    pars.push(parseInt(mm[1]));
+    hcps.push(parseInt(mm[2]));
+  });
+  var parInputs = document.querySelectorAll('.cd-holepar-inp');
+  var hcpInputs = document.querySelectorAll('.cd-holehcp-inp');
+  if(pars.length !== parInputs.length) {
+    if(!confirm('Hittade '+pars.length+' hål i texten, men banan har '+parInputs.length+' hål inlagt just nu. Fylla i så långt det går ändå?')) return;
+  }
+  var n = Math.min(pars.length, parInputs.length);
+  for(var i=0; i<n; i++) { parInputs[i].value = pars[i]; hcpInputs[i].value = hcps[i]; }
+  updateScorecardTotal();
+  alert(n+' hål ifyllda från inklistrad text. Kontrollera gärna att det ser rätt ut innan du sparar.');
 }
 
 function renderScorecardGrid(existingPars, existingHcp, existingLengths) {
@@ -5036,6 +5072,11 @@ function openEditCourse(id) {
     '</div>' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
+    '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
+      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata (t.ex. "Par 4 - Index 9" per rad, en per hål)</label>' +
+      '<textarea id="cd-scorecard-paste" rows="3" placeholder="Par 5 - Index 7&#10;Par 4 - Index 9&#10;Par 3 - Index 17 ..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
+      '<button type="button" class="btn btn-sm" onclick="parseScorecardPaste()"><i class="ti ti-wand"></i> Tolka & fyll i</button>' +
+    '</div>' +
     '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
     '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
@@ -5437,6 +5478,38 @@ function calcCourseDistance() {
 }
 
 // ── TOURKARTA (GIS Version 3) ───────────────────────────────────────────────
+// ── BANÖVERSIKT (vilken bana används i respektive deltävling) ──────────────
+function openTourCourseOverview() {
+  var t = getTour();
+  if(!t) return;
+  var h = '<h3><i class="ti ti-list-details"></i> Banöversikt – '+esc(t.name)+(t.season?' '+esc(t.season):'')+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Vilken bana som används i respektive deltävling – bra att ha samlat när ni t.ex. ska komplettera scorekort.</p>';
+  h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:14px">';
+  (t.events||[]).forEach(function(e){
+    var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
+    var hasScorecard = !!(course && course.holePars && course.holePars.length);
+    var statusBadge = !e.course ? ''
+      : !course ? '<span style="color:#dc2626;font-size:11px"><i class="ti ti-alert-triangle"></i> Ej i Bandatabasen</span>'
+      : hasScorecard ? '<span style="color:var(--green-dark);font-size:11px"><i class="ti ti-list-numbers"></i> Scorekort OK</span>'
+      : '<span style="color:var(--text-3);font-size:11px"><i class="ti ti-list-numbers"></i> Inget scorekort</span>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);gap:10px">'+
+      '<span style="font-size:13px;font-weight:600;white-space:nowrap">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+esc(e.name)+'</span>'+
+      '<span style="font-size:13px;color:var(--text-2);text-align:right">'+esc(e.course||'–')+'</span>'+
+    '</div>'+
+    (statusBadge ? '<div style="text-align:right;margin-top:-4px;margin-bottom:4px">'+statusBadge+'</div>' : '');
+  });
+  h += '</div>';
+
+  var uniqueCourses = [];
+  (t.events||[]).forEach(function(e){ if(e.course && uniqueCourses.indexOf(e.course)===-1) uniqueCourses.push(e.course); });
+  h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text-2)">'+
+    '<b>'+uniqueCourses.length+'</b> unika banor används i den här touren: '+uniqueCourses.map(function(c){return esc(c);}).join(', ')+
+  '</div>';
+
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true);
+}
+
 function openTourMap() {
   var t = getTour();
   if(!t) return;
@@ -5899,6 +5972,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (28)',
+    items: [
+      { type: 'new', text: 'Ny "Banöversikt" i Kalender-fliken – visar vilken bana som används i varje deltävling i touren, med status för om banan har scorekort inlagt. Bra för att snabbt se vilka banor som behöver kompletteras.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (27)',
+    items: [
+      { type: 'new', text: 'Scorekortsfältet i Bandatabasen kan nu klistras in direkt – kopiera text i formatet "Par 4 - Index 9" (t.ex. från Caddee.se) och klicka "Tolka & fyll i", så fylls alla hål i automatiskt istället för att skrivas in ett i taget.' }
+    ]
+  },
   {
     date: '2 juli 2026 (26)',
     items: [
