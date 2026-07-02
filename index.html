@@ -4431,14 +4431,20 @@ function buildCourseProfileHTML(courseId) {
 
   if(c.holePars && c.holePars.length) {
     h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-list-numbers"></i> Scorekort</div>';
-    h += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-bottom:14px">';
-    c.holePars.forEach(function(p, idx){
-      h += '<div style="text-align:center;background:var(--surface2);border-radius:6px;padding:4px 2px">'+
-        '<div style="font-size:9px;color:var(--text-3)">'+(idx+1)+'</div>'+
-        '<div style="font-size:13px;font-weight:700;color:var(--text)">'+p+'</div>'+
-      '</div>';
-    });
-    h += '</div>';
+    h += '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    h += '<thead><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px"><th style="padding:3px;text-align:left">Hål</th>'+
+      c.holePars.map(function(p,idx){ return '<th style="padding:3px;text-align:center">'+(idx+1)+'</th>'; }).join('')+'</tr></thead>';
+    h += '<tbody><tr><td style="padding:3px;color:var(--text-2)">Par</td>'+
+      c.holePars.map(function(p){ return '<td style="padding:3px;text-align:center;font-weight:700">'+p+'</td>'; }).join('')+'</tr>';
+    if(c.holeHcpIndex && c.holeHcpIndex.length) {
+      h += '<tr><td style="padding:3px;color:var(--text-2)">Hcp</td>'+
+        c.holeHcpIndex.map(function(hc){ return '<td style="padding:3px;text-align:center;color:var(--text-2)">'+(hc!=null?hc:'–')+'</td>'; }).join('')+'</tr>';
+    }
+    if(c.holeLengths && c.holeLengths.some(function(l){return l!=null;})) {
+      h += '<tr><td style="padding:3px;color:var(--text-2)">M</td>'+
+        c.holeLengths.map(function(l){ return '<td style="padding:3px;text-align:center;color:var(--text-3);font-size:11px">'+(l!=null?l:'–')+'</td>'; }).join('')+'</tr>';
+    }
+    h += '</tbody></table></div>';
   }
 
   // Tourstatistik
@@ -4490,7 +4496,7 @@ function openAddCourse() {
     '</div>' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
-    '<div id="cd-scorecard-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px"></div>' +
+    '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
     '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin"></i> Plats</div>' +
@@ -4542,32 +4548,55 @@ function openAddCourse() {
   setTimeout(function(){ renderScorecardGrid(); }, 30);
 }
 
-function renderScorecardGrid(existingPars) {
+function renderScorecardGrid(existingPars, existingHcp, existingLengths) {
   var holesEl = document.getElementById('cd-holes');
   var grid = document.getElementById('cd-scorecard-grid');
   if(!holesEl || !grid) return;
   var n = parseInt(holesEl.value) || 18;
-  var html = '';
+  var rows = '';
   for(var i=0; i<n; i++) {
-    var val = (existingPars && existingPars[i]!=null) ? existingPars[i] : 4;
-    html += '<div style="text-align:center"><label style="font-size:10px;color:var(--text-3);display:block">Hål '+(i+1)+'</label>'+
-      '<input type="number" min="3" max="6" value="'+val+'" class="cd-holepar-inp" data-idx="'+i+'" style="margin:0;padding:4px;text-align:center;font-size:12px" oninput="updateScorecardTotal()"></div>';
+    var parVal = (existingPars && existingPars[i]!=null) ? existingPars[i] : 4;
+    var hcpVal = (existingHcp && existingHcp[i]!=null) ? existingHcp[i] : (i+1);
+    var lenVal = (existingLengths && existingLengths[i]!=null) ? existingLengths[i] : '';
+    rows += '<tr>'+
+      '<td style="text-align:center;font-size:12px;color:var(--text-3);padding:3px">'+(i+1)+'</td>'+
+      '<td style="padding:3px 4px"><input type="number" min="3" max="6" value="'+parVal+'" class="cd-holepar-inp" data-idx="'+i+'" style="margin:0;padding:4px;text-align:center;font-size:12px;width:100%" oninput="updateScorecardTotal()"></td>'+
+      '<td style="padding:3px 4px"><input type="number" min="1" max="'+n+'" value="'+hcpVal+'" class="cd-holehcp-inp" data-idx="'+i+'" style="margin:0;padding:4px;text-align:center;font-size:12px;width:100%" oninput="updateScorecardTotal()"></td>'+
+      '<td style="padding:3px 4px"><input type="number" min="0" max="700" value="'+lenVal+'" class="cd-holelength-inp" data-idx="'+i+'" placeholder="m" style="margin:0;padding:4px;text-align:center;font-size:12px;width:100%"></td>'+
+    '</tr>';
   }
-  grid.innerHTML = html;
+  grid.innerHTML = '<table style="width:100%;border-collapse:collapse">'+
+    '<thead><tr style="font-size:10px;color:var(--text-3);text-transform:uppercase">'+
+      '<th style="padding:3px;font-weight:600">Hål</th><th style="padding:3px;font-weight:600">Par</th><th style="padding:3px;font-weight:600">Hcp</th><th style="padding:3px;font-weight:600">Längd (m)</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table>';
   updateScorecardTotal();
 }
 
 function updateScorecardTotal() {
-  var inputs = document.querySelectorAll('.cd-holepar-inp');
+  var parInputs = document.querySelectorAll('.cd-holepar-inp');
+  var hcpInputs = document.querySelectorAll('.cd-holehcp-inp');
   var totalEl = document.getElementById('cd-scorecard-total');
   var parInp = document.getElementById('cd-par');
-  if(!totalEl || !inputs.length) { if(totalEl) totalEl.innerHTML=''; return; }
+  if(!totalEl || !parInputs.length) { if(totalEl) totalEl.innerHTML=''; return; }
+
   var sum = 0;
-  inputs.forEach(function(inp){ sum += parseInt(inp.value)||0; });
+  parInputs.forEach(function(inp){ sum += parseInt(inp.value)||0; });
   var declaredPar = parInp ? (parseInt(parInp.value)||0) : 0;
-  var match = sum === declaredPar;
-  totalEl.innerHTML = 'Summa par per hål: <b style="color:'+(match?'var(--green-dark)':'#dc2626')+'">'+sum+'</b>'+
-    (declaredPar ? (match ? ' ✓ stämmer med totalpar' : ' – matchar inte totalpar ('+declaredPar+')') : '');
+  var parMatch = sum === declaredPar;
+  var lines = ['Summa par: <b style="color:'+(parMatch?'var(--green-dark)':'#dc2626')+'">'+sum+'</b>'+
+    (declaredPar ? (parMatch ? ' ✓ stämmer med totalpar' : ' – matchar inte totalpar ('+declaredPar+')') : '')];
+
+  // Validera att hcp-index är en giltig permutation (1..N, alla unika)
+  var hcpVals = Array.prototype.map.call(hcpInputs, function(inp){ return parseInt(inp.value)||0; });
+  var n = hcpVals.length;
+  var seen = {}; var validPerm = true;
+  hcpVals.forEach(function(v){ if(v<1||v>n||seen[v]) validPerm=false; seen[v]=true; });
+  if(n) {
+    lines.push('Hcp-index: '+(validPerm
+      ? '<b style="color:var(--green-dark)">✓ giltig fördelning (1–'+n+', alla unika)</b>'
+      : '<b style="color:#dc2626">ogiltig – varje hål måste ha ett unikt nummer 1–'+n+'</b>'));
+  }
+  totalEl.innerHTML = lines.join('<br>');
 }
 
 function readCourseFormFields() {
@@ -4575,11 +4604,15 @@ function readCourseFormFields() {
   var getNum = function(id){ var v = get(id); return v===''?null:parseFloat(v); };
   var getBool = function(id){ var el=document.getElementById(id); return el ? !!el.checked : false; };
   var holeParInputs = document.querySelectorAll('.cd-holepar-inp');
+  var holeHcpInputs = document.querySelectorAll('.cd-holehcp-inp');
+  var holeLengthInputs = document.querySelectorAll('.cd-holelength-inp');
   var holePars = holeParInputs.length ? Array.prototype.map.call(holeParInputs, function(inp){ return parseInt(inp.value)||4; }) : null;
+  var holeHcpIndex = holeHcpInputs.length ? Array.prototype.map.call(holeHcpInputs, function(inp){ return parseInt(inp.value)||null; }) : null;
+  var holeLengths = holeLengthInputs.length ? Array.prototype.map.call(holeLengthInputs, function(inp){ return inp.value!==''?parseInt(inp.value):null; }) : null;
   return {
     name: get('cd-name'), klubb: get('cd-klubb')||null,
     holes: parseInt(get('cd-holes'))||18, par: parseInt(get('cd-par'))||72,
-    holePars: holePars,
+    holePars: holePars, holeHcpIndex: holeHcpIndex, holeLengths: holeLengths,
     slope: getNum('cd-slope'), rating: getNum('cd-rating'),
     kommun: get('cd-kommun')||null, lan: get('cd-lan')||null,
     district: get('cd-district')||null, land: get('cd-land')||null,
@@ -4646,7 +4679,7 @@ function openEditCourse(id) {
     '</div>' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
-    '<div id="cd-scorecard-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:6px"></div>' +
+    '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
     '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
     '<hr class="divider">' +
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-map-pin"></i> Plats</div>' +
@@ -4693,7 +4726,7 @@ function openEditCourse(id) {
     '</div>',
     true, true
   );
-  setTimeout(function(){ renderScorecardGrid(c.holePars); }, 30);
+  setTimeout(function(){ renderScorecardGrid(c.holePars, c.holeHcpIndex, c.holeLengths); }, 30);
 }
 
 function submitEditCourse(id) {
@@ -5445,6 +5478,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (18)',
+    items: [
+      { type: 'new', text: 'Scorekortet i Bandatabasen har utökats med hcp-index (streckfördelning) och längd per hål, inte bara par. Visas som tabell i redigeringsvyn och på banans profilsida.' },
+      { type: 'improved', text: 'Redigeringsvyn varnar nu om hcp-index inte är en giltig fördelning (varje hål måste ha ett unikt nummer 1 till antal hål).' }
+    ]
+  },
   {
     date: '2 juli 2026 (17)',
     items: [
