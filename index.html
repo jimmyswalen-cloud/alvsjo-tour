@@ -290,6 +290,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="view-players" class="view">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
       <h2 style="margin:0">Spelare</h2>
+      <button class="btn btn-sm" onclick="openTourBagStats()"><i class="ti ti-golf"></i> Tourens utrustning</button>
     </div>
     <div class="card" id="players-list"><p class="empty">Inga spelare ännu.</p></div>
   </div>
@@ -1684,7 +1685,7 @@ function wizFinish() {
   save(); closeModal(); renderToursList();
 }
 
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── PLAYERS ────────────────────────────────────────────────────────────────
 function renderPlayers() {
@@ -2883,24 +2884,100 @@ function buildCareerStatsHTML(username) {
 
 // ── WHAT'S IN THE BAG? ───────────────────────────────────────────────────────
 var BAG_CLUB_TYPES = ['Driver','Fairwayträ','Hybrid','Järn','Wedge','Putter','Annat'];
+
+var CLUB_BRANDS = [
+  'Titleist','TaylorMade','Callaway','Cobra','Ping','Mizuno','Wilson','PXG','Srixon','Cleveland',
+  'XXIO','Honma','Miura','Fourteen','Tour Edge','Sub70','Ben Hogan','Haywood','Maltby','Vega',
+  'Edel','Krank','Proto Concept','New Level','Takomo','Ram','MacGregor','Lynx','Yonex','Bridgestone Golf',
+  'Yamaha','Majesty','Epon','ONOFF','Seven','Wishon','Alpha Golf','Exotics'
+];
+var PUTTER_BRANDS = ['Scotty Cameron','Odyssey','Bettinardi','LAB Golf','Evnroll','SeeMore','Ping','TaylorMade','Cleveland','Axis1'];
+var BALL_BRANDS = ['Titleist','TaylorMade','Callaway','Bridgestone','Srixon','Vice','Wilson','Mizuno','Snell','Maxfli','Cut','OnCore','Seed','Volvik'];
+var SHAFT_BRANDS = ['Fujikura','Mitsubishi','Graphite Design','Project X','KBS','True Temper','Nippon Shaft','UST Mamiya','LA Golf','Accra','Aerotech','BGT'];
+var GRIP_BRANDS = ['Golf Pride','Lamkin','SuperStroke','Winn','Iomic','Pure Grips','JumboMax','BestGrips'];
+var BAG_BRANDS = ['Sun Mountain','Vessel','Ogio','Ping','TaylorMade','Callaway','Cobra','Mizuno','Jones','Titleist'];
+var SHOE_BRANDS = ['FootJoy','Adidas','Nike','Puma','Ecco','G/FORE','Under Armour','New Balance','Payntr','Duca del Cosma'];
+var CLOTHING_BRANDS = ['Galvin Green','J.Lindeberg','FootJoy','Adidas','Nike','Puma','TravisMathew','Under Armour','Greyson','RLX Ralph Lauren','Malbon','Peter Millar','Original Penguin','Kjus','Ping Apparel'];
+var GPS_BRANDS = ['Garmin','Bushnell','Shot Scope','SkyCaddie','GolfBuddy','Voice Caddie','Precision Pro'];
+var RANGEFINDER_BRANDS = ['Bushnell','Nikon','Garmin','Blue Tees','Precision Pro','Voice Caddie'];
+var ALL_BRANDS = Array.from(new Set([].concat(CLUB_BRANDS,PUTTER_BRANDS,BALL_BRANDS,BAG_BRANDS,SHOE_BRANDS,CLOTHING_BRANDS))).sort();
+
+function buildDatalist(id, list) {
+  return '<datalist id="'+id+'">'+list.map(function(b){ return '<option value="'+esc(b)+'">'; }).join('')+'</datalist>';
+}
+var _bagDatalists = buildDatalist('dl-club-brands', CLUB_BRANDS)+buildDatalist('dl-putter-brands', PUTTER_BRANDS)+
+  buildDatalist('dl-ball-brands', BALL_BRANDS)+buildDatalist('dl-shaft-brands', SHAFT_BRANDS)+
+  buildDatalist('dl-grip-brands', GRIP_BRANDS)+buildDatalist('dl-bag-brands', BAG_BRANDS)+
+  buildDatalist('dl-shoe-brands', SHOE_BRANDS)+buildDatalist('dl-clothing-brands', CLOTHING_BRANDS)+
+  buildDatalist('dl-gps-brands', GPS_BRANDS)+buildDatalist('dl-rangefinder-brands', RANGEFINDER_BRANDS)+
+  buildDatalist('dl-all-brands', ALL_BRANDS);
+
 var _editingBag = null;   // { username, clubs:[...], ball, glove, putterGrip, notes }
 var _bagClubDraft = null; // klubban som just nu läggs till/redigeras, eller null
+
+function computeDominantBrand(bag) {
+  var counts = {};
+  (bag.clubs||[]).forEach(function(c){ if(c.maker) counts[c.maker] = (counts[c.maker]||0)+1; });
+  if(bag.ball) counts[bag.ball] = (counts[bag.ball]||0)+1;
+  var best = null, bestCount = 0;
+  Object.keys(counts).forEach(function(k){ if(counts[k]>bestCount){ best=k; bestCount=counts[k]; } });
+  return best;
+}
+
+function findLongestClub(clubs) {
+  var best = null, bestDist = -1;
+  (clubs||[]).forEach(function(c){
+    var dist = parseFloat(c.total) || parseFloat(c.carry) || 0;
+    if(dist > bestDist) { bestDist = dist; best = c; }
+  });
+  return bestDist > 0 ? { club: best, dist: bestDist } : null;
+}
 
 function buildBagDisplayHTML(p, tourUser) {
   var bag = (tourUser&&tourUser.bag) || {};
   var clubs = bag.clubs || [];
   var canEdit = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
-  var hasAnything = clubs.length || bag.ball || bag.glove || bag.putterGrip || bag.notes;
-  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
-  h += '<div class="row" style="justify-content:space-between;margin-bottom:10px">';
-  h += '<div style="font-size:13px;font-weight:600;color:var(--text)"><i class="ti ti-golf" style="color:#0F6E56"></i> What\'s in the Bag?</div>';
-  if(canEdit) h += '<button class="btn btn-sm" onclick="openBagEdit(\''+esc(p.username||'')+'\')"><i class="ti ti-edit"></i> Redigera</button>';
+  var hasAnything = clubs.length || bag.ball || bag.glove || bag.putterGrip || bag.notes ||
+    bag.bagBrand || bag.shoes || bag.clothingBrand || bag.gpsDevice || bag.rangefinder || bag.favoriteBrand;
+  var teamBrand = bag.favoriteBrand || computeDominantBrand(bag);
+
+  var h = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
+  h += '<div style="padding:14px 16px;'+(teamBrand?'background:linear-gradient(135deg,#0F6E56 0%,#1D9E75 100%)':'')+'">';
+  h += '<div class="row" style="justify-content:space-between;align-items:center">';
+  h += '<div style="font-size:13px;font-weight:600;'+(teamBrand?'color:#fff':'color:var(--text)')+'"><i class="ti ti-golf"></i> What\'s in the Bag?</div>';
+  if(canEdit) h += '<button class="btn btn-sm" style="'+(teamBrand?'background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5);color:#fff':'')+'" onclick="openBagEdit(\''+esc(p.username||'')+'\')"><i class="ti ti-edit"></i> Redigera</button>';
   h += '</div>';
+  if(teamBrand) h += '<div style="font-size:20px;font-weight:800;color:#fff;margin-top:6px">🏌️ Team '+esc(teamBrand)+'</div>';
+  h += '</div>';
+
+  h += '<div style="padding:14px 16px">';
   if(!hasAnything) {
     h += '<p style="font-size:13px;color:var(--text-3);margin:0">Ingen utrustning registrerad ännu.</p>';
   } else {
+    var driver = clubs.find(function(c){ return c.type==='Driver'; });
+    var irons = clubs.filter(function(c){ return c.type==='Järn'; });
+    var putter = clubs.find(function(c){ return c.type==='Putter'; });
+    var highlights = [];
+    if(bag.ball) highlights.push({ icon:'⚪', label:'Boll', val: esc(bag.ball) });
+    if(driver) highlights.push({ icon:'🏌️', label:'Driver', val: esc(((driver.maker||'')+' '+(driver.model||'')).trim())||'–',
+      sub: driver.shaftModel ? esc(driver.shaftModel)+(driver.shaftFlex?' '+esc(driver.shaftFlex):'') : '' });
+    if(irons.length) highlights.push({ icon:'🏌️', label: irons.length>1?'Järnset':'Järn',
+      val: (esc(((irons[0].maker||'')+' '+(irons[0].model||'')).trim())||'–')+(irons.length>1?' <span style="color:var(--text-3);font-weight:400;font-size:11px">+'+(irons.length-1)+' till</span>':'') });
+    if(putter) highlights.push({ icon:'⛳', label:'Putter', val: esc(((putter.maker||'')+' '+(putter.model||'')).trim())||'–' });
+    if(highlights.length) {
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">';
+      highlights.forEach(function(hi){
+        h += '<div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em">'+hi.icon+' '+hi.label+'</div>'+
+          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-top:2px">'+hi.val+'</div>'+
+          (hi.sub?'<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+hi.sub+'</div>':'')+
+        '</div>';
+      });
+      h += '</div>';
+    }
+
     if(clubs.length) {
-      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:'+((bag.ball||bag.glove||bag.putterGrip||bag.notes)?'10px':'0')+'">';
+      h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;border-top:1px solid var(--border);padding-top:10px">Alla klubbor</div>';
+      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">';
       clubs.forEach(function(c){
         h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">'+
           '<div style="min-width:0"><span style="font-size:13px;font-weight:600">'+esc(c.type||'Klubba')+'</span> '+
@@ -2914,14 +2991,32 @@ function buildBagDisplayHTML(p, tourUser) {
       });
       h += '</div>';
     }
+
+    var metaRows = [];
+    if(teamBrand) metaRows.push({ icon:'❤️', label:'Favoritmärke', val: esc(teamBrand) });
+    var longest = findLongestClub(clubs);
+    if(longest) metaRows.push({ icon:'📏', label:'Längsta klubba', val: esc(longest.club.type||'Klubba')+' – '+longest.dist+'m' });
+    if(metaRows.length) {
+      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">';
+      metaRows.forEach(function(m){
+        h += '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="color:var(--text-2)">'+m.icon+' '+m.label+'</span><span style="font-weight:600;color:var(--text)">'+m.val+'</span></div>';
+      });
+      h += '</div>';
+    }
+
     var extras = [];
-    if(bag.ball) extras.push('<b>Boll:</b> '+esc(bag.ball));
     if(bag.glove) extras.push('<b>Handske:</b> '+esc(bag.glove));
     if(bag.putterGrip) extras.push('<b>Puttergrepp:</b> '+esc(bag.putterGrip));
-    if(extras.length) h += '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+extras.join(' &nbsp;·&nbsp; ')+'</div>';
-    if(bag.notes) h += '<div style="font-size:12px;color:var(--text-3);margin-top:6px;font-style:italic">"'+esc(bag.notes)+'"</div>';
+    if(bag.bagBrand) extras.push('<b>Bag:</b> '+esc(bag.bagBrand));
+    if(bag.shoes) extras.push('<b>Skor:</b> '+esc(bag.shoes));
+    if(bag.clothingBrand) extras.push('<b>Kläder:</b> '+esc(bag.clothingBrand));
+    if(bag.gpsDevice) extras.push('<b>GPS:</b> '+esc(bag.gpsDevice));
+    if(bag.rangefinder) extras.push('<b>Avståndsmätare:</b> '+esc(bag.rangefinder));
+    if(extras.length) h += '<div style="font-size:12px;color:var(--text-2)">'+extras.join(' &nbsp;·&nbsp; ')+'</div>';
+    if(bag.notes) h += '<div style="font-size:12px;color:var(--text-3);margin-top:8px;font-style:italic">"'+esc(bag.notes)+'"</div>';
   }
-  h += '</div>';
+  h += '</div></div>';
   return h;
 }
 
@@ -2933,7 +3028,9 @@ function openBagEdit(username) {
   _editingBag = {
     username: username,
     clubs: (bag.clubs||[]).map(function(c){ var o={}; for(var k in c) o[k]=c[k]; return o; }),
-    ball: bag.ball||'', glove: bag.glove||'', putterGrip: bag.putterGrip||'', notes: bag.notes||''
+    ball: bag.ball||'', glove: bag.glove||'', putterGrip: bag.putterGrip||'', notes: bag.notes||'',
+    bagBrand: bag.bagBrand||'', shoes: bag.shoes||'', clothingBrand: bag.clothingBrand||'',
+    gpsDevice: bag.gpsDevice||'', rangefinder: bag.rangefinder||'', favoriteBrand: bag.favoriteBrand||''
   };
   _bagClubDraft = null;
   renderBagModal();
@@ -2941,12 +3038,13 @@ function openBagEdit(username) {
 
 function syncBagOtherFields() {
   if(!_editingBag) return;
-  var ball=document.getElementById('bag-ball'), glove=document.getElementById('bag-glove'),
-      pg=document.getElementById('bag-puttergrip'), notes=document.getElementById('bag-notes');
-  if(ball) _editingBag.ball = ball.value;
-  if(glove) _editingBag.glove = glove.value;
-  if(pg) _editingBag.putterGrip = pg.value;
-  if(notes) _editingBag.notes = notes.value;
+  var ids = { ball:'bag-ball', glove:'bag-glove', putterGrip:'bag-puttergrip', notes:'bag-notes',
+    bagBrand:'bag-bagbrand', shoes:'bag-shoes', clothingBrand:'bag-clothingbrand',
+    gpsDevice:'bag-gps', rangefinder:'bag-rangefinder', favoriteBrand:'bag-favoritebrand' };
+  Object.keys(ids).forEach(function(key){
+    var el = document.getElementById(ids[key]);
+    if(el) _editingBag[key] = el.value;
+  });
 }
 
 function renderBagModal() {
@@ -2972,11 +3070,23 @@ function renderBagModal() {
     h += '</div>';
   }
   h += '<button class="btn btn-sm btn-primary" onclick="addBagClub()" style="margin-bottom:20px"><i class="ti ti-plus"></i> Lägg till klubba</button>';
-  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;border-top:1px solid var(--border);padding-top:14px">Övrig utrustning</div>';
-  h += '<div class="field"><label>Golfboll</label><input id="bag-ball" value="'+esc(b.ball)+'"></div>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;border-top:1px solid var(--border);padding-top:14px">Favoritmärke</div>';
+  h += '<div class="field"><label>"Team..." (visas som rubrik på profilen)</label><input id="bag-favoritebrand" value="'+esc(b.favoriteBrand)+'" list="dl-all-brands" autocomplete="off" placeholder="T.ex. Titleist"></div>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin:16px 0 10px">Övrig utrustning</div>';
+  h += '<div class="field"><label>Golfboll</label><input id="bag-ball" value="'+esc(b.ball)+'" list="dl-ball-brands" autocomplete="off"></div>';
   h += '<div class="field"><label>Handske</label><input id="bag-glove" value="'+esc(b.glove)+'"></div>';
-  h += '<div class="field"><label>Puttergrepp</label><input id="bag-puttergrip" value="'+esc(b.putterGrip)+'"></div>';
+  h += '<div class="field"><label>Puttergrepp</label><input id="bag-puttergrip" value="'+esc(b.putterGrip)+'" list="dl-grip-brands" autocomplete="off"></div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="field"><label>Bag</label><input id="bag-bagbrand" value="'+esc(b.bagBrand)+'" list="dl-bag-brands" autocomplete="off"></div>'+
+    '<div class="field"><label>Skor</label><input id="bag-shoes" value="'+esc(b.shoes)+'" list="dl-shoe-brands" autocomplete="off"></div>'+
+  '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="field"><label>Kläder</label><input id="bag-clothingbrand" value="'+esc(b.clothingBrand)+'" list="dl-clothing-brands" autocomplete="off"></div>'+
+    '<div class="field"><label>GPS</label><input id="bag-gps" value="'+esc(b.gpsDevice)+'" list="dl-gps-brands" autocomplete="off"></div>'+
+  '</div>';
+  h += '<div class="field"><label>Avståndsmätare</label><input id="bag-rangefinder" value="'+esc(b.rangefinder)+'" list="dl-rangefinder-brands" autocomplete="off"></div>';
   h += '<div class="field"><label>Övriga kommentarer</label><textarea id="bag-notes" rows="3" style="width:100%;box-sizing:border-box">'+esc(b.notes)+'</textarea></div>';
+  h += _bagDatalists;
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
     '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '<button class="btn btn-primary" onclick="saveBagEdit()">Spara bagen</button></div>';
@@ -3004,26 +3114,34 @@ function deleteBagClub(idx) {
   renderBagModal();
 }
 
+function onBagClubTypeChange() {
+  var typeSel = document.getElementById('bc-type');
+  var makerInp = document.getElementById('bc-maker');
+  if(!typeSel || !makerInp) return;
+  makerInp.setAttribute('list', typeSel.value==='Putter' ? 'dl-putter-brands' : 'dl-club-brands');
+}
+
 function renderBagClubForm() {
   var d = _bagClubDraft;
   var typeOpts = BAG_CLUB_TYPES.map(function(t){ return '<option value="'+esc(t)+'"'+(t===d.type?' selected':'')+'>'+esc(t)+'</option>'; }).join('');
+  var makerDatalistId = d.type==='Putter' ? 'dl-putter-brands' : 'dl-club-brands';
   var h = '<h3><i class="ti ti-golf"></i> '+(d.idx!=null?'Redigera klubba':'Lägg till klubba')+'</h3>';
-  h += '<div class="field"><label>Typ av klubba</label><select id="bc-type">'+typeOpts+'</select></div>';
+  h += '<div class="field"><label>Typ av klubba</label><select id="bc-type" onchange="onBagClubTypeChange()">'+typeOpts+'</select></div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-    '<div class="field"><label>Tillverkare</label><input id="bc-maker" value="'+esc(d.maker)+'"></div>'+
+    '<div class="field"><label>Tillverkare</label><input id="bc-maker" value="'+esc(d.maker)+'" list="'+makerDatalistId+'" autocomplete="off"></div>'+
     '<div class="field"><label>Modell</label><input id="bc-model" value="'+esc(d.model)+'"></div>'+
   '</div>';
   h += '<div class="field"><label>Loft</label><input id="bc-loft" value="'+esc(d.loft)+'" placeholder="t.ex. 10.5°"></div>';
   h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin:12px 0 6px">Skaft</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
-    '<div class="field"><label>Modell</label><input id="bc-shaftmodel" value="'+esc(d.shaftModel)+'"></div>'+
+    '<div class="field"><label>Modell</label><input id="bc-shaftmodel" value="'+esc(d.shaftModel)+'" list="dl-shaft-brands" autocomplete="off"></div>'+
     '<div class="field"><label>Flex</label><input id="bc-shaftflex" value="'+esc(d.shaftFlex)+'" placeholder="t.ex. Stiff"></div>'+
     '<div class="field"><label>Längd</label><input id="bc-shaftlength" value="'+esc(d.shaftLength)+'" placeholder="t.ex. 45.5 tum"></div>'+
   '</div>';
   h += '<div class="field"><label>Lie-vinkel</label><input id="bc-lie" value="'+esc(d.lie)+'" placeholder="t.ex. 60°"></div>';
   h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin:12px 0 6px">Grepp</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
-    '<div class="field"><label>Modell</label><input id="bc-gripmodel" value="'+esc(d.gripModel)+'"></div>'+
+    '<div class="field"><label>Modell</label><input id="bc-gripmodel" value="'+esc(d.gripModel)+'" list="dl-grip-brands" autocomplete="off"></div>'+
     '<div class="field"><label>Storlek</label><input id="bc-gripsize" value="'+esc(d.gripSize)+'" placeholder="t.ex. Standard"></div>'+
     '<div class="field"><label>Lager tejp</label><input id="bc-gripwraps" type="number" min="0" value="'+esc(d.gripWraps)+'"></div>'+
   '</div>';
@@ -3031,6 +3149,7 @@ function renderBagClubForm() {
     '<div class="field"><label>Carry-distans (m)</label><input id="bc-carry" type="number" value="'+esc(d.carry)+'"></div>'+
     '<div class="field"><label>Totaldistans (m)</label><input id="bc-total" type="number" value="'+esc(d.total)+'"></div>'+
   '</div>';
+  h += _bagDatalists;
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">'+
     '<button class="btn" onclick="cancelBagClubForm()">Avbryt</button>'+
     '<button class="btn btn-primary" onclick="saveBagClubForm()">Spara klubba</button></div>';
@@ -3062,7 +3181,12 @@ function saveBagEdit() {
   syncBagOtherFields();
   var u = (S.users||[]).find(function(x){ return x.username===_editingBag.username; });
   if(!u) return;
-  u.bag = { clubs:_editingBag.clubs, ball:_editingBag.ball, glove:_editingBag.glove, putterGrip:_editingBag.putterGrip, notes:_editingBag.notes };
+  u.bag = {
+    clubs:_editingBag.clubs, ball:_editingBag.ball, glove:_editingBag.glove, putterGrip:_editingBag.putterGrip,
+    notes:_editingBag.notes, bagBrand:_editingBag.bagBrand, shoes:_editingBag.shoes,
+    clothingBrand:_editingBag.clothingBrand, gpsDevice:_editingBag.gpsDevice,
+    rangefinder:_editingBag.rangefinder, favoriteBrand:_editingBag.favoriteBrand
+  };
   save();
   closeModal();
   var savedUsername = _editingBag.username;
@@ -3076,6 +3200,127 @@ function saveBagEdit() {
       if(pi>=0) showPlayerProfile(pi);
     }
   }
+}
+
+// ── WHAT'S IN THE TOUR BAG? (gemensam utrustningsstatistik för touren) ─────
+function mostCommonEntry(items) {
+  var counts = {};
+  items.forEach(function(v){ if(v) counts[v] = (counts[v]||0)+1; });
+  var best=null, bestCount=0;
+  Object.keys(counts).forEach(function(k){ if(counts[k]>bestCount){ best=k; bestCount=counts[k]; } });
+  return best ? { value:best, count:bestCount } : null;
+}
+
+function computeTourBagStats(t) {
+  var players = getPlayersForTour(t);
+  var allClubs = [];
+  var balls = [];
+  var brandVotes = [];
+  var driverDistances = []; // {hcp, dist}
+  players.forEach(function(p){
+    if(!p) return;
+    var u = (S.users||[]).find(function(x){ return x.username===p.username; });
+    var bag = (u&&u.bag) || {};
+    (bag.clubs||[]).forEach(function(c){
+      allClubs.push(c);
+      if(c.maker) brandVotes.push(c.maker);
+      if(c.type==='Driver') {
+        var dist = parseFloat(c.total) || parseFloat(c.carry);
+        if(dist) driverDistances.push({ hcp: p.hcp||0, dist: dist });
+      }
+    });
+    if(bag.ball) { balls.push(bag.ball); brandVotes.push(bag.ball); }
+  });
+
+  var nameKey = function(c){ return ((c.maker||'')+' '+(c.model||'')).trim(); };
+  var drivers = allClubs.filter(function(c){ return c.type==='Driver'; }).map(nameKey).filter(Boolean);
+  var irons   = allClubs.filter(function(c){ return c.type==='Järn'; }).map(nameKey).filter(Boolean);
+  var putters = allClubs.filter(function(c){ return c.type==='Putter'; }).map(nameKey).filter(Boolean);
+  var shafts  = allClubs.map(function(c){ return c.shaftModel; }).filter(Boolean);
+  var grips   = allClubs.map(function(c){ return c.gripModel; }).filter(Boolean);
+
+  var groups = { '0-9':[], '10-18':[], '19+':[] };
+  driverDistances.forEach(function(d){
+    if(d.hcp<=9) groups['0-9'].push(d.dist);
+    else if(d.hcp<=18) groups['10-18'].push(d.dist);
+    else groups['19+'].push(d.dist);
+  });
+  var avgByGroup = {};
+  Object.keys(groups).forEach(function(g){
+    var arr = groups[g];
+    avgByGroup[g] = arr.length ? Math.round(arr.reduce(function(s,x){return s+x;},0)/arr.length) : null;
+  });
+
+  var playersWithBag = players.filter(function(p){
+    if(!p) return false;
+    var u = (S.users||[]).find(function(x){ return x.username===p.username; });
+    return u && u.bag && ((u.bag.clubs&&u.bag.clubs.length) || u.bag.ball);
+  }).length;
+
+  return {
+    playersWithBag: playersWithBag,
+    totalPlayers: players.filter(Boolean).length,
+    mostPopularDriver: mostCommonEntry(drivers),
+    mostPopularIron: mostCommonEntry(irons),
+    mostPlayedBall: mostCommonEntry(balls),
+    mostUsedPutter: mostCommonEntry(putters),
+    mostPopularShaft: mostCommonEntry(shafts),
+    mostPopularGrip: mostCommonEntry(grips),
+    dominantBrand: mostCommonEntry(brandVotes),
+    avgDriverByHcpGroup: avgByGroup
+  };
+}
+
+function buildTourBagStatsHTML(t) {
+  var s = computeTourBagStats(t);
+  var rows = [
+    { icon:'🏌️', label:'Mest populära driver', entry:s.mostPopularDriver },
+    { icon:'⛳', label:'Mest populära järnset', entry:s.mostPopularIron },
+    { icon:'⚪', label:'Mest spelade boll', entry:s.mostPlayedBall },
+    { icon:'🥅', label:'Mest använda putter', entry:s.mostUsedPutter },
+    { icon:'🎯', label:'Mest populära skaft', entry:s.mostPopularShaft },
+    { icon:'✋', label:'Mest populära grepp', entry:s.mostPopularGrip },
+    { icon:'🏆', label:'Dominerande märke i touren', entry:s.dominantBrand }
+  ];
+  var h = '<h3><i class="ti ti-golf" style="color:#0F6E56"></i> What\'s in the Tour Bag?</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Baserat på '+s.playersWithBag+' av '+s.totalPlayers+' spelares registrerade utrustning.</p>';
+  if(!s.playersWithBag) {
+    h += '<p class="empty">Ingen utrustning registrerad än i den här touren.</p>';
+  } else {
+    var anyRow = false;
+    h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:16px">';
+    rows.forEach(function(r){
+      if(!r.entry) return;
+      anyRow = true;
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:10px">'+
+        '<span style="font-size:13px;color:var(--text-2)">'+r.icon+' '+r.label+'</span>'+
+        '<span style="font-size:13px;font-weight:600;color:var(--text);text-align:right">'+esc(r.entry.value)+' <span style="color:var(--text-3);font-weight:400;font-size:11px">('+r.entry.count+' st)</span></span>'+
+      '</div>';
+    });
+    h += '</div>';
+    if(!anyRow) h += '<p class="empty">Ingen klubbdata registrerad än.</p>';
+
+    var hasDist = ['0-9','10-18','19+'].some(function(g){ return s.avgDriverByHcpGroup[g]!=null; });
+    if(hasDist) {
+      h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Snitt driverlängd per HCP-grupp</div>';
+      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:8px">';
+      ['0-9','10-18','19+'].forEach(function(g){
+        var val = s.avgDriverByHcpGroup[g];
+        h += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="font-size:13px;color:var(--text-2)">HCP '+g+'</span>'+
+          '<span style="font-size:13px;font-weight:600;color:var(--text)">'+(val!=null?val+' m':'–')+'</span></div>';
+      });
+      h += '</div>';
+    }
+  }
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  return h;
+}
+
+function openTourBagStats() {
+  var t = getTour();
+  if(!t) return;
+  showModal(buildTourBagStatsHTML(t), true);
 }
 
 function buildProfileHTML(pi){
@@ -3906,6 +4151,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (3)',
+    items: [
+      { type: 'new', text: 'What\'s in the Bag har fått märkes-autocomplete för klubbor, skaft, grepp, boll, bag, skor, kläder, GPS och avståndsmätare (40+ märken).' },
+      { type: 'new', text: 'Profilsidan visar nu en personlig "Team [märke]"-rubrik samt highlights för boll, driver, järn och putter.' },
+      { type: 'new', text: 'Ny knapp "Tourens utrustning" i Spelare-fliken – visar mest populära driver, järnset, boll, putter, skaft, grepp och dominerande märke i touren, plus snitt-driverlängd per HCP-grupp.' }
+    ]
+  },
   {
     date: '2 juli 2026 (2)',
     items: [
