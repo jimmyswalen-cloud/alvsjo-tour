@@ -230,9 +230,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-sub" style="color:#854F0B">Profiler &amp; statistik</div>
       </div>
       <div class="home-card" onclick="showGlobalSettings()" style="background:#D3D1C7;border:none">
-        <i class="ti ti-settings" style="font-size:32px;color:#444441" aria-hidden="true"></i>
-        <div class="home-card-label" style="color:#444441">Inställningar</div>
-        <div class="home-card-sub" style="color:#5F5E5A">Banor &amp; konfiguration</div>
+        <i class="ti ti-settings" style="font-size:32px;color:#444441" aria-hidden="true" id="settings-card-icon"></i>
+        <div class="home-card-label" style="color:#444441" id="settings-card-label">Inställningar</div>
+        <div class="home-card-sub" style="color:#5F5E5A" id="settings-card-sub">Banor &amp; konfiguration</div>
       </div>
       <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
         <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
@@ -844,6 +844,23 @@ function showHomeScreen() {
   renderHomeUserBar();
   updateHero(null);
   renderHomeApprovalWidget();
+  updateSettingsCard();
+}
+
+function updateSettingsCard() {
+  var icon = document.getElementById('settings-card-icon');
+  var label = document.getElementById('settings-card-label');
+  var sub = document.getElementById('settings-card-sub');
+  if(!icon || !label || !sub) return;
+  if(isAdmin()) {
+    icon.className = 'ti ti-settings';
+    label.textContent = 'Inställningar';
+    sub.textContent = 'Banor & konfiguration';
+  } else {
+    icon.className = 'ti ti-user-circle';
+    label.textContent = 'Min profil';
+    sub.textContent = 'Statistik, bag & mer';
+  }
 }
 
 function showToursView() { showToursList(); }
@@ -881,6 +898,7 @@ function showGlobalPlayers() {
 }
 
 function showGlobalSettings() {
+  if(!isAdmin()) { viewMyProfile(); return; }
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
@@ -1968,6 +1986,9 @@ function renderPlayers() {
   var playerCards = t.players.map(function(p,i){
     if(!p) return '';
     var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
+    // Admin är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
+    // (Returnerar bara tom sträng, rubbar inte pi-indexet som poäng/placeringar bygger på.)
+    if(tourUser && tourUser.role==='admin' && !isAdmin()) return '';
     var strengths  = (tourUser&&tourUser.strengths)  || [];
     var weaknesses = (tourUser&&tourUser.weaknesses) || [];
     var swBadges = '';
@@ -1989,10 +2010,12 @@ function renderPlayers() {
       }
       swBadges += '</div>';
     }
+    var pLogo = playerBrandLogoTag(p.username, 15);
     return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
       '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px;display:flex;align-items:center">'+p.name+playerBrandLogoTag(p.username, 15)+'</div>'+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
         '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
@@ -2485,7 +2508,7 @@ function eventCardHTML(i,e) {
       }
       return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
         '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
-        '<td><span style="display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, 13)+'</span></td>'+
+        '<td><div>'+esc(p.name)+'</div>'+(playerBrandLogoTag(p.username, 13)?'<div style="margin-top:2px">'+playerBrandLogoTag(p.username, 13)+'</div>':'')+'</td>'+
         '<td style="text-align:right">'+scoreLabel+'</td>'+
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
@@ -3552,7 +3575,7 @@ var SHAFT_BRANDS = ['Fujikura','Mitsubishi','Graphite Design','Project X','KBS',
 var GRIP_BRANDS = ['Golf Pride','Lamkin','SuperStroke','Winn','Iomic','Pure Grips','JumboMax','BestGrips'];
 var BAG_BRANDS = ['Sun Mountain','Vessel','Ogio','Ping','TaylorMade','Callaway','Cobra','Mizuno','Jones','Titleist'];
 var SHOE_BRANDS = ['FootJoy','Adidas','Nike','Puma','Ecco','G/FORE','Under Armour','New Balance','Payntr','Duca del Cosma'];
-var CLOTHING_BRANDS = ['Galvin Green','J.Lindeberg','FootJoy','Adidas','Nike','Puma','TravisMathew','Under Armour','Greyson','RLX Ralph Lauren','Malbon','Peter Millar','Original Penguin','Kjus','Ping Apparel'];
+var CLOTHING_BRANDS = ['Galvin Green','J.Lindeberg','FootJoy','Adidas','Nike','Puma','TravisMathew','Under Armour','Greyson','RLX Ralph Lauren','Malbon','Peter Millar','Original Penguin','Kjus','Ping Apparel','Local Rule'];
 var GPS_BRANDS = ['Garmin','Bushnell','Shot Scope','SkyCaddie','GolfBuddy','Voice Caddie','Precision Pro'];
 var RANGEFINDER_BRANDS = ['Bushnell','Nikon','Garmin','Blue Tees','Precision Pro','Voice Caddie'];
 var ALL_BRANDS = Array.from(new Set([].concat(CLUB_BRANDS,PUTTER_BRANDS,BALL_BRANDS,BAG_BRANDS,SHOE_BRANDS,CLOTHING_BRANDS,SHAFT_BRANDS,GRIP_BRANDS,GPS_BRANDS,RANGEFINDER_BRANDS))).sort();
@@ -4702,7 +4725,7 @@ function buildTop3HTML(t, compact) {
     return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
-      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?13:15)+'</span>'+
+      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
       (!compact?'<span style="font-size:11px;color:var(--text-3)">'+s.events+' rundor</span>':'')+
       '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.pts+' p</span>'+
     '</div>';
@@ -4730,10 +4753,12 @@ function renderOOM(){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
       var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
+      var pLogo = playerBrandLogoTag(p.username, 14);
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px;display:flex;align-items:center">'+p.name+playerBrandLogoTag(p.username, 15)+'</div>'+
+        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
+        (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
         '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · <span style="color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</span>':'')+       '</div></div>'+
         '<div class="oom-pts">'+d.pts+' pts</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
@@ -6102,6 +6127,25 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (35)',
+    items: [
+      { type: 'improved', text: 'Admin-kontot är nu en dold systemanvändare och visas inte längre i Spelare-listor (varken globalt eller i en specifik tour) för vanliga spelare – bara andra admins ser det.' },
+      { type: 'improved', text: 'Märkeslogotypen bredvid spelarnamn visas nu på en egen rad under namnet i OoM, resultatlistor, Spelare-vyer och profilsidor, för mindre trångt utseende. Top 3-widgeten är oförändrad i layout men loggan där är nu lite större.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (34)',
+    items: [
+      { type: 'fixed', text: 'Icke-admin-spelare som klickade på "Inställningar" på hemskärmen såg en tom sida. Kortet heter nu "Min profil" för spelare och leder direkt till deras egen profilsida istället.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (33)',
+    items: [
+      { type: 'new', text: 'Lagt till "Local Rule" som klädmärke i What\'s in the Bag.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (32)',
     items: [
       { type: 'new', text: 'Spelarens märke (favoritmärke eller vanligaste klubbmärke) visas nu som logotyp bredvid namnet i Order of Merit, Top 3-widgeten, resultatlistor, Spelare-vyerna och profilsidorna.' },
@@ -6840,7 +6884,8 @@ function buildGlobalPlayerProfileHTML(username) {
     (playerImg
       ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
-    '<div><div style="font-size:22px;font-weight:700;color:var(--text);display:flex;align-items:center">'+esc(displayName)+playerBrandLogoTag(u.username, 20)+'</div>'+
+    '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
+    (playerBrandLogoTag(u.username, 18)?'<div style="margin-top:4px">'+playerBrandLogoTag(u.username, 18)+'</div>':'')+
     (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
@@ -6910,8 +6955,9 @@ function editStrengthsFromGlobalProfile(username) {
 function renderUsersList() {
   renderDbDiagnostics();
   var el = document.getElementById('users-list');
-  var users = getUsers();
   var admin = isAdmin();
+  // Admin-kontot är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
+  var users = getUsers().filter(function(u){ return admin || u.role !== 'admin'; });
   var newUserBtn = document.getElementById('new-user-btn');
   if(newUserBtn) newUserBtn.style.display = admin ? '' : 'none';
   var headerEl = document.getElementById('users-screen-title');
@@ -6925,6 +6971,7 @@ function renderUsersList() {
     var isPlayer = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
     var displayName = u.name || u.username;
     var img = playerPhoto(u.username, u.img);
+    var pLogo = playerBrandLogoTag(u.username, 14);
     var avatar = img
       ? '<img src="'+img+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">'
       : '<div class="avatar-ph" style="width:40px;height:40px;font-size:13px;flex-shrink:0">'+ini(displayName)+'</div>';
@@ -6933,7 +6980,8 @@ function renderUsersList() {
         '<div class="row" style="gap:10px;align-items:center">'+
           avatar+
           '<div>'+
-            '<div style="font-weight:600;font-size:16px;display:flex;align-items:center">'+esc(displayName)+playerBrandLogoTag(u.username, 14)+'</div>'+
+            '<div style="font-weight:600;font-size:16px">'+esc(displayName)+'</div>'+
+            (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
             (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
             (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
           '</div>'+
