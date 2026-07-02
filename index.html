@@ -124,9 +124,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .pos-2{background:#D3D1C7;color:#2C2C2A}
 .pos-3{background:#F5C4B3;color:#4A1B0C}
 .pos-other{background:var(--surface2);color:var(--text-2)}
-.signature{position:fixed;bottom:18px;right:18px;z-index:1;pointer-events:none;opacity:.35;transition:opacity .2s}
-.signature:hover{opacity:.7;pointer-events:auto}
-.signature img{width:110px;height:auto}
+.signature{display:flex;justify-content:center;padding:28px 0 16px;opacity:.35;transition:opacity .2s}
+.signature:hover{opacity:.7}
+.signature img{width:100px;height:auto}
 
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -2010,7 +2010,7 @@ function renderPlayers() {
       }
       swBadges += '</div>';
     }
-    var pLogo = playerBrandLogoTag(p.username, 15);
+    var pLogo = playerBrandLogoTag(p.username, 17);
     return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
       '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
@@ -2508,7 +2508,7 @@ function eventCardHTML(i,e) {
       }
       return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
         '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
-        '<td><div>'+esc(p.name)+'</div>'+(playerBrandLogoTag(p.username, 13)?'<div style="margin-top:2px">'+playerBrandLogoTag(p.username, 13)+'</div>':'')+'</td>'+
+        '<td><div>'+esc(p.name)+'</div>'+(playerBrandLogoTag(p.username, 15)?'<div style="margin-top:2px">'+playerBrandLogoTag(p.username, 15)+'</div>':'')+'</td>'+
         '<td style="text-align:right">'+scoreLabel+'</td>'+
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
@@ -3627,7 +3627,7 @@ function playerBrandLogoTag(username, height) {
   height = height || 15;
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
   return '<img src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
-    'style="height:'+height+'px;width:auto;max-width:70px;object-fit:contain;vertical-align:middle;margin-left:6px">';
+    'style="height:'+height+'px;width:auto;max-width:90px;object-fit:contain;vertical-align:middle;margin-left:6px">';
 }
 
 function brandLogoTag(brand, size) {
@@ -4753,7 +4753,7 @@ function renderOOM(){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
       var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
-      var pLogo = playerBrandLogoTag(p.username, 14);
+      var pLogo = playerBrandLogoTag(p.username, 16);
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
@@ -6127,6 +6127,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (37)',
+    items: [
+      { type: 'fixed', text: 'Vattenstämpeln ("By J Swalén") låg som "position:fixed" vilket på mobilen (särskilt iOS) kunde hamna mitt i innehållet vid scroll. Den är nu en vanlig sidfot som alltid ligger konsekvent längst ner efter allt innehåll på varje sida.' },
+      { type: 'improved', text: 'Märkeslogotyper bredvid spelarnamn är nu något större på de flesta ställen (tourens Spelare-flik, resultatlistor, OoM, profilsidor, globala Spelare-listan) för bättre läsbarhet, utan att det blir för dominant.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (36)',
     items: [
       { type: 'improved', text: 'Användare-vyn (admin) visar nu inloggningsnamnet (@användarnamn) tydligt under visningsnamnet, istället för att det gömdes bakom det riktiga namnet.' }
@@ -6891,7 +6898,7 @@ function buildGlobalPlayerProfileHTML(username) {
       ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
     '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
-    (playerBrandLogoTag(u.username, 18)?'<div style="margin-top:4px">'+playerBrandLogoTag(u.username, 18)+'</div>':'')+
+    (playerBrandLogoTag(u.username, 20)?'<div style="margin-top:4px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
     (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
@@ -6977,7 +6984,7 @@ function renderUsersList() {
     var isPlayer = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
     var displayName = u.name || u.username;
     var img = playerPhoto(u.username, u.img);
-    var pLogo = playerBrandLogoTag(u.username, 14);
+    var pLogo = playerBrandLogoTag(u.username, 16);
     var avatar = img
       ? '<img src="'+img+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">'
       : '<div class="avatar-ph" style="width:40px;height:40px;font-size:13px;flex-shrink:0">'+ini(displayName)+'</div>';
