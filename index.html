@@ -5265,6 +5265,64 @@ function renderCourseMapMarkers() {
   }
 }
 
+// ── AUTOMATISK GEOKODNING (OpenStreetMap Nominatim - gratis, samma tjänst som kartan använder) ──
+function geocodeQueryFor(course) {
+  var parts = [course.name];
+  if(course.district) parts.push(course.district.replace(' Golfdistrikt',''));
+  parts.push(course.land || 'Sverige');
+  return parts.join(', ');
+}
+
+async function geocodeOneCourse(course) {
+  var query = encodeURIComponent(geocodeQueryFor(course));
+  var url = 'https://nominatim.openstreetmap.org/search?q='+query+'&format=json&limit=1';
+  try {
+    var res = await fetch(url, { headers: { 'Accept-Language': 'sv' } });
+    var data = await res.json();
+    if(data && data.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch(err) {
+    console.error('Geokodning misslyckades för', course.name, err);
+  }
+  return null;
+}
+
+async function geocodeMissingCourses() {
+  if(!isAdmin()) return;
+  var missing = courseDb.filter(function(c){ return c.lat==null || c.lng==null; });
+  if(!missing.length) { alert('Alla banor har redan koordinater.'); return; }
+  if(!confirm('Slå upp koordinater för '+missing.length+' banor via OpenStreetMap? Tar ca '+Math.ceil(missing.length*1.1)+' sekunder (en förfrågan i taget för att respektera tjänstens gräns).')) return;
+
+  var progressHtml = function(done, total, foundCount) {
+    return '<h3><i class="ti ti-map-pin-search"></i> Geokodar banor...</h3>'+
+      '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:10px"><div style="background:#1D9E75;height:100%;width:'+Math.round(done/total*100)+'%"></div></div>'+
+      '<p style="font-size:13px;color:var(--text-2)">'+done+' av '+total+' kontrollerade · '+foundCount+' hittade</p>';
+  };
+  showModal(progressHtml(0, missing.length, 0), true, true);
+
+  var found = 0, notFound = [];
+  for(var i=0; i<missing.length; i++) {
+    var course = missing[i];
+    var coords = await geocodeOneCourse(course);
+    if(coords) { course.lat = coords.lat; course.lng = coords.lng; found++; }
+    else notFound.push(course.name);
+    var modalBox = document.querySelector('#modal-mc .modal');
+    if(modalBox) modalBox.innerHTML = progressHtml(i+1, missing.length, found);
+    if(i < missing.length-1) await new Promise(function(r){ setTimeout(r, 1100); });
+  }
+
+  saveCourseDb();
+  renderCourseDbSection();
+
+  var resultHtml = '<h3><i class="ti ti-map-pin-check"></i> Klart!</h3>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+found+' av '+missing.length+' banor fick koordinater automatiskt.</p>';
+  if(notFound.length) {
+    resultHtml += '<p style="font-size:13px;color:var(--text-2);margin-bottom:6px">Kunde inte hittas (lägg in manuellt via redigera-knappen):</p>'+
+      '<ul style="font-size:12px;color:var(--text-3);margin:0 0 10px 18px">'+notFound.map(function(n){ return '<li>'+esc(n)+'</li>'; }).join('')+'</ul>';
+  }
+  resultHtml += '<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(resultHtml, true);
+}
+
 function renderCourseDbSection() {
   var el = document.getElementById('course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
@@ -5273,6 +5331,7 @@ function renderCourseDbSection() {
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
     '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Visa karta ('+withCoords+'/'+courseDb.length+' med koordinater)</button>'+
+    '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
     '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
     '<button class="btn btn-sm" onclick="importBulkCourseData()"><i class="ti ti-map-plus"></i> Importera bandata ('+BULK_GOLF_COURSES.length+' st)</button>'+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
@@ -5386,6 +5445,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (17)',
+    items: [
+      { type: 'new', text: 'Ny knapp "Geokoda saknade banor" i Bandatabasen – slår automatiskt upp koordinater för alla banor som saknar det, via OpenStreetMap (gratis, samma tjänst som kartan redan använder).' }
+    ]
+  },
   {
     date: '2 juli 2026 (16)',
     items: [
