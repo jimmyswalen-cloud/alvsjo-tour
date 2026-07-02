@@ -207,6 +207,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   </div>
   <div id="db-diagnostics"></div>
   <div id="users-list"></div>
+  <div id="global-player-profile" style="display:none"></div>
 </div>
 
 <div id="tours-screen">
@@ -3319,12 +3320,16 @@ function saveBagEdit() {
   _editingBag = null;
   // Om profilsidan för den här spelaren är öppen, rita om den så bagen syns direkt.
   var profileEl = document.getElementById('oom-profile');
-  if(profileEl && profileEl.style.display !== 'none') {
+  if(profileEl && profileEl.style.display !== 'none' && activeTourId) {
     var t = getTour();
     if(t) {
       var pi = t.players.findIndex(function(p){ return p && p.username===savedUsername; });
       if(pi>=0) showPlayerProfile(pi);
     }
+  }
+  var globalProfileEl = document.getElementById('global-player-profile');
+  if(globalProfileEl && globalProfileEl.style.display !== 'none') {
+    showGlobalPlayerProfile(savedUsername);
   }
 }
 
@@ -5140,6 +5145,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (14)',
+    items: [
+      { type: 'improved', text: 'Spelare-vyn (för icke-admin) visar nu riktiga namn och profilbilder istället för inloggningsnamn.' },
+      { type: 'new', text: 'Klicka på en spelare i Spelare-vyn för att se en fullständig profil – karriärstatistik, styrkor/svagheter, "What\'s in the Bag" och golfkarta – precis som från Order of Merit.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (13)',
     items: [
       { type: 'improved', text: 'Bandata (103 banor) importeras nu automatiskt vid inloggning istället för att kräva ett manuellt klick. Banor som redan finns hoppas alltid över, så det går inte att få dubbletter.' }
@@ -5759,7 +5771,92 @@ function showUsersView() {
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = '';
   updateHero(null);
+  var profileEl = document.getElementById('global-player-profile');
+  var listEl = document.getElementById('users-list');
+  var diagEl = document.getElementById('db-diagnostics');
+  if(profileEl) profileEl.style.display = 'none';
+  if(listEl) listEl.style.display = '';
+  if(diagEl) diagEl.style.display = '';
   renderUsersList();
+}
+
+// ── GLOBAL SPELARPROFIL (för Spelare-vyn utanför en specifik tour) ─────────
+function buildGlobalPlayerProfileHTML(username) {
+  var u = (S.users||[]).find(function(x){ return x.username===username; });
+  if(!u) return '<p class="empty">Spelaren hittades inte.</p>';
+  var displayName = u.name || u.username;
+  var playerImg = playerPhoto(u.username, u.img);
+  var strengths = u.strengths || [];
+  var weaknesses = u.weaknesses || [];
+  var canEditSW = isAdmin() || (currentUser && currentUser.username===u.username);
+
+  var h = '<div class="back-btn" onclick="goBackFromGlobalProfile()"><i class="ti ti-arrow-left"></i> Tillbaka</div>';
+  h += '<div style="display:flex;align-items:center;gap:16px;padding:0 0 1.25rem">'+
+    (playerImg
+      ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
+      : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
+    '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
+    (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
+    '</div></div>';
+
+  h += buildCareerStatsHTML(u.username);
+
+  // Styrkor och svagheter
+  var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  swHtml += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Styrkor och svagheter</div>';
+  if(strengths.length||weaknesses.length) {
+    if(strengths.length) {
+      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+      strengths.forEach(function(s){
+        swHtml += '<span style="background:#E1F5EE;color:#0F6E56;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-up" style="font-size:12px"></i>'+esc(s)+'</span>';
+      });
+      swHtml += '</div>';
+    }
+    if(weaknesses.length) {
+      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+      weaknesses.forEach(function(w){
+        swHtml += '<span style="background:#FCEBEB;color:#A32D2D;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-down" style="font-size:12px"></i>'+esc(w)+'</span>';
+      });
+      swHtml += '</div>';
+    }
+  } else {
+    swHtml += '<p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p>';
+  }
+  if(canEditSW) {
+    swHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+      '<button class="btn btn-sm" onclick="editStrengthsFromGlobalProfile(\''+esc(u.username)+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
+  }
+  swHtml += '</div>';
+  h += swHtml;
+
+  h += buildBagDisplayHTML({username: u.username}, u);
+  h += buildPlayerGolfMapStatsHTML(u.username, displayName);
+
+  return h;
+}
+
+function showGlobalPlayerProfile(username) {
+  var listEl = document.getElementById('users-list');
+  var diagEl = document.getElementById('db-diagnostics');
+  var profileEl = document.getElementById('global-player-profile');
+  if(listEl) listEl.style.display = 'none';
+  if(diagEl) diagEl.style.display = 'none';
+  if(profileEl) { profileEl.style.display = ''; profileEl.innerHTML = buildGlobalPlayerProfileHTML(username); }
+}
+
+function goBackFromGlobalProfile() {
+  var listEl = document.getElementById('users-list');
+  var diagEl = document.getElementById('db-diagnostics');
+  var profileEl = document.getElementById('global-player-profile');
+  if(profileEl) profileEl.style.display = 'none';
+  if(listEl) listEl.style.display = '';
+  if(diagEl) diagEl.style.display = '';
+}
+
+// Redigera styrkor/svagheter från den globala profilen, och rita om profilen när man är klar.
+function editStrengthsFromGlobalProfile(username) {
+  _afterModalClose = function(){ showGlobalPlayerProfile(username); };
+  openStrengthsEdit(username);
 }
 
 function renderUsersList() {
@@ -5778,14 +5875,22 @@ function renderUsersList() {
       return t ? t.name : null;
     }).filter(Boolean);
     var isPlayer = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
-    return '<div class="card">'+
+    var displayName = u.name || u.username;
+    var img = playerPhoto(u.username, u.img);
+    var avatar = img
+      ? '<img src="'+img+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+      : '<div class="avatar-ph" style="width:40px;height:40px;font-size:13px;flex-shrink:0">'+ini(displayName)+'</div>';
+    return '<div class="card" style="cursor:pointer" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')">'+
       '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
-        '<div>'+
-          '<div style="font-weight:600;font-size:16px">'+u.username+'</div>'+
-          (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
-          (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
+        '<div class="row" style="gap:10px;align-items:center">'+
+          avatar+
+          '<div>'+
+            '<div style="font-weight:600;font-size:16px">'+esc(displayName)+'</div>'+
+            (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
+            (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
+          '</div>'+
         '</div>'+
-        (admin ? '<div class="row" style="gap:6px">'+
+        (admin ? '<div class="row" style="gap:6px" onclick="event.stopPropagation()">'+
           (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
           '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
           (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
