@@ -200,10 +200,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="users-screen" style="display:none">
   <div class="tours-header">
     <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
-    <h2 style="margin:0;flex:1;text-align:right">Användare</h2>
+    <h2 id="users-screen-title" style="margin:0;flex:1;text-align:right">Användare</h2>
   </div>
   <div class="row" style="justify-content:flex-end;margin-bottom:16px">
-    <button class="btn btn-primary btn-sm" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
+    <button class="btn btn-primary btn-sm" id="new-user-btn" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
   </div>
   <div id="db-diagnostics"></div>
   <div id="users-list"></div>
@@ -913,6 +913,7 @@ function renderCourseStatsView() {
     districts.map(function(d){ return '<option value="'+esc(d)+'"'+(d===filterDistrict?' selected':'')+'>'+esc(d)+'</option>'; }).join('')+
   '</select>';
   filterHtml += '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Karta</button>';
+  filterHtml += '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-map-pin-search"></i> Nära mig</button>';
   filterHtml += '</div>';
 
   var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
@@ -4279,6 +4280,117 @@ function importCoursesFromTours() {
 var _courseMapInstance = null;
 var _courseMapMarkers = [];
 
+// ── GEOGRAFISK INTELLIGENS (GIS Version 2) ──────────────────────────────────
+function haversineKm(lat1, lng1, lat2, lng2) {
+  var R = 6371; // jordens radie i km
+  var dLat = (lat2-lat1) * Math.PI/180;
+  var dLng = (lng2-lng1) * Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLng/2)*Math.sin(dLng/2);
+  var c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R*c;
+}
+
+var _nearbyUserPos = null;   // { lat, lng } när geolokalisering lyckats
+var _nearbyRadiusKm = null;  // null = visa alla, annars 25/50/100
+
+function openNearbyCourses() {
+  var h = '<h3><i class="ti ti-map-pin-search"></i> Banor nära mig</h3>';
+  h += '<div id="nearby-content"><p style="font-size:13px;color:var(--text-2)">Hämtar din plats...</p></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true, true);
+  _nearbyUserPos = null;
+  _nearbyRadiusKm = null;
+  if(!navigator.geolocation) {
+    renderNearbyError('Din enhet/webbläsare stödjer inte platsdelning.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      _nearbyUserPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      renderNearbyResults();
+    },
+    function(err){
+      renderNearbyError('Kunde inte hämta din plats (du kanske nekade behörighet). Tillåt platsdelning i webbläsaren och försök igen.');
+    },
+    { timeout: 8000 }
+  );
+}
+
+function renderNearbyError(msg) {
+  var el = document.getElementById('nearby-content');
+  if(el) el.innerHTML = '<p style="font-size:13px;color:var(--danger-text)">'+esc(msg)+'</p>'+
+    '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-refresh"></i> Försök igen</button>';
+}
+
+function setNearbyRadius(km) {
+  _nearbyRadiusKm = km;
+  renderNearbyResults();
+}
+
+function renderNearbyResults() {
+  var el = document.getElementById('nearby-content');
+  if(!el || !_nearbyUserPos) return;
+  var withCoords = (courseDb||[]).filter(function(c){ return c.lat!=null && c.lng!=null; });
+  var withDist = withCoords.map(function(c){
+    return { course:c, km: haversineKm(_nearbyUserPos.lat, _nearbyUserPos.lng, c.lat, c.lng) };
+  }).sort(function(a,b){ return a.km-b.km; });
+
+  var filtered = _nearbyRadiusKm ? withDist.filter(function(x){ return x.km <= _nearbyRadiusKm; }) : withDist;
+
+  var radiusBtns = [25,50,100].map(function(km){
+    return '<button class="btn btn-sm'+(_nearbyRadiusKm===km?' btn-primary':'')+'" onclick="setNearbyRadius('+km+')">Inom '+km+' km</button>';
+  }).join('');
+  radiusBtns += '<button class="btn btn-sm'+(!_nearbyRadiusKm?' btn-primary':'')+'" onclick="setNearbyRadius(null)">Alla</button>';
+
+  var h = '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+radiusBtns+'</div>';
+  if(!withCoords.length) {
+    h += '<p class="empty">Inga banor har koordinater registrerade ännu.</p>';
+  } else if(!filtered.length) {
+    h += '<p class="empty">Inga banor inom valt avstånd.</p>';
+  } else {
+    h += '<div style="display:flex;flex-direction:column;gap:2px">';
+    filtered.forEach(function(x, idx){
+      var img = getCourseImage(x.course.name);
+      h += '<div class="row" style="gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'+
+        (idx===0?'<span class="badge badge-gold" style="flex-shrink:0">Närmast</span>':'<span style="width:8px;flex-shrink:0"></span>')+
+        (img?'<img src="'+img+'" style="width:44px;height:30px;object-fit:cover;border-radius:5px;flex-shrink:0">':'')+
+        '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(x.course.name)+'</div>'+
+        (x.course.district?'<div style="font-size:11px;color:var(--text-3)">'+esc(x.course.district)+'</div>':'')+'</div>'+
+        '<div style="font-size:13px;font-weight:700;color:var(--green-dark);flex-shrink:0">'+x.km.toFixed(1)+' km</div>'+
+      '</div>';
+    });
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+function openCourseDistanceTool() {
+  var withCoords = (courseDb||[]).filter(function(c){ return c.lat!=null && c.lng!=null; });
+  if(withCoords.length < 2) { alert('Minst två banor behöver koordinater för att kunna jämföra avstånd.'); return; }
+  var opts = withCoords.map(function(c){ return '<option value="'+c.id+'">'+esc(c.name)+'</option>'; }).join('');
+  var h = '<h3><i class="ti ti-ruler-2"></i> Avstånd mellan banor</h3>';
+  h += '<div class="field"><label>Bana A</label><select id="dist-a">'+opts+'</select></div>';
+  h += '<div class="field"><label>Bana B</label><select id="dist-b">'+opts+'</select></div>';
+  h += '<button class="btn btn-primary btn-sm" onclick="calcCourseDistance()"><i class="ti ti-calculator"></i> Beräkna</button>';
+  h += '<div id="dist-result" style="margin-top:12px;font-size:14px;font-weight:600"></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, false, true);
+}
+
+function calcCourseDistance() {
+  var aId = document.getElementById('dist-a').value;
+  var bId = document.getElementById('dist-b').value;
+  var a = courseDb.find(function(c){ return c.id===aId; });
+  var b = courseDb.find(function(c){ return c.id===bId; });
+  var resEl = document.getElementById('dist-result');
+  if(!a || !b) return;
+  if(a.id===b.id) { resEl.innerHTML = '<span style="color:var(--text-3);font-weight:400">Välj två olika banor.</span>'; return; }
+  var km = haversineKm(a.lat, a.lng, b.lat, b.lng);
+  resEl.innerHTML = esc(a.name)+' &harr; '+esc(b.name)+': <span style="color:var(--green-dark)">'+km.toFixed(1)+' km fågelvägen</span>';
+}
+
 function openCourseMap() {
   var h = '<h3><i class="ti ti-map"></i> Bankarta</h3>';
   var districts = [];
@@ -4352,6 +4464,7 @@ function renderCourseDbSection() {
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
     '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Visa karta ('+withCoords+'/'+courseDb.length+' med koordinater)</button>'+
+    '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
@@ -4463,6 +4576,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (8)',
+    items: [
+      { type: 'fixed', text: 'Säkerhetsfix: vanliga spelare kunde av misstag se admin-kontroller (bl.a. "logga in som annan användare" och ta bort användare) i Spelare-vyn. Endast admin har nu dessa möjligheter.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (7)',
+    items: [
+      { type: 'new', text: '"Banor nära mig" – hittar banor sorterat efter avstånd från din plats, med filter för 25/50/100 km eller alla.' },
+      { type: 'new', text: 'Nytt verktyg "Avstånd mellan banor" i Bandatabasen – välj två banor och se avståndet fågelvägen.' }
+    ]
+  },
   {
     date: '2 juli 2026 (6)',
     items: [
@@ -4846,6 +4972,7 @@ function saveHcpUpdate() {
 }
 
 function impersonateUser(username) {
+  if(!isAdmin()) { alert('Endast admin kan logga in som andra användare.'); return; }
   var target = findUser(username);
   if(!target) return;
   if(target.role === 'admin') { alert('Du kan inte logga in som en annan admin.'); return; }
@@ -5042,6 +5169,11 @@ function renderUsersList() {
   renderDbDiagnostics();
   var el = document.getElementById('users-list');
   var users = getUsers();
+  var admin = isAdmin();
+  var newUserBtn = document.getElementById('new-user-btn');
+  if(newUserBtn) newUserBtn.style.display = admin ? '' : 'none';
+  var headerEl = document.getElementById('users-screen-title');
+  if(headerEl) headerEl.textContent = admin ? 'Användare' : 'Spelare';
   if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
   el.innerHTML = users.map(function(u, i) {
     var tourNames = (u.tourAccess||[]).map(function(tid){
@@ -5053,17 +5185,17 @@ function renderUsersList() {
       '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
         '<div>'+
           '<div style="font-weight:600;font-size:16px">'+u.username+'</div>'+
-          '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>'+
+          (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
           (isPlayer ? ' <span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
         '</div>'+
-        '<div class="row" style="gap:6px">'+
+        (admin ? '<div class="row" style="gap:6px">'+
           (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
           '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
           (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
-        '</div>'+
+        '</div>' : '')+
       '</div>'+
-      (u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-bottom:2px">Admin ser alltid alla tourer i översikten</div>' : '')+
-      '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
+      (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-bottom:2px">Admin ser alltid alla tourer i översikten</div>' : '')+
+      (admin ? '<div style="font-size:13px;color:var(--text-2)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>' : '')+
     '</div>';
   }).join('');
 }
@@ -5417,6 +5549,7 @@ function saveEditUser(i) {
 }
 
 function delUser(i) {
+  if(!isAdmin()) return;
   var u = getUsers()[i];
   if(u.username === currentUser.username) { alert('Du kan inte ta bort dig själv.'); return; }
   if(!confirm('Ta bort användaren "'+u.username+'"?')) return;
