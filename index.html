@@ -229,6 +229,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-label" style="color:#444441">Inställningar</div>
         <div class="home-card-sub" style="color:#5F5E5A">Banor &amp; konfiguration</div>
       </div>
+      <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
+        <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#5B2C8C">Idéer &amp; nyheter</div>
+        <div class="home-card-sub" style="color:#7A4CAE">Föreslå funktioner, se vad som är nytt</div>
+      </div>
     </div>
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px"></div>
   </div>
@@ -253,6 +258,16 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
       <h2 style="margin:0;flex:1;text-align:center">Inställningar</h2>
     </div>
     <div id="global-settings-content"></div>
+  </div>
+  <div id="idea-wall-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <h2 style="margin:0;flex:1;text-align:center">Idéer &amp; nyheter</h2>
+      <button class="btn btn-primary btn-sm" onclick="openNewIdeaModal()"><i class="ti ti-plus"></i> Nytt förslag</button>
+    </div>
+    <div id="release-notes-inline" style="margin-bottom:20px"></div>
+    <div id="idea-wall-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div id="idea-wall-content"></div>
   </div>
 </div>
 
@@ -502,7 +517,7 @@ var STATIC_COURSE_IMAGES = {
   'lindo': 'lindo.jpg',
 };
 
-var S = { tours: [] };
+var S = { tours: [], ideas: [] };
 var firebaseReady = false;
 var saveTimer = null;
 
@@ -533,9 +548,11 @@ function initFirebaseSync(onFirstLoad) {
       var incoming = JSON.parse(doc.data().data);
       S.tours = incoming.tours || [];
       S.users = incoming.users || [];
+      S.ideas = incoming.ideas || [];
     } else {
       S.tours = [];
       S.users = [];
+      S.ideas = [];
     }
     if (!firebaseReady) {
       firebaseReady = true;
@@ -3824,6 +3841,173 @@ function toggleReleaseNotes() {
     panel.style.display = 'block';
     if(chevron) chevron.style.transform = 'rotate(180deg)';
   }
+}
+
+// ── IDÉVÄGG (förslag, röstning, status) ─────────────────────────────────────
+var IDEA_STATUSES = ['new','evaluating','planned','in_progress','launched'];
+var IDEA_STATUS_META = {
+  new:         { label:'Nytt',              color:'#185FA5', bg:'#E3EFFB' },
+  evaluating:  { label:'Under utvärdering', color:'#854F0B', bg:'#FCEFDA' },
+  planned:     { label:'Planerat',          color:'#5B2C8C', bg:'#EFE4FA' },
+  in_progress: { label:'Under utveckling',  color:'#BA7517', bg:'#FDF3DF' },
+  launched:    { label:'Lanserat',          color:'#0F6E56', bg:'#E1F5EE' }
+};
+var _ideaFilter = 'all';
+
+function showIdeaWall() {
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
+  });
+  updateHero(null);
+  renderReleaseNotesInline();
+  renderIdeaWall();
+}
+
+function renderReleaseNotesInline() {
+  var el = document.getElementById('release-notes-inline');
+  if(!el) return;
+  el.innerHTML = '<div class="card" style="padding:14px 16px">'+
+    '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:var(--gold)"></i> Nyheter i appen</div>'+
+    RELEASE_NOTES.map(function(entry){
+      var rows = entry.items.map(function(it){
+        var meta = RELEASE_TYPE_META[it.type] || RELEASE_TYPE_META.new;
+        return '<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">'+
+          '<span style="flex-shrink:0;font-size:10px;font-weight:700;color:'+meta.color+';background:'+meta.bg+';padding:2px 8px;border-radius:20px;white-space:nowrap;margin-top:1px"><i class="ti '+meta.icon+'" style="font-size:10px"></i> '+meta.label+'</span>'+
+          '<span style="font-size:13px;color:var(--text);line-height:1.4">'+esc(it.text)+'</span>'+
+        '</div>';
+      }).join('');
+      return '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+esc(entry.date)+'</div>'+rows+'</div>';
+    }).join('')+
+  '</div>';
+}
+
+function setIdeaFilter(status) {
+  _ideaFilter = status;
+  renderIdeaWall();
+}
+
+function renderIdeaWall() {
+  var filterEl = document.getElementById('idea-wall-filters');
+  var contentEl = document.getElementById('idea-wall-content');
+  if(!filterEl || !contentEl) return;
+  var ideas = S.ideas || [];
+
+  var allChip = '<button class="btn btn-sm'+(_ideaFilter==='all'?' btn-primary':'')+'" onclick="setIdeaFilter(\'all\')">Alla ('+ideas.length+')</button>';
+  var statusChips = IDEA_STATUSES.map(function(st){
+    var count = ideas.filter(function(i){ return i.status===st; }).length;
+    var meta = IDEA_STATUS_META[st];
+    return '<button class="btn btn-sm'+(_ideaFilter===st?' btn-primary':'')+'" onclick="setIdeaFilter(\''+st+'\')">'+esc(meta.label)+' ('+count+')</button>';
+  }).join('');
+  filterEl.innerHTML = allChip + statusChips;
+
+  var shown = ideas.filter(function(i){ return _ideaFilter==='all' || i.status===_ideaFilter; });
+  shown = shown.slice().sort(function(a,b){
+    var va=(a.votes||[]).length, vb=(b.votes||[]).length;
+    if(vb!==va) return vb-va;
+    return new Date(b.createdAt)-new Date(a.createdAt);
+  });
+
+  if(!shown.length) {
+    contentEl.innerHTML = '<p class="empty">Inga förslag ännu'+(_ideaFilter!=='all'?' i den här kategorin':'')+'. Bli den första att föreslå något!</p>';
+    return;
+  }
+
+  contentEl.innerHTML = shown.map(function(idea){
+    var meta = IDEA_STATUS_META[idea.status] || IDEA_STATUS_META.new;
+    var votes = idea.votes || [];
+    var hasVoted = currentUser && votes.indexOf(currentUser.username) !== -1;
+    var canManage = isAdmin();
+    var canDelete = canManage || (currentUser && idea.author === currentUser.username);
+    var statusSelect = canManage
+      ? '<select onchange="setIdeaStatus(\''+idea.id+'\',this.value)" style="margin:0;font-size:11px;padding:3px 8px;width:auto">'+
+          IDEA_STATUSES.map(function(st){ return '<option value="'+st+'"'+(st===idea.status?' selected':'')+'>'+esc(IDEA_STATUS_META[st].label)+'</option>'; }).join('')+
+        '</select>'
+      : '<span style="font-size:11px;font-weight:700;color:'+meta.color+';background:'+meta.bg+';padding:3px 10px;border-radius:20px">'+esc(meta.label)+'</span>';
+    return '<div class="card" style="margin-bottom:10px;padding:14px 16px">'+
+      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">'+
+        '<div style="font-size:15px;font-weight:700;color:var(--text);flex:1">'+esc(idea.title)+'</div>'+
+        statusSelect+
+      '</div>'+
+      (idea.description?'<p style="font-size:13px;color:var(--text-2);margin:0 0 10px;white-space:pre-wrap">'+esc(idea.description)+'</p>':'')+
+      '<div class="row" style="justify-content:space-between;align-items:center">'+
+        '<span style="font-size:11px;color:var(--text-3)">Föreslaget av '+esc(idea.authorName||idea.author)+'</span>'+
+        '<div class="row" style="gap:8px">'+
+          (canDelete?'<button class="btn btn-sm" onclick="deleteIdea(\''+idea.id+'\')" style="color:#dc2626" title="Ta bort"><i class="ti ti-trash"></i></button>':'')+
+          '<button class="btn btn-sm'+(hasVoted?' btn-primary':'')+'" onclick="toggleIdeaVote(\''+idea.id+'\')"><i class="ti ti-thumb-up"></i> '+votes.length+'</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function openNewIdeaModal() {
+  if(!currentUser) return;
+  var h = '<h3><i class="ti ti-bulb" style="color:#5B2C8C"></i> Nytt förslag</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Beskriv din idé så tydligt du kan – andra medlemmar kan rösta på den.</p>';
+  h += '<div class="field"><label>Titel</label><input id="idea-title-inp" type="text" placeholder="T.ex. \'Mobilanpassad leaderboard\'" maxlength="80"></div>';
+  h += '<div class="field"><label>Beskrivning</label><textarea id="idea-desc-inp" rows="4" style="width:100%;box-sizing:border-box" placeholder="Valfritt – motivera gärna varför det vore bra"></textarea></div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
+    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="createIdea()">Skicka förslag</button></div>';
+  showModal(h, false, true);
+  setTimeout(function(){ var el=document.getElementById('idea-title-inp'); if(el) el.focus(); }, 30);
+}
+
+function createIdea() {
+  var titleEl = document.getElementById('idea-title-inp');
+  var descEl = document.getElementById('idea-desc-inp');
+  var title = titleEl ? titleEl.value.trim() : '';
+  if(!title) { alert('Skriv en titel för förslaget.'); return; }
+  if(!S.ideas) S.ideas = [];
+  S.ideas.push({
+    id: uid(),
+    title: title,
+    description: descEl ? descEl.value.trim() : '',
+    author: currentUser.username,
+    authorName: currentUser.name || currentUser.username,
+    createdAt: new Date().toISOString(),
+    votes: [],
+    status: 'new'
+  });
+  save();
+  closeModal();
+  renderIdeaWall();
+}
+
+function toggleIdeaVote(id) {
+  if(!currentUser) return;
+  var idea = (S.ideas||[]).find(function(i){ return i.id===id; });
+  if(!idea) return;
+  if(!idea.votes) idea.votes = [];
+  var idx = idea.votes.indexOf(currentUser.username);
+  if(idx === -1) idea.votes.push(currentUser.username);
+  else idea.votes.splice(idx, 1);
+  save();
+  renderIdeaWall();
+}
+
+function setIdeaStatus(id, status) {
+  if(!isAdmin()) return;
+  var idea = (S.ideas||[]).find(function(i){ return i.id===id; });
+  if(!idea || IDEA_STATUSES.indexOf(status)===-1) return;
+  idea.status = status;
+  save();
+  renderIdeaWall();
+}
+
+function deleteIdea(id) {
+  var idea = (S.ideas||[]).find(function(i){ return i.id===id; });
+  if(!idea) return;
+  var canDelete = isAdmin() || (currentUser && idea.author === currentUser.username);
+  if(!canDelete) return;
+  if(!confirm('Ta bort förslaget "'+idea.title+'"?')) return;
+  S.ideas = (S.ideas||[]).filter(function(i){ return i.id!==id; });
+  save();
+  renderIdeaWall();
 }
 
 // ── LOGIN SCREEN ───────────────────────────────────────────────────────────
