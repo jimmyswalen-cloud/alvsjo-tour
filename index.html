@@ -210,6 +210,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="tours-screen">
   <div id="home-screen-content">
     <div id="home-approvals-widget"></div>
+    <div id="home-sidebet-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
         <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
@@ -840,6 +841,7 @@ function showHomeScreen() {
   renderHomeUserBar();
   updateHero(null);
   renderHomeApprovalWidget();
+  renderHomeSideBetWidget();
   updateSettingsCard();
 }
 
@@ -1865,8 +1867,23 @@ function wizStep3() {
 
   h += '<hr class="divider">';
   h += '<h3>Avgift & prispott</h3>';
-  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Avgift per spelare för hela touren. Prispotten fördelas på pallen efter avslutad tour.</p>';
+  h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Avgift per spelare för hela touren.</p>';
   h += '<div class="field"><label>Avgift per spelare (kr)</label><input type="number" id="w-fee" min="0" step="50" value="'+(wiz.fee||500)+'" style="width:120px"></div>';
+
+  var payoutMode = wiz.payoutMode || 'pot';
+  h += '<div class="section-title" style="margin-top:8px">Prisstruktur</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
+  h += '<label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;font-size:13px;cursor:pointer">'+
+    '<input type="radio" name="w-payout-mode" value="pot" '+(payoutMode==='pot'?'checked':'')+' onchange="wizTogglePayoutMode()" style="margin-top:2px;width:auto">'+
+    '<span><b>Prispott vid touravslut</b><br><span style="color:var(--text-3);font-size:12px">Hela potten delas mellan de tre bästa i OoM-slutställningen.</span></span>'+
+  '</label>';
+  h += '<label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;font-size:13px;cursor:pointer">'+
+    '<input type="radio" name="w-payout-mode" value="per_event" '+(payoutMode==='per_event'?'checked':'')+' onchange="wizTogglePayoutMode()" style="margin-top:2px;width:auto">'+
+    '<span><b>Vinst per deltävling + totalseger</b><br><span style="color:var(--text-3);font-size:12px">Vinnaren av varje deltävling får en andel av potten direkt. Totalvinnaren i OoM får en egen andel.</span></span>'+
+  '</label>';
+  h += '</div>';
+
+  h += '<div id="w-pot-payout-section" style="display:'+(payoutMode==='pot'?'':'none')+'">';
   h += '<div class="section-title" style="margin-top:8px">Fördelning av prispott</div>';
   var payouts = wiz.payouts || [60,25,15];
   h += '<div id="w-payout-rows">';
@@ -1875,6 +1892,13 @@ function wizStep3() {
   }).join('');
   h += '</div>';
   h += '<p id="w-payout-sum-warn" style="font-size:12px;color:var(--danger-text);display:none">Summan måste vara 100%.</p>';
+  h += '</div>';
+
+  h += '<div id="w-per-event-payout-section" style="display:'+(payoutMode==='per_event'?'':'none')+'">';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Ange hur stor andel av potten (i procent) som delas ut vid varje delseger, respektive till totalvinnaren av touren. Om ni har många deltävlingar, håll delseger-procenten låg så det finns kvar till totalsegern.</p>';
+  h += '<div class="field"><label>Andel av potten per delseger (%)</label><input type="number" id="w-per-event-pct" min="0" max="100" value="'+(wiz.perEventWinPct!=null?wiz.perEventWinPct:5)+'" style="width:100px"></div>';
+  h += '<div class="field"><label>Andel av potten till totalvinnaren (%)</label><input type="number" id="w-total-win-pct" min="0" max="100" value="'+(wiz.totalWinPct!=null?wiz.totalWinPct:40)+'" style="width:100px"></div>';
+  h += '</div>';
 
   h += '<div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">';
   h += '<button class="btn" onclick="wizStep3Back()"><i class="ti ti-arrow-left"></i> Föregående</button>';
@@ -1883,6 +1907,12 @@ function wizStep3() {
   h += '<button class="btn btn-primary" onclick="wizFinish()"><i class="ti ti-check"></i> Skapa tour</button>';
   h += '</div>';
   showModal(h, false, true);
+}
+
+function wizTogglePayoutMode() {
+  var mode = document.querySelector('input[name="w-payout-mode"]:checked').value;
+  document.getElementById('w-pot-payout-section').style.display = mode==='pot' ? '' : 'none';
+  document.getElementById('w-per-event-payout-section').style.display = mode==='per_event' ? '' : 'none';
 }
 
 function wizStep3Back() {
@@ -1897,6 +1927,12 @@ function wizStep3SaveCurrent() {
   }
   var feeEl = document.getElementById('w-fee');
   if(feeEl) wiz.fee = parseInt(feeEl.value)||0;
+  var modeEl = document.querySelector('input[name="w-payout-mode"]:checked');
+  if(modeEl) wiz.payoutMode = modeEl.value;
+  var perEventEl = document.getElementById('w-per-event-pct');
+  if(perEventEl) wiz.perEventWinPct = parseInt(perEventEl.value)||0;
+  var totalWinEl = document.getElementById('w-total-win-pct');
+  if(totalWinEl) wiz.totalWinPct = parseInt(totalWinEl.value)||0;
   var payouts = [];
   for(var pi=0; document.getElementById('w-po-'+pi); pi++) {
     payouts.push(parseInt(document.getElementById('w-po-'+pi).value)||0);
@@ -1911,10 +1947,13 @@ function wizRemoveFinalRow(i){ wizStep3SaveCurrent(); wiz.finalTable.splice(i,1)
 
 function wizFinish() {
   wizStep3SaveCurrent();
-  var payoutSum = (wiz.payouts||[]).reduce(function(s,p){return s+p;},0);
-  if(wiz.fee > 0 && wiz.payouts && wiz.payouts.length && payoutSum !== 100) {
-    alert('Summan av prispottsfördelningen måste vara exakt 100%. Nu är den '+payoutSum+'%.');
-    return;
+  var payoutMode = wiz.payoutMode || 'pot';
+  if(payoutMode === 'pot') {
+    var payoutSum = (wiz.payouts||[]).reduce(function(s,p){return s+p;},0);
+    if(wiz.fee > 0 && wiz.payouts && wiz.payouts.length && payoutSum !== 100) {
+      alert('Summan av prispottsfördelningen måste vara exakt 100%. Nu är den '+payoutSum+'%.');
+      return;
+    }
   }
   var events = wiz.events.map(function(ev) {
     return { id:uid(), name:ev.name, course:ev.course, date:ev.date, type:ev.type,
@@ -1929,7 +1968,10 @@ function wizFinish() {
     pointsScale: wiz.pointsScale,
     finalTable: wiz.finalTable || [],
     fee: wiz.fee || 0,
+    payoutMode: payoutMode,
     payouts: wiz.payouts || [60,25,15],
+    perEventWinPct: wiz.perEventWinPct || 0,
+    totalWinPct: wiz.totalWinPct || 0,
     payments: {},
     calYear: new Date().getFullYear(), calMonth: new Date().getMonth()
   };
@@ -2116,8 +2158,9 @@ function buildFeePotHTML(t) {
   var payments = t.payments || {};
   var activePlayers = players.map(function(p,pi){ return {p:p, pi:pi}; }).filter(function(x){ return !!x.p; });
   var paidCount = activePlayers.filter(function(x){ return !!payments[x.pi]; }).length;
-  var pot = paidCount * t.fee;
-  var payouts = t.payouts || [60,25,15];
+  var wd = computeTourWinnings(t);
+  var pot = wd.pot;
+  var mode = wd.mode;
 
   var h = '<h3><i class="ti ti-cash" style="color:var(--green-dark)"></i> Avgift & prispott</h3>';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:18px;gap:10px">'+
@@ -2125,15 +2168,48 @@ function buildFeePotHTML(t) {
     '<div style="text-align:right"><div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em">Pott ('+paidCount+'/'+activePlayers.length+' betalat)</div><div style="font-size:24px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>'+
   '</div>';
 
-  h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Fördelning</div>';
-  h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:20px">'+
-    payouts.map(function(pct,i){
-      return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
-        '<span style="font-size:13px;color:var(--text-2)">Plats '+(i+1)+' ('+pct+'%)</span>'+
-        '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+Math.round(pot*pct/100)+' kr</span>'+
+  if(mode === 'per_event') {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Prisstruktur</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:16px">'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
+        '<span style="font-size:13px;color:var(--text-2)">Per delseger ('+(t.perEventWinPct||0)+'% av potten)</span>'+
+        '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+wd.perEventAmount+' kr</span>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
+        '<span style="font-size:13px;color:var(--text-2)">Totalvinnare i OoM ('+(t.totalWinPct||0)+'% av potten)</span>'+
+        '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+wd.totalAmount+' kr</span>'+
+      '</div>'+
+    '</div>';
+
+    var winnersSorted = Object.keys(wd.winnings).map(function(pi){
+      var p = players[pi];
+      return { pi: parseInt(pi), name: p ? p.name : '?', kr: wd.winnings[pi] };
+    }).filter(function(x){ return x.kr > 0; }).sort(function(a,b){ return b.kr-a.kr; });
+
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Vinstpengar per spelare</div>';
+    if(!winnersSorted.length) {
+      h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Ingen har vunnit pengar än.</p>';
+    } else {
+      h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:20px">'+
+        winnersSorted.map(function(w){
+          return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
+            '<span style="font-size:13px;color:var(--text-2)">'+esc(w.name)+'</span>'+
+            '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+w.kr+' kr</span>'+
+          '</div>';
+        }).join('')+
       '</div>';
-    }).join('')+
-  '</div>';
+    }
+  } else {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Fördelning</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:20px">'+
+      (wd.payouts||[]).map(function(pct,i){
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="font-size:13px;color:var(--text-2)">Plats '+(i+1)+' ('+pct+'%)</span>'+
+          '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+Math.round(pot*pct/100)+' kr</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
 
   h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Betalningsstatus</div>';
   h += '<div id="fee-pot-payment-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">';
@@ -2534,6 +2610,184 @@ function renderHomeApprovalWidget() {
   el.innerHTML = html;
 }
 
+// ── SIDE BETS (längsta drive, närmast hål, minst antal puttar m.m.) ────────
+function dateMinusDays(dateStr, days) {
+  var d = new Date(dateStr);
+  d.setDate(d.getDate()-days);
+  return d.toISOString().slice(0,10);
+}
+
+// Avgifter som väntar på betalning för den inloggade spelaren, tvärs över alla tourer.
+function computeSideBetDues() {
+  var dues = [];
+  if(!currentUser) return dues;
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
+    if(myPi < 0) return;
+    (t.events||[]).forEach(function(e){
+      (e.sideBets||[]).forEach(function(sb){
+        var isParticipant = (sb.participants||[]).indexOf(myPi) !== -1;
+        var hasPaid = !!(sb.payments && sb.payments[myPi]);
+        if(sb.fee > 0 && isParticipant && !hasPaid) {
+          dues.push({
+            tourName: t.name+(t.season?' '+t.season:''), eventName: e.name, eventDate: e.date,
+            betName: sb.name, fee: sb.fee, deadline: dateMinusDays(e.date, 1)
+          });
+        }
+      });
+    });
+  });
+  return dues;
+}
+
+function renderHomeSideBetWidget() {
+  var el = document.getElementById('home-sidebet-widget');
+  if(!el) return;
+  if(!currentUser) { el.innerHTML = ''; return; }
+  var dues = computeSideBetDues();
+  if(!dues.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px;border-color:#dc2626">'+
+    '<div style="font-size:13px;font-weight:700;color:#dc2626;margin-bottom:8px"><i class="ti ti-alert-circle"></i> Du har en avgift att betala ('+dues.length+')</div>'+
+    dues.map(function(d){
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'+
+        '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(d.betName)+' <span style="color:#dc2626">– '+d.fee+' kr</span></div>'+
+        '<div style="font-size:12px;color:var(--text-2)">'+esc(d.eventName)+' · '+esc(d.tourName)+'</div>'+
+        '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+'</div>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+
+function openSideBets(ei) {
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  if(!e.sideBets) e.sideBets = [];
+  var players = getPlayersForTour(t);
+  var regPis = getEventRegPis(e);
+  var admin = isAdmin();
+
+  var h = '<h3><i class="ti ti-target-arrow"></i> Side bets – '+esc(e.name)+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:14px">T.ex. längsta drive, närmast hål, minst antal puttar.</p>';
+
+  if(!e.sideBets.length) {
+    h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:14px">Inga side bets inlagda ännu för den här deltävlingen.</p>';
+  } else {
+    h += e.sideBets.map(function(sb){
+      var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
+      var participants = sb.participants || [];
+      var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
+      var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
+        '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+'</div>'+
+          (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
+          (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
+          (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>':'')+
+          '</div>'+
+          (admin?'<button class="btn btn-sm btn-danger" onclick="deleteSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-trash"></i></button>':'')+
+        '</div>';
+      if(admin) {
+        box += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
+        if(sb.fee > 0 && participants.length) {
+          box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">Betalning</div>';
+          box += participants.map(function(pi){
+            var p = players[pi]; if(!p) return '';
+            var paid = !!(sb.payments && sb.payments[pi]);
+            return '<div class="row" style="justify-content:space-between;align-items:center;padding:3px 0">'+
+              '<span style="font-size:12px">'+esc(p.name)+'</span>'+
+              '<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:'+(paid?'#1D9E75':'transparent')+';color:'+(paid?'#fff':'var(--text-3)')+';border-color:'+(paid?'#1D9E75':'var(--border)')+'" onclick="toggleSideBetPayment('+ei+',\''+sb.id+'\','+pi+')">'+(paid?'Betalt':'Ej betalt')+'</button>'+
+            '</div>';
+          }).join('');
+        }
+        box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:8px 0 4px">Vinnare</div>';
+        box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:0">'+
+          '<option value="">Ingen vinnare satt</option>'+
+          participants.map(function(pi){
+            var p = players[pi]; if(!p) return '';
+            return '<option value="'+pi+'" '+(sb.winnerPi===pi?'selected':'')+'>'+esc(p.name)+'</option>';
+          }).join('')+
+        '</select>';
+        box += '</div>';
+      }
+      box += '</div>';
+      return box;
+    }).join('');
+  }
+
+  if(admin) {
+    h += '<hr class="divider">';
+    h += '<h4 style="margin-bottom:8px">Lägg till side bet</h4>';
+    h += '<div class="field"><label>Namn</label><input type="text" id="sb-name" placeholder="T.ex. Längsta drive"></div>';
+    h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Hål 14"></div>';
+    h += '<div class="field"><label>Avgift per deltagare (kr, 0 = gratis)</label><input type="number" id="sb-fee" min="0" value="0" style="width:120px"></div>';
+    h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt: alla anmälda till deltävlingen)</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
+      (regPis.length ? regPis.map(function(pi){
+        var p = players[pi]; if(!p) return '';
+        return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
+      }).join('') : '<span style="font-size:12px;color:var(--text-3)">Inga anmälda ännu.</span>')+
+    '</div>';
+    h += '<button class="btn btn-sm btn-primary" onclick="addSideBet('+ei+')"><i class="ti ti-plus"></i> Lägg till side bet</button>';
+  }
+
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true, true);
+}
+
+function addSideBet(ei) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var nameEl = document.getElementById('sb-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if(!name) { alert('Ange ett namn för side betet.'); return; }
+  var desc = (document.getElementById('sb-desc')||{}).value || '';
+  var fee = parseInt((document.getElementById('sb-fee')||{}).value)||0;
+  var checked = Array.prototype.map.call(document.querySelectorAll('.sb-participant-chk:checked'), function(el){ return parseInt(el.value); });
+  if(!e.sideBets) e.sideBets = [];
+  e.sideBets.push({ id: uid(), name: name, description: desc.trim(), fee: fee, participants: checked, payments: {}, winnerPi: null });
+  save();
+  renderEvents();
+  renderHomeSideBetWidget();
+  openSideBets(ei);
+}
+
+function deleteSideBet(ei, betId) {
+  if(!isAdmin()) return;
+  if(!confirm('Ta bort det här side betet?')) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  e.sideBets = (e.sideBets||[]).filter(function(sb){ return sb.id!==betId; });
+  save();
+  renderEvents();
+  renderHomeSideBetWidget();
+  openSideBets(ei);
+}
+
+function toggleSideBetPayment(ei, betId, pi) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(!sb.payments) sb.payments = {};
+  sb.payments[pi] = !sb.payments[pi];
+  save();
+  renderHomeSideBetWidget();
+  openSideBets(ei);
+}
+
+function setSideBetWinner(ei, betId, val) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
+  save();
+  renderEvents();
+}
+
 function eventCardHTML(i,e) {
   var tl=e.type==='stableford'?'Stableford':'Slag';
   var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
@@ -2650,15 +2904,20 @@ function eventCardHTML(i,e) {
   }
 
   var chatBtn = '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Chat'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>';
+  var sideBetsBtn = (e.sideBets && e.sideBets.length)
+    ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
+    : (isAdmin() ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
+      sideBetsBtn+
       chatBtn
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       myResultBtn+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
+      sideBetsBtn+
       chatBtn;
   return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
@@ -4759,6 +5018,42 @@ function computeOomStandings(t) {
   return totals;
 }
 
+// ── VINSTPENGAR (stödjer både prispott-läge och vinst-per-deltävling-läge) ──
+function computeTourWinnings(t) {
+  var players = getPlayersForTour(t);
+  var payments = t.payments || {};
+  var paidCount = players.filter(function(p,pi){ return p && payments[pi]; }).length;
+  var pot = paidCount * (t.fee||0);
+  var mode = t.payoutMode || 'pot';
+  var winnings = {}; // pi -> kr
+
+  if(mode === 'per_event') {
+    var perEventAmount = Math.round(pot * (t.perEventWinPct||0)/100);
+    (t.events||[]).forEach(function(e){
+      if(e.closed && !e.isFinal && e.results && e.results.length) {
+        var winnerPi = e.results[0].pi;
+        winnings[winnerPi] = (winnings[winnerPi]||0) + perEventAmount;
+      }
+    });
+    var standings = computeOomStandings(t);
+    var totalAmount = Math.round(pot * (t.totalWinPct||0)/100);
+    if(standings.length && totalAmount > 0) {
+      winnings[standings[0].pi] = (winnings[standings[0].pi]||0) + totalAmount;
+    }
+    return { mode:mode, pot:pot, winnings:winnings, perEventAmount:perEventAmount, totalAmount:totalAmount };
+  }
+
+  // Standardläge: prispott delas mellan de bästa i OoM-slutställningen enligt t.payouts.
+  var standings2 = computeOomStandings(t);
+  var payouts = t.payouts || [60,25,15];
+  payouts.forEach(function(pct,idx){
+    if(standings2[idx]) {
+      winnings[standings2[idx].pi] = (winnings[standings2[idx].pi]||0) + Math.round(pot*pct/100);
+    }
+  });
+  return { mode:mode, pot:pot, winnings:winnings, payouts:payouts };
+}
+
 // Compact "Top 3 i ledning" / "Vinnare" widget for tour cards and the tour's Tävlingar-view.
 function buildTop3HTML(t, compact) {
   var standings = computeOomStandings(t).filter(function(s){ return s.events > 0; });
@@ -4800,12 +5095,14 @@ function renderOOM(){
   var sorted = computeOomStandings(t);
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
   var medals=['🥇','🥈','🥉'];
+  var winningsData = (t.fee>0) ? computeTourWinnings(t) : null;
   el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
     sorted.map(function(d,idx){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
       var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
       var pLogo = playerBrandLogoTag(p.username, 16);
+      var won = winningsData ? (winningsData.winnings[pi]||0) : 0;
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
         '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
@@ -4813,6 +5110,7 @@ function renderOOM(){
         (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
         '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+'</div>'+
         (bestN>0?'<div style="font-size:12px;color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</div>':'')+
+        (won>0?'<div style="font-size:12px;color:#0F6E56;font-weight:700"><i class="ti ti-cash" style="font-size:11px"></i> '+won+' kr</div>':'')+
         '</div>'+
         '<div class="oom-pts">'+d.pts+' pts</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
@@ -6181,6 +6479,21 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (45)',
+    items: [
+      { type: 'new', text: 'Nya "Side bets" per deltävling – admin kan lägga till sidovad som längsta drive, närmast hål eller minst antal puttar, med valfri avgift per deltagare och vinnare.' },
+      { type: 'new', text: 'Spelare med obetald side bet-avgift ser nu en tydlig påminnelse "Du har en avgift att betala" på hemskärmen, med vad avgiften avser och en påminnelse om att swisha tävlingsledningen senast dagen före deltävlingens datum.' },
+      { type: 'improved', text: 'Endast admin kan skapa, redigera eller ta bort side bets samt markera betalningar och vinnare – alla kan se dem.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (44)',
+    items: [
+      { type: 'new', text: 'Nytt val av prisstruktur när man skapar en tour: "Prispott vid touravslut" (som förut) eller "Vinst per deltävling + totalseger", där vinnaren av varje deltävling får en andel av potten direkt och totalvinnaren i OoM får en egen andel.' },
+      { type: 'new', text: 'Summan av alla vinster per spelare visas nu både i OoM-listan och i Avgift & prispott-vyn, oavsett vilken prisstruktur touren använder.' }
+    ]
+  },
   {
     date: '2 juli 2026 (43)',
     items: [
