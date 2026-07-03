@@ -5102,7 +5102,7 @@ function openStrengthsEdit(username, mandatory) {
       var bg     = active ? (color==='green' ? '#1D9E75' : '#dc2626') : 'transparent';
       var col    = active ? '#fff' : 'var(--text-2)';
       var border = active ? (color==='green' ? '#1D9E75' : '#dc2626') : 'var(--border)';
-      return '<button id="sw-chip-'+prefix+'-'+i+'" onclick="swToggleChip(\''+prefix+'\','+i+',\''+color+'\')" '+
+      return '<button id="sw-chip-'+prefix+'-'+i+'" data-active="'+(active?'1':'0')+'" onclick="swToggleChip(\''+prefix+'\','+i+',\''+color+'\')" '+
         'style="border:1px solid '+border+';background:'+bg+';color:'+col+';border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit">'+
         esc(item)+'</button>';
     }).join('');
@@ -5132,11 +5132,11 @@ function openStrengthsEdit(username, mandatory) {
   setTimeout(function(){
     curStr.forEach(function(s){
       var idx = SW_STRENGTHS.indexOf(s);
-      if(idx !== -1) { var el = document.getElementById('sw-chip-str-'+idx); if(el) el.style.background='#1D9E75',el.style.color='#fff',el.style.borderColor='#1D9E75'; }
+      if(idx !== -1) { var el = document.getElementById('sw-chip-str-'+idx); if(el) { el.style.background='#1D9E75'; el.style.color='#fff'; el.style.borderColor='#1D9E75'; el.setAttribute('data-active','1'); } }
     });
     curWeak.forEach(function(s){
       var idx = SW_WEAKNESSES.indexOf(s);
-      if(idx !== -1) { var el = document.getElementById('sw-chip-weak-'+idx); if(el) el.style.background='#dc2626',el.style.color='#fff',el.style.borderColor='#dc2626'; }
+      if(idx !== -1) { var el = document.getElementById('sw-chip-weak-'+idx); if(el) { el.style.background='#dc2626'; el.style.color='#fff'; el.style.borderColor='#dc2626'; el.setAttribute('data-active','1'); } }
     });
   }, 30);
 }
@@ -5145,7 +5145,7 @@ function swCountActive(prefix, list) {
   var n = 0;
   list.forEach(function(item, i){
     var el = document.getElementById('sw-chip-'+prefix+'-'+i);
-    if(el && el.style.background && el.style.background !== 'transparent' && el.style.background !== '') n++;
+    if(el && el.getAttribute('data-active')==='1') n++;
   });
   return n;
 }
@@ -5154,16 +5154,18 @@ function swToggleChip(prefix, idx, color) {
   var el = document.getElementById('sw-chip-'+prefix+'-'+idx);
   if(!el) return;
   var list = prefix==='str' ? SW_STRENGTHS : SW_WEAKNESSES;
-  var active = el.style.background !== 'transparent' && el.style.background !== '';
+  var active = el.getAttribute('data-active')==='1';
   if(!active && swCountActive(prefix, list) >= 3) {
     alert('Du kan max välja 3 st. Avmarkera en annan först.');
     return;
   }
   if(active) {
+    el.setAttribute('data-active','0');
     el.style.background = 'transparent';
     el.style.color = 'var(--text-2)';
     el.style.borderColor = 'var(--border)';
   } else {
+    el.setAttribute('data-active','1');
     var bg = color==='green' ? '#1D9E75' : '#dc2626';
     el.style.background = bg;
     el.style.color = '#fff';
@@ -5176,14 +5178,13 @@ function swToggleChip(prefix, idx, color) {
 function saveStrengths(username, mandatory) {
   var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!mandatory && !isAdmin() && (!currentUser || currentUser.username !== username)) { alert("Ingen behörighet."); return; }
-  var u = (S.users||[]).find(function(x){ return x.username===username; });
   if(!u) return;
 
   // Collect selected chips
   var strengths = [];
   SW_STRENGTHS.forEach(function(item, i){
     var el = document.getElementById('sw-chip-str-'+i);
-    if(el && el.style.background && el.style.background !== 'transparent' && el.style.background !== '') strengths.push(item);
+    if(el && el.getAttribute('data-active')==='1') strengths.push(item);
   });
   // Add custom
   var customStr = document.getElementById('sw-custom-str');
@@ -5194,7 +5195,7 @@ function saveStrengths(username, mandatory) {
   var weaknesses = [];
   SW_WEAKNESSES.forEach(function(item, i){
     var el = document.getElementById('sw-chip-weak-'+i);
-    if(el && el.style.background && el.style.background !== 'transparent' && el.style.background !== '') weaknesses.push(item);
+    if(el && el.getAttribute('data-active')==='1') weaknesses.push(item);
   });
   var customWeak = document.getElementById('sw-custom-weak');
   if(customWeak && customWeak.value.trim()) {
@@ -6801,6 +6802,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '3 juli 2026 (1)',
+    items: [
+      { type: 'fixed', text: 'Fixat bugg där spelare inte kunde välja styrkor och svagheter – klick på en chip kunde verka göra ingenting. Orsaken var att koden avgjorde vald/ovald genom att läsa tillbaka en CSS-färgsträng, vilket vissa webbläsare normaliserar annorlunda. Bytt till en pålitlig markör som fungerar konsekvent i alla webbläsare.' }
+    ]
+  },
   {
     date: '2 juli 2026 (51)',
     items: [
