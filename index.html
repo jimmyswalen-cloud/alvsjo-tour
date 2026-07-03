@@ -6692,6 +6692,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (50)',
+    items: [
+      { type: 'fixed', text: 'Utloggning gjorde tidigare en full sidladdning som fick appen att visa "Ansluter till molnet..." igen, trots att anslutningen redan fanns. Utloggning är nu "mjuk" och går direkt till inloggningssidan utan onödig väntan.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (49)',
     items: [
       { type: 'improved', text: 'Vinstbelopp (kr) visas inte längre i OoM-listan under en pågående tour, eftersom slutresultatet kan ändras – de dyker upp först när touren är helt avslutad (finalen stängd).' }
@@ -7302,7 +7308,13 @@ function tryAutoLogin() {
 function logout() {
   sessionStorage.removeItem('tourapp_session');
   currentUser = null;
-  location.reload();
+  activeTourId = null;
+  var userBar = document.getElementById('user-bar');
+  if(userBar) userBar.style.display = 'none';
+  var usersBtn = document.getElementById('nav-users-btn');
+  if(usersBtn) usersBtn.style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  showLoginScreen();
 }
 
 function afterLogin() {
