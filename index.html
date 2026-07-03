@@ -232,6 +232,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-label" style="color:#444441" id="settings-card-label">Inställningar</div>
         <div class="home-card-sub" style="color:#5F5E5A" id="settings-card-sub">Banor &amp; konfiguration</div>
       </div>
+      <div class="home-card" onclick="showMyBetting()" style="background:#FFD9A0;border:none;grid-column:1 / -1">
+        <i class="ti ti-coin" style="font-size:32px;color:#7A4A00" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#7A4A00">Min betting</div>
+        <div class="home-card-sub" style="color:#8A5E1F">Dina side bets &amp; saldo</div>
+      </div>
       <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
         <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
         <div class="home-card-label" style="color:#5B2C8C">Idéer &amp; nyheter</div>
@@ -829,6 +834,71 @@ function enablePasteForInput(btnId, onImage) {
 }
 
 // ── NAVIGATION ─────────────────────────────────────────────────────────────
+// ── MIN BETTING (hemskärmens sammanställning av spelarens egna side bets) ──
+function computeMyBettingOverview() {
+  var myActive = [], joinable = [];
+  if(!currentUser) return { myActive: myActive, joinable: joinable };
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
+    if(myPi < 0) return;
+    (t.events||[]).forEach(function(e){
+      (e.sideBets||[]).forEach(function(sb){
+        var participants = sb.participants || [];
+        var isIn = participants.indexOf(myPi) !== -1;
+        var decided = sb.winnerPi != null;
+        var item = {
+          tourId: t.id, tourName: t.name+(t.season?' '+t.season:''),
+          eventId: e.id, eventName: e.name,
+          betId: sb.id, betName: sb.name, fee: sb.fee,
+          paid: !!(sb.payments && sb.payments[myPi]), decided: decided
+        };
+        if(isIn) myActive.push(item);
+        else if(!decided) joinable.push(item);
+      });
+    });
+  });
+  return { myActive: myActive, joinable: joinable };
+}
+
+function showMyBetting() {
+  var stats = computePlayerSideBetStats(currentUser ? currentUser.username : '');
+  var overview = computeMyBettingOverview();
+  var h = '<h3><i class="ti ti-coin" style="color:#BA7517"></i> Min betting</h3>';
+  var statsHtml = buildSideBetStatsHTML(stats, 'Din sammanfattning');
+  h += statsHtml || '<p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Du har inte deltagit i några side bets ännu.</p>';
+
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">Mina aktiva bets</div>';
+  var activePending = overview.myActive.filter(function(x){ return !x.decided; });
+  if(!activePending.length) {
+    h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:14px">Inga aktiva bets just nu.</p>';
+  } else {
+    h += activePending.map(function(x){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">'+
+        '<div style="min-width:0"><div style="font-size:13px;font-weight:600">'+esc(x.betName)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3)">'+esc(x.eventName)+' · '+esc(x.tourName)+'</div></div>'+
+        (x.fee>0 ? '<span style="font-size:11px;padding:3px 9px;border-radius:20px;flex-shrink:0;background:'+(x.paid?'#E1F5EE':'#FCEBEB')+';color:'+(x.paid?'#0F6E56':'#A32D2D')+'">'+(x.paid?'Betalt':'Ej betalt')+'</span>' : '<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
+      '</div>';
+    }).join('');
+  }
+
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">Bets du kan gå med i</div>';
+  if(!overview.joinable.length) {
+    h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:10px">Inga öppna bets att gå med i just nu.</p>';
+  } else {
+    h += overview.joinable.map(function(x){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">'+
+        '<div style="min-width:0"><div style="font-size:13px;font-weight:600">'+esc(x.betName)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3)">'+esc(x.eventName)+' · '+esc(x.tourName)+'</div></div>'+
+        '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="joinSideBetGlobal(\''+x.tourId+'\',\''+x.eventId+'\',\''+x.betId+'\')">Gå med'+(x.fee>0?' ('+x.fee+' kr)':'')+'</button>'+
+      '</div>';
+    }).join('');
+  }
+
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true);
+}
+
 function showHomeScreen() {
   activeTourId = null;
   document.getElementById('tours-screen').style.display = '';
@@ -2890,9 +2960,10 @@ function setSideBetWinner(ei, betId, val) {
 }
 
 // Sammanfattning av side bets som visas direkt i tävlingskortet, under knapparna.
-function buildSideBetsSummaryHTML(t, e) {
+function buildSideBetsSummaryHTML(t, e, ei) {
   if(!e.sideBets || !e.sideBets.length) return '';
   var players = t.players;
+  var myPi = getMyPi(t);
   var h = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
   h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"><i class="ti ti-target-arrow"></i> Side bets</div>';
   h += e.sideBets.map(function(sb){
@@ -2900,6 +2971,7 @@ function buildSideBetsSummaryHTML(t, e) {
     var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
     var pot = paidCount * (sb.fee||0);
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
+    var canJoin = myPi>=0 && sb.winnerPi==null && participants.indexOf(myPi)===-1;
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
       '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+'</div>'+
@@ -2911,7 +2983,7 @@ function buildSideBetsSummaryHTML(t, e) {
       box += '<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-bottom:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>';
     }
     if(participants.length) {
-      box += '<div style="display:flex;flex-wrap:wrap;gap:5px">'+
+      box += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:'+(canJoin?'8px':'0')+'">'+
         participants.map(function(pi){
           var p = players[pi]; if(!p) return '';
           var paid = !!(sb.payments && sb.payments[pi]);
@@ -2922,13 +2994,51 @@ function buildSideBetsSummaryHTML(t, e) {
         }).join('')+
       '</div>';
     } else {
-      box += '<p style="font-size:11px;color:var(--text-3);margin:0">Inga deltagare inlagda.</p>';
+      box += '<p style="font-size:11px;color:var(--text-3);margin:0 0 '+(canJoin?'8px':'0')+'">Inga deltagare inlagda.</p>';
+    }
+    if(canJoin) {
+      box += '<button class="btn btn-sm btn-primary" onclick="joinSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-plus"></i> Gå med'+(sb.fee>0?' ('+sb.fee+' kr)':'')+'</button>';
     }
     box += '</div>';
     return box;
   }).join('');
   h += '</div>';
   return h;
+}
+
+// Låter en spelare gå med i ett befintligt side bet på egen hand (t.ex. vid efteranmälan).
+function joinSideBetCore(t, e, sb) {
+  var myPi = getMyPi(t);
+  if(myPi < 0) { alert('Du är inte registrerad som spelare i den här touren.'); return false; }
+  if(!sb.participants) sb.participants = [];
+  if(sb.participants.indexOf(myPi) !== -1) { alert('Du är redan med i det här betet.'); return false; }
+  if(sb.winnerPi != null) { alert('Det här betet är redan avgjort och går inte att gå med i längre.'); return false; }
+  if(!confirm('Vill du gå med i "'+sb.name+'"'+(sb.fee>0?' för '+sb.fee+' kr':'')+'?')) return false;
+  sb.participants.push(myPi);
+  save();
+  return true;
+}
+
+function joinSideBet(ei, betId) {
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(joinSideBetCore(t, e, sb)) renderEvents();
+}
+
+// Tour-oberoende variant, för användning från "Min betting" på hemskärmen.
+function joinSideBetGlobal(tourId, eventId, betId) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(joinSideBetCore(t, e, sb)) {
+    if(activeTourId === tourId) renderEvents();
+    showMyBetting();
+  }
 }
 
 function eventCardHTML(i,e) {
@@ -3084,7 +3194,7 @@ function eventCardHTML(i,e) {
     markerApprovalHtml+adminApprovalHtml+
     '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
     '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
-    buildSideBetsSummaryHTML(t, e)+
+    buildSideBetsSummaryHTML(t, e, i)+
   '</div>';
 }
 
@@ -6691,6 +6801,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (51)',
+    items: [
+      { type: 'new', text: 'Spelare kan nu gå med i ett befintligt side bet på egen hand (t.ex. vid efteranmälan) via en "Gå med"-knapp, istället för att behöva be admin lägga till dem manuellt.' },
+      { type: 'new', text: 'Ny hemskärmsknapp "Min betting" – visar din sammanfattning (bets placerade, earnings, balans), dina aktiva bets, och vilka öppna side bets du kan gå med i just nu, över alla tourer.' }
+    ]
+  },
   {
     date: '2 juli 2026 (50)',
     items: [
