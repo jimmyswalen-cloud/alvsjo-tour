@@ -2101,6 +2101,28 @@ function renderEvents() {
   var top3Html = buildTop3HTML(t, false);
   if(!t.events.length){el.innerHTML=top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
 
+  // Säsongsberättelse (tourens egen "story", motsvarande deltävlingarnas story fast för hela touren)
+  var hasFinal = t.events.some(function(e){ return e.isFinal; });
+  var tourConcluded = hasFinal ? t.events.some(function(e){ return e.isFinal && e.closed; }) : t.events.every(function(e){ return e.closed; });
+  var storyBanner = '';
+  if(t.story || t.storyImg) {
+    storyBanner = '<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">'+
+      (t.storyImg?'<img src="'+t.storyImg+'" style="width:100%;height:200px;object-fit:cover;display:block">':'')+
+      '<div style="padding:14px 16px">'+
+        '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div style="font-size:13px;font-weight:700;color:var(--text)"><i class="ti ti-book-2" style="color:var(--gold)"></i> Säsongsminnen</div>'+
+          (isAdmin()?'<button class="btn btn-sm" onclick="openTourStory()"><i class="ti ti-edit"></i></button>':'')+
+        '</div>'+
+        (t.story?'<p style="font-size:13px;color:var(--text);margin:8px 0 0;white-space:pre-wrap;line-height:1.45">'+esc(t.story)+'</p>':'')+
+      '</div>'+
+    '</div>';
+  } else if(isAdmin() && tourConcluded) {
+    storyBanner = '<div class="card" style="margin-bottom:16px;padding:14px 16px;text-align:center">'+
+      '<div style="font-size:13px;color:var(--text-2);margin-bottom:10px"><i class="ti ti-book"></i> Touren är avslutad – vill du skriva en säsongsberättelse för minnenas skull?</div>'+
+      '<button class="btn btn-sm btn-primary" onclick="openTourStory()"><i class="ti ti-plus"></i> Lägg till säsongsberättelse</button>'+
+    '</div>';
+  }
+
   // Fee/pot card
   var feeCard = '';
   if(t.fee > 0) {
@@ -2129,7 +2151,58 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = top3Html + feeCard + titleBlock + html;
+  el.innerHTML = top3Html + storyBanner + feeCard + titleBlock + html;
+}
+
+var _tourStoryImg = null;
+
+function openTourStory() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  _tourStoryImg = null;
+  var h = '<h3><i class="ti ti-book-2" style="color:var(--gold)"></i> Säsongsberättelse – '+esc(t.name)+(t.season?' '+esc(t.season):'')+'</h3>';
+  h += '<div class="field"><label><i class="ti ti-photo"></i> Bild (valfritt)</label>';
+  h += '<div id="ts-img-prev">'+(t.storyImg?'<img src="'+t.storyImg+'" class="img-preview-sm">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="ts-img-btn"><i class="ti ti-camera"></i> Välj bild</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="ts-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<div class="field"><label><i class="ti ti-book"></i> Berättelse</label>';
+  h += '<textarea id="ts-story" rows="6" placeholder="Sammanfatta säsongen – höjdpunkter, dramatik, roliga minnen..." style="width:100%;box-sizing:border-box">'+esc(t.story||'')+'</textarea></div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveTourStory()">Spara</button>';
+  h += '</div>';
+  showModal(h);
+  setTimeout(function(){
+    var b=document.getElementById('ts-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('ts-file-inp').click(); };
+    var inp=document.getElementById('ts-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onTourStoryImgFile(this.files[0]); };
+    enablePasteForInput('ts-img-btn', onTourStoryImgFile);
+  }, 50);
+}
+
+function onTourStoryImgFile(file) {
+  compressImage(file, 1200, 800, 0.92, function(d) {
+    showCropModal(d, 220, function(cropped) {
+      _tourStoryImg = cropped;
+      var prev = document.getElementById('ts-img-prev');
+      if(prev) prev.innerHTML = '<img src="'+cropped+'" class="img-preview-sm">';
+    });
+  });
+}
+
+function saveTourStory() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  var storyEl = document.getElementById('ts-story');
+  t.story = storyEl ? storyEl.value.trim() : (t.story||'');
+  if(_tourStoryImg) t.storyImg = _tourStoryImg;
+  save();
+  closeModal();
+  _tourStoryImg = null;
+  renderEvents();
 }
 
 // Snabbstart: sätt en avgift och markera alla nuvarande spelare som betalt i ett steg,
@@ -2611,6 +2684,9 @@ function renderHomeApprovalWidget() {
 }
 
 // ── SIDE BETS (längsta drive, närmast hål, minst antal puttar m.m.) ────────
+// Hårdkodad lista på standardtyper, så statistiken inte splittras av stavfel eller varianter av samma namn.
+var SIDE_BET_TYPES = ['Längsta drive', 'Närmast hål', 'Minst antal puttar', 'Färst antal slag på ett hål', 'Flest birdies på rundan'];
+var SIDE_BET_TYPE_OTHER = 'Annat (eget namn)';
 function dateMinusDays(dateStr, days) {
   var d = new Date(dateStr);
   d.setDate(d.getDate()-days);
@@ -2717,7 +2793,11 @@ function openSideBets(ei) {
   if(admin) {
     h += '<hr class="divider">';
     h += '<h4 style="margin-bottom:8px">Lägg till side bet</h4>';
-    h += '<div class="field"><label>Namn</label><input type="text" id="sb-name" placeholder="T.ex. Längsta drive"></div>';
+    h += '<div class="field"><label>Typ</label><select id="sb-type" onchange="onSideBetTypeChange()">'+
+      SIDE_BET_TYPES.map(function(bt){ return '<option value="'+esc(bt)+'">'+esc(bt)+'</option>'; }).join('')+
+      '<option value="'+esc(SIDE_BET_TYPE_OTHER)+'">'+esc(SIDE_BET_TYPE_OTHER)+'</option>'+
+    '</select></div>';
+    h += '<div class="field" id="sb-custom-name-field" style="display:none"><label>Eget namn</label><input type="text" id="sb-custom-name" placeholder="T.ex. Skip-tävlingen"></div>';
     h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Hål 14"></div>';
     h += '<div class="field"><label>Avgift per deltagare (kr, 0 = gratis)</label><input type="number" id="sb-fee" min="0" value="0" style="width:120px"></div>';
     h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt: alla anmälda till deltävlingen)</div>';
@@ -2734,18 +2814,33 @@ function openSideBets(ei) {
   showModal(h, true, true);
 }
 
+function onSideBetTypeChange() {
+  var sel = document.getElementById('sb-type');
+  var customField = document.getElementById('sb-custom-name-field');
+  if(sel && customField) customField.style.display = (sel.value===SIDE_BET_TYPE_OTHER) ? '' : 'none';
+}
+
 function addSideBet(ei) {
   if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
-  var nameEl = document.getElementById('sb-name');
-  var name = nameEl ? nameEl.value.trim() : '';
-  if(!name) { alert('Ange ett namn för side betet.'); return; }
+  var typeEl = document.getElementById('sb-type');
+  var chosenType = typeEl ? typeEl.value : '';
+  var name, betType;
+  if(chosenType === SIDE_BET_TYPE_OTHER) {
+    var customEl = document.getElementById('sb-custom-name');
+    name = customEl ? customEl.value.trim() : '';
+    if(!name) { alert('Ange ett eget namn för side betet.'); return; }
+    betType = 'other';
+  } else {
+    name = chosenType;
+    betType = chosenType;
+  }
   var desc = (document.getElementById('sb-desc')||{}).value || '';
   var fee = parseInt((document.getElementById('sb-fee')||{}).value)||0;
   var checked = Array.prototype.map.call(document.querySelectorAll('.sb-participant-chk:checked'), function(el){ return parseInt(el.value); });
   if(!e.sideBets) e.sideBets = [];
-  e.sideBets.push({ id: uid(), name: name, description: desc.trim(), fee: fee, participants: checked, payments: {}, winnerPi: null });
+  e.sideBets.push({ id: uid(), name: name, betType: betType, description: desc.trim(), fee: fee, participants: checked, payments: {}, winnerPi: null });
   save();
   renderEvents();
   renderHomeSideBetWidget();
@@ -2786,6 +2881,48 @@ function setSideBetWinner(ei, betId, val) {
   sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
   save();
   renderEvents();
+}
+
+// Sammanfattning av side bets som visas direkt i tävlingskortet, under knapparna.
+function buildSideBetsSummaryHTML(t, e) {
+  if(!e.sideBets || !e.sideBets.length) return '';
+  var players = t.players;
+  var h = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"><i class="ti ti-target-arrow"></i> Side bets</div>';
+  h += e.sideBets.map(function(sb){
+    var participants = sb.participants || [];
+    var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
+    var pot = paidCount * (sb.fee||0);
+    var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
+    var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
+    box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
+      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+'</div>'+
+      (sb.description?'<div style="font-size:11px;color:var(--text-3)">'+esc(sb.description)+'</div>':'')+
+      '</div>'+
+      (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
+    '</div>';
+    if(winner) {
+      box += '<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-bottom:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>';
+    }
+    if(participants.length) {
+      box += '<div style="display:flex;flex-wrap:wrap;gap:5px">'+
+        participants.map(function(pi){
+          var p = players[pi]; if(!p) return '';
+          var paid = !!(sb.payments && sb.payments[pi]);
+          var isWinner = sb.winnerPi===pi;
+          return '<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:'+(sb.fee>0?(paid?'#E1F5EE':'#FCEBEB'):'var(--surface)')+';color:'+(sb.fee>0?(paid?'#0F6E56':'#A32D2D'):'var(--text-2)')+';border:1px solid '+(sb.fee>0?(paid?'#1D9E75':'#dc2626'):'var(--border)')+'">'+
+            (isWinner?'🏆 ':'')+esc(p.name)+(sb.fee>0?(paid?' ✓':' ✕'):'')+
+          '</span>';
+        }).join('')+
+      '</div>';
+    } else {
+      box += '<p style="font-size:11px;color:var(--text-3);margin:0">Inga deltagare inlagda.</p>';
+    }
+    box += '</div>';
+    return box;
+  }).join('');
+  h += '</div>';
+  return h;
 }
 
 function eventCardHTML(i,e) {
@@ -2934,9 +3071,14 @@ function eventCardHTML(i,e) {
       '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
     '</div>'+
     (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
+    (e.closed && e.story ? '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ti ti-book"></i> Story</div>'+
+      '<p style="font-size:13px;color:var(--text);margin:0;white-space:pre-wrap;line-height:1.4">'+esc(e.story)+'</p>'+
+    '</div>' : '')+
     markerApprovalHtml+adminApprovalHtml+
     '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
     '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+    buildSideBetsSummaryHTML(t, e)+
   '</div>';
 }
 
@@ -3391,6 +3533,10 @@ function openResults(i) {
   h+=' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
   h+='<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
   h+='</div>';
+  h+='<div class="field"><label><i class="ti ti-book" style="color:#BA7517"></i> Story / sammanfattning (valfritt)</label>';
+  h+='<textarea id="w-story" rows="4" placeholder="Berätta hur tävlingen gick, roliga händelser, dramatik på sista hålet..." style="width:100%;box-sizing:border-box">'+esc(e.story||'')+'</textarea>';
+  h+='<p style="font-size:11px;color:var(--text-3);margin-top:2px">Visas under den avslutade deltävlingen så alla kan läsa den senare.</p>';
+  h+='</div>';
   h+='<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
   h+='<button class="btn" onclick="closeModal()">Avbryt</button>';
   h+='<button class="btn btn-primary" onclick="saveResults('+i+')">Spara resultat</button>';
@@ -3453,6 +3599,8 @@ function saveResults(i) {
     results.sort(function(a,b){ return isStab?(b.score-a.score||t.players[a.pi].hcp-t.players[b.pi].hcp):(a.score-b.score||t.players[a.pi].hcp-t.players[b.pi].hcp); });
   }
   if(_wImg) e.winnerImg=_wImg;
+  var storyEl = document.getElementById('w-story');
+  if(storyEl) e.story = storyEl.value.trim();
   e.results=results; save();
   if(!e.isFinal) {
     resolveTies(i,0,function(){ save(); closeModal(); renderEvents(); });
@@ -3595,6 +3743,10 @@ function openResultsView(i){
     '<div style="font-size:20px;font-weight:700">'+e.name+'</div>'+
     '<div style="font-size:13px;color:var(--text-3)">'+e.course+' · '+e.date+'</div></div>';
   if(winnerImg) h+='<img src="'+winnerImg+'" style="width:100%;height:300px;object-fit:cover;border-radius:10px;margin-bottom:16px" alt="">';
+  if(e.story) h+='<div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:16px">'+
+    '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ti ti-book"></i> Story</div>'+
+    '<p style="font-size:13px;color:var(--text);margin:0;white-space:pre-wrap;line-height:1.45">'+esc(e.story)+'</p>'+
+  '</div>';
   h+=buildPodiumHTML(e,t);
   var rest=e.results.slice(3).map(function(r,idx){
     var p=t.players[r.pi];
@@ -4503,6 +4655,59 @@ function computeCourseHoleStats(courseName) {
   return { counts: counts, totalHolesPlayed: totalHolesPlayed, hasData: totalHolesPlayed>0 };
 }
 
+// ── SIDE BET-STATISTIK PER SPELARE (bets placerade, vunnet, balans) ────────
+function computePlayerSideBetStats(username) {
+  var stats = { betsPlaced: 0, totalStaked: 0, totalWon: 0, winsByType: {} };
+  SIDE_BET_TYPES.forEach(function(bt){ stats.winsByType[bt] = 0; });
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var myPi = players.findIndex(function(p){ return p && p.username===username; });
+    if(myPi < 0) return;
+    (t.events||[]).forEach(function(e){
+      (e.sideBets||[]).forEach(function(sb){
+        var participants = sb.participants || [];
+        if(participants.indexOf(myPi) === -1) return;
+        stats.betsPlaced++;
+        stats.totalStaked += (sb.fee||0);
+        if(sb.winnerPi === myPi) {
+          stats.totalWon += (sb.fee||0) * participants.length;
+          if(sb.betType && stats.winsByType.hasOwnProperty(sb.betType)) stats.winsByType[sb.betType]++;
+        }
+      });
+    });
+  });
+  stats.balance = stats.totalWon - stats.totalStaked;
+  stats.hasData = stats.betsPlaced > 0;
+  return stats;
+}
+
+function buildSideBetStatsHTML(stats, title) {
+  if(!stats.hasData) return '';
+  var balanceColor = stats.balance > 0 ? 'var(--green-dark)' : (stats.balance < 0 ? '#A32D2D' : 'var(--text-2)');
+  var balanceSign = stats.balance > 0 ? '+' : '';
+  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px"><i class="ti ti-coin"></i> '+esc(title)+'</div>';
+  h += '<div class="stat-grid" style="margin-bottom:12px">'+
+    '<div class="stat-card"><div class="stat-val">'+stats.betsPlaced+'</div><div class="stat-lbl">Bets placerade</div></div>'+
+    '<div class="stat-card"><div class="stat-val">'+stats.totalWon+' kr</div><div class="stat-lbl">Total earnings</div></div>'+
+    '<div class="stat-card"><div class="stat-val" style="color:'+balanceColor+'">'+balanceSign+stats.balance+' kr</div><div class="stat-lbl">Balans</div></div>'+
+  '</div>';
+  var typeRows = SIDE_BET_TYPES.filter(function(bt){ return stats.winsByType[bt] > 0; });
+  if(typeRows.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Vinster per typ</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:2px">'+
+      typeRows.map(function(bt){
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="font-size:13px;color:var(--text-2)">'+esc(bt)+'</span>'+
+          '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+stats.winsByType[bt]+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
 function computePlayerHoleStats(username) {
   var counts = emptyHoleCounts();
   var totalHolesPlayed = 0;
@@ -4717,6 +4922,7 @@ function buildProfileHTML(pi){
     '</div>'+
     buildCareerStatsHTML(p.username)+
     buildHoleStatsHTML(computePlayerHoleStats(p.username), 'Hålstatistik')+
+    buildSideBetStatsHTML(computePlayerSideBetStats(p.username), 'Side bets')+
     buildPlayerGolfMapStatsHTML(p.username, p.name)+
     swHtml+
     buildBagDisplayHTML(p, tourUser)+
@@ -6480,6 +6686,26 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '2 juli 2026 (48)',
+    items: [
+      { type: 'new', text: 'Side bets väljs nu från en fördefinierad lista (Längsta drive, Närmast hål, Minst antal puttar, m.fl.) istället för fritext, så statistiken inte splittras av stavfel eller olika varianter av samma namn. Eget namn går fortfarande att ange vid behov.' },
+      { type: 'new', text: 'Ny "Side bets"-sektion i spelarprofilen: bets placerade, total earnings, balans (plus/minus över tid) samt antal vinster per bet-typ.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (47)',
+    items: [
+      { type: 'new', text: 'Admin kan nu skriva en "story" (sammanfattande text) när en deltävling stängs, precis som med vinnarfotot. Texten visas därefter direkt under den avslutade deltävlingen och i Resultattavlan.' },
+      { type: 'new', text: 'Ny "Säsongsberättelse" för hela touren – när finalen är avslutad kan admin lägga till en bild och en text som sammanfattar hela säsongen, synlig högst upp i Tävlingar-fliken för alla.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (46)',
+    items: [
+      { type: 'new', text: 'Side bets visas nu direkt i tävlingskortet under knapparna – namn, pott, deltagare (grönt = betalt, rött = ej betalt) och vinnare, utan att behöva öppna en separat vy.' }
+    ]
+  },
+  {
     date: '2 juli 2026 (45)',
     items: [
       { type: 'new', text: 'Nya "Side bets" per deltävling – admin kan lägga till sidovad som längsta drive, närmast hål eller minst antal puttar, med valfri avgift per deltagare och vinnare.' },
@@ -7313,6 +7539,7 @@ function buildGlobalPlayerProfileHTML(username) {
 
   h += buildCareerStatsHTML(u.username);
   h += buildHoleStatsHTML(computePlayerHoleStats(u.username), 'Hålstatistik');
+  h += buildSideBetStatsHTML(computePlayerSideBetStats(u.username), 'Side bets');
 
   // Styrkor och svagheter
   var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
