@@ -124,6 +124,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .pos-2{background:#D3D1C7;color:#2C2C2A}
 .pos-3{background:#F5C4B3;color:#4A1B0C}
 .pos-other{background:var(--surface2);color:var(--text-2)}
+.sw-chip{border:1px solid var(--border);background:transparent;color:var(--text-2);border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit}
+.sw-chip.sw-chip-active-green{background:#1D9E75;color:#fff;border-color:#1D9E75}
+.sw-chip.sw-chip-active-red{background:#dc2626;color:#fff;border-color:#dc2626}
 
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -5099,11 +5102,8 @@ function openStrengthsEdit(username, mandatory) {
   var makeChips = function(list, selected, prefix, color) {
     return list.map(function(item, i){
       var active = selected.indexOf(item) !== -1;
-      var bg     = active ? (color==='green' ? '#1D9E75' : '#dc2626') : 'transparent';
-      var col    = active ? '#fff' : 'var(--text-2)';
-      var border = active ? (color==='green' ? '#1D9E75' : '#dc2626') : 'var(--border)';
-      return '<button id="sw-chip-'+prefix+'-'+i+'" data-active="'+(active?'1':'0')+'" onclick="swToggleChip(\''+prefix+'\','+i+',\''+color+'\')" '+
-        'style="border:1px solid '+border+';background:'+bg+';color:'+col+';border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit">'+
+      var activeClass = active ? (' sw-chip-active ' + (color==='green' ? 'sw-chip-active-green' : 'sw-chip-active-red')) : '';
+      return '<button id="sw-chip-'+prefix+'-'+i+'" class="sw-chip'+activeClass+'" onclick="swToggleChip(\''+prefix+'\','+i+',\''+color+'\')">'+
         esc(item)+'</button>';
     }).join('');
   };
@@ -5127,25 +5127,13 @@ function openStrengthsEdit(username, mandatory) {
     '<button class="btn btn-primary" onclick="saveStrengths(\''+esc(username)+'\','+(mandatory?'true':'false')+')">Spara</button></div>';
 
   showModal(h, true, true);
-
-  // Pre-select currently saved items
-  setTimeout(function(){
-    curStr.forEach(function(s){
-      var idx = SW_STRENGTHS.indexOf(s);
-      if(idx !== -1) { var el = document.getElementById('sw-chip-str-'+idx); if(el) { el.style.background='#1D9E75'; el.style.color='#fff'; el.style.borderColor='#1D9E75'; el.setAttribute('data-active','1'); } }
-    });
-    curWeak.forEach(function(s){
-      var idx = SW_WEAKNESSES.indexOf(s);
-      if(idx !== -1) { var el = document.getElementById('sw-chip-weak-'+idx); if(el) { el.style.background='#dc2626'; el.style.color='#fff'; el.style.borderColor='#dc2626'; el.setAttribute('data-active','1'); } }
-    });
-  }, 30);
 }
 
 function swCountActive(prefix, list) {
   var n = 0;
   list.forEach(function(item, i){
     var el = document.getElementById('sw-chip-'+prefix+'-'+i);
-    if(el && el.getAttribute('data-active')==='1') n++;
+    if(el && el.classList.contains('sw-chip-active')) n++;
   });
   return n;
 }
@@ -5154,23 +5142,14 @@ function swToggleChip(prefix, idx, color) {
   var el = document.getElementById('sw-chip-'+prefix+'-'+idx);
   if(!el) return;
   var list = prefix==='str' ? SW_STRENGTHS : SW_WEAKNESSES;
-  var active = el.getAttribute('data-active')==='1';
+  var active = el.classList.contains('sw-chip-active');
   if(!active && swCountActive(prefix, list) >= 3) {
     alert('Du kan max välja 3 st. Avmarkera en annan först.');
     return;
   }
-  if(active) {
-    el.setAttribute('data-active','0');
-    el.style.background = 'transparent';
-    el.style.color = 'var(--text-2)';
-    el.style.borderColor = 'var(--border)';
-  } else {
-    el.setAttribute('data-active','1');
-    var bg = color==='green' ? '#1D9E75' : '#dc2626';
-    el.style.background = bg;
-    el.style.color = '#fff';
-    el.style.borderColor = bg;
-  }
+  var colorClass = color==='green' ? 'sw-chip-active-green' : 'sw-chip-active-red';
+  el.classList.toggle('sw-chip-active');
+  el.classList.toggle(colorClass);
   var countEl = document.getElementById('sw-'+prefix+'-count');
   if(countEl) countEl.textContent = '('+swCountActive(prefix, list)+'/3)';
 }
@@ -5184,7 +5163,7 @@ function saveStrengths(username, mandatory) {
   var strengths = [];
   SW_STRENGTHS.forEach(function(item, i){
     var el = document.getElementById('sw-chip-str-'+i);
-    if(el && el.getAttribute('data-active')==='1') strengths.push(item);
+    if(el && el.classList.contains('sw-chip-active')) strengths.push(item);
   });
   // Add custom
   var customStr = document.getElementById('sw-custom-str');
@@ -5195,7 +5174,7 @@ function saveStrengths(username, mandatory) {
   var weaknesses = [];
   SW_WEAKNESSES.forEach(function(item, i){
     var el = document.getElementById('sw-chip-weak-'+i);
-    if(el && el.getAttribute('data-active')==='1') weaknesses.push(item);
+    if(el && el.classList.contains('sw-chip-active')) weaknesses.push(item);
   });
   var customWeak = document.getElementById('sw-custom-weak');
   if(customWeak && customWeak.value.trim()) {
@@ -6802,6 +6781,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '3 juli 2026 (2)',
+    items: [
+      { type: 'fixed', text: 'Byggt om styrkor/svagheter-väljaren från grunden att använda CSS-klasser istället för att läsa/skriva inline-stilar direkt. Tog också bort en tidskänslig bakgrundsprocess som i vissa fall kunde återställa ett val precis efter att man klickat. Mer robust lösning som inte är beroende av webbläsarspecifikt beteende.' }
+    ]
+  },
   {
     date: '3 juli 2026 (1)',
     items: [
