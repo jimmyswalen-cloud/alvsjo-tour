@@ -124,9 +124,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .pos-2{background:#D3D1C7;color:#2C2C2A}
 .pos-3{background:#F5C4B3;color:#4A1B0C}
 .pos-other{background:var(--surface2);color:var(--text-2)}
-.signature{display:flex;justify-content:center;padding:28px 0 16px;opacity:.35;transition:opacity .2s}
-.signature:hover{opacity:.7}
-.signature img{width:100px;height:auto}
 
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -347,7 +344,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="modal-mc"></div>
 </div>
 
-<div class="signature"><img src="signature.png" alt="By J Swalén"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -701,7 +697,7 @@ function openComments(eid) {
   var e = findEventById(eid);
   if(!e) return;
   if(!e.comments) e.comments = [];
-  var h = '<h3><i class="ti ti-message-circle"></i> Diskussionsvägg – '+e.name+'</h3>';
+  var h = '<h3><i class="ti ti-message-circle"></i> Chat – '+e.name+'</h3>';
   h += '<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2)"></div>';
   h += '<div class="field">';
   h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
@@ -1319,10 +1315,14 @@ function enterTour(id) {
   document.getElementById('active-tour-name').textContent = getTour().name;
   updateHero(id);
   renderEditTourBtn();
+  // Avgift/prispott och antal räknade rundor är admin-inställningar - vanliga spelare ska inte ens se fliken.
+  var settingsNav = document.getElementById('nav-settings');
+  if(settingsNav) settingsNav.style.display = isAdmin() ? '' : 'none';
   showView('tournament');
 }
 
 function showView(v) {
+  if(v==='settings' && !isAdmin()) { viewMyProfile(); return; }
   document.querySelectorAll('.view').forEach(function(e){e.classList.remove('active');});
   document.querySelectorAll('.nav-btn').forEach(function(e){e.classList.remove('active');});
   document.getElementById('view-'+v).classList.add('active');
@@ -2103,6 +2103,11 @@ function renderEvents() {
         '</div>'+
       '</div>'+
     '</div>';
+  } else if(isAdmin()) {
+    feeCard = '<div class="card" style="margin-bottom:16px;padding:14px 16px;text-align:center">'+
+      '<div style="font-size:13px;color:var(--text-2);margin-bottom:10px"><i class="ti ti-cash-off"></i> Ingen avgift satt för den här touren ännu – prispotten visas inte förrän den finns.</div>'+
+      '<button class="btn btn-sm btn-primary" onclick="quickSetupFee()"><i class="ti ti-cash"></i> Sätt avgift & markera betalningar</button>'+
+    '</div>';
   }
 
   var open=[], closed=[];
@@ -2111,6 +2116,26 @@ function renderEvents() {
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   el.innerHTML = top3Html + feeCard + titleBlock + html;
+}
+
+// Snabbstart: sätt en avgift och markera alla nuvarande spelare som betalt i ett steg,
+// användbart t.ex. när avgiften redan samlats in utanför appen och bara ska registreras i efterhand.
+function quickSetupFee() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  if(!t) return;
+  var amount = prompt('Ange avgift per spelare (kr):', '500');
+  if(amount === null) return;
+  var fee = parseInt(amount);
+  if(isNaN(fee) || fee < 0) { alert('Ange ett giltigt belopp.'); return; }
+  var players = getPlayersForTour(t);
+  var activeCount = players.filter(function(p){ return !!p; }).length;
+  if(!confirm('Sätt avgift till '+fee+' kr/spelare och markera samtliga '+activeCount+' nuvarande spelare som betalt (pott: '+(fee*activeCount)+' kr)?')) return;
+  t.fee = fee;
+  if(!t.payments) t.payments = {};
+  players.forEach(function(p, pi){ if(p) t.payments[pi] = true; });
+  save();
+  renderEvents();
 }
 
 function togglePayment(tourId, pi) {
@@ -2538,7 +2563,9 @@ function eventCardHTML(i,e) {
       }
       return '<tr onclick="showPlayerProfile('+x.pi+')" style="cursor:pointer'+(x.status==='declined'?';opacity:0.55':'')+'">'+
         '<td>'+dot+esc(x.p.name)+'</td>'+
-        '<td>'+(x.status==='registered' ? (x.reg.date+' ('+weekdaySv(x.reg.date)+')'+(altDate?' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>':'')) : '<span style="color:var(--text-3)">–</span>')+'</td>'+
+        '<td>'+(x.status==='registered'
+          ? ('<div>'+x.reg.date+'</div><div style="color:var(--text-3);font-size:11px">'+weekdaySv(x.reg.date)+'</div>'+(altDate?'<div style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</div>':''))
+          : '<span style="color:var(--text-3)">–</span>')+'</td>'+
         '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
     }).join('');
@@ -2597,14 +2624,17 @@ function eventCardHTML(i,e) {
     }
   }
 
+  var chatBtn = '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Chat'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>';
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
-      (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')
+      (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
+      chatBtn
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       myResultBtn+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
-      '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '');
+      '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
+      chatBtn;
   return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
@@ -2622,10 +2652,7 @@ function eventCardHTML(i,e) {
     (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
     markerApprovalHtml+adminApprovalHtml+
     '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
-    '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:space-between">'+
-      '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
-      '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Diskussionsvägg'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>'+
-    '</div>'+
+    '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
   '</div>';
 }
 
@@ -4759,7 +4786,9 @@ function renderOOM(){
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
         (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
-        '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · <span style="color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</span>':'')+       '</div></div>'+
+        '<div style="font-size:12px;color:var(--text-3)">'+d.events+' tävl. · '+d.wins+' vinst'+(d.wins!==1?'er':'')+'</div>'+
+        (bestN>0?'<div style="font-size:12px;color:var(--green-dark);font-weight:600">bästa '+d.counted+'/'+d.events+'</div>':'')+
+        '</div>'+
         '<div class="oom-pts">'+d.pts+' pts</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
     }).join('');
@@ -4767,6 +4796,7 @@ function renderOOM(){
 
 // ── SETTINGS (read-only since tours are locked) ─────────────────────────────
 function renderSettings(){
+  if(!isAdmin()) { var ro = document.getElementById('settings-readonly'); if(ro) ro.innerHTML = ''; return; }
   var t=getTour();
   var html = '<p style="font-size:13px;color:var(--text-2);margin-bottom:14px">Poängskalan och försprångstabellen sattes vid skapandet och kan inte ändras.</p>';
   html += '<div class="section-title">Poäng per placering</div>';
@@ -6126,6 +6156,32 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 juli 2026 (41)',
+    items: [
+      { type: 'new', text: 'Ny "Sätt avgift & markera betalningar"-knapp (admin) i Tävlingar-fliken när ingen avgift är satt ännu – sätter avgift och markerar alla nuvarande spelare som betalt i ett steg, praktiskt när avgiften redan samlats in utanför appen.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (40)',
+    items: [
+      { type: 'fixed', text: 'Tourens "Inst."-flik (avgift, prispott och antal räknade rundor i OoM) var synlig och redigerbar för alla, inte bara admin. Fliken döljs nu helt för vanliga spelare, och de skickas till sin profil om de ändå försöker nå den.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (39)',
+    items: [
+      { type: 'improved', text: 'OoM-listan visar nu "bästa X/Y" på en egen rad under antal tävlingar och vinster, istället för hoptryckt på samma rad.' }
+    ]
+  },
+  {
+    date: '2 juli 2026 (38)',
+    items: [
+      { type: 'improved', text: 'Anmälningstabellen visar nu datum, veckodag och "(ej ordinarie)" på varsin rad istället för hoptryckt på en rad, för ett mer enhetligt utseende.' },
+      { type: 'improved', text: 'Diskussionsväggen heter nu "Chat" och dess knapp ligger nu bredvid Stäng-knappen i samma knapprad istället för separat, vilket sparar plats.' },
+      { type: 'improved', text: 'Vattenstämpeln ("By J Swalén") är helt borttagen från appen.' }
+    ]
+  },
   {
     date: '2 juli 2026 (37)',
     items: [
