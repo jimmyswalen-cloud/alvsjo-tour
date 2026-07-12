@@ -3684,11 +3684,15 @@ function saveResults(i) {
   var t=getTour(), e=t.events[i], isStab=e.type==='stableford';
   var regsRaw = e.registrations || [];
   var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
-  var regs = regPis.filter(function(pi){return t.players[pi];});
+  // Samma filtrering som openResults() använder för att bygga formuläret (exkluderar spelare som markerat "Deltar ej"),
+  // så vi aldrig försöker läsa ett inmatningsfält som inte ritades upp.
+  var regs = regPis.filter(function(pi){ return t.players[pi] && !e.registrations.find(function(r){return r.pi==pi&&r.declined;}); });
   var results=[];
   for(var k=0;k<regs.length;k++){
     var pi=regs[k];
-    var v=document.getElementById('res-'+pi).value;
+    var resEl=document.getElementById('res-'+pi);
+    if(!resEl) continue; // fältet finns inte (borde inte hända nu, men undviker en krasch om data ändå skulle vara inkonsekvent
+    var v=resEl.value;
     if(v==='') continue;
     var score=parseFloat(v);
     var bruttoEl=document.getElementById('brutto-'+pi);
@@ -3712,10 +3716,13 @@ function saveResults(i) {
       var diff = isStab ? (b.adjusted-a.adjusted) : (a.adjusted-b.adjusted);
       if(diff !== 0) return diff;
       // Tiebreak: lower HCP wins, since they needed sharper play to reach the same adjusted result.
-      return (t.players[a.pi].hcp||0) - (t.players[b.pi].hcp||0);
+      return ((t.players[a.pi]&&t.players[a.pi].hcp)||0) - ((t.players[b.pi]&&t.players[b.pi].hcp)||0);
     });
   } else {
-    results.sort(function(a,b){ return isStab?(b.score-a.score||t.players[a.pi].hcp-t.players[b.pi].hcp):(a.score-b.score||t.players[a.pi].hcp-t.players[b.pi].hcp); });
+    results.sort(function(a,b){
+      var ah=(t.players[a.pi]&&t.players[a.pi].hcp)||0, bh=(t.players[b.pi]&&t.players[b.pi].hcp)||0;
+      return isStab?(b.score-a.score||ah-bh):(a.score-b.score||ah-bh);
+    });
   }
   if(_wImg) e.winnerImg=_wImg;
   var storyEl = document.getElementById('w-story');
@@ -6781,6 +6788,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '3 juli 2026 (3)',
+    items: [
+      { type: 'fixed', text: 'Fixat krasch ("JS-fel: null is not an object") vid sparande av resultat när en anmäld spelare markerat "Deltar ej" för deltävlingen. saveResults() använde inte samma filtrering som formuläret byggdes med, vilket fick appen att försöka läsa ett inmatningsfält som aldrig ritades upp – detta stoppade sparandet för alla spelare i tävlingen, inte bara den som deltog ej.' }
+    ]
+  },
   {
     date: '3 juli 2026 (2)',
     items: [
