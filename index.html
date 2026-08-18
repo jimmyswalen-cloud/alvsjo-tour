@@ -539,6 +539,9 @@ var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara k
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
 var STATIC_COURSE_IMAGES = {
+  'sand gk': 'sand.jpg',
+  'sand golf club': 'sand.jpg',
+  'sand': 'sand.jpg',
   'bro hof slott gc - stadium course': 'bro-hof-slott-gc-stadium-course.jpg',
   'bro hof slott gc - castle course': 'bro-hof-slott-gc-castle-course.jpg',
   'ullna golf & country club': 'ullna-golf-country-club.jpg',
@@ -4250,8 +4253,15 @@ function openEditEventCourseImg(i) {
   var t = getTour(), e = t.events[i];
   if(!e) return;
   if(e.closed) { alert('Tävlingen är stängd och kan inte redigeras.'); return; }
-  _editEventDraft = { i: i, course: e.course || '', img: e.img || null };
+  _editEventDraft = { i: i, course: e.course || '', img: e.img || null, date: e.date || '' };
   renderEeciModal();
+}
+
+// En deltävling räknas som "påbörjad" (och bana/datum låses) så fort den har
+// anmälningar - oavsett om touren i övrigt är låst/startad. Banfoto påverkas
+// inte av detta, det går alltid att byta så länge deltävlingen inte är stängd.
+function eeciIsLocked(e) {
+  return !!(e.registrations && e.registrations.length);
 }
 
 // Ritar om Bana/bild-modalen utifrån NUVARANDE _editEventDraft, utan att bygga
@@ -4262,9 +4272,12 @@ function renderEeciModal() {
   if(!_editEventDraft) return;
   var t = getTour(), e = t.events[_editEventDraft.i];
   if(!e) return;
+  var locked = eeciIsLocked(e);
 
   var courseField = '';
-  if(courseDb.length) {
+  if(locked) {
+    courseField = '<div class="field"><label>Bana</label><input type="text" value="'+esc(_editEventDraft.course||'')+'" disabled style="background:var(--surface2);color:var(--text-3)"></div>';
+  } else if(courseDb.length) {
     var manualSelected = _editEventDraft.course && !courseDb.find(function(c){ return c.name.toLowerCase()===_editEventDraft.course.toLowerCase(); });
     courseField = '<div class="field"><label>Bana</label>' +
       '<select id="eeci-course-sel" onchange="onEeciCourseSelChange()" style="margin-bottom:4px">' +
@@ -4282,9 +4295,15 @@ function renderEeciModal() {
       '<datalist id="course-bank-list-eeci">'+Object.values(courseBank).map(function(c){ return '<option value="'+esc(c.displayName||'')+'">'; }).join('')+'</datalist>';
   }
 
+  var dateField = locked
+    ? '<div class="field"><label>Datum</label><input type="text" value="'+esc(_editEventDraft.date||'')+'" disabled style="background:var(--surface2);color:var(--text-3)"></div>'
+    : '<div class="field"><label>Datum</label><input id="eeci-date" type="date" value="'+esc(_editEventDraft.date||'')+'" oninput="onEeciDateChange()"></div>';
+
   var h = '<h3><i class="ti ti-map-pin"></i> Redigera bana/bild'+(e.isFinal?' – Final':'')+'</h3>';
-  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar bara bana och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
+  if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan anmälningar, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
   h += courseField;
+  h += dateField;
   h += '<div class="field"><label>Banfoto</label>';
   h += '<div id="eeci-img-prev">'+(_editEventDraft.img?'<img src="'+_editEventDraft.img+'" class="img-preview">':'<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Ingen bild vald</p>')+'</div>';
   h += '<div class="row" style="gap:6px;flex-wrap:wrap">';
@@ -4338,6 +4357,12 @@ function onEeciCourseChange() {
   _editEventDraft.course = inp.value.trim();
 }
 
+function onEeciDateChange() {
+  var inp = document.getElementById('eeci-date');
+  if(!inp || !_editEventDraft) return;
+  _editEventDraft.date = inp.value;
+}
+
 function handleEeciImg(file) {
   syncEeciCourseField();
   compressImage(file, 1100, 950, 0.92, function(d) {
@@ -4378,15 +4403,20 @@ function saveEditEventCourseImg() {
   var t = getTour(), e = t.events[_editEventDraft.i];
   if(!e) { _editEventDraft = null; closeModal(); return; }
   if(e.closed) { alert('Tävlingen stängdes precis och kan inte längre redigeras.'); _editEventDraft = null; closeModal(); return; }
-  if(!_editEventDraft.course) { alert('Ange en bana.'); return; }
-  e.course = _editEventDraft.course;
-  e.img = _editEventDraft.img;
-  // Om banan skrevs in manuellt och saknas i banregistret, lägg till den (samma logik som i skapa-tour-guiden)
-  if(!courseDb.find(function(c){ return c.name.toLowerCase()===e.course.toLowerCase(); })) {
-    courseDb.push({ id: uid(), name: e.course, par: 72 });
-    courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
-    saveCourseDb();
+  var locked = eeciIsLocked(e);
+  if(!locked) {
+    if(!_editEventDraft.course) { alert('Ange en bana.'); return; }
+    if(!_editEventDraft.date) { alert('Ange ett datum.'); return; }
+    e.course = _editEventDraft.course;
+    e.date = _editEventDraft.date;
+    // Om banan skrevs in manuellt och saknas i banregistret, lägg till den (samma logik som i skapa-tour-guiden)
+    if(!courseDb.find(function(c){ return c.name.toLowerCase()===e.course.toLowerCase(); })) {
+      courseDb.push({ id: uid(), name: e.course, par: 72 });
+      courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
+      saveCourseDb();
+    }
   }
+  e.img = _editEventDraft.img;
   _editEventDraft = null;
   save();
   closeModal();
@@ -6224,7 +6254,7 @@ function openAddCourse() {
     '<div class="field"><label>Klubb <span style="font-size:11px;color:var(--text-3)">(om annat än bannamnet)</span></label><input id="cd-klubb" type="text" placeholder="t.ex. Riksten Golfklubb"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="18" onchange="renderScorecardGrid()"></div>' +
-      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="72" oninput="updateScorecardTotal()"></div>' +
+      '<div class="field"><label>Par (totalt) <span style="font-size:11px;color:var(--text-3)">– räknas ut automatiskt när scorekortet fylls i</span></label><input id="cd-par" type="number" min="54" max="90" value="72" oninput="updateScorecardTotal()"></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Slope</label><input id="cd-slope" type="number" min="55" max="155" placeholder="t.ex. 130"></div>' +
@@ -6346,14 +6376,26 @@ function updateScorecardTotal() {
   var hcpInputs = document.querySelectorAll('.cd-holehcp-inp');
   var totalEl = document.getElementById('cd-scorecard-total');
   var parInp = document.getElementById('cd-par');
-  if(!totalEl || !parInputs.length) { if(totalEl) totalEl.innerHTML=''; return; }
+  if(!totalEl) return;
+
+  if(!parInputs.length) {
+    // Inget scorekort ifyllt än - låt Par (totalt) vara fritt redigerbart som tidigare.
+    if(parInp) { parInp.readOnly = false; parInp.style.background = ''; parInp.style.color = ''; }
+    totalEl.innerHTML = '';
+    return;
+  }
 
   var sum = 0;
   parInputs.forEach(function(inp){ sum += parseInt(inp.value)||0; });
-  var declaredPar = parInp ? (parseInt(parInp.value)||0) : 0;
-  var parMatch = sum === declaredPar;
-  var lines = ['Summa par: <b style="color:'+(parMatch?'var(--green-dark)':'#dc2626')+'">'+sum+'</b>'+
-    (declaredPar ? (parMatch ? ' ✓ stämmer med totalpar' : ' – matchar inte totalpar ('+declaredPar+')') : '')];
+  // Totalpar räknas nu alltid ut automatiskt från hål-för-hål-summan, istället för
+  // att vara ett separat fält som kan hamna i otakt med scorekortet.
+  if(parInp) {
+    parInp.value = sum;
+    parInp.readOnly = true;
+    parInp.style.background = 'var(--surface2)';
+    parInp.style.color = 'var(--text-3)';
+  }
+  var lines = ['Totalpar (räknas automatiskt från scorekortet): <b style="color:var(--green-dark)">'+sum+'</b>'];
 
   // Validera att hcp-index är en giltig permutation (1..N, alla unika)
   var hcpVals = Array.prototype.map.call(hcpInputs, function(inp){ return parseInt(inp.value)||0; });
@@ -6440,7 +6482,7 @@ function openEditCourse(id) {
     '<div class="field"><label>Klubb</label><input id="cd-klubb" type="text" value="'+esc(c.klubb||'')+'"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="'+(c.holes||18)+'" onchange="renderScorecardGrid()"></div>' +
-      '<div class="field"><label>Par (totalt)</label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'" oninput="updateScorecardTotal()"></div>' +
+      '<div class="field"><label>Par (totalt) <span style="font-size:11px;color:var(--text-3)">– räknas ut automatiskt när scorekortet fylls i</span></label><input id="cd-par" type="number" min="54" max="90" value="'+c.par+'" oninput="updateScorecardTotal()"></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Slope</label><input id="cd-slope" type="number" min="55" max="155" value="'+(c.slope!=null?c.slope:'')+'"></div>' +
@@ -6996,6 +7038,17 @@ var BULK_PENDING_COURSES = [
     holePars:     [4,5,4,4,6,4,4,3,4,4,4,4,4,5,3,4,3,4],
     holeHcpIndex: [12,16,4,6,2,18,8,14,10,11,1,7,13,15,17,5,3,9],
     holeLengths:  [313,478,340,369,567,311,357,150,332,311,351,356,273,494,140,355,145,349]
+  },
+  {
+    name: "Sand GK",
+    klubb: "Sand Golf Club",
+    par: 72, holes: 18,
+    lat: 57.8456100, lng: 14.0355090,
+    district: "Jönköping", land: "Sverige",
+    website: "https://www.sandgolfclub.se",
+    holePars:     [4,5,3,4,4,4,4,3,5,4,4,4,4,4,3,5,3,5],
+    holeHcpIndex: [10,18,2,14,6,4,16,8,12,9,1,7,13,17,3,5,15,11],
+    holeLengths:  [313,471,154,311,320,303,291,131,455,363,388,314,314,294,150,490,128,436]
   }
 ];
 
@@ -7583,6 +7636,17 @@ function renderCourseDbSection() {
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
+  // Diagnostik: visar exakt varför "Importera väntande banor" syns eller inte,
+  // rad för rad per post i kön (BULK_PENDING_COURSES) - för felsökning.
+  html += '<details style="margin-bottom:12px;font-size:12px"><summary style="cursor:pointer;color:var(--text-2)">Kö-diagnostik ('+pendingCount+'/'+BULK_PENDING_COURSES.length+' väntande)</summary>';
+  html += '<div style="overflow-x:auto;margin-top:6px"><table class="hist-table" style="font-size:11px;white-space:nowrap"><thead><tr><th>Kö-post</th><th>Status</th><th>Matchande post i courseDb</th></tr></thead><tbody>';
+  BULK_PENDING_COURSES.forEach(function(c){
+    var status = pendingStatus(c);
+    var existing = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+    var statusLabel = status==='complete' ? '<span style="color:var(--green-dark)">✓ Redan klar</span>' : (status==='fill' ? '<span style="color:var(--gold)">Fyll i scorekort</span>' : '<span style="color:var(--danger-text)">Ny bana</span>');
+    html += '<tr><td>'+esc(c.name)+'</td><td>'+statusLabel+'</td><td>'+(existing ? esc(existing.name)+' (par '+existing.par+', holePars: '+(existing.holePars?existing.holePars.length+' hål':'saknas')+')' : '<span style="color:var(--text-3)">Ingen matchning</span>')+'</td></tr>';
+  });
+  html += '</tbody></table></div></details>';
   if(courseDb.length) {
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
     html += '<div style="position:relative;flex:1;min-width:180px">'+
@@ -7739,6 +7803,30 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (35)',
+    items: [
+      { type: 'added', text: 'Lagt till Sand GK (Jönköping, par 72) i väntande kö med fullständigt scorekort, verifierat mot caddee.se (par-summa och giltig hcp-index-permutation). Bildmappning kopplad till den redan uppladdade sand.jpg.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (34)',
+    items: [
+      { type: 'fixed', text: '"Par (totalt)"-fältet i bandatabasens redigeringsformulär räknas nu ut automatiskt som summan av hål-för-hål-scorekortet, istället för att vara ett separat fält man måste hålla synkat manuellt. Fältet blir låst (gråmarkerat) så fort ett scorekort finns ifyllt. Gäller både "Lägg till bana" och "Redigera bana". Öppna och spara om Kyssinges banpost en gång till så rättas totalparet automatiskt till 74.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (33)',
+    items: [
+      { type: 'added', text: '"Bana/bild"-redigeraren på en deltävling har nu även ett Datum-fält, så bana och datum kan bytas tillsammans (t.ex. om bokning inte går att få till på vald bana). Går att göra oavsett om touren i övrigt är startad. Låses automatiskt (bana + datum, men inte banfoto) så fort deltävlingen fått sin första anmälan – och som vanligt helt låst när tävlingen stängts.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (32)',
+    items: [
+      { type: 'added', text: 'Ny "Kö-diagnostik"-panel (expanderbar) i Bandatabasen som visar varje post i den väntande kön med exakt status (Ny bana / Fyll i scorekort / Redan klar) och vilken matchande post som faktiskt finns i din databas just nu – för att felsöka varför "Importera väntande banor"-knappen visas eller inte visas.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (31)',
     items: [
