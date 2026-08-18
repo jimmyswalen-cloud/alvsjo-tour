@@ -527,6 +527,11 @@ var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara k
 var STATIC_COURSE_IMAGES = {
   'bro hof slott gc - stadium course': 'bro-hof-slott-gc-stadium-course.jpg',
   'bro hof slott gc - castle course': 'bro-hof-slott-gc-castle-course.jpg',
+  'ullna golf & country club': 'ullna-golf-country-club.jpg',
+  'kungl. drottningholms golfklubb': 'kungl-drottningholms-golfklubb.jpg',
+  'lidingö golfklubb': 'lidingo-golfklubb.jpg',
+  'saltsjöbadens golfklubb': 'saltsjobadens-golfklubb.jpg',
+  'djursholms golfklubb': 'djursholms-golfklubb.jpg',
   'riksten': 'riksten.jpg',
   'riksten gk': 'riksten.jpg',
   'kyssinge': 'kyssinge.jpg',
@@ -7040,6 +7045,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (8)',
+    items: [
+      { type: 'added', text: 'Lagt till bildmappning i STATIC_COURSE_IMAGES för de 5 nya Stockholmsbanorna (Ullna, Kungl. Drottningholms, Lidingö, Saltsjöbadens, Djursholms). Bilderna kopplas automatiskt så fort respektive fil laddas upp till repots rot-mapp.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (7)',
     items: [
