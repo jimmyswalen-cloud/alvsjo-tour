@@ -6239,6 +6239,61 @@ function importBulkCourseData() {
   alert(result.added+' banor importerade.'+(result.skipped?' '+result.skipped+' hoppades över (fanns redan).':''));
 }
 
+// ── Nya banor med komplett scorekort, hämtat från caddee.se (2026-08-18) ────
+var BULK_BROHOF_COURSES = [
+  {
+    name: "Bro Hof Slott GC - Stadium Course",
+    klubb: "Bro Hof Slott Golf Club",
+    par: 72, holes: 18,
+    lat: 59.4954437, lng: 17.6254070,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.brohofslott.se/sv",
+    holePars:     [5,4,4,3,4,4,3,4,5,4,3,5,5,4,5,3,3,4],
+    holeHcpIndex: [8,4,18,16,2,14,12,10,6,9,15,13,7,3,1,11,5,17],
+    holeLengths:  [527,411,287,172,384,366,142,371,517,366,134,435,475,326,481,167,121,303]
+  },
+  {
+    name: "Bro Hof Slott GC - Castle Course",
+    klubb: "Bro Hof Slott Golf Club",
+    par: 72, holes: 18,
+    lat: 59.4954437, lng: 17.6254070,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.brohofslott.se/sv",
+    holePars:     [5,3,4,3,5,4,3,4,5,5,3,3,5,4,5,4,3,4],
+    holeHcpIndex: [5,13,11,9,7,1,17,15,3,4,16,18,6,14,2,12,10,8],
+    holeLengths:  [518,140,298,176,469,345,112,336,461,487,131,120,440,288,433,301,146,334]
+  }
+];
+
+function importBroHofCoursesSilent() {
+  var added = 0, skipped = [];
+  BULK_BROHOF_COURSES.forEach(function(c){
+    var exists = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+    if(exists) { skipped.push(c.name); return; }
+    courseDb.push({
+      id: uid(), name: c.name, klubb: c.klubb,
+      par: c.par, holes: c.holes,
+      holePars: c.holePars, holeHcpIndex: c.holeHcpIndex, holeLengths: c.holeLengths,
+      lat: c.lat, lng: c.lng,
+      district: c.district, land: c.land, website: c.website
+    });
+    added++;
+  });
+  if(added) {
+    courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+    saveCourseDb();
+    if(document.getElementById('course-db-section')) renderCourseDbSection();
+  }
+  return { added: added, skipped: skipped };
+}
+
+function importBroHofCourses() {
+  if(!isAdmin()) return;
+  if(!confirm('Importera '+BULK_BROHOF_COURSES.length+' Bro Hof-banor (med fullt scorekort och koordinater)? Banor som redan finns hoppas över.')) return;
+  var result = importBroHofCoursesSilent();
+  alert(result.added+' bana(er) importerade.'+(result.skipped.length?' Hoppade över: '+result.skipped.join(', '):''));
+}
+
 function seedCourseDb() {
   var defaultCourses = [
     { name: 'Ågesta GK',              par: 71 },
@@ -6756,6 +6811,7 @@ function renderCourseDbSection() {
     '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
     '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
     '<button class="btn btn-sm" onclick="importBulkCourseData()"><i class="ti ti-map-plus"></i> Importera bandata ('+BULK_GOLF_COURSES.length+' st)</button>'+
+    '<button class="btn btn-sm" onclick="importBroHofCourses()"><i class="ti ti-golf"></i> Importera Bro Hof-banor (2 st)</button>'+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
@@ -6915,6 +6971,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (4)',
+    items: [
+      { type: 'added', text: 'Lagt till en engångsknapp "Importera Bro Hof-banor (2 st)" i bandatabasen. Importerar Bro Hof Slott GC – Stadium Course och Castle Course med fullständigt scorekort (par, hcp-index och hållängd för alla 18 hål per bana, hämtat från caddee.se) samt koordinater till klubbhuset. Hoppar över banor som redan finns.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (3)',
     items: [
