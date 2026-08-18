@@ -563,7 +563,7 @@ var STATIC_COURSE_IMAGES = {
   'brollsta cup': 'brollsta.jpg',
   'bodaholm': 'bodaholm.jpg',
   'bodaholm gk': 'bodaholm.jpg',
-  'viksbergs golfklubb': 'viksbergs-golfklubb.jpg',
+  'viksbergs golfklubb': 'viksberg-golfklubb.jpg',
   'bromma': 'bromma.jpg',
   'bromma gk': 'bromma.jpg',
   'gripsholm': 'gripsholm.jpg',
@@ -7449,6 +7449,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (18)',
+    items: [
+      { type: 'fixed', text: 'Fixat trasig bild för Viksbergs Golfklubb. Uppladdad fil hette viksberg-golfklubb.jpg (utan "s"), medan STATIC_COURSE_IMAGES letade efter viksbergs-golfklubb.jpg. Rättat mappningen till att peka på den fil som faktiskt finns i repot.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (17)',
     items: [
