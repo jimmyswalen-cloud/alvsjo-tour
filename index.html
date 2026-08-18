@@ -1055,13 +1055,43 @@ function renderHomeUserBar() {
   var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; }) || currentUser;
   var initials = ini(u.name||u.username);
   var uImg = playerPhoto(u.username, u.img);
+  var hcpVal = (u.hcp!=null ? u.hcp : 0);
   el.innerHTML =
     (uImg ? '<img src="'+uImg+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
       '<div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
     '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(u.name||u.username)+'</div>' +
-    '<div style="font-size:12px;color:var(--text-3)">'+(isAdmin()?'Admin':'Spelare')+'</div></div>' +
+    '<div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px">'+(isAdmin()?'Admin':'Spelare')+' &middot; HCP '+hcpVal+
+      ' <i class="ti ti-edit" style="cursor:pointer;font-size:12px" onclick="event.stopPropagation();quickEditHcpFromHome()" title="Ändra HCP"></i>'+
+    '</div></div>' +
     '<button class="btn btn-sm" onclick="viewMyProfile()" style="margin-right:6px"><i class="ti ti-user"></i></button>' +
     '<button class="btn btn-sm" onclick="logout()"><i class="ti ti-logout"></i></button>';
+}
+
+// Snabb HCP-redigering direkt från startsidans användarrad. Fristående från
+// login-flödets checkHcpConfirmation()/showHcpUpdateForm() så den inte triggar
+// den efterföljande styrkor/svagheter-bekräftelsen som hör till inloggningen.
+function quickEditHcpFromHome() {
+  if(!currentUser) return;
+  var hcpVal = (currentUser.hcp!=null ? currentUser.hcp : 0);
+  showModal(
+    '<h3 style="margin-bottom:4px">Uppdatera HCP</h3>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Ange ditt aktuella handicap.</p>'+
+    '<div class="field"><label>HCP</label><input id="hcp-update-inp" type="number" step="0.1" value="'+hcpVal+'"></div>'+
+    '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveHcpUpdateFromHome()"><i class="ti ti-device-floppy"></i> Spara</button>',
+    true, false
+  );
+  setTimeout(function(){ var inp=document.getElementById('hcp-update-inp'); if(inp) inp.focus(); }, 30);
+}
+
+function saveHcpUpdateFromHome() {
+  var inp = document.getElementById('hcp-update-inp');
+  var val = parseFloat(inp.value);
+  if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
+  currentUser.hcp = val;
+  currentUser.hcpLastConfirmed = new Date().toISOString();
+  save();
+  closeModal();
+  renderHomeUserBar();
 }
 
 function renderGlobalSettings() {
@@ -7665,6 +7695,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (30)',
+    items: [
+      { type: 'added', text: 'HCP visas nu i användarraden längst ner på startsidan (t.ex. "Admin · HCP 7.2"), med en pennikon för att snabbt ändra det direkt därifrån – utan att behöva gå via inloggningens HCP-fråga (som admin-konton ändå inte ser).' }
+    ]
+  },
   {
     date: '18 augusti 2026 (29)',
     items: [
