@@ -6241,8 +6241,12 @@ function importBulkCourseData() {
   alert(result.added+' banor importerade.'+(result.skipped?' '+result.skipped+' hoppades över (fanns redan).':''));
 }
 
-// ── Nya banor med komplett scorekort, hämtat från caddee.se (2026-08-18) ────
-var BULK_BROHOF_COURSES = [
+// ── Väntande banor med komplett scorekort ───────────────────────────────────
+// Generisk kö: nya banor läggs till här allteftersom (namn, par, hål-för-hål
+// scorekort, koordinater). Importknappen i admin-vyn visas bara så länge
+// listan innehåller banor som saknas i courseDb, och döljs annars automatiskt.
+// Redan importerade banor kan lämnas kvar i listan utan problem (hoppas över).
+var BULK_PENDING_COURSES = [
   {
     name: "Bro Hof Slott GC - Stadium Course",
     klubb: "Bro Hof Slott Golf Club",
@@ -6264,12 +6268,67 @@ var BULK_BROHOF_COURSES = [
     holePars:     [5,3,4,3,5,4,3,4,5,5,3,3,5,4,5,4,3,4],
     holeHcpIndex: [5,13,11,9,7,1,17,15,3,4,16,18,6,14,2,12,10,8],
     holeLengths:  [518,140,298,176,469,345,112,336,461,487,131,120,440,288,433,301,146,334]
+  },
+  {
+    name: "Ullna Golf & Country Club",
+    klubb: "Ullna Golf & Country Club",
+    par: 72, holes: 18,
+    lat: 59.4955253, lng: 18.1524696,
+    district: "Stockholm", land: "Sverige",
+    website: "https://ullnagolf.se",
+    holePars:     [5,4,3,5,3,4,4,4,4,4,3,5,5,4,4,3,4,4],
+    holeHcpIndex: [12,8,16,18,4,14,10,2,6,3,13,17,15,7,5,9,1,11],
+    holeLengths:  [450,292,130,419,164,302,321,327,296,365,128,488,522,338,344,148,369,345]
+  },
+  {
+    name: "Kungl. Drottningholms Golfklubb",
+    klubb: "Kungl. Drottningholms Golfklubb",
+    par: 72, holes: 18,
+    lat: 59.3192160, lng: 17.8580400,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.kdrgk.se",
+    holePars:     [4,4,4,5,3,5,5,3,4,4,4,3,4,4,5,3,5,3],
+    holeHcpIndex: [11,5,7,9,13,15,3,17,1,2,14,18,12,10,8,16,6,4],
+    holeLengths:  [340,303,298,364,124,439,466,106,327,317,292,119,297,342,422,149,477,159]
+  },
+  {
+    name: "Lidingö Golfklubb",
+    klubb: "Lidingö Golfklubb",
+    par: 70, holes: 18,
+    lat: 59.3792594, lng: 18.1271853,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.lidingogk.se",
+    holePars:     [3,5,3,4,4,3,4,4,3,5,3,5,4,4,4,3,5,4],
+    holeHcpIndex: [14,6,10,4,18,8,2,12,16,7,17,3,11,15,1,9,13,5],
+    holeLengths:  [162,472,173,358,262,166,336,332,136,446,125,470,305,310,357,163,421,379]
+  },
+  {
+    name: "Saltsjöbadens Golfklubb",
+    klubb: "Saltsjöbadens Golfklubb",
+    par: 71, holes: 18,
+    lat: 59.2830611, lng: 18.2674238,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.saltsjobadengk.se",
+    holePars:     [4,4,3,4,4,5,5,3,4,3,4,3,5,3,4,5,4,4],
+    holeHcpIndex: [9,7,15,5,13,1,3,17,11,14,2,10,16,18,8,4,12,6],
+    holeLengths:  [315,290,121,348,270,477,485,132,334,125,325,174,428,120,350,495,307,360]
+  },
+  {
+    name: "Djursholms Golfklubb",
+    klubb: "Djursholms Golfklubb",
+    par: 71, holes: 18,
+    lat: 59.4144447, lng: 18.0800611,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.dgk.nu",
+    holePars:     [4,5,4,4,4,3,5,3,4,4,3,5,4,4,3,4,4,4],
+    holeHcpIndex: [11,7,5,13,3,15,9,17,1,18,14,4,8,2,16,10,6,12],
+    holeLengths:  [261,355,291,204,282,146,383,105,297,224,122,350,257,261,145,293,233,262]
   }
 ];
 
-function importBroHofCoursesSilent() {
+function importPendingCoursesSilent() {
   var added = 0, skipped = [];
-  BULK_BROHOF_COURSES.forEach(function(c){
+  BULK_PENDING_COURSES.forEach(function(c){
     var exists = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
     if(exists) { skipped.push(c.name); return; }
     courseDb.push({
@@ -6289,11 +6348,18 @@ function importBroHofCoursesSilent() {
   return { added: added, skipped: skipped };
 }
 
-function importBroHofCourses() {
+function countPendingCourses() {
+  return BULK_PENDING_COURSES.filter(function(c){
+    return !courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+  }).length;
+}
+
+function importPendingCourses() {
   if(!isAdmin()) return;
-  if(!confirm('Importera '+BULK_BROHOF_COURSES.length+' Bro Hof-banor (med fullt scorekort och koordinater)? Banor som redan finns hoppas över.')) return;
-  var result = importBroHofCoursesSilent();
-  alert(result.added+' bana(er) importerade.'+(result.skipped.length?' Hoppade över: '+result.skipped.join(', '):''));
+  var n = countPendingCourses();
+  if(!confirm('Importera '+n+' väntande bana(er) med fullt scorekort och koordinater? Banor som redan finns hoppas över.')) return;
+  var result = importPendingCoursesSilent();
+  alert(result.added+' bana(er) importerade.'+(result.skipped.length?' Hoppade över (fanns redan): '+result.skipped.join(', '):''));
 }
 
 function seedCourseDb() {
@@ -6806,9 +6872,7 @@ function renderCourseDbSection() {
   var el = document.getElementById('course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var withCoords = courseDb.filter(function(c){ return c.lat!=null && c.lng!=null; }).length;
-  var broHofMissing = BULK_BROHOF_COURSES.some(function(c){
-    return !courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
-  });
+  var pendingCount = countPendingCourses();
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
@@ -6816,7 +6880,7 @@ function renderCourseDbSection() {
     '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
     '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
     '<button class="btn btn-sm" onclick="importBulkCourseData()"><i class="ti ti-map-plus"></i> Importera bandata ('+BULK_GOLF_COURSES.length+' st)</button>'+
-    (broHofMissing ? '<button class="btn btn-sm" onclick="importBroHofCourses()"><i class="ti ti-golf"></i> Importera Bro Hof-banor (2 st)</button>' : '')+
+    (pendingCount ? '<button class="btn btn-sm" onclick="importPendingCourses()"><i class="ti ti-golf"></i> Importera väntande banor ('+pendingCount+' st)</button>' : '')+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
@@ -6976,6 +7040,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (7)',
+    items: [
+      { type: 'changed', text: 'Bandatabasens engångs-import har gjorts om till en generisk kö (BULK_PENDING_COURSES). Knappen "Importera väntande banor" visar nu ett dynamiskt antal och döljs helt när kön är tom, oavsett hur många banor som läggs till över tid.' },
+      { type: 'added', text: 'Lagt till 5 nya Stockholmsbanor i väntande kö, med fullständigt scorekort (par, hcp-index, hållängd per hål) och koordinater: Ullna Golf & Country Club, Kungl. Drottningholms Golfklubb, Lidingö Golfklubb, Saltsjöbadens Golfklubb (18-hålsbanan) och Djursholms Golfklubb (18-hålsbanan). Källa: caddee.se, verifierat par-summa och giltig hcp-index-permutation för varje bana.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (6)',
     items: [
