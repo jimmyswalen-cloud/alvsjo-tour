@@ -6471,14 +6471,85 @@ var BULK_PENDING_COURSES = [
     holePars:     [4,3,5,4,3,4,5,3,5,5,3,4,4,5,4,3,4,5],
     holeHcpIndex: [6,14,10,4,18,8,2,16,12,3,15,17,11,7,9,13,5,1],
     holeLengths:  [285,126,409,337,126,293,457,121,366,481,126,290,255,413,261,142,226,503]
+  },
+  {
+    name: "Bodaholm GK",
+    klubb: "Bodaholm Golfklubb",
+    par: 71, holes: 18,
+    lat: 59.6663711, lng: 17.7542674,
+    district: "Uppland", land: "Sverige",
+    website: "https://www.golfstar.se",
+    holePars:     [4,4,3,5,4,3,4,3,5,5,4,4,4,3,4,3,4,5],
+    holeHcpIndex: [9,15,3,13,1,17,11,7,5,8,12,14,10,18,4,16,2,6],
+    holeLengths:  null
+  },
+  {
+    name: "Gripsholm GK",
+    klubb: "Gripsholms Golfklubb",
+    par: 70, holes: 18,
+    lat: 59.2598214, lng: 17.2095841,
+    district: "Södermanland", land: "Sverige",
+    website: "https://www.golfstar.se",
+    holePars:     [4,3,5,4,3,3,3,3,5,4,5,4,3,4,5,3,5,4],
+    holeHcpIndex: [14,10,6,12,2,16,8,18,4,13,3,9,15,1,11,17,7,5],
+    holeLengths:  null
+  },
+  {
+    name: "Lövsättra GK",
+    klubb: "Huvudstadens Golfklubb",
+    par: 68, holes: 18,
+    lat: 59.6103693, lng: 18.3314824,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.golfstar.se",
+    holePars:     [4,4,4,5,3,4,3,4,3,4,3,4,4,4,3,5,3,4],
+    holeHcpIndex: [17,5,11,9,15,7,1,13,3,4,10,16,2,8,18,12,6,14],
+    holeLengths:  [284,319,350,472,136,315,170,340,114,346,154,331,363,281,141,498,162,331]
+  },
+  {
+    name: "Viksbergs Golfklubb",
+    klubb: "Viksbergs Golfklubb",
+    par: 72, holes: 18,
+    lat: 59.2464976, lng: 17.6314647,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.golfstar.se",
+    holePars:     [5,4,5,4,3,4,3,5,3,3,4,5,4,4,3,5,4,4],
+    holeHcpIndex: [17,3,1,15,11,5,9,7,13,18,4,8,12,2,16,14,6,10],
+    holeLengths:  null
   }
 ];
 
+// En bana räknas som "väntande" om den antingen saknas helt i courseDb,
+// eller redan finns men saknar scorekort (holePars) – t.ex. banor som bara
+// skapats via seedCourseDb() med enbart namn och ett platshållar-par.
+function pendingStatus(c) {
+  var existing = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+  if(!existing) return 'new';
+  if(!(existing.holePars && existing.holePars.length)) return 'fill';
+  return 'complete';
+}
+
 function importPendingCoursesSilent() {
-  var added = 0, skipped = [];
+  var added = 0, updated = 0, skipped = [];
   BULK_PENDING_COURSES.forEach(function(c){
-    var exists = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
-    if(exists) { skipped.push(c.name); return; }
+    var existing = courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+    if(existing) {
+      if(existing.holePars && existing.holePars.length) { skipped.push(c.name); return; }
+      // Fyll i (och rätta) saknade fält på en befintlig, ofullständig banpost –
+      // utan att skapa en dubblett eller tappa dess id/övriga data.
+      existing.klubb = existing.klubb || c.klubb;
+      existing.par = c.par; // rättar eventuellt felaktigt platshållar-par
+      existing.holes = existing.holes || c.holes;
+      existing.holePars = c.holePars;
+      existing.holeHcpIndex = c.holeHcpIndex;
+      existing.holeLengths = c.holeLengths;
+      if(existing.lat == null) existing.lat = c.lat;
+      if(existing.lng == null) existing.lng = c.lng;
+      existing.district = existing.district || c.district;
+      existing.land = existing.land || c.land;
+      existing.website = existing.website || c.website;
+      updated++;
+      return;
+    }
     courseDb.push({
       id: uid(), name: c.name, klubb: c.klubb,
       par: c.par, holes: c.holes,
@@ -6488,27 +6559,26 @@ function importPendingCoursesSilent() {
     });
     added++;
   });
-  if(added) {
+  if(added || updated) {
     courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
     saveCourseDb();
     if(document.getElementById('course-db-section')) renderCourseDbSection();
   }
-  return { added: added, skipped: skipped };
+  return { added: added, updated: updated, skipped: skipped };
 }
 
 function countPendingCourses() {
-  return BULK_PENDING_COURSES.filter(function(c){
-    return !courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
-  }).length;
+  return BULK_PENDING_COURSES.filter(function(c){ return pendingStatus(c) !== 'complete'; }).length;
 }
 
 function importPendingCourses() {
   if(!isAdmin()) return;
   var n = countPendingCourses();
-  if(!confirm('Importera '+n+' väntande bana(er) med fullt scorekort och koordinater? Banor som redan finns hoppas över.')) return;
+  if(!confirm('Importera/uppdatera '+n+' väntande bana(er) med fullt scorekort och koordinater? Banor som redan är kompletta hoppas över.')) return;
   var result = importPendingCoursesSilent();
-  alert(result.added+' bana(er) importerade.'+(result.skipped.length?' Hoppade över (fanns redan): '+result.skipped.join(', '):''));
+  alert(result.added+' ny(a) bana(er), '+result.updated+' befintlig(a) bana(or) uppdaterad(e) med scorekort.'+(result.skipped.length?' Redan kompletta (hoppade över): '+result.skipped.join(', '):''));
 }
+
 
 function seedCourseDb() {
   var defaultCourses = [
@@ -7188,6 +7258,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (10)',
+    items: [
+      { type: 'changed', text: 'Importfunktionen för väntande banor kan nu fylla i (och rätta) scorekort på banor som redan finns i databasen men saknar hål-för-hål-data – t.ex. banor skapade via den ursprungliga seedCourseDb()-listan med bara namn och ett platshållar-par. Tidigare hoppades dessa alltid över som "dubbletter".' },
+      { type: 'added', text: 'Lagt till/kompletterat 4 GolfStar-banor i väntande kö: Bodaholm GK (rättat par 72→71), Gripsholm GK (rättat par 72→70) och Lövsättra GK (rättat par 72→68) får nu fullständigt scorekort – tidigare fanns bara namn och ett felaktigt platshållar-par. Viksbergs Golfklubb är helt ny (par 72). Källa: caddee.se, verifierat par-summa och giltig hcp-index-permutation för alla fyra. Hållängder saknas för Bodaholm, Gripsholm och Viksberg (källdatan gick inte att extrahera tillförlitligt) – kan fyllas i manuellt senare.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (9)',
     items: [
