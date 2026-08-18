@@ -6706,6 +6706,17 @@ var BULK_PENDING_COURSES = [
     holePars:     [5,4,5,4,3,4,3,5,3,3,4,5,4,4,3,5,4,4],
     holeHcpIndex: [17,3,1,15,11,5,9,7,13,18,4,8,12,2,16,14,6,10],
     holeLengths:  null
+  },
+  {
+    name: "Kyssinge GK",
+    klubb: "Kyssinge Golf",
+    par: 74, holes: 18,
+    lat: 59.5977236, lng: 18.0051417,
+    district: "Stockholm", land: "Sverige",
+    website: "https://www.golfstar.se",
+    holePars:     [4,5,5,4,3,4,4,3,5,4,5,4,4,5,3,4,3,5],
+    holeHcpIndex: [11,17,5,9,13,15,1,7,3,4,2,12,14,6,8,16,18,10],
+    holeLengths:  null
   }
 ];
 
@@ -6784,7 +6795,7 @@ function seedCourseDb() {
     { name: 'International GK',       par: 72 },
     { name: 'Kallfors GK',            par: 71 },
     { name: 'Kungsängen Queens GK',   par: 72 },
-    { name: 'Kyssinge GK',            par: 72 },
+    { name: 'Kyssinge GK',            par: 74 },
     { name: 'Lindö GK',               par: 72 },
     { name: 'Lövsättra GK',           par: 72 },
     { name: 'Riksten GK',             par: 72 },
@@ -7449,6 +7460,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (19)',
+    items: [
+      { type: 'fixed', text: 'Kyssinge GK hade fel platshållarpar (72) och saknade scorekort helt. Rättat till korrekt par 74 och lagt till fullständigt scorekort (18-hålsbanan "Kyssinge 1-18") i väntande kö, med par och hcp-index verifierat mot caddee.se. Klart att fyllas i via "Importera väntande banor" i bandatabasen.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (18)',
     items: [
