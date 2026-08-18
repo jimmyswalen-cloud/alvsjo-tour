@@ -175,7 +175,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px">Logga in</button>
       </form>
     </div>
-    <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Kontakta din admin om du saknar inloggningsuppgifter</p>
+    <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Ny spelare? <a href="signup.html" style="color:#fff;font-weight:600;text-decoration:underline">Skapa konto här</a> · Kontakta din admin om du saknar inloggningsuppgifter</p>
 
     <div style="margin-top:14px;text-align:center">
       <button type="button" id="release-notes-toggle" onclick="toggleReleaseNotes()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:6px 10px">
@@ -7627,6 +7627,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (28)',
+    items: [
+      { type: 'added', text: 'Ny fristående sida för självregistrering: nya spelare kan skapa sitt eget konto på jimmyswalen-cloud.github.io/alvsjo-tour/signup.html (länk finns även på inloggningssidan). Kontot skapas alltid som spelare (aldrig admin) utan tour-åtkomst – admin tilldelar tourer efteråt precis som vanligt via "Lägg till spelare". Skriver säkert till samma databas som huvudappen via en Firestore-transaktion som kontrollerar att användarnamnet är ledigt.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (27)',
     items: [

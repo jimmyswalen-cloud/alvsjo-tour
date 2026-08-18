@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skapa konto – Älvsjö Players Tour</title>
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --green:#1D9E75;--green-light:#E1F5EE;--green-dark:#0F6E56;
+  --gold:#BA7517;--gold-light:#FAEEDA;
+  --bg:#f0f4f1;--surface:#ffffff;--surface2:#f3f4f6;
+  --border:#e5e7eb;--border-strong:#d1d5db;
+  --text:#111827;--text-2:#6b7280;--text-3:#9ca3af;
+  --radius:8px;--danger-bg:#fef2f2;--danger-border:#fecaca;--danger-text:#dc2626;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.hero{position:relative;width:100%;height:180px;background:#1a2e22 url('hero-bg.jpg') center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(3,30,18,.75) 100%)}
+.hero-content{position:relative;text-align:center;padding:0 20px}
+.hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px}
+.hero-title{font-size:clamp(26px,7vw,44px);font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1.1;text-shadow:0 3px 28px rgba(0,0,0,.5)}
+.wrap{max-width:480px;margin:0 auto;padding:28px 16px 4rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+h2{font-size:19px;font-weight:700;margin-bottom:6px}
+.sub{font-size:13px;color:var(--text-2);margin-bottom:20px;line-height:1.5}
+.field{margin-bottom:14px}
+label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-weight:500}
+input[type=text],input[type=password],input[type=email],input[type=number],select{
+  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);
+  font-size:16px;background:var(--surface);color:var(--text);font-family:inherit
+}
+input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(29,158,117,.1)}
+.row{display:flex;gap:10px}
+.row .field{flex:1}
+.hint{font-size:11px;color:var(--text-3);margin-top:4px}
+.btn{width:100%;padding:12px 16px;border:1px solid var(--green-dark);background:var(--green);color:#fff;
+  border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;margin-top:6px;
+  display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
+.btn:hover{background:var(--green-dark)}
+.btn:disabled{opacity:.6;cursor:default}
+.gender-row{display:flex;gap:16px;margin-bottom:4px}
+.gender-row label{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:400;cursor:pointer;color:var(--text)}
+.gender-row input{width:auto;margin:0}
+.error-box{background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-text);
+  border-radius:var(--radius);padding:10px 12px;font-size:13px;margin-bottom:14px;display:none}
+.success-box{text-align:center;padding:20px 4px}
+.success-box i{font-size:48px;color:var(--green-dark);margin-bottom:12px;display:block}
+.success-box h2{margin-bottom:10px}
+.success-box p{font-size:14px;color:var(--text-2);line-height:1.6;margin-bottom:18px}
+.footer-link{display:block;text-align:center;margin-top:18px;font-size:13px;color:var(--text-2)}
+.footer-link a{color:var(--green-dark);font-weight:600;text-decoration:none}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-content">
+    <div class="hero-eyebrow">Älvsjö Golf &amp; Country Club</div>
+    <div class="hero-title">Skapa ditt konto</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card" id="form-card">
+    <h2>Ny spelare</h2>
+    <p class="sub">Fyll i dina uppgifter för att skapa ett konto. Ditt konto skapas som <strong>spelare</strong> – en admin behöver sedan ge dig tillgång till en eller flera tourer innan du ser något, precis som vanligt.</p>
+
+    <div class="error-box" id="error-box"></div>
+
+    <form id="signup-form">
+      <div class="field">
+        <label>Namn (för- och efternamn)</label>
+        <input type="text" id="f-name" placeholder="t.ex. Anna Andersson" required>
+      </div>
+
+      <div class="field">
+        <label>Användarnamn (för inloggning)</label>
+        <input type="text" id="f-username" placeholder="t.ex. anna eller e-post" required>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Lösenord</label>
+          <input type="password" id="f-password" required>
+        </div>
+        <div class="field">
+          <label>Bekräfta lösenord</label>
+          <input type="password" id="f-password2" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>E-postadress (valfritt)</label>
+        <input type="email" id="f-email" placeholder="t.ex. namn@exempel.se">
+      </div>
+
+      <div class="field">
+        <label>Golf-ID</label>
+        <input type="text" id="f-golfid" maxlength="10" placeholder="10 tecken, t.ex. 820804-012">
+        <div class="hint">Exakt 10 tecken. Hittar du inte ditt just nu går det bra att lämna tomt och fylla i senare via profilen.</div>
+      </div>
+
+      <div class="field">
+        <label>Kön</label>
+        <div class="gender-row">
+          <label><input type="radio" name="f-gender" value="man" checked> Man</label>
+          <label><input type="radio" name="f-gender" value="kvinna"> Kvinna</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>HCP</label>
+        <input type="number" id="f-hcp" step="0.1" placeholder="t.ex. 18.4">
+      </div>
+
+      <button type="submit" class="btn" id="submit-btn"><i class="ti ti-user-plus"></i> Skapa konto</button>
+    </form>
+  </div>
+
+  <div class="card success-box" id="success-card" style="display:none">
+    <i class="ti ti-circle-check"></i>
+    <h2>Kontot är skapat!</h2>
+    <p id="success-msg"></p>
+    <a class="btn" style="text-decoration:none" href="index.html"><i class="ti ti-login"></i> Gå till inloggningen</a>
+  </div>
+
+  <p class="footer-link">Har du redan ett konto? <a href="index.html">Logga in här</a></p>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// Samma Firebase-projekt och samma dokumentstruktur som index.html (S = {tours, users, ideas},
+// sparat som en JSON-sträng i fältet "data" på golfapp/shared). Nya konton läggs till via en
+// transaktion så vi säkert kan kolla att användarnamnet är ledigt och undvika krockar med andra
+// samtidiga skrivningar (t.ex. admin som sparar något i huvudappen just då).
+var firebaseConfig = {
+  apiKey: "AIzaSyCnLVk8kqPvw51Q_ebz1ywbobyvSyiBdro",
+  authDomain: "tourapp-187b1.firebaseapp.com",
+  projectId: "tourapp-187b1",
+  storageBucket: "tourapp-187b1.firebasestorage.app",
+  messagingSenderId: "734893897025",
+  appId: "1:734893897025:web:5a710855184a36c2689dc0"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.firestore();
+var DOC_REF = db.collection('golfapp').doc('shared');
+
+// Måste vara identisk med simpleHash() i index.html, annars kan inte det nya kontot logga in.
+function simpleHash(str) {
+  var h = 0;
+  for (var i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return 'h' + (h >>> 0).toString(36) + '_' + str.length;
+}
+
+function showError(msg) {
+  var box = document.getElementById('error-box');
+  box.textContent = msg;
+  box.style.display = 'block';
+  box.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+
+document.getElementById('signup-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  hideError();
+
+  var name = document.getElementById('f-name').value.trim();
+  var username = document.getElementById('f-username').value.trim();
+  var password = document.getElementById('f-password').value;
+  var password2 = document.getElementById('f-password2').value;
+  var email = document.getElementById('f-email').value.trim();
+  var golfId = document.getElementById('f-golfid').value.trim();
+  var genderEl = document.querySelector('input[name="f-gender"]:checked');
+  var gender = genderEl ? genderEl.value : 'man';
+  var hcpRaw = document.getElementById('f-hcp').value;
+  var hcp = hcpRaw !== '' ? parseFloat(hcpRaw) : 0;
+
+  if(!name) { showError('Ange ditt namn.'); return; }
+  if(!username) { showError('Ange ett användarnamn.'); return; }
+  if(!password || password.length < 4) { showError('Lösenordet måste vara minst 4 tecken.'); return; }
+  if(password !== password2) { showError('Lösenorden matchar inte.'); return; }
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('E-postadressen ser inte korrekt ut.'); return; }
+  if(golfId && golfId.length !== 10) { showError('Golf-ID måste vara exakt 10 tecken (eller lämnas tomt).'); return; }
+
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Skapar konto...';
+
+  db.runTransaction(function(tx) {
+    return tx.get(DOC_REF).then(function(doc) {
+      var state = { tours: [], users: [], ideas: [] };
+      if(doc.exists && doc.data().data) {
+        var parsed = JSON.parse(doc.data().data);
+        state.tours = parsed.tours || [];
+        state.users = parsed.users || [];
+        state.ideas = parsed.ideas || [];
+      }
+      var taken = state.users.some(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
+      if(taken) throw new Error('USERNAME_TAKEN');
+
+      state.users.push({
+        username: username,
+        email: email || null,
+        passHash: simpleHash(password),
+        role: 'user',
+        tourAccess: [],
+        isPlayer: true,
+        name: name,
+        golfId: golfId || '',
+        gender: gender,
+        hcp: isNaN(hcp) ? 0 : hcp,
+        img: null
+      });
+
+      tx.set(DOC_REF, { data: JSON.stringify(state) });
+    });
+  }).then(function() {
+    document.getElementById('form-card').style.display = 'none';
+    document.getElementById('success-msg').textContent =
+      'Ditt konto (' + username + ') är skapat som spelare. Be din admin tilldela dig en tour, så kan du logga in och komma igång.';
+    document.getElementById('success-card').style.display = 'block';
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-user-plus"></i> Skapa konto';
+    if(err.message === 'USERNAME_TAKEN') {
+      showError('Det användarnamnet är redan taget. Välj ett annat.');
+    } else {
+      console.error('Kunde inte skapa konto:', err);
+      showError('Något gick fel, kontot kunde inte skapas. Kontrollera din internetanslutning och försök igen.');
+    }
+  });
+});
+</script>
+
+</body>
+</html>
