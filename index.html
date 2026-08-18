@@ -6952,6 +6952,50 @@ var BULK_PENDING_COURSES = [
     holePars:     [4,5,5,4,3,4,4,3,5,4,5,4,4,5,3,4,3,5],
     holeHcpIndex: [11,17,5,9,13,15,1,7,3,4,2,12,14,6,8,16,18,10],
     holeLengths:  null
+  },
+  {
+    name: "Landskrona GK - Erikstorp",
+    klubb: "Landskrona Golfklubb",
+    par: 72, holes: 18,
+    lat: 55.9036670, lng: 12.8111420,
+    district: "Skåne", land: "Sverige",
+    website: "https://landskronagk.se",
+    holePars:     [4,3,5,3,5,3,4,5,5,4,4,3,5,3,5,4,4,3],
+    holeHcpIndex: [5,15,7,11,3,13,9,17,1,12,14,4,10,18,2,16,6,8],
+    holeLengths:  [355,136,426,149,479,163,366,432,495,365,305,157,460,126,475,276,375,110]
+  },
+  {
+    name: "Landskrona GK - Hildesborg",
+    klubb: "Landskrona Golfklubb",
+    par: 70, holes: 18,
+    lat: 55.9036670, lng: 12.8111420,
+    district: "Skåne", land: "Sverige",
+    website: "https://landskronagk.se",
+    holePars:     [4,4,5,3,4,4,4,5,3,4,4,4,4,3,5,3,4,3],
+    holeHcpIndex: [5,7,15,13,3,11,17,1,9,4,14,12,2,18,10,8,6,16],
+    holeLengths:  [332,348,477,128,357,315,257,479,140,296,327,320,348,153,410,126,312,101]
+  },
+  {
+    name: "Rönnebäck GK",
+    klubb: "Hinton Golf Club",
+    par: 72, holes: 18,
+    lat: 55.5312630, lng: 13.1018449,
+    district: "Skåne", land: "Sverige",
+    website: "https://hintongolf.se",
+    holePars:     [4,4,3,5,4,3,4,5,4,5,4,3,4,5,4,4,3,4],
+    holeHcpIndex: [10,4,16,6,14,18,8,2,12,9,3,17,15,1,13,7,5,11],
+    holeLengths:  [320,380,130,475,340,170,370,505,330,470,345,135,300,520,290,370,180,335]
+  },
+  {
+    name: "Sofiedal GK",
+    klubb: "Hinton Golf Club",
+    par: 73, holes: 18,
+    lat: 55.5869070, lng: 13.1117960,
+    district: "Skåne", land: "Sverige",
+    website: "https://hintongolf.se",
+    holePars:     [4,5,4,4,6,4,4,3,4,4,4,4,4,5,3,4,3,4],
+    holeHcpIndex: [12,16,4,6,2,18,8,14,10,11,1,7,13,15,17,5,3,9],
+    holeLengths:  [313,478,340,369,567,311,357,150,332,311,351,356,273,494,140,355,145,349]
   }
 ];
 
@@ -7034,7 +7078,7 @@ function seedCourseDb() {
     { name: 'Lindö GK',               par: 72 },
     { name: 'Lövsättra GK',           par: 72 },
     { name: 'Riksten GK',             par: 72 },
-    { name: 'Sofiedal GK',            par: 72 },
+    { name: 'Sofiedal GK',            par: 73 },
     { name: 'Waxholms GK',            par: 72 },
   ];
   // Only add courses not already in the DB
@@ -7695,6 +7739,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (31)',
+    items: [
+      { type: 'fixed', text: 'Sofiedal GK hade fel platshållarpar (72) och saknade scorekort. Rättat till korrekt par 73 (inkl. en par 6:a på hål 5!) och lagt till fullständigt scorekort i väntande kö.' },
+      { type: 'added', text: 'Lagt till fullständiga scorekort i väntande kö för Landskrona GK – Erikstorp (par 72) och Hildesborg (par 70), samt Rönnebäck GK (par 72, Hinton Golf Club). Alla verifierade mot caddee.se (par-summa + giltig hcp-index-permutation). Notera: Sofiedals hål 1–18 hämtades i caddee.se:s standardordning – ingen explicit "södra/norra 9"-märkning fanns i källan, så om ordningen inte matchar önskad södra-först/norra-sist-uppdelning behöver hålen justeras manuellt i Bandatabasen efter import.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (30)',
     items: [
