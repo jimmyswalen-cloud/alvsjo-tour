@@ -1635,6 +1635,15 @@ function renderToursList() {
     (allClosed ? finished : active).push(t);
   });
 
+  // Sortera efter tourens startdatum, äldst först. Tourer utan datum (inga deltävlingar
+  // ifyllda ännu) hamnar sist.
+  function tourSortKey(t) {
+    var range = tourDateRange(t);
+    return range ? range.start : '9999-99-99';
+  }
+  active.sort(function(a,b){ return tourSortKey(a).localeCompare(tourSortKey(b)); });
+  finished.sort(function(a,b){ return tourSortKey(a).localeCompare(tourSortKey(b)); });
+
   var html = '';
   if(active.length) {
     html += '<p class="section-title">Aktiva</p>' + active.map(tourCardHTML).join('');
@@ -4097,6 +4106,17 @@ function openEditEventCourseImg(i) {
   if(!e) return;
   if(e.closed) { alert('Tävlingen är stängd och kan inte redigeras.'); return; }
   _editEventDraft = { i: i, course: e.course || '', img: e.img || null };
+  renderEeciModal();
+}
+
+// Ritar om Bana/bild-modalen utifrån NUVARANDE _editEventDraft, utan att bygga
+// om utkastet från det sparade eventet. Måste användas (inte openEditEventCourseImg)
+// varje gång man vill uppdatera förhandsvisningen efter att ha valt en ny bild –
+// annars skrivs den nyss valda (osparade) bilden över av den gamla sparade igen.
+function renderEeciModal() {
+  if(!_editEventDraft) return;
+  var t = getTour(), e = t.events[_editEventDraft.i];
+  if(!e) return;
 
   var courseField = '';
   if(courseDb.length) {
@@ -4179,7 +4199,7 @@ function handleEeciImg(file) {
     showCropModal(d, 160, function(cropped) {
       _editEventDraft.img = cropped;
       if(_editEventDraft.course) saveCourseImage(_editEventDraft.course, cropped);
-      openEditEventCourseImg(_editEventDraft.i);
+      renderEeciModal();
     });
   });
 }
@@ -4190,22 +4210,21 @@ function useLibraryImageForEeci() {
   var img = getCourseImage(_editEventDraft.course);
   if(!img) { alert('Ingen sparad bild hittades för "'+_editEventDraft.course+'". Ladda upp en ny bild istället.'); return; }
   _editEventDraft.img = img;
-  openEditEventCourseImg(_editEventDraft.i);
+  renderEeciModal();
 }
 
 function pickEeciCover() {
   syncEeciCourseField();
-  var i = _editEventDraft.i;
   openTourCoverPicker(function(url){
     _editEventDraft.img = url;
-    openEditEventCourseImg(i);
-  }, function(){ openEditEventCourseImg(i); });
+    renderEeciModal();
+  }, function(){ renderEeciModal(); });
 }
 
 function clearEeciImg() {
   syncEeciCourseField();
   _editEventDraft.img = null;
-  openEditEventCourseImg(_editEventDraft.i);
+  renderEeciModal();
 }
 
 function saveEditEventCourseImg() {
@@ -7531,6 +7550,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (25)',
+    items: [
+      { type: 'changed', text: 'Touröversikten sorterar nu tourerna efter startdatum, äldst först, både bland aktiva och avslutade tourer. Tidigare visades de i den ordning de skapats, vilket blev missvisande nu när tourperioden visas på korten.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (24)',
+    items: [
+      { type: 'fixed', text: 'Fixat bugg där en vald banbild i "Bana/bild"-redigeraren aldrig sparades – varken via uppladdning, "Hämta banans bild" eller "Bildbibliotek". Orsaken var att förhandsvisningen uppdaterades genom att bygga om hela utkastet från det redan sparade eventet, vilket omedelbart skrev över den nyss valda (osparade) bilden innan man hann klicka "Spara". Detta var en äldre bugg som fanns redan innan dagens ändringar. Nu återanvänds samma utkast vid uppdatering av förhandsvisningen, så vald bild ligger kvar tills man sparar.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (23)',
     items: [
