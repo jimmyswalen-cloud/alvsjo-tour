@@ -1752,6 +1752,122 @@ function wizSaveStep1Fields() {
   saveDraft();
 }
 
+// ── SCHEMAÖVERSIKT (kalender) ───────────────────────────────────────────────
+// Visar en liten kalender i tur-guiden så admin ser vilka datum som redan är
+// upptagna av andra deltävlingar, i växlande färg (blå/gul), och kan klicka
+// på en ledig dag för att sätta ordinarie datum för den deltävling som redigeras.
+function wizScheduleMonths() {
+  var i = wiz.stepIdx;
+  var refs = [];
+  [i-1, i, i+1].forEach(function(idx){ var e = wiz.events[idx]; if(e && e.date) refs.push(e.date); });
+  if(!refs.length) refs.push(new Date().toISOString().slice(0,10));
+  var monthNums = refs.map(function(d){ var dt = new Date(d+'T00:00:00'); return dt.getFullYear()*12 + dt.getMonth(); });
+  var minM = Math.min.apply(null, monthNums), maxM = Math.max.apply(null, monthNums);
+  if(maxM - minM > 2) maxM = minM + 2; // cap span to max 3 månader
+  var out = [];
+  for(var m=minM; m<=maxM; m++) out.push([Math.floor(m/12), m%12]);
+  return out;
+}
+
+function renderWizMonthCalendar(year, month) {
+  var monthNames = ['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+  var firstDay = new Date(year, month, 1);
+  var startOffset = (firstDay.getDay()+6)%7; // måndag = 0
+  var daysInMonth = new Date(year, month+1, 0).getDate();
+  var cells = [];
+  for(var k=0;k<startOffset;k++) cells.push(null);
+  for(var d=1; d<=daysInMonth; d++) cells.push(d);
+  while(cells.length % 7 !== 0) cells.push(null);
+
+  var curIdx = wiz.stepIdx;
+  var html = '<div style="flex:1;min-width:150px">';
+  html += '<div style="font-size:11px;font-weight:600;margin-bottom:4px;text-align:center">'+monthNames[month]+' '+year+'</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:10px">';
+  ['M','T','O','T','F','L','S'].forEach(function(dl){ html += '<div style="text-align:center;color:var(--text-3);font-weight:600">'+dl+'</div>'; });
+  cells.forEach(function(day){
+    if(day==null) { html += '<div></div>'; return; }
+    var dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    var ownerIdx = -1, owner = null;
+    wiz.events.forEach(function(ev, idx){
+      if(ev.periodStart && ev.periodEnd && dateStr>=ev.periodStart && dateStr<=ev.periodEnd) { owner = ev; ownerIdx = idx; }
+    });
+    var bg = 'transparent';
+    if(owner) bg = (ownerIdx % 2 === 0) ? 'rgba(59,130,246,0.22)' : 'rgba(234,179,8,0.28)';
+    var isOwnDate = owner && owner.date === dateStr;
+    var isCurrentEditing = ownerIdx === curIdx;
+    var style = 'text-align:center;padding:4px 0;border-radius:4px;cursor:pointer;background:'+bg+
+      (isOwnDate ? ';font-weight:700' : '') +
+      (isCurrentEditing ? ';box-shadow:inset 0 0 0 1.5px var(--gold)' : '');
+    html += '<div style="'+style+'" onclick="pickWizDateFromCalendar(\''+dateStr+'\')" title="'+(owner?esc(owner.name||''):'Ledigt')+'">'+day+'</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function renderWizScheduleCalendar() {
+  var months = wizScheduleMonths();
+  var h = '<div style="margin-top:8px">';
+  h += '<div style="display:flex;gap:14px;flex-wrap:wrap">';
+  months.forEach(function(m){ h += renderWizMonthCalendar(m[0], m[1]); });
+  h += '</div>';
+  h += '<p style="font-size:10px;color:var(--text-3);margin-top:6px">'+
+    '<span style="background:rgba(59,130,246,0.35);padding:1px 5px;border-radius:3px">blå</span> / '+
+    '<span style="background:rgba(234,179,8,0.4);padding:1px 5px;border-radius:3px">gul</span> = upptaget av andra deltävlingar (växlande färg) &middot; '+
+    'fet dag = ordinarie datum &middot; guldram = denna deltävling &middot; klicka en ledig dag för att välja den'+
+  '</p>';
+  h += '</div>';
+  return h;
+}
+
+function pickWizDateFromCalendar(dateStr) {
+  var inp = document.getElementById('w-ev-date');
+  if(inp) inp.value = dateStr;
+  wizStep2SaveCurrent();
+  wizStep2();
+}
+
+// ── AUTO-IFYLLNAD AV SPELTIDSPERIOD ─────────────────────────────────────────
+// period-start för en deltävling föreslås som dagen efter föregående
+// deltävlings datum; period-slut föreslås som dagen före nästa deltävlings
+// datum. Föreslagna värden skrivs bara över så länge admin inte själv ändrat
+// fältet manuellt (spåras via periodStartAuto/periodEndAuto, default true).
+function addDaysISO(dateStr, days) {
+  if(!dateStr) return dateStr;
+  var d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+
+function recomputeAutoPeriods() {
+  wiz.events.forEach(function(ev, idx){
+    if(!ev.date) return;
+    if(ev.periodStartAuto !== false) {
+      var prev = wiz.events[idx-1];
+      ev.periodStart = (prev && prev.date) ? addDaysISO(prev.date, 1) : ev.date;
+    }
+    if(ev.periodEndAuto !== false) {
+      var next = wiz.events[idx+1];
+      ev.periodEnd = (next && next.date) ? addDaysISO(next.date, -1) : ev.date;
+    }
+  });
+}
+
+function markPeriodManual(which) {
+  var ev = wiz.events[wiz.stepIdx];
+  if(!ev) return;
+  if(which==='start') ev.periodStartAuto = false;
+  else ev.periodEndAuto = false;
+}
+
+function resetPeriodAuto(which) {
+  wizStep2SaveCurrent();
+  var ev = wiz.events[wiz.stepIdx];
+  if(which==='start') ev.periodStartAuto = true;
+  else ev.periodEndAuto = true;
+  recomputeAutoPeriods();
+  wizStep2();
+}
+
 function wizToStep2() {
   wiz.name = document.getElementById('w-name').value.trim();
   if(!wiz.name) { alert('Namn krävs.'); return; }
@@ -1777,6 +1893,7 @@ function wizStep2() {
   var i = wiz.stepIdx;
   var ev = wiz.events[i];
   var total = wiz.events.length;
+  recomputeAutoPeriods();
   var h = '<h3>'+(ev.isFinal?'Final':'Deltävling')+' '+(i+1)+' av '+total+'</h3>';
   h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
   var courseField = '';
@@ -1799,12 +1916,17 @@ function wizStep2() {
   }
   h += courseField;
   h += '<div class="field"><label>Datum (ordinarie)</label><input id="w-ev-date" type="date" value="'+ev.date+'"></div>';
+  h += renderWizScheduleCalendar();
   h += '<div class="field" style="background:var(--surface2);border-radius:10px;padding:10px 12px">';
   h += '<label style="margin-bottom:8px;display:block"><i class="ti ti-calendar-stats"></i> Speltidsperiod</label>';
-  h += '<p style="font-size:11px;color:var(--text-2);margin-bottom:8px">Spelare kan välja vilket datum inom perioden de avser spela.</p>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin-bottom:8px">Spelare kan välja vilket datum inom perioden de avser spela. Från/till föreslås automatiskt utifrån grannarnas datum, men går att skriva över.</p>';
   h += '<div class="row" style="gap:8px">';
-  h += '<div style="flex:1"><label style="font-size:11px">Från</label><input id="w-ev-pstart" type="date" value="'+(ev.periodStart||ev.date||'')+'"></div>';
-  h += '<div style="flex:1"><label style="font-size:11px">Till</label><input id="w-ev-pend" type="date" value="'+(ev.periodEnd||ev.date||'')+'"></div>';
+  h += '<div style="flex:1"><label style="font-size:11px">Från</label><input id="w-ev-pstart" type="date" value="'+(ev.periodStart||ev.date||'')+'" oninput="markPeriodManual(\'start\')">'+
+    (ev.periodStartAuto===false ? '<span style="font-size:10px;color:var(--text-3);cursor:pointer" onclick="resetPeriodAuto(\'start\')"><i class="ti ti-refresh"></i> Återställ auto</span>' : '<span style="font-size:10px;color:var(--text-3)">Auto: dagen efter föregående</span>')+
+    '</div>';
+  h += '<div style="flex:1"><label style="font-size:11px">Till</label><input id="w-ev-pend" type="date" value="'+(ev.periodEnd||ev.date||'')+'" oninput="markPeriodManual(\'end\')">'+
+    (ev.periodEndAuto===false ? '<span style="font-size:10px;color:var(--text-3);cursor:pointer" onclick="resetPeriodAuto(\'end\')"><i class="ti ti-refresh"></i> Återställ auto</span>' : '<span style="font-size:10px;color:var(--text-3)">Auto: dagen före nästa</span>')+
+    '</div>';
   h += '</div></div>';
   h += '<div class="field"><label>Typ</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="w-etype" value="slag" '+(ev.type!=='stableford'?'checked':'')+' style="width:auto;margin:0"> Slag</label>';
@@ -1923,6 +2045,7 @@ function wizStep2SaveCurrent() {
     }
   }
   ev.date = document.getElementById('w-ev-date').value;
+  recomputeAutoPeriods();
   var pStartEl = document.getElementById('w-ev-pstart');
   var pEndEl = document.getElementById('w-ev-pend');
   if(pStartEl) ev.periodStart = pStartEl.value || ev.date;
@@ -7292,6 +7415,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (16)',
+    items: [
+      { type: 'added', text: 'Ny liten kalenderöversikt i tur-guidens deltävlingssteg, direkt under "Datum (ordinarie)". Visar 1–3 relevanta månader med redan bokade deltävlingar färgmarkerade i växlande blått/gult, fet stil på ordinarie speldatum, och guldram runt den deltävling som just redigeras. Klicka på en ledig dag för att direkt sätta den som ordinarie datum – speltidsperioden (Från/Till) räknas då om automatiskt enligt föregående funktion.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (15)',
+    items: [
+      { type: 'added', text: 'Speltidsperiod (Från/Till) i tur-guiden fylls nu i automatiskt: period-start föreslås som dagen efter föregående deltävlings datum, period-slut som dagen före nästa deltävlings datum. Uppdateras löpande i takt med att fler datum fylls i. Går fortfarande att skriva över manuellt per fält, med en "Återställ auto"-länk om man ångrar sig.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (14)',
     items: [
