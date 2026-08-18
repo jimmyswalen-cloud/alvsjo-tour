@@ -1246,10 +1246,13 @@ function renderEditTourBtn() {
   var t = getTour();
   var wrap = document.getElementById('edit-tour-btn-wrap');
   if(!wrap) return;
-  if(isAdmin() && !tourHasStarted(t)) {
+  if(!isAdmin()) { wrap.innerHTML = ''; return; }
+  if(!tourHasStarted(t)) {
     wrap.innerHTML = '<button class="btn btn-sm" onclick="openEditTour()" style="margin-left:8px"><i class="ti ti-edit"></i> Redigera</button>';
   } else {
-    wrap.innerHTML = '';
+    // Touren är låst strukturellt (deltävlingar kan inte ändras), men namn/säsong/
+    // omslagsbild är helt ofarligt att ändra ändå - så vi erbjuder en lättare variant.
+    wrap.innerHTML = '<button class="btn btn-sm" onclick="openRenameTour()" style="margin-left:8px"><i class="ti ti-edit"></i> Byt namn/bild</button>';
   }
 }
 
@@ -1334,6 +1337,77 @@ function clearEditTourCover() {
   syncEditTourDraftFields();
   _editTourDraft.img = null;
   openEditTour();
+}
+
+// ── LÄTTVIKTS-REDIGERING (namn/säsong/omslag) FÖR REDAN STARTADE TOURER ─────
+// Samma fält som i openEditTour(), men rör aldrig deltävlingarna och kräver
+// inte att touren är ostartad. Egna hjälpfunktioner nedan (inte de för
+// openEditTour) eftersom de annars skulle trigga "touren har startat"-spärren
+// när de försöker rita om modalen efter en bildändring.
+function openRenameTour() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null };
+
+  var h = '<h3><i class="ti ti-edit"></i> Byt namn/bild</h3>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Touren har startat, så deltävlingarna kan inte ändras längre - men namn, säsong och omslagsbild går fortfarande fint att uppdatera.</p>';
+  h += '<div class="field"><label>Tournamn</label><input id="edit-tour-name" type="text" value="'+esc(_editTourDraft.name)+'"></div>';
+  h += '<div class="field"><label>Säsong</label><input id="edit-tour-season" type="text" value="'+esc(_editTourDraft.season)+'" placeholder="t.ex. 2025"></div>';
+  h += '<div class="field"><label>Omslagsbild</label>';
+  h += '<div id="edit-tour-img-prev">'+(_editTourDraft.img?'<img src="'+_editTourDraft.img+'" class="img-preview">':'<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Ingen bild vald</p>')+'</div>';
+  h += '<div class="row" style="gap:6px;flex-wrap:wrap">';
+  h += '<button type="button" class="btn btn-sm" id="edit-tour-img-btn"><i class="ti ti-photo"></i> Ladda upp</button>';
+  h += '<button type="button" class="btn btn-sm" onclick="pickRenameTourCover()"><i class="ti ti-library-photo"></i> Bildbibliotek</button>';
+  if(_editTourDraft.img) h += '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="clearRenameTourCover()"><i class="ti ti-trash"></i> Ta bort</button>';
+  h += '</div>';
+  h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
+    '<button class="btn" onclick="_editTourDraft=null;closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveRenameTour()">Spara</button></div>';
+  showModal(h, true, true);
+  setTimeout(function(){
+    var b=document.getElementById('edit-tour-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('edit-tour-img-inp').click(); };
+    var inp=document.getElementById('edit-tour-img-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) handleRenameTourImg(this.files[0]); };
+  }, 50);
+}
+
+function handleRenameTourImg(file) {
+  syncEditTourDraftFields();
+  compressImage(file, 1100, 950, 0.92, function(d) {
+    showCropModal(d, 160, function(cropped) {
+      _editTourDraft.img = cropped;
+      openRenameTour();
+    });
+  });
+}
+
+function pickRenameTourCover() {
+  syncEditTourDraftFields();
+  openTourCoverPicker(function(url){ _editTourDraft.img = url; openRenameTour(); }, function(){ openRenameTour(); });
+}
+
+function clearRenameTourCover() {
+  syncEditTourDraftFields();
+  _editTourDraft.img = null;
+  openRenameTour();
+}
+
+function saveRenameTour() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  syncEditTourDraftFields();
+  if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
+  if(_editTourDraft) t.season = _editTourDraft.season.trim();
+  t.img = _editTourDraft ? _editTourDraft.img : t.img;
+  _editTourDraft = null;
+  save();
+  document.getElementById('active-tour-name').textContent = t.name;
+  closeModal();
+  renderToursList();
+  renderEditTourBtn();
 }
 
 function addEventToTour() {
@@ -7553,6 +7627,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (27)',
+    items: [
+      { type: 'added', text: 'Ny knapp "Byt namn/bild" på tourer som redan har startat (där den tidigare "Redigera"-knappen är helt dold eftersom deltävlingarna då är låsta). Låter admin ändra tournamn, säsong och omslagsbild utan att röra deltävlingar eller resultat – helt riskfritt även på en pågående tour.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (26)',
     items: [
