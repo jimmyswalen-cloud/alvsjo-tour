@@ -2378,8 +2378,11 @@ function renderPlayers() {
     if(!p) return '';
     var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     // Admin är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
+    // Undantag: om admin-kontot ändå är uttryckligen markerat som spelare (isPlayer),
+    // ska det synas för alla precis som en vanlig spelare.
     // (Returnerar bara tom sträng, rubbar inte pi-indexet som poäng/placeringar bygger på.)
-    if(tourUser && tourUser.role==='admin' && !isAdmin()) return '';
+    var tourUserIsPlayer = tourUser && (tourUser.isPlayer != null ? tourUser.isPlayer : (tourUser.role !== 'admin'));
+    if(tourUser && tourUser.role==='admin' && !tourUserIsPlayer && !isAdmin()) return '';
     var strengths  = (tourUser&&tourUser.strengths)  || [];
     var weaknesses = (tourUser&&tourUser.weaknesses) || [];
     var swBadges = '';
@@ -7550,6 +7553,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (26)',
+    items: [
+      { type: 'fixed', text: 'Fixat bugg där en admin som också är markerad som spelare (t.ex. Jimmy Swalén) inte syntes i Spelare-fliken för vanliga användare. Filtret gömde tidigare blint alla admin-konton oavsett spelarstatus – nu görs undantag för admins som uttryckligen är markerade som spelare (isPlayer). OoM och resultatlistor påverkades inte, de använde redan rätt filtrering.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (25)',
     items: [
