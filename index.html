@@ -6806,6 +6806,9 @@ function renderCourseDbSection() {
   var el = document.getElementById('course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var withCoords = courseDb.filter(function(c){ return c.lat!=null && c.lng!=null; }).length;
+  var broHofMissing = BULK_BROHOF_COURSES.some(function(c){
+    return !courseDb.find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+  });
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
@@ -6813,7 +6816,7 @@ function renderCourseDbSection() {
     '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
     '<button class="btn btn-sm" onclick="openCourseDistanceTool()"><i class="ti ti-ruler-2"></i> Avstånd mellan banor</button>'+
     '<button class="btn btn-sm" onclick="importBulkCourseData()"><i class="ti ti-map-plus"></i> Importera bandata ('+BULK_GOLF_COURSES.length+' st)</button>'+
-    '<button class="btn btn-sm" onclick="importBroHofCourses()"><i class="ti ti-golf"></i> Importera Bro Hof-banor (2 st)</button>'+
+    (broHofMissing ? '<button class="btn btn-sm" onclick="importBroHofCourses()"><i class="ti ti-golf"></i> Importera Bro Hof-banor (2 st)</button>' : '')+
     '<button class="btn btn-sm" onclick="importCoursesFromTours()"><i class="ti ti-download"></i> Importera från tourer</button>'+
     '<button class="btn btn-primary btn-sm" onclick="openAddCourse()"><i class="ti ti-plus"></i> Lägg till bana</button>'+
   '</div>';
@@ -6973,6 +6976,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (6)',
+    items: [
+      { type: 'changed', text: 'Knappen "Importera Bro Hof-banor" i bandatabasen visas nu bara så länge minst en av de två banorna saknas – döljs automatiskt när båda är inlagda, så den inte ligger kvar och skräpar efter engångsimporten.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (5)',
     items: [
