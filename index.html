@@ -413,6 +413,18 @@ var STATIC_BRAND_LOGOS = {
   'titleist': 'brand-logos/titleist.jpg'
 };
 
+// Vissa loggor läses olika bra vid samma pixelhöjd (kursiva scriptloggor kontra
+// tjocka wordmarks). Här kan enskilda märken skalas upp/ner relativt bas-storleken.
+var BRAND_LOGO_SIZE_ADJUST = {
+  'titleist': 1.4,
+  'takomo': 0.65
+};
+
+function adjustedLogoSize(brand, size) {
+  var mult = BRAND_LOGO_SIZE_ADJUST[brandKey(brand)] || 1;
+  return Math.round(size * mult);
+}
+
 function brandKey(name) {
   return (name||'').trim().toLowerCase();
 }
@@ -4538,7 +4550,7 @@ function playerBrandLogoTag(username, height) {
   if(!brand) return '';
   var logo = getBrandLogo(brand);
   if(!logo) return '';
-  height = height || 15;
+  height = adjustedLogoSize(brand, height || 15);
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
   return '<img src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
     'style="height:'+height+'px;width:auto;max-width:90px;object-fit:contain;vertical-align:middle;margin-left:6px">';
@@ -4547,7 +4559,7 @@ function playerBrandLogoTag(username, height) {
 function brandLogoTag(brand, size) {
   var logo = getBrandLogo(brand);
   if(!logo) return '';
-  size = size || 16;
+  size = adjustedLogoSize(brand, size || 16);
   // Om den registrerade filändelsen inte finns, prova automatiskt den andra (jpg <-> png) innan loggan döljs helt.
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
   return '<img src="'+logo+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
@@ -7461,6 +7473,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '18 augusti 2026 (21)',
+    items: [
+      { type: 'changed', text: 'Titleist-loggan visas nu 40% större och Takomo-loggan 35% mindre överallt den syns (spelarlistan, "What\'s in the Bag" osv), via en ny central BRAND_LOGO_SIZE_ADJUST-tabell där fler märken enkelt kan finjusteras framöver.' }
+    ]
+  },
+  {
+    date: '18 augusti 2026 (20)',
+    items: [
+      { type: 'added', text: 'Ny "Tour-diagnostik"-tabell i databasvyn (syns för admin under "Användare"), som listar alla tourer med namn, säsong, internt ID, antal tilldelade spelare, antal deltävlingar och antal stängda deltävlingar. Dubbletter av samma ID flaggas i rött. Byggd för att felsöka varför OoM för en tour visar data som verkar höra till en annan tour.' }
+    ]
+  },
+  {
     date: '18 augusti 2026 (19)',
     items: [
       { type: 'fixed', text: 'Kyssinge GK hade fel platshållarpar (72) och saknade scorekort helt. Rättat till korrekt par 74 och lagt till fullständigt scorekort (18-hålsbanan "Kyssinge 1-18") i väntande kö, med par och hcp-index verifierat mot caddee.se. Klart att fyllas i via "Importera väntande banor" i bandatabasen.' }
@@ -8619,6 +8643,30 @@ function renderDbDiagnostics() {
   var barColor = totalKB > 850 ? 'var(--danger-text)' : (totalKB > 600 ? 'var(--gold)' : 'var(--green)');
 
   var html = '<div class="card" style="margin-bottom:16px">';
+
+  // Tour-diagnostik: visar varje tours interna ID och nyckeltal, för att avslöja
+  // ev. dubbletter (samma ID, samma spelare/events oavsiktligt återanvända).
+  var idCounts = {};
+  (S.tours||[]).forEach(function(t){ idCounts[t.id] = (idCounts[t.id]||0) + 1; });
+  html += '<div style="margin-bottom:16px"><strong style="font-size:13px">Tour-diagnostik ('+(S.tours||[]).length+' st)</strong>';
+  html += '<div style="overflow-x:auto;margin-top:6px"><table class="hist-table" style="font-size:11px;white-space:nowrap">'+
+    '<thead><tr><th>Namn</th><th>Säsong</th><th>ID</th><th>Spelare</th><th>Deltävl.</th><th>Stängda</th></tr></thead><tbody>';
+  (S.tours||[]).forEach(function(t){
+    var playerCount = (S.users||[]).filter(function(u){ return (u.tourAccess||[]).indexOf(t.id) >= 0; }).length;
+    var evCount = (t.events||[]).length;
+    var closedCount = (t.events||[]).filter(function(e){ return e.closed; }).length;
+    var dupWarning = idCounts[t.id] > 1;
+    html += '<tr'+(dupWarning?' style="background:rgba(220,38,38,0.12)"':'')+'>'+
+      '<td>'+esc(t.name)+(dupWarning?' <span style="color:var(--danger-text);font-weight:700">⚠ DUBBLETT-ID</span>':'')+'</td>'+
+      '<td>'+esc(t.season||'')+'</td>'+
+      '<td style="font-family:monospace;color:var(--text-3)">'+esc(t.id)+'</td>'+
+      '<td>'+playerCount+'</td>'+
+      '<td>'+evCount+'</td>'+
+      '<td>'+closedCount+'</td>'+
+    '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
   html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
   html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
   var profileImgCount = (S.users||[]).filter(function(u){ return u.img; }).length;
