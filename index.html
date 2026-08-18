@@ -145,7 +145,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 
 <div class="hero" id="hero-bg">
   <div class="hero-content">
-    <div class="hero-eyebrow" id="hero-eyebrow">&#9971; En touröversikt för Älvsjö Golf &amp; Country Club medlemmar</div>
+    <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
       <img src="logo-hero.png" style="height:clamp(56px,11vw,90px);width:auto" alt="ÄGCC Tour">
       <div class="hero-title" id="hero-title">TOURER</div>
@@ -6882,7 +6882,7 @@ function updateHero(tourId) {
   if(!tourId) {
     heroBg.style.backgroundImage = DEFAULT_BG;
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
-    heroEye.textContent='\u26f3 En tour\u00f6versikt f\u00f6r \u00c4lvsj\u00f6 Golf & Country Club medlemmar';
+    heroEye.textContent='\u26f3 TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR';
   } else {
     var t=S.tours.find(function(x){return x.id===tourId;});
     if(!t) return;
@@ -6915,6 +6915,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (3)',
+    items: [
+      { type: 'changed', text: 'Ändrat rubriktexten på startsidan från "En touröversikt för Älvsjö Golf & Country Club medlemmar" till "TOUREN FÖR ÄLVSJÖ GOLF & COUNTRY CLUBS MEDLEMMAR".' }
+    ]
+  },
   {
     date: '18 augusti 2026 (2)',
     items: [
