@@ -1872,6 +1872,34 @@ function pickWizDateFromCalendar(dateStr) {
   wizStep2();
 }
 
+// ── ÖVERSIKT ÖVER REDAN IFYLLDA DELTÄVLINGAR ────────────────────────────────
+// Visas ovanför formuläret i tur-guiden så admin ser vad som redan är inlagt
+// för tidigare (och senare, om man hoppat fram och tillbaka) deltävlingar.
+// Klickbar - hoppar direkt till att redigera en annan deltävling.
+function renderWizEventsOverview() {
+  var curIdx = wiz.stepIdx;
+  var rows = '';
+  wiz.events.forEach(function(e, idx){
+    if(idx === curIdx) return;
+    if(!e.name && !e.date) return; // hoppa över helt tomma, ännu ej påbörjade steg
+    rows += '<div onclick="wizJumpToStep('+idx+')" style="cursor:pointer;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:12px;display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:4px">'+
+      '<span style="font-weight:600">'+(idx+1)+'. '+esc(e.name||'(namnlös)')+(e.isFinal?' <span style="color:var(--gold)">★</span>':'')+'</span>'+
+      '<span style="color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%">'+(e.course?esc(e.course)+' &middot; ':'')+(e.date||'–')+'</span>'+
+    '</div>';
+  });
+  if(!rows) return '';
+  return '<div style="margin-bottom:14px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em">Redan ifyllda deltävlingar</div>'+
+    rows+
+  '</div>';
+}
+
+function wizJumpToStep(idx) {
+  wizStep2SaveCurrent();
+  wiz.stepIdx = idx;
+  wizStep2();
+}
+
 // ── AUTO-IFYLLNAD AV SPELTIDSPERIOD ─────────────────────────────────────────
 // period-start för en deltävling föreslås som dagen efter föregående
 // deltävlings datum; period-slut föreslås som dagen före nästa deltävlings
@@ -1941,6 +1969,7 @@ function wizStep2() {
   var total = wiz.events.length;
   recomputeAutoPeriods();
   var h = '<h3>'+(ev.isFinal?'Final':'Deltävling')+' '+(i+1)+' av '+total+'</h3>';
+  h += renderWizEventsOverview();
   h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
   var courseField = '';
   if(courseDb.length) {
@@ -7472,6 +7501,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (22)',
+    items: [
+      { type: 'added', text: 'Ny "Redan ifyllda deltävlingar"-lista i tur-guiden, ovanför formuläret för varje deltävling. Visar namn, bana och datum för alla andra deltävlingar som redan fyllts i, klickbar för att direkt hoppa dit och redigera.' }
+    ]
+  },
   {
     date: '18 augusti 2026 (21)',
     items: [
