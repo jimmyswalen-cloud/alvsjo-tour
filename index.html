@@ -525,6 +525,10 @@ var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara k
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
 var STATIC_COURSE_IMAGES = {
+  'nynäshamn': 'nynashamn-berg-sjo.jpg',
+  'nynashamn': 'nynashamn-berg-sjo.jpg',
+  'nynäshamns gk': 'nynashamn-berg-sjo.jpg',
+  'nynashamns gk': 'nynashamn-berg-sjo.jpg',
   'riksten': 'riksten.jpg',
   'riksten gk': 'riksten.jpg',
   'kyssinge': 'kyssinge.jpg',
@@ -6919,6 +6923,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026',
+    items: [
+      { type: 'fixed', text: 'Fixat trasig banbild för Nynäshamn. Filen som laddats upp i repot (nynashamn-berg-sjo.jpg) matchade inte appens automatiska namnkonvention, så en manuell mappning lades till i STATIC_COURSE_IMAGES.' }
+    ]
+  },
   {
     date: '17 augusti 2026',
     items: [
