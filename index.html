@@ -525,6 +525,8 @@ var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara k
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
 var STATIC_COURSE_IMAGES = {
+  'bro hof slott gc - stadium course': 'bro-hof-slott-gc-stadium-course.jpg',
+  'bro hof slott gc - castle course': 'bro-hof-slott-gc-castle-course.jpg',
   'riksten': 'riksten.jpg',
   'riksten gk': 'riksten.jpg',
   'kyssinge': 'kyssinge.jpg',
@@ -6971,6 +6973,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (5)',
+    items: [
+      { type: 'added', text: 'Lagt till bildmappning i STATIC_COURSE_IMAGES för Bro Hof Slott GC – Stadium Course och Castle Course (bro-hof-slott-gc-stadium-course.jpg / bro-hof-slott-gc-castle-course.jpg).' }
+    ]
+  },
   {
     date: '18 augusti 2026 (4)',
     items: [
