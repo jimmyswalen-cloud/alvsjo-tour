@@ -525,10 +525,6 @@ var _bulkCoursesAutoImported = false; // säkerställer att auto-importen bara k
 // Statically hosted course images (uploaded to the GitHub repo alongside index.html).
 // Matching is done on a normalized (lowercase, trimmed) name via courseKey().
 var STATIC_COURSE_IMAGES = {
-  'nynäshamn': 'nynashamn-berg-sjo.jpg',
-  'nynashamn': 'nynashamn-berg-sjo.jpg',
-  'nynäshamns gk': 'nynashamn-berg-sjo.jpg',
-  'nynashamns gk': 'nynashamn-berg-sjo.jpg',
   'riksten': 'riksten.jpg',
   'riksten gk': 'riksten.jpg',
   'kyssinge': 'kyssinge.jpg',
@@ -575,6 +571,10 @@ var STATIC_COURSE_IMAGES = {
   'kungsängen queens gk': 'kungsangen.jpg',
   'queens gk': 'kungsangen.jpg',
   'lindo': 'lindo.jpg',
+  'nynäshamn': 'nynashamn-berg-sjo.jpg',
+  'nynashamn': 'nynashamn-berg-sjo.jpg',
+  'nynäshamn gk': 'nynashamn-berg-sjo.jpg',
+  'nynashamn gk': 'nynashamn-berg-sjo.jpg',
 };
 
 // Statically hosted player profile photos (uploaded to the GitHub repo alongside
@@ -3507,8 +3507,11 @@ function getHeadStart(t, e, pi) {
   var finals = t.events.filter(function(x){return x.isFinal;});
   var thisFinalIdx = finals.indexOf(e);
   if(thisFinalIdx === 0) {
-    // First final: head start from current OoM standing using finalTable
-    var oom = computeOOM(t);
+    // First final: head start from current OoM standing using finalTable.
+    // Uses computeOomStandings() (samma funktion som den officiella OoM-tabellen)
+    // så att finalens startläge alltid matchar den riktiga ställningen, inklusive
+    // "räkna bara bästa N deltävlingar"-regeln (t.bestRounds).
+    var oom = computeOomStandings(t);
     var rank = oom.findIndex(function(o){return o.pi===pi;});
     if(rank<0) return 0;
     return t.finalTable[rank] || 0;
@@ -3524,17 +3527,6 @@ function getHeadStart(t, e, pi) {
     var bestAdjusted = prevIsStab ? Math.max.apply(null, adjustedVals) : Math.min.apply(null, adjustedVals);
     return prevIsStab ? (bestAdjusted - r.adjusted) : (r.adjusted - bestAdjusted); // always >= 0, 0 for the leader
   }
-}
-
-function computeOOM(t) {
-  var totals={};
-  t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;}).forEach(function(e){
-    e.results.forEach(function(r){
-      if(!totals[r.pi]) totals[r.pi]={pi:r.pi,pts:0};
-      totals[r.pi].pts+=(r.points||0);
-    });
-  });
-  return Object.values(totals).sort(function(a,b){return b.pts-a.pts;});
 }
 
 function findRelevantFinal(t) {
@@ -6924,9 +6916,15 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '18 augusti 2026 (2)',
+    items: [
+      { type: 'fixed', text: 'Fixat felaktigt startläge inför finalen. Startläget räknades tidigare ut med en gammal, egen summeringsfunktion som inte respekterade "räkna bara bästa N deltävlingar"-regeln, till skillnad från den officiella OoM-tabellen. Det kunde göra att en spelare som faktiskt ligger tvåa i OoM (efter att sämsta ronden räknats bort) ändå fick ett bättre startläge än ettan i finalen. Startläget beräknas nu med samma funktion som den riktiga OoM-ställningen.' }
+    ]
+  },
+  {
     date: '18 augusti 2026',
     items: [
-      { type: 'fixed', text: 'Fixat trasig banbild för Nynäshamn. Filen som laddats upp i repot (nynashamn-berg-sjo.jpg) matchade inte appens automatiska namnkonvention, så en manuell mappning lades till i STATIC_COURSE_IMAGES.' }
+      { type: 'fixed', text: 'Fixat trasig banbild för Nynäshamn. Banan saknades i den statiska bildlistan, vilket fick appen att gissa ett filnamn som aldrig laddats upp. Kopplat till den nu uppladdade filen nynashamn-berg-sjo.jpg.' }
     ]
   },
   {
