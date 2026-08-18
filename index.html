@@ -1563,6 +1563,33 @@ function cropCommit(){
 }
 
 // ── TOURS LIST ─────────────────────────────────────────────────────────────
+// Räknar ut hela tourens speltidsperiod: tidigaste periodStart/date till senaste periodEnd/date bland alla deltävlingar.
+function tourDateRange(t) {
+  var events = t.events || [];
+  var starts = events.map(function(e){ return e.periodStart || e.date; }).filter(Boolean);
+  var ends = events.map(function(e){ return e.periodEnd || e.date; }).filter(Boolean);
+  if(!starts.length || !ends.length) return null;
+  var minDate = starts.reduce(function(a,b){ return a<b?a:b; });
+  var maxDate = ends.reduce(function(a,b){ return a>b?a:b; });
+  return { start:minDate, end:maxDate };
+}
+
+function formatSvDateShort(iso) {
+  var months = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+  var d = new Date(iso+'T00:00:00');
+  return d.getDate()+' '+months[d.getMonth()];
+}
+
+function formatTourPeriod(t) {
+  var range = tourDateRange(t);
+  if(!range) return '';
+  var d1 = new Date(range.start+'T00:00:00'), d2 = new Date(range.end+'T00:00:00');
+  var startStr = formatSvDateShort(range.start) + (d1.getFullYear()!==d2.getFullYear() ? ' '+d1.getFullYear() : '');
+  var endStr = formatSvDateShort(range.end) + ' ' + d2.getFullYear();
+  if(range.start === range.end) return startStr;
+  return startStr + ' &ndash; ' + endStr;
+}
+
 function renderToursList() {
   var el = document.getElementById('tours-list');
   var tours = visibleTours();
@@ -1584,10 +1611,13 @@ function renderToursList() {
       '<div style="padding:14px 16px 16px">'+
         '<div style="font-weight:700;font-size:17px;margin-bottom:2px">'+t.name+'</div>'+
         (t.season?'<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+t.season+'</div>':'<div style="margin-bottom:10px"></div>')+
-        '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
-          (regularCount?'<span class="badge badge-green"><i class="ti ti-calendar-event" style="font-size:11px"></i> '+regularCount+' deltävling'+(regularCount!==1?'ar':'')+'</span>':'')+
-          (finalsCount?'<span class="badge badge-gold"><i class="ti ti-flag" style="font-size:11px"></i> '+finalsCount+' final'+(finalsCount!==1?'er':'')+'</span>':'')+
-          (closedCount?'<span class="badge badge-gray">'+closedCount+' av '+totalCount+' genomförda</span>':'')+
+        '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            (regularCount?'<span class="badge badge-green"><i class="ti ti-calendar-event" style="font-size:11px"></i> '+regularCount+' deltävling'+(regularCount!==1?'ar':'')+'</span>':'')+
+            (finalsCount?'<span class="badge badge-gold"><i class="ti ti-flag" style="font-size:11px"></i> '+finalsCount+' final'+(finalsCount!==1?'er':'')+'</span>':'')+
+            (closedCount?'<span class="badge badge-gray">'+closedCount+' av '+totalCount+' genomförda</span>':'')+
+          '</div>'+
+          (formatTourPeriod(t) ? '<span style="font-size:12px;color:var(--text-3);white-space:nowrap"><i class="ti ti-calendar-time" style="font-size:11px"></i> '+formatTourPeriod(t)+'</span>' : '')+
         '</div>'+
         buildTop3HTML(t, true)+
         '<div class="row" style="gap:6px">'+
@@ -7501,6 +7531,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '18 augusti 2026 (23)',
+    items: [
+      { type: 'added', text: 'Tourkorten på touröversikten visar nu tourens hela speltidsperiod (tidigaste till senaste datum bland alla deltävlingar) i det tidigare tomma utrymmet bredvid badges-raden, t.ex. "2 maj – 30 aug 2027".' }
+    ]
+  },
   {
     date: '18 augusti 2026 (22)',
     items: [
