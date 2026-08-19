@@ -1690,7 +1690,15 @@ function showModal(html, wide, preventOutsideClose) {
 }
 var _afterModalClose = null; // engångs-callback som körs nästa gång closeModal() anropas
 function closeModal() {
-  var mc=document.getElementById('modal-mc'); if(mc) mc.remove(); _openCommentsEventId = null;
+  var mc=document.getElementById('modal-mc');
+  if(mc) {
+    // Skyddar mot ett sällsynt webbläsarrace: om closeModal() anropas synkront inifrån ett
+    // change/blur-event på ett fält som sitter i modalen som just då tas bort (t.ex. datumfältet
+    // i anmälningsvyn), kan .remove() kasta "node no longer a child of this node". Det ska aldrig
+    // stoppa resten av closeModal() - annars körs inte _afterModalClose-callbacken heller.
+    try { mc.remove(); } catch(err) { console.warn('closeModal: kunde inte ta bort modal-noden (race vid blur/change)', err); }
+  }
+  _openCommentsEventId = null;
   if(_afterModalClose) { var cb=_afterModalClose; _afterModalClose=null; cb(); }
 }
 
@@ -4256,11 +4264,18 @@ function refreshRegisterModal(ei) {
   var t = getTour(), e = t.events[ei];
   var groupEl = document.querySelector('#modal-mc .section-title');
   var container = groupEl ? groupEl.parentElement : null;
-  // Simplicity: just rebuild the whole modal content (cheap), but keep scroll position acceptable for this list size
+  // Simplicity: just rebuild the whole modal content (cheap), but keep scroll position acceptable for this list size.
+  // Görs med setTimeout(0) - denna funktion anropas ofta synkront från ett change/blur-event på ett
+  // fält (t.ex. datumfältet) som sitter inuti modalen som ska byggas om. Att ta bort modalens DOM-nod
+  // medan webbläsaren fortfarande dispatchar det eventet kan i sällsynta fall krascha med "node no
+  // longer a child of this node" (särskilt kopplat till blur). Att skjuta upp till nästa tick låter
+  // webbläsaren bli klar med det pågående eventet först.
   var scrollTop = document.querySelector('#modal-mc .modal') ? document.querySelector('#modal-mc .modal').scrollTop : 0;
-  openRegister(ei);
-  var modalEl = document.querySelector('#modal-mc .modal');
-  if(modalEl) modalEl.scrollTop = scrollTop;
+  setTimeout(function(){
+    openRegister(ei);
+    var modalEl = document.querySelector('#modal-mc .modal');
+    if(modalEl) modalEl.scrollTop = scrollTop;
+  }, 0);
 }
 
 // ── RESULTS INPUT ──────────────────────────────────────────────────────────
@@ -9024,6 +9039,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (72)',
+    items: [
+      { type: 'improved', text: 'Lagt till en illustration i "Lägg till TOURER som app på din iPhone"-guiden – en liten hemskärmsmockup som visar hur appikonen ser ut bland andra appar på iPhone, med den faktiska app-ikonen (apple-touch-icon.png) markerad med en "NY"-bricka. Visas direkt under stegen i guiden.' }
+    ]
+  },
+  {
+    date: '19 augusti 2026 (71)',
+    items: [
+      { type: 'fixed', text: 'Fixat en bugg där man i vissa fall inte kunde välja datum (eller skapa/lämna boll) i anmälningsvyn för en deltävling – ett JS-fel ("node no longer a child of this node") kraschade sidan mitt i interaktionen. Orsak: att ändra datumfältet byggde om hela anmälningsmodalen synkront, samtidigt som webbläsaren fortfarande hanterade fältets eget change/blur-event, vilket i sällsynta fall gjorde att webbläsaren försökte ta bort en DOM-nod som redan var borta. Ombygget av modalen skjuts nu upp till precis efter det pågående eventet, och closeModal() är dessutom gjord felsäker så att den aldrig kraschar och blockerar resten av stängningslogiken, oavsett orsak.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (70)',
     items: [
       { type: 'improved', text: '"Kommande runda"-rutan på startsidan visar nu inte längre "Mitt resultat" för en deltävling man inte är anmäld till (det finns ju inget resultat att fylla i). Istället visas en tydlig påminnelse - "Glöm inte anmäla dig" - med en knapp som länkar direkt till anmälningsvyn för just den deltävlingen. Påminnelsen ligger kvar så länge deltävlingens datum inte har passerat än; är man fortsatt oanmäld när datumet passerat försvinner rutan automatiskt (för sent att göra något åt saken). Är man redan anmäld fungerar rutan precis som innan, med genväg till "Mitt resultat".' }
@@ -9924,6 +9951,48 @@ function helpStepRow(n, icon, title, desc) {
   '</div>';
 }
 
+// Bygger en liten illustration av en iPhone-hemskärm med TOURERs faktiska appikon
+// (samma bild som iOS använder, apple-touch-icon.png) bland några generiska appikoner,
+// så man ser ungefär hur det ser ut när appen är tillagd på hemskärmen.
+function helpIphoneMockupHTML() {
+  function genericIcon(icon, bg, label) {
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px">'+
+      '<div style="width:42px;height:42px;border-radius:11px;background:'+bg+';display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.25)"><i class="ti '+icon+'" style="font-size:19px;color:#fff"></i></div>'+
+      '<span style="font-size:8.5px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45)">'+label+'</span>'+
+    '</div>';
+  }
+  var tourerIcon =
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;position:relative">'+
+      '<div style="width:42px;height:42px;border-radius:11px;overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.35)">'+
+        '<img src="apple-touch-icon.png" style="width:100%;height:100%;object-fit:cover;display:block">'+
+      '</div>'+
+      '<span style="font-size:8.5px;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.45)">Tourer</span>'+
+      '<span style="position:absolute;top:-5px;right:-6px;background:#FF3B30;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.3)">NY</span>'+
+    '</div>';
+  var icons = [
+    tourerIcon,
+    genericIcon('ti-message-circle','#34C759','Meddel.'),
+    genericIcon('ti-mail','#0A84FF','Mail'),
+    genericIcon('ti-camera','#8E8E93','Kamera'),
+    genericIcon('ti-photo','linear-gradient(135deg,#F7B733,#EA4C89)','Foton'),
+    genericIcon('ti-calendar-event','#FF3B30','Kalender'),
+    genericIcon('ti-cloud','linear-gradient(135deg,#4FACFE,#00C6FB)','Väder'),
+    genericIcon('ti-settings','linear-gradient(135deg,#8E8E93,#5A5A5E)','Inst.')
+  ].join('');
+  return '<div style="display:flex;flex-direction:column;align-items:center;margin:18px 0 4px">'+
+    '<div style="width:190px;background:#0b0b0d;border-radius:32px;padding:8px 7px;box-shadow:0 10px 26px rgba(0,0,0,.28);position:relative">'+
+      '<div style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:62px;height:16px;background:#0b0b0d;border-radius:9px;z-index:2"></div>'+
+      '<div style="background:linear-gradient(165deg,#8fc1e8 0%,#4d7fa3 55%,#1c3b2e 100%);border-radius:24px;overflow:hidden;padding:30px 10px 14px;position:relative">'+
+        '<div style="display:flex;justify-content:space-between;font-size:9.5px;color:#fff;font-weight:600;padding:0 3px;margin-bottom:20px">'+
+          '<span>9:41</span><span>&#9679;&#9679;&#9679; &nbsp;5G &nbsp;100%</span>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px 8px">'+icons+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text-3);margin-top:8px;text-align:center">Så kan appikonen se ut på din hemskärm<br>(markerad med "NY" i exemplet ovan)</div>'+
+  '</div>';
+}
+
 var HELP_TOPICS = [
   {
     id: 'iphone-install',
@@ -9937,7 +10006,8 @@ var HELP_TOPICS = [
         helpStepRow(3, 'ti-square-rounded-plus', 'Välj "Lägg till på hemskärmen"', 'Bläddra nedåt i menyn som dyker upp och tryck på "Lägg till på hemskärmen" (Add to Home Screen).')+
         helpStepRow(4, 'ti-edit', 'Namnge genvägen', 'Ge appen ett namn, t.ex. "Tourer", och tryck sedan på "Lägg till" uppe i högra hörnet.')+
         helpStepRow(5, 'ti-device-mobile', 'Klart!', 'En ny appikon dyker nu upp på din hemskärm. Tryck på den för att öppna TOURER i helskärmsläge, precis som en vanlig app – snabbare och smidigare än att leta upp länken varje gång.')+
-      '</div>'
+      '</div>'+
+      helpIphoneMockupHTML()
   }
 ];
 
