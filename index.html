@@ -212,6 +212,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 
 <div id="tours-screen">
   <div id="home-screen-content">
+    <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -235,10 +236,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-label" style="color:#444441" id="settings-card-label">Inställningar</div>
         <div class="home-card-sub" style="color:#5F5E5A" id="settings-card-sub">Banor &amp; konfiguration</div>
       </div>
-      <div class="home-card" onclick="showMyBetting()" style="background:#FFD9A0;border:none;grid-column:1 / -1">
-        <i class="ti ti-coin" style="font-size:32px;color:#7A4A00" aria-hidden="true"></i>
-        <div class="home-card-label" style="color:#7A4A00">Vinster &amp; betting</div>
-        <div class="home-card-sub" style="color:#8A5E1F">Side bets &amp; tour-vinster</div>
+      <div class="home-card" onclick="showMyBetting()" style="background:#FFB870;border:none;grid-column:1 / -1">
+        <i class="ti ti-coin" style="font-size:32px;color:#7A3D00" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#7A3D00">Vinster &amp; betting</div>
+        <div class="home-card-sub" style="color:#8F4B00">Side bets &amp; tour-vinster</div>
       </div>
       <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
         <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
@@ -246,7 +247,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-sub" style="color:#7A4CAE">Föreslå funktioner, se vad som är nytt</div>
       </div>
     </div>
-    <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px"></div>
   </div>
   <div id="tours-list-screen" style="display:none">
     <div class="tours-header">
@@ -8867,6 +8867,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (59)',
+    items: [
+      { type: 'improved', text: 'Flyttat användarraden (profilbild, namn, HCP och snabbknappar) från längst ner till högst upp på startsidan, direkt under toppmenyn – syns nu först, innan de färgade rutorna.' },
+      { type: 'improved', text: 'Bytt till en mer distinkt orange färg på "Vinster & betting"-rutan på startsidan, så den skiljer sig tydligare från Spelare-rutans gulaktiga ton.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (58)',
     items: [
