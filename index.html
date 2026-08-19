@@ -629,7 +629,8 @@ var STATIC_PLAYER_PHOTOS = {
   'kape': 'player-photos/kape.jpg',
   'nilu': 'player-photos/nilu.jpg',
   'toli': 'player-photos/toli.jpg',
-  'daka': 'player-photos/daka.jpg'
+  'daka': 'player-photos/daka.jpg',
+  'ebsw': 'player-photos/ebsw.jpg'
 };
 function playerPhoto(username, fallbackImg) {
   if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
@@ -8841,6 +8842,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (52)',
+    items: [
+      { type: 'added', text: 'Lagt till profilbild för Ebbe (ebsw) i STATIC_PLAYER_PHOTOS, kopplad till den redan uppladdade player-photos/ebsw.jpg.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (51)',
     items: [
