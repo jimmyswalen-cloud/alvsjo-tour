@@ -214,7 +214,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="home-screen-content">
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
-    <div id="home-my-tours-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
         <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
@@ -255,11 +254,16 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
       <h2 style="margin:0;flex:1;text-align:center">Tourer</h2>
       <button class="btn btn-primary btn-sm" id="new-tour-btn" onclick="openNewTourWizard()" style="display:none"><i class="ti ti-plus"></i> Ny tour</button>
     </div>
+    <div class="home-card" onclick="showTourSearch()" style="background:#CFE8FB;border:none;margin-bottom:16px">
+      <i class="ti ti-search" style="font-size:28px;color:#0C447C" aria-hidden="true"></i>
+      <div class="home-card-label" style="color:#0C447C">Sök &amp; anmäl till tour</div>
+      <div class="home-card-sub" style="color:#185FA5">Hitta tourer och anmäl dig själv</div>
+    </div>
     <div id="tours-list"></div>
   </div>
   <div id="tour-search-screen" style="display:none">
     <div class="tours-header">
-      <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <button class="btn btn-sm" onclick="showToursList()"><i class="ti ti-arrow-left"></i> Tourer</button>
       <h2 style="margin:0;flex:1;text-align:center">Sök &amp; anmäl till tour</h2>
     </div>
     <div class="field" style="margin-bottom:16px">
@@ -998,7 +1002,6 @@ function showHomeScreen() {
   updateHero(null);
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
-  renderHomeMyTours();
   updateSettingsCard();
 }
 
@@ -1771,6 +1774,13 @@ function renderToursList() {
       : '<p class="empty">Du har inte fått åtkomst till någon tour ännu. Kontakta din admin.</p>';
     return;
   }
+  function statusBadgeHTML(t) {
+    var grp = tourStatusGroup(t);
+    if(grp === 'ongoing') return '<span class="badge" style="background:var(--green-light);color:#0F6E56">Pågående</span>';
+    if(grp === 'upcoming') return '<span class="badge" style="background:var(--surface2);color:#185FA5">Kommande</span>';
+    return '<span class="badge badge-gray">Avslutad</span>';
+  }
+
   function tourCardHTML(t) {
     var events = t.events || [];
     var regularCount = events.filter(function(e){return !e.isFinal;}).length;
@@ -1780,7 +1790,10 @@ function renderToursList() {
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
       (t.img?'<img src="'+t.img+'" style="width:100%;height:110px;object-fit:cover;display:block">':'')+
       '<div style="padding:14px 16px 16px">'+
-        '<div style="font-weight:700;font-size:17px;margin-bottom:2px">'+t.name+'</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
+          '<div style="font-weight:700;font-size:17px">'+t.name+'</div>'+
+          statusBadgeHTML(t)+
+        '</div>'+
         (t.season?'<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+t.season+'</div>':'<div style="margin-bottom:10px"></div>')+
         '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
@@ -1799,28 +1812,25 @@ function renderToursList() {
     '</div>';
   }
 
-  var active = [], finished = [];
-  tours.forEach(function(t){
-    var events = t.events || [];
-    var allClosed = events.length > 0 && events.every(function(e){ return e.closed; });
-    (allClosed ? finished : active).push(t);
-  });
+  var groups = { ongoing: [], upcoming: [], finished: [] };
+  tours.forEach(function(t){ groups[tourStatusGroup(t)].push(t); });
 
-  // Sortera efter tourens startdatum, äldst först. Tourer utan datum (inga deltävlingar
-  // ifyllda ännu) hamnar sist.
-  function tourSortKey(t) {
-    var range = tourDateRange(t);
-    return range ? range.start : '9999-99-99';
-  }
-  active.sort(function(a,b){ return tourSortKey(a).localeCompare(tourSortKey(b)); });
-  finished.sort(function(a,b){ return tourSortKey(a).localeCompare(tourSortKey(b)); });
+  // Sortera pågående/kommande efter startdatum (snarast överst), avslutade efter slutdatum (senast avslutad överst).
+  function sortAsc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var sa=ra?ra.start:'9999-99-99', sb=rb?rb.start:'9999-99-99'; return sa.localeCompare(sb); }
+  function sortDesc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var ea=ra?ra.end:'0000-00-00', eb=rb?rb.end:'0000-00-00'; return eb.localeCompare(ea); }
+  groups.ongoing.sort(sortAsc);
+  groups.upcoming.sort(sortAsc);
+  groups.finished.sort(sortDesc);
 
   var html = '';
-  if(active.length) {
-    html += '<p class="section-title">Aktiva</p>' + active.map(tourCardHTML).join('');
+  if(groups.ongoing.length) {
+    html += '<p class="section-title" style="margin-top:0">Pågående</p>' + groups.ongoing.map(tourCardHTML).join('');
   }
-  if(finished.length) {
-    html += '<div style="display:flex;align-items:center;gap:12px;margin:'+(active.length?'24px':'0')+' 0 14px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE TOURER</span><div style="flex:1;height:2px;background:var(--border)"></div></div>' + finished.map(tourCardHTML).join('');
+  if(groups.upcoming.length) {
+    html += '<p class="section-title">Kommande</p>' + groups.upcoming.map(tourCardHTML).join('');
+  }
+  if(groups.finished.length) {
+    html += '<div style="display:flex;align-items:center;gap:12px;margin:'+((groups.ongoing.length||groups.upcoming.length)?'24px':'0')+' 0 14px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE TOURER</span><div style="flex:1;height:2px;background:var(--border)"></div></div>' + groups.finished.map(tourCardHTML).join('');
   }
   el.innerHTML = html;
 }
@@ -1848,53 +1858,6 @@ function countTourPlayers(t) {
 
 function isRegisteredForTour(t) {
   return !!currentUser && (currentUser.tourAccess||[]).indexOf(t.id) >= 0;
-}
-
-// ── STARTSIDA: MINA TOURER ──────────────────────────────────────────────────
-function renderHomeMyTours() {
-  var el = document.getElementById('home-my-tours-widget');
-  if(!el || !currentUser) return;
-  var tours = visibleTours();
-  var groups = { ongoing: [], upcoming: [], finished: [] };
-  tours.forEach(function(t){ groups[tourStatusGroup(t)].push(t); });
-  function sortAsc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var sa=ra?ra.start:'9999-99-99', sb=rb?rb.start:'9999-99-99'; return sa.localeCompare(sb); }
-  function sortDesc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var ea=ra?ra.end:'0000-00-00', eb=rb?rb.end:'0000-00-00'; return eb.localeCompare(ea); }
-  groups.ongoing.sort(sortAsc);
-  groups.upcoming.sort(sortAsc);
-  groups.finished.sort(sortDesc);
-
-  function miniCard(t, statusLabel, statusColor, statusBg) {
-    var events = t.events || [];
-    var regularCount = events.filter(function(e){return !e.isFinal;}).length;
-    var finalsCount = events.filter(function(e){return e.isFinal;}).length;
-    return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')" style="margin-bottom:10px">'+
-      '<div style="padding:12px 14px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">'+
-          '<div style="font-weight:700;font-size:15px">'+esc(t.name)+'</div>'+
-          '<span class="badge" style="background:'+statusBg+';color:'+statusColor+';white-space:nowrap">'+statusLabel+'</span>'+
-        '</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--text-3)">'+
-          (formatTourPeriod(t) ? '<span><i class="ti ti-calendar-time" style="font-size:11px"></i> '+formatTourPeriod(t)+'</span>' : '')+
-          (regularCount?'<span>'+regularCount+' deltävling'+(regularCount!==1?'ar':'')+(finalsCount?' + final':'')+'</span>':'')+
-        '</div>'+
-      '</div>'+
-    '</div>';
-  }
-
-  var html = '<p class="section-title" style="margin-top:0">Mina tourer</p>';
-  if(!tours.length) {
-    html += '<p class="empty" style="margin-bottom:12px">Du är inte anmäld till någon tour ännu.</p>';
-  } else {
-    if(groups.ongoing.length) html += groups.ongoing.map(function(t){ return miniCard(t,'Pågående','#0F6E56','var(--green-light)'); }).join('');
-    if(groups.upcoming.length) html += groups.upcoming.map(function(t){ return miniCard(t,'Kommande','#185FA5','var(--surface2)'); }).join('');
-    if(groups.finished.length) html += groups.finished.map(function(t){ return miniCard(t,'Avslutad','var(--text-2)','var(--surface2)'); }).join('');
-  }
-  html += '<div class="home-card" onclick="showTourSearch()" style="background:#CFE8FB;border:none;margin-bottom:12px">'+
-    '<i class="ti ti-search" style="font-size:28px;color:#0C447C" aria-hidden="true"></i>'+
-    '<div class="home-card-label" style="color:#0C447C">Sök &amp; anmäl till tour</div>'+
-    '<div class="home-card-sub" style="color:#185FA5">Hitta tourer och anmäl dig själv</div>'+
-  '</div>';
-  el.innerHTML = html;
 }
 
 // ── SÖK & ANMÄL TILL TOUR ────────────────────────────────────────────────────
@@ -1966,7 +1929,6 @@ function selfRegisterTour(id) {
   if(currentUser.tourAccess.indexOf(id) < 0) currentUser.tourAccess.push(id);
   save();
   renderTourSearchList();
-  renderHomeMyTours();
 }
 
 function selfUnregisterTour(id) {
@@ -1976,7 +1938,6 @@ function selfUnregisterTour(id) {
   currentUser.tourAccess = (currentUser.tourAccess||[]).filter(function(x){ return x!==id; });
   save();
   renderTourSearchList();
-  renderHomeMyTours();
 }
 
 function delTour(id) {
@@ -8566,6 +8527,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (44)',
+    items: [
+      { type: 'changed', text: 'Flyttat tillbaka "Mina tourer"-widgeten och "Sök & anmäl till tour"-boxen från startsidan till Tourer-sidan, där de hör hemma. Startsidan är återställd till hur den var innan. Tourer-sidans lista är nu grupperad i Pågående (överst), Kommande (i mitten) och Avslutade (längst ner, med avdelare), med statusmärke på varje tourkort.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (43)',
     items: [
