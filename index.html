@@ -630,7 +630,8 @@ var STATIC_PLAYER_PHOTOS = {
   'nilu': 'player-photos/nilu.jpg',
   'toli': 'player-photos/toli.jpg',
   'daka': 'player-photos/daka.jpg',
-  'ebsw': 'player-photos/ebsw.jpg'
+  'ebsw': 'player-photos/ebsw.jpg',
+  'jole': 'player-photos/jole.jpg'
 };
 function playerPhoto(username, fallbackImg) {
   if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
@@ -1600,6 +1601,7 @@ function enterTour(id) {
   var settingsNav = document.getElementById('nav-settings');
   if(settingsNav) settingsNav.style.display = isAdmin() ? '' : 'none';
   showView('tournament');
+  window.scrollTo(0, 0);
 }
 
 function showView(v) {
@@ -1614,6 +1616,7 @@ function showView(v) {
   if(v==='calendar')   renderCalendar();
   if(v==='oom')        { showOOMMain(); renderOOM(); }
   if(v==='settings')   renderSettings();
+  window.scrollTo(0, 0);
 }
 
 function getTour() {
@@ -8864,6 +8867,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (56)',
+    items: [
+      { type: 'added', text: 'Lagt till profilbild för JOLE i STATIC_PLAYER_PHOTOS, kopplad till den uppladdade player-photos/jole.jpg.' }
+    ]
+  },
+  {
+    date: '19 augusti 2026 (55)',
+    items: [
+      { type: 'fixed', text: 'Fixat att man hamnade kvar mitt på sidan och fick scrolla upp manuellt när man klickade in på en tour. Sidan scrollar nu automatiskt till toppen både när man går in i en tour och när man byter flik (Tävlingar/Spelare/Kalender/OoM/Inst.) inuti touren.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (54)',
     items: [
