@@ -1942,7 +1942,12 @@ function selfRegisterTour(id) {
 function selfUnregisterTour(id) {
   if(!currentUser) return;
   var t = (S.tours||[]).find(function(x){ return x.id===id; });
-  if(!confirm('Anmäla av dig från "'+(t?t.name:'touren')+'"?')) return;
+  if(!t) return;
+  if(playerHasParticipatedInTour(t, currentUser.username)) {
+    alert('Du har redan spelat minst en deltävling i "'+t.name+'" och kan därför inte anmäla av dig. Det skulle bryta resultathistoriken. Kontakta din admin om du vill lösa detta på annat sätt.');
+    return;
+  }
+  if(!confirm('Anmäla av dig från "'+t.name+'"?')) return;
   currentUser.tourAccess = (currentUser.tourAccess||[]).filter(function(x){ return x!==id; });
   save();
   renderTourSearchList();
@@ -2729,6 +2734,19 @@ function addPlayerToTour(username) {
   renderOOM();
 }
 
+// Kollar om en spelare har deltagit (dvs har ett sparat resultat) i minst en deltävling i touren.
+// Används för att spärra borttagning av spelare - varken admin eller spelaren själv ska kunna
+// ta bort en spelare som redan finns med i något resultat, eftersom det skulle bryta historiken
+// (pi-index i e.results skulle peka på en spelare som inte längre går att slå upp).
+function playerHasParticipatedInTour(t, username) {
+  getPlayersForTour(t); // säkerställer att t.playerIndexMap är uppbyggd
+  var pi = t.playerIndexMap ? t.playerIndexMap[username] : null;
+  if(pi == null) return false;
+  return (t.events||[]).some(function(e){
+    return e.results && e.results.some(function(r){ return r.pi === pi; });
+  });
+}
+
 // Tar bort en spelares åtkomst till den aktuella touren. Spelarens pi-index (playerIndexMap)
 // och redan sparade resultat/side bets rörs inte - de finns kvar i historiken, men spelaren
 // försvinner från aktuell spelarlista, OoM och framtida anmälningar eftersom getPlayersForTour
@@ -2738,7 +2756,11 @@ function removePlayerFromTour(username) {
   var u = findUser(username);
   if(!u) return;
   var t = getTour();
-  if(!confirm('Ta bort '+(u.name||u.username)+' från touren "'+t.name+'"?\n\nRedan registrerade resultat och side bets finns kvar i historiken, men spelaren försvinner från aktuell spelarlista, OoM och anmälningar framåt. Du kan när som helst lägga till spelaren igen.')) return;
+  if(playerHasParticipatedInTour(t, username)) {
+    alert((u.name||u.username)+' har redan spelat minst en deltävling i "'+t.name+'" och kan därför inte tas bort. Det skulle bryta resultathistoriken. Du kan istället avmarkera "Spelare i tourer" på kontot om personen inte längre ska synas som aktiv spelare.');
+    return;
+  }
+  if(!confirm('Ta bort '+(u.name||u.username)+' från touren "'+t.name+'"?\n\nSpelaren försvinner från aktuell spelarlista, OoM och anmälningar framåt. Du kan när som helst lägga till spelaren igen.')) return;
   u.tourAccess = (u.tourAccess||[]).filter(function(x){ return x !== t.id; });
   save();
   renderPlayers();
@@ -8842,6 +8864,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (54)',
+    items: [
+      { type: 'fixed', text: 'En spelare som redan har ett sparat resultat i minst en deltävling i touren kan nu inte längre tas bort från touren – varken av admin (via "Ta bort från touren" i Spelare-vyn) eller av spelaren själv (via "Avanmäl" i Sök & anmäl-vyn). Detta hindrar att pi-index i resultathistoriken bryts. Admin kan istället avmarkera "Spelare i tourer" på kontot om personen inte längre ska synas som aktiv.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (53)',
     items: [
