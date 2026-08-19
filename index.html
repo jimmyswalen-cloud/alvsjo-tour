@@ -247,6 +247,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-label" style="color:#5B2C8C">Idéer &amp; nyheter</div>
         <div class="home-card-sub" style="color:#7A4CAE">Föreslå funktioner, se vad som är nytt</div>
       </div>
+      <div class="home-card" onclick="showHelp()" style="background:#1E3A5F;border:none;grid-column:1 / -1">
+        <i class="ti ti-help-circle" style="font-size:32px;color:#fff" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#fff">Hjälp &amp; tips</div>
+        <div class="home-card-sub" style="color:#C9D9EC">Guider och vanliga frågor</div>
+      </div>
     </div>
   </div>
   <div id="tours-list-screen" style="display:none">
@@ -295,6 +300,13 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="release-notes-inline" style="margin-bottom:20px"></div>
     <div id="idea-wall-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
     <div id="idea-wall-content"></div>
+  </div>
+  <div id="help-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <h2 style="margin:0;flex:1;text-align:center">Hjälp &amp; tips</h2>
+    </div>
+    <div id="help-content"></div>
   </div>
 </div>
 
@@ -1002,7 +1014,7 @@ function showHomeScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
@@ -1036,7 +1048,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -1049,7 +1061,7 @@ function showCourseStats() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
@@ -1060,7 +1072,7 @@ function showTourSearch() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tour-search-screen' ? '' : 'none';
   });
@@ -1071,7 +1083,7 @@ function showTourSearch() {
 }
 
 function showGlobalPlayers() {
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
   });
@@ -1083,7 +1095,7 @@ function showGlobalSettings() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
@@ -8975,6 +8987,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (69)',
+    items: [
+      { type: 'new', text: 'Ny "Hjälp & tips"-sida! Ny mörkblå menyruta på startsidan, direkt under "Idéer & nyheter". Hjälpsidan är uppbyggd som kollapsbara avsnitt (fler kan läggas till efter hand) – första avsnittet är en steg-för-steg-guide för att lägga till TOURER som en app på hemskärmen på iPhone (via Safaris Dela-knapp → "Lägg till på hemskärmen"), så sidan öppnas i helskärmsläge utan Safaris adressfält, precis som en riktig app.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (68)',
     items: [
       { type: 'fixed', text: 'SHCP (spelhandicap) visades och sparades ibland med en decimal, t.ex. "21,7", eftersom det förifylldes direkt från spelarens rå HCP (som nu visas med en decimal överallt). SHCP är per definition alltid ett heltal antal slag - fixat så att det avrundas konsekvent till närmaste heltal, både vid förifyllning i "Mitt resultat" och admins resultatinmatning, och oavsett om spelaren har scorekortsdata (hål-för-hål) eller bara anger totalresultat. Netto/poäng-uträkningarna är opåverkade eftersom de redan använde SHCP som ett rent avdrag.' }
@@ -9841,13 +9859,80 @@ function showIdeaWall() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
   });
   updateHero(null);
   renderReleaseNotesInline();
   renderIdeaWall();
+}
+
+// ── HJÄLP & TIPS ─────────────────────────────────────────────────────────────
+// Varje hjälpavsnitt är ett kollapsbart kort. Lägg till fler poster i HELP_TOPICS
+// i takt med att fler guider behövs - det första avsnittet ligger alltid expanderat.
+function helpStepRow(n, icon, title, desc) {
+  return '<div style="display:flex;gap:12px;padding:10px 0'+(n>1?';border-top:1px solid var(--border)':'')+'">'+
+    '<div style="width:28px;height:28px;border-radius:50%;background:var(--green-light);color:#0F6E56;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+n+'</div>'+
+    '<div style="flex:1;min-width:0">'+
+      '<div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px"><i class="ti '+icon+'" style="font-size:15px;color:var(--green-dark)"></i> '+title+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2);margin-top:2px">'+desc+'</div>'+
+    '</div>'+
+  '</div>';
+}
+
+var HELP_TOPICS = [
+  {
+    id: 'iphone-install',
+    icon: 'ti-brand-apple',
+    title: 'Lägg till TOURER som app på din iPhone',
+    body:
+      '<p style="font-size:13px;color:var(--text-2);margin:12px 0 6px">Genom att lägga till TOURER på hemskärmen får du en egen appikon och sidan öppnas i helskärmsläge utan Safaris adressfält och navigeringsknappar – precis som en vanlig app. <strong>OBS:</strong> detta fungerar bara i webbläsaren Safari på iPhone/iPad, inte i Chrome eller andra webbläsare.</p>'+
+      '<div style="margin-top:6px">'+
+        helpStepRow(1, 'ti-compass', 'Öppna TOURER i Safari', 'Se till att du besöker sidan i Safari-appen (det ljusblå kompass-ikonen) – inte Chrome eller någon annan webbläsare.')+
+        helpStepRow(2, 'ti-share', 'Tryck på Dela-ikonen', 'Tryck på delningsikonen (en fyrkant med en pil som pekar uppåt) längst ner i mitten av skärmen.')+
+        helpStepRow(3, 'ti-square-rounded-plus', 'Välj "Lägg till på hemskärmen"', 'Bläddra nedåt i menyn som dyker upp och tryck på "Lägg till på hemskärmen" (Add to Home Screen).')+
+        helpStepRow(4, 'ti-edit', 'Namnge genvägen', 'Ge appen ett namn, t.ex. "Tourer", och tryck sedan på "Lägg till" uppe i högra hörnet.')+
+        helpStepRow(5, 'ti-device-mobile', 'Klart!', 'En ny appikon dyker nu upp på din hemskärm. Tryck på den för att öppna TOURER i helskärmsläge, precis som en vanlig app – snabbare och smidigare än att leta upp länken varje gång.')+
+      '</div>'
+  }
+];
+
+function toggleHelpTopic(id) {
+  var body = document.getElementById('help-body-'+id);
+  var chevron = document.getElementById('help-chevron-'+id);
+  if(!body) return;
+  var isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if(chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function renderHelpContent() {
+  var el = document.getElementById('help-content');
+  if(!el) return;
+  el.innerHTML = HELP_TOPICS.map(function(topic, idx){
+    var open = idx === 0;
+    return '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">'+
+      '<div onclick="toggleHelpTopic(\''+topic.id+'\')" style="padding:14px 16px;display:flex;align-items:center;gap:10px;cursor:pointer">'+
+        '<i class="ti '+topic.icon+'" style="font-size:20px;color:var(--green-dark);flex-shrink:0"></i>'+
+        '<div style="flex:1;font-weight:700;font-size:15px">'+topic.title+'</div>'+
+        '<i class="ti ti-chevron-down" id="help-chevron-'+topic.id+'" style="transition:transform .15s;flex-shrink:0'+(open?';transform:rotate(180deg)':'')+'"></i>'+
+      '</div>'+
+      '<div id="help-body-'+topic.id+'" style="display:'+(open?'block':'none')+';padding:0 16px 16px;border-top:1px solid var(--border)">'+topic.body+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+function showHelp() {
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'help-screen' ? '' : 'none';
+  });
+  updateHero(null);
+  renderHelpContent();
 }
 
 var _releaseNotesInlineExpanded = false;
