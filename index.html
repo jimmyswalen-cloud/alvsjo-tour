@@ -10234,7 +10234,7 @@ function renderUsersList() {
           '</div>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px" onclick="event.stopPropagation()">'+
-          (pLogo ? '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;align-items:center">'+pLogo+'</div>' : '')+
+          (pLogo ? '<div style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center">'+pLogo+'</div>' : '')+
           (admin ? '<div class="row" style="gap:6px">'+
             (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
