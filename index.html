@@ -206,7 +206,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div class="row" style="justify-content:flex-end;margin-bottom:16px">
     <button class="btn btn-primary btn-sm" id="new-user-btn" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
   </div>
-  <div id="db-diagnostics"></div>
   <div id="users-list"></div>
   <div id="global-player-profile" style="display:none"></div>
 </div>
@@ -1142,11 +1141,12 @@ function renderGlobalSettings() {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
   }
-  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div>';
+  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div><div id="db-diagnostics"></div>';
   el.innerHTML = html;
   renderCourseBankSection();
   renderCourseDbSection();
   renderLogoManagerSection();
+  renderDbDiagnostics();
 }
 
 function renderLogoManagerSection() {
@@ -8878,6 +8878,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (64)',
+    items: [
+      { type: 'changed', text: 'Flyttat Tour-diagnostik, Databasstorlek och listan över största bidragsgivarna till databaslagringen från Användare-vyn till Inställningar-vyn (längst ner, under Märkeslogotyper). Användare-vyn visar nu bara spelarkorten, ren och enkel.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (63)',
     items: [
       { type: 'improved', text: 'Justerat storleksbalansen mellan sponsor-/utrustningsloggorna på Spelare-sidan så de läser mer enhetligt visuellt: TaylorMade och Callaway skalas nu upp något (1.3x resp. 1.15x) eftersom deras logotyper annars såg klenare ut än Titleists, och Takomos tjocka versaltext skalas ner mer (0.5x istället för 0.65x) eftersom den annars dominerade jämfört med de andra. Titleist förblir referensstorleken (1.4x). Säg till om något märke fortfarande sticker ut så finjusterar jag vidare – detta är en enkel multiplikator per märke i BRAND_LOGO_SIZE_ADJUST.' }
@@ -10150,10 +10156,8 @@ function showUsersView() {
   updateHero(null);
   var profileEl = document.getElementById('global-player-profile');
   var listEl = document.getElementById('users-list');
-  var diagEl = document.getElementById('db-diagnostics');
   if(profileEl) profileEl.style.display = 'none';
   if(listEl) listEl.style.display = '';
-  if(diagEl) diagEl.style.display = '';
   renderUsersList();
 }
 
@@ -10221,20 +10225,16 @@ function buildGlobalPlayerProfileHTML(username) {
 
 function showGlobalPlayerProfile(username) {
   var listEl = document.getElementById('users-list');
-  var diagEl = document.getElementById('db-diagnostics');
   var profileEl = document.getElementById('global-player-profile');
   if(listEl) listEl.style.display = 'none';
-  if(diagEl) diagEl.style.display = 'none';
   if(profileEl) { profileEl.style.display = ''; profileEl.innerHTML = buildGlobalPlayerProfileHTML(username); }
 }
 
 function goBackFromGlobalProfile() {
   var listEl = document.getElementById('users-list');
-  var diagEl = document.getElementById('db-diagnostics');
   var profileEl = document.getElementById('global-player-profile');
   if(profileEl) profileEl.style.display = 'none';
   if(listEl) listEl.style.display = '';
-  if(diagEl) diagEl.style.display = '';
 }
 
 // Redigera styrkor/svagheter från den globala profilen, och rita om profilen när man är klar.
