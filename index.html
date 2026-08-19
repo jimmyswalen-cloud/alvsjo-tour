@@ -8818,6 +8818,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (49)',
+    items: [
+      { type: 'fixed', text: 'Lagt till e-postadress i "Kontouppgifter" (profilsidan) så att befintliga konton kan komplettera sin egen e-post själva – tidigare gick det bara att sätta e-post när admin skapade ett helt nytt konto eller redigerade någon annans konto via Bandatabasen/Användare-listan.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (48)',
     items: [
       { type: 'added', text: 'Hämtat och lagt till fullständiga scorekort i väntande kö för V/Ö-banorna: Vasatorps Tournament Course (par 72, mästerskapsbana), Vasatorps Classic Course (par 72), Ängelholms GK (par 71), Öresunds Golf (par 71), Vellinge Golfklubb (par 72), Varbergs Golfklubbs Västra och Östra banor (par 72/71), Vinbergs Golfklubb (par 72), Örebro City Golf & Country Clubs Gustavsviksbana (par 70), Västerviks Golf (par 72), Växjö Golfklubb (par 72), Västerås Golfklubb (par 70), Östersund-Frösö Golfklubb (par 73) och Visby Golfklubbs 18-hålsbana (par 72). Alla verifierade mot caddee.se (par-summa + giltig hcp-index-permutation 1–18). Detta var den sista bokstavsgruppen (V–Ö) – hela alfabetet A–Ö är nu genomgånget.' },
@@ -9902,6 +9908,7 @@ function openMyProfile() {
   var h = '<h3>Min profil</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:14px">Den här informationen visas i resultatlistor, OoM och anmälningar.</p>';
   h += '<div class="field"><label>Namn</label><input id="mp-name" type="text" value="'+esc(u.name||u.username)+'" placeholder="För- och efternamn"></div>';
+  h += '<div class="field"><label>E-postadress (valfritt)</label><input id="mp-email" type="email" value="'+esc(u.email||'')+'" placeholder="t.ex. namn@exempel.se"></div>';
   h += '<div class="field"><label>Golf-ID <span style="color:var(--danger-text)">*</span></label><input id="mp-golfid" type="text" value="'+esc(u.golfId||'')+'" maxlength="10" placeholder="10 tecken"></div>';
   h += '<div class="field"><label>Kön</label><div class="row" style="gap:16px;margin-bottom:8px">';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="mp-gender" value="man" '+(u.gender!=='kvinna'?'checked':'')+' style="width:auto;margin:0"> Man</label>';
@@ -9942,7 +9949,10 @@ function submitMyProfile() {
   var u = findUser(currentUser.username);
   var golfId = document.getElementById('mp-golfid').value.trim();
   if(golfId.length !== 10) { alert('Golf-ID måste vara exakt 10 tecken.'); return; }
+  var email = document.getElementById('mp-email').value.trim();
+  if(!isValidEmail(email)) { alert('E-postadressen ser inte korrekt ut.'); return; }
   u.name = document.getElementById('mp-name').value.trim() || u.username;
+  u.email = email || null;
   u.golfId = golfId;
   var genderEl = document.querySelector('input[name="mp-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
