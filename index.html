@@ -7229,6 +7229,72 @@ var BULK_PENDING_COURSES = [
     holeLengths:  [312,436,148,334,152,332,332,343,523,349,123,434,347,330,250,341,128,452]
   },
   {
+    name: "Trelleborgs Golf Club",
+    klubb: "Trelleborgs Golfklubb",
+    par: 71, holes: 18,
+    lat: 55.3697222, lng: 13.0813889,
+    district: "Skåne", land: "Sverige",
+    website: "https://www.trelleborgsgk.se",
+    holePars:     [5,3,4,4,4,3,4,3,5,3,5,3,4,5,3,4,4,5],
+    holeHcpIndex: [7,15,5,11,3,13,17,9,1,14,4,12,2,10,18,8,6,16],
+    holeLengths:  [365,105,260,281,327,109,231,135,408,113,370,125,257,352,99,241,265,334]
+  },
+  {
+    name: "Uddevalla Golf Club",
+    klubb: "Uddevalla Golfklubb",
+    par: 72, holes: 18,
+    lat: 58.3697719, lng: 11.7695783,
+    district: "Bohuslän-Dal", land: "Sverige",
+    website: "https://www.uddevallagk.se",
+    holePars:     [3,5,3,5,3,4,5,3,4,4,5,3,4,4,4,4,4,5],
+    holeHcpIndex: [10,4,6,14,18,8,12,2,16,5,7,17,15,3,9,1,13,11],
+    holeLengths:  [107,345,130,385,142,265,365,107,210,196,365,85,220,245,285,310,194,328]
+  },
+  {
+    name: "Upsala Golf Club",
+    klubb: "Upsala Golfklubb (Stora banan)",
+    par: 72, holes: 18,
+    lat: 59.8413941, lng: 17.4956097,
+    district: "Uppland", land: "Sverige",
+    website: "https://www.upsalagk.se",
+    holePars:     [4,3,4,4,5,3,4,5,4,3,4,5,4,3,4,5,4,4],
+    holeHcpIndex: [7,17,5,3,13,9,1,15,11,14,4,10,12,16,2,6,18,8],
+    holeLengths:  [259,103,287,299,389,128,295,370,293,111,288,390,265,104,319,349,186,287]
+  },
+  {
+    name: "Umeå Sörfors Golf Course",
+    klubb: "Umeå Sörfors Golfklubb (StorSpoven)",
+    par: 71, holes: 18,
+    lat: 63.8538733, lng: 20.0161903,
+    district: "Västerbotten", land: "Sverige",
+    website: "https://www.caddee.se/klubb/umea-sorfors-golfklubb",
+    holePars:     [4,4,3,5,3,4,5,3,4,5,3,4,3,4,5,4,4,4],
+    holeHcpIndex: [10,8,18,6,16,2,4,14,12,9,17,5,15,1,13,7,3,11],
+    holeLengths:  [256,264,115,405,138,290,380,113,243,369,112,299,113,314,362,261,284,332]
+  },
+  {
+    name: "Umeå Norrmjöle Golf Club",
+    klubb: "Umeå Norrmjöle Golfklubb",
+    par: 72, holes: 18,
+    lat: 63.6602904, lng: 20.1308377,
+    district: "Västerbotten", land: "Sverige",
+    website: "http://www.norrmjole-golf.se",
+    holePars:     [4,3,4,4,4,5,3,4,5,4,3,5,3,4,4,4,4,5],
+    holeHcpIndex: [4,12,8,6,10,16,18,2,14,3,15,13,17,1,5,9,7,11],
+    holeLengths:  [298,122,308,263,274,350,103,266,377,257,91,355,80,282,291,256,271,365]
+  },
+  {
+    name: "Tegelberga Golfklubb",
+    klubb: "Tegelberga Golfklubb (Gamla banan)",
+    par: 71, holes: 18,
+    lat: 55.4601569, lng: 13.2330794,
+    district: "Skåne", land: "Sverige",
+    website: "https://tegelbergagk.se",
+    holePars:     [4,5,3,5,3,5,4,5,4,3,4,3,4,3,4,4,3,5],
+    holeHcpIndex: [10,8,14,6,18,2,4,12,16,7,1,17,3,11,15,5,13,9],
+    holeLengths:  [265,372,136,325,98,358,256,393,221,120,286,114,322,106,244,329,115,357]
+  },
+  {
     name: "Söderåsens GK",
     klubb: "Söderåsens Golfklubb",
     par: 71, holes: 18,
@@ -8575,6 +8641,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (47)',
+    items: [
+      { type: 'added', text: 'Hämtat och lagt till fullständiga scorekort i väntande kö för U-banorna: Uddevalla Golf Club (par 72, Bohuslän), Upsala Golf Club (par 72, Stora banan – mästerskapsbanan), Umeå Sörfors Golf Course (StorSpoven, par 71) och Umeå Norrmjöle Golf Club (par 72, skogsbana med vattenhinder på sista nio). Alla verifierade mot caddee.se (par-summa + giltig hcp-index-permutation 1–18).' },
+      { type: 'fixed', text: 'Upptäckte att Umeå Golf Club har 27 hål fördelade på tre 9-hålsslingor som varvas veckovis – ingen fast 18-hålslayout finns, så inget scorekort tillagt för den.' }
+    ]
+  },
+  {
+    date: '19 augusti 2026 (46)',
+    items: [
+      { type: 'added', text: 'Hämtat och lagt till fullständiga scorekort i väntande kö för T-banorna: Trelleborgs Golf Club (par 71, linksbana med havskontakt) och Tegelberga Golfklubbs Gamla bana (par 71, Sveriges bästa golfbana 2022/2023 enligt Golfhäftet). Alla verifierade mot caddee.se (par-summa + giltig hcp-index-permutation 1–18).' },
+      { type: 'fixed', text: 'Upptäckte att Torrekulla Golf Club (numera "Valley Golfklubb") bara är en 12-hålsbana som spelas i olika kombinationer (12+6 eller 9+9) för att få ihop 18 hål – inget standardiserat 18-hålsscorekort tillagt för den.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (45)',
     items: [
