@@ -213,6 +213,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="tours-screen">
   <div id="home-screen-content">
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
+    <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -1007,6 +1008,7 @@ function showHomeScreen() {
   });
   renderHomeUserBar();
   updateHero(null);
+  renderHomeNextRoundWidget();
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
   updateSettingsCard();
@@ -1775,6 +1777,85 @@ function formatTourPeriod(t) {
   var endStr = formatSvDateShort(range.end) + ' ' + d2.getFullYear();
   if(range.start === range.end) return startStr;
   return startStr + ' &ndash; ' + endStr;
+}
+
+// Fullt datum med veckodag och år, t.ex. "Lördag 9 maj 2026" - för den framträdande "kommande runda"-rutan.
+function formatSvDateFull(iso) {
+  var days = ['Söndag','Måndag','Tisdag','Onsdag','Torsdag','Fredag','Lördag'];
+  var d = new Date(iso+'T00:00:00');
+  return days[d.getDay()]+' '+formatSvDateShort(iso)+' '+d.getFullYear();
+}
+
+// Hittar spelarens närmaste ej stängda deltävling över alla tourer hen har åtkomst till (oavsett
+// om datumet är i framtiden eller ett redan passerat men ännu ej stängt/rapporterat tillfälle).
+// Används för "Kommande runda"-rutan på startsidan, så man snabbt kan hoppa till "Mitt resultat"
+// utan att behöva leta upp rätt tour och scrolla ner till rätt deltävling manuellt.
+function findMyNextRoundInfo() {
+  if(!currentUser) return null;
+  var accessIds = currentUser.tourAccess || [];
+  if(!accessIds.length) return null;
+  var todayStr = new Date().toISOString().slice(0,10);
+  var today = new Date(todayStr+'T00:00:00');
+  var best = null, bestDiff = Infinity;
+  (S.tours||[]).forEach(function(t){
+    if(accessIds.indexOf(t.id) < 0) return;
+    var myPi = getMyPi(t);
+    if(myPi < 0) return;
+    (t.events||[]).forEach(function(e, ei){
+      if(e.closed) return;
+      var regsRaw = e.registrations || [];
+      var regsNorm = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
+      var myReg = regsNorm.find(function(r){ return r.pi===myPi && !r.declined; });
+      var dateStr = (myReg && myReg.date) || e.date;
+      if(!dateStr) return;
+      var diffDays = Math.abs((new Date(dateStr+'T00:00:00') - today) / 86400000);
+      if(diffDays < bestDiff) {
+        bestDiff = diffDays;
+        var time = '';
+        if(e.teeGroups) {
+          var grp = e.teeGroups.find(function(g){ return g.date===dateStr && g.playerPis.indexOf(myPi)>=0; });
+          if(grp) time = grp.time || '';
+        }
+        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: dateStr >= todayStr };
+      }
+    });
+  });
+  return best;
+}
+
+function goToMyNextRound(tourId, eventIndex) {
+  enterTour(tourId);
+  setTimeout(function(){ openMyScoreSubmission(eventIndex); }, 60);
+}
+
+function renderHomeNextRoundWidget() {
+  var el = document.getElementById('home-next-round-widget');
+  if(!el) return;
+  var info = findMyNextRoundInfo();
+  if(!info) { el.innerHTML = ''; return; }
+  var t = info.tour, e = info.event;
+  var img = getEventImage(e);
+  var dateLabel = formatSvDateFull(info.date);
+  var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
+  el.innerHTML =
+    '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
+      '<div style="display:flex;align-items:stretch">'+
+        (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0">' : '<div style="width:88px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="font-size:28px;color:var(--text-3)"></i></div>')+
+        '<div style="padding:12px 14px;flex:1;min-width:0">'+
+          '<div style="font-size:11px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">'+eyebrow+'</div>'+
+          '<div style="font-weight:700;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'+
+          '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+          '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
+            (e.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course)+'</span>' : '')+
+            '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
+            (info.time ? '<span><i class="ti ti-clock" style="font-size:11px"></i> '+esc(info.time)+'</span>' : '')+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="padding:0 14px 12px">'+
+        '<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
+      '</div>'+
+    '</div>';
 }
 
 function renderToursList() {
@@ -8891,6 +8972,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (66)',
+    items: [
+      { type: 'new', text: 'Ny "Kommande runda"-ruta på startsidan, mellan användarraden och de färgade menyrutorna. Visar din närmaste ej avslutade deltävling över alla dina tourer – namn, tour, bana, datum och tid (om du blivit bollagd) – samt en "Mitt resultat"-genväg som hoppar direkt till rätt tour och öppnar samma resultatformulär som redan finns i deltävlingsvyn. Sparar en hel del knapptryckningar jämfört med att själv leta upp rätt tour och scrolla ner till rätt tävling. Om du inte har någon öppen deltävling i någon av dina tourer visas ingen ruta.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (65)',
     items: [
