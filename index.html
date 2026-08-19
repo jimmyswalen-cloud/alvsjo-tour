@@ -3161,7 +3161,8 @@ function openMyScoreSubmission(ei) {
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
   var hasScorecard = !!(course && course.holePars && course.holePars.length);
   var myHcp = t.players[myPi].hcp!=null ? t.players[myPi].hcp : 0;
-  var shcpVal = existing&&existing.shcp!=null ? existing.shcp : myHcp;
+  // SHCP (spelhandicap) är alltid ett heltal antal slag - till skillnad från rå HCP som kan ha en decimal.
+  var shcpVal = Math.round(existing&&existing.shcp!=null ? existing.shcp : myHcp);
 
   var h = '<h3><i class="ti ti-edit"></i> Mitt resultat – '+esc(e.name)+'</h3>';
   if(existing) {
@@ -3174,14 +3175,14 @@ function openMyScoreSubmission(ei) {
   if(!hasScorecard) {
     // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning.
     h += '<p style="font-size:12px;color:#854F0B;background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Banan "'+esc(e.course)+'" saknar scorekortsdata (par/hcp per hål) i Bandatabasen ännu. Be admin fylla i det, eller ange totalresultat direkt här under.</p>';
-    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+shcpVal+'"></div>';
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+shcpVal+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>';
     if(!isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
     h += '<div class="field"><label>'+(isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!isStab?'readonly':'')+'></div>';
     _myScorecardCtx = null;
   } else {
     var n = course.holePars.length;
     _myScorecardCtx = { isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex, totalHoles: n };
-    h += '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" id="my-shcp" value="'+shcpVal+'" oninput="recalcMyScorecard()"></div>';
+    h += '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+shcpVal+'" oninput="recalcMyScorecard()"></div>';
     h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(isStab?'Poäng':'Netto')+' räknas ut automatiskt.</p>';
     h += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
     h += '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
@@ -3232,7 +3233,7 @@ function recalcMyScorecard() {
   var ctx = _myScorecardCtx;
   if(!ctx) return;
   var shcpEl = document.getElementById('my-shcp');
-  var shcp = parseFloat(shcpEl.value)||0;
+  var shcp = Math.round(parseFloat(shcpEl.value)||0);
 
   // Uppdatera "extra slag"-kolumnen för alla hål (oavsett om slaget för hålet fyllts i än).
   for(var idx=0; idx<ctx.totalHoles; idx++) {
@@ -3297,15 +3298,15 @@ function onMyDispensChange() {
 }
 function recalcMyNet() {
   var bEl = document.getElementById('my-brutto'), sEl = document.getElementById('my-shcp'), scoreEl = document.getElementById('my-score');
-  var b = parseFloat(bEl.value), s = parseFloat(sEl.value);
-  if(!isNaN(b) && !isNaN(s)) scoreEl.value = Math.round((b-s)*10)/10;
+  var b = parseFloat(bEl.value), s = Math.round(parseFloat(sEl.value));
+  if(!isNaN(b) && !isNaN(s)) scoreEl.value = b-s;
 }
 
 function submitMyScore(ei, pi) {
   var t = getTour(), e = t.events[ei];
   var ctx = _myScorecardCtx;
   var shcpEl = document.getElementById('my-shcp');
-  var shcp = shcpEl && shcpEl.value!=='' ? parseFloat(shcpEl.value) : null;
+  var shcp = shcpEl && shcpEl.value!=='' ? Math.round(parseFloat(shcpEl.value)) : null;
   var holes = null;
 
   if(ctx) {
@@ -4307,9 +4308,9 @@ function recalcNet(pi) {
   var resEl = document.getElementById('res-'+pi);
   if(!bruttoEl || !shcpEl || !resEl) return;
   var brutto = parseFloat(bruttoEl.value);
-  var shcp = parseFloat(shcpEl.value);
+  var shcp = Math.round(parseFloat(shcpEl.value));
   if(isNaN(brutto) || isNaN(shcp)) { resEl.value = ''; return; }
-  resEl.value = Math.round((brutto - shcp) * 10) / 10;
+  resEl.value = brutto - shcp;
 }
 
 function openResults(i) {
@@ -4329,7 +4330,7 @@ function openResults(i) {
     var prefillShcp = ex&&ex.shcp!=null ? ex.shcp : (approved && sub && sub.shcp!=null ? sub.shcp : null);
     var p=t.players[pi];
     var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
-    var shcpVal = (prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0);
+    var shcpVal = Math.round((prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0));
     var statusBadge = !sub ? '<span style="font-size:10px;color:var(--text-3)">Ej inskickat</span>'
       : approved ? '<span style="font-size:10px;color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>'
       : '<span style="font-size:10px;color:var(--gold)"><i class="ti ti-clock"></i> Väntar</span><button type="button" class="btn btn-sm" style="padding:1px 6px;margin-left:4px" onclick="approveScoreSubmission('+i+','+pi+',true);openResults('+i+')" title="Godkänn"><i class="ti ti-check" style="font-size:11px"></i></button>';
@@ -4338,7 +4339,7 @@ function openResults(i) {
       '<span style="flex:1;font-size:14px;font-weight:500">'+p.name+(e.isFinal?' <span style="font-size:11px;color:var(--gold);font-weight:600">('+(hs>0?'-':'')+hs+' förspr.)</span>':'')+'</span>'+
       (!isStab?
         '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+prefillBrutto+'" oninput="recalcNet('+pi+')">'+
-        '<input type="number" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
+        '<input type="number" step="1" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
         :'')+
       '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+prefillScore+'" '+(!isStab?'readonly':'')+'>'+
     '</div>'+
@@ -4408,7 +4409,7 @@ function saveResults(i) {
     var bruttoEl=document.getElementById('brutto-'+pi);
     var brutto=bruttoEl&&bruttoEl.value!==''?parseFloat(bruttoEl.value):null;
     var shcpEl=document.getElementById('shcp-'+pi);
-    var shcp=shcpEl&&shcpEl.value!==''?parseFloat(shcpEl.value):null;
+    var shcp=shcpEl&&shcpEl.value!==''?Math.round(parseFloat(shcpEl.value)):null;
     var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
     // Bevara hål-för-hål-slag från en godkänd spelarinskickning, så statistik (birdies, hio m.m.) går att räkna senare.
     var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
@@ -8973,6 +8974,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (68)',
+    items: [
+      { type: 'fixed', text: 'SHCP (spelhandicap) visades och sparades ibland med en decimal, t.ex. "21,7", eftersom det förifylldes direkt från spelarens rå HCP (som nu visas med en decimal överallt). SHCP är per definition alltid ett heltal antal slag - fixat så att det avrundas konsekvent till närmaste heltal, både vid förifyllning i "Mitt resultat" och admins resultatinmatning, och oavsett om spelaren har scorekortsdata (hål-för-hål) eller bara anger totalresultat. Netto/poäng-uträkningarna är opåverkade eftersom de redan använde SHCP som ett rent avdrag.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (67)',
     items: [
