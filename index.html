@@ -1798,10 +1798,11 @@ function formatSvDateFull(iso) {
   return days[d.getDay()]+' '+formatSvDateShort(iso)+' '+d.getFullYear();
 }
 
-// Hittar spelarens närmaste ej stängda deltävling över alla tourer hen har åtkomst till (oavsett
-// om datumet är i framtiden eller ett redan passerat men ännu ej stängt/rapporterat tillfälle).
-// Används för "Kommande runda"-rutan på startsidan, så man snabbt kan hoppa till "Mitt resultat"
-// utan att behöva leta upp rätt tour och scrolla ner till rätt deltävling manuellt.
+// Hittar spelarens närmaste ej stängda deltävling över alla tourer hen har åtkomst till. Om
+// spelaren redan är anmäld räknas både framtida och redan passerade-men-ej-stängda tillfällen
+// (så man snabbt kan hoppa till "Mitt resultat"). Om spelaren INTE är anmäld räknas bara
+// tillfällen som fortfarande ligger i framtiden eller är idag - annars vore det en meningslös
+// påminnelse att anmäla sig till något som redan spelats.
 function findMyNextRoundInfo() {
   if(!currentUser) return null;
   var accessIds = currentUser.tourAccess || [];
@@ -1818,17 +1819,20 @@ function findMyNextRoundInfo() {
       var regsRaw = e.registrations || [];
       var regsNorm = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
       var myReg = regsNorm.find(function(r){ return r.pi===myPi && !r.declined; });
+      var registered = !!myReg;
       var dateStr = (myReg && myReg.date) || e.date;
       if(!dateStr) return;
+      var isFuture = dateStr >= todayStr;
+      if(!registered && !isFuture) return; // för sent att anmäla sig - ingen mening med en påminnelse
       var diffDays = Math.abs((new Date(dateStr+'T00:00:00') - today) / 86400000);
       if(diffDays < bestDiff) {
         bestDiff = diffDays;
         var time = '';
-        if(e.teeGroups) {
+        if(registered && e.teeGroups) {
           var grp = e.teeGroups.find(function(g){ return g.date===dateStr && g.playerPis.indexOf(myPi)>=0; });
           if(grp) time = grp.time || '';
         }
-        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: dateStr >= todayStr };
+        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: isFuture, registered: registered };
       }
     });
   });
@@ -1840,6 +1844,11 @@ function goToMyNextRound(tourId, eventIndex) {
   setTimeout(function(){ openMyScoreSubmission(eventIndex); }, 60);
 }
 
+function goToMyRegistration(tourId, eventIndex) {
+  enterTour(tourId);
+  setTimeout(function(){ openRegister(eventIndex); }, 60);
+}
+
 function renderHomeNextRoundWidget() {
   var el = document.getElementById('home-next-round-widget');
   if(!el) return;
@@ -1848,6 +1857,34 @@ function renderHomeNextRoundWidget() {
   var t = info.tour, e = info.event;
   var img = getEventImage(e);
   var dateLabel = formatSvDateFull(info.date);
+
+  if(!info.registered) {
+    // Spelaren är inte anmäld till sin närmast kommande deltävling än - visa en påminnelse att
+    // anmäla sig istället för en "Mitt resultat"-genväg (det finns ju inget resultat att fylla i).
+    // Länken går till anmälningsvyn för just den deltävlingen. Påminnelsen försvinner automatiskt
+    // så fort deltävlingens datum har passerat (hanteras i findMyNextRoundInfo).
+    el.innerHTML =
+      '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer;border:1px solid #F3D19E" onclick="goToMyRegistration(\''+t.id+'\','+info.eventIndex+')">'+
+        '<div style="display:flex;align-items:stretch">'+
+          (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0">' : '<div style="width:88px;background:var(--gold-light);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-alert-circle" style="font-size:28px;color:var(--gold)"></i></div>')+
+          '<div style="padding:12px 14px;flex:1;min-width:0">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Glöm inte anmäla dig</div>'+
+            '<div style="font-weight:700;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'+
+            '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
+              (e.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course)+'</span>' : '')+
+              '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="row" style="justify-content:flex-end;padding:0 14px 12px">'+
+          '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyRegistration(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-clipboard-check"></i> Anmäl dig</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
+    return;
+  }
+
   var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
   el.innerHTML =
     '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
@@ -8986,6 +9023,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (70)',
+    items: [
+      { type: 'improved', text: '"Kommande runda"-rutan på startsidan visar nu inte längre "Mitt resultat" för en deltävling man inte är anmäld till (det finns ju inget resultat att fylla i). Istället visas en tydlig påminnelse - "Glöm inte anmäla dig" - med en knapp som länkar direkt till anmälningsvyn för just den deltävlingen. Påminnelsen ligger kvar så länge deltävlingens datum inte har passerat än; är man fortsatt oanmäld när datumet passerat försvinner rutan automatiskt (för sent att göra något åt saken). Är man redan anmäld fungerar rutan precis som innan, med genväg till "Mitt resultat".' }
+    ]
+  },
   {
     date: '19 augusti 2026 (69)',
     items: [
