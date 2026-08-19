@@ -5804,25 +5804,73 @@ function buildProfileHTML(pi){
 
 var SW_STRENGTHS = [
   'Långa drives','Precisions drives','Powerfade drives','Sänker allt på green',
-  'Närspel som Phil Mickelson','Stabil som Tiger','Långa järn',
-  'Träffar alltid fairway','GIR-KING','Älskar alla banor',
-  'Kan hitta bollar ingen annan visste fanns',
-  'Bjuder gärna på en öl efter rundan','Är väldigt bra på att ge råd till andra',
-  'Exceptionell på att spela från skogen','Driver längre än GPS:en räknar med',
-  'Aldrig rädd för att gå över vatten','Puttar med stort självförtroende, oavsett avstånd',
-  'Vet exakt hur man använder alla 14 klubbor... till punchslag',
-  'Kan göra birdie från ingenstans'
+  'Närspel som Phil Mickelson','Stabil som Tiger','Långa järn','Träffar alltid fairway',
+  'GIR-KING','Älskar alla banor','Kan hitta bollar ingen annan visste fanns','Bjuder gärna på en öl efter rundan',
+  'Är väldigt bra på att ge råd till andra','Exceptionell på att spela från skogen','Driver längre än GPS:en räknar med','Aldrig rädd för att gå över vatten',
+  'Puttar med stort självförtroende, oavsett avstånd','Vet exakt hur man använder alla 14 klubbor... till punchslag','Kan göra birdie från ingenstans','Rak som en linjal från tee',
+  'Grym på inspel från 100 meter','Puttspecialist','Chippar som en tourspelare','Bunkerkung',
+  'Räddar par från omöjliga lägen','Fantastisk på långa par 3','Håller huvudet kallt under press','Stark när det verkligen gäller',
+  'Vass med wedgarna','Extremt bra bollträff','Läser greener som en bok','Missar alltid på rätt sida',
+  'Grym på låga slag','Fantastisk när vinden tilltar','Spelar bättre ju svårare banan är','Kan växla upp efter en dålig start',
+  'Stabil som ett schweiziskt urverk','Gör alltid det enkla rätt','Har järnnerven på green','Kan sänka en putt när det behövs',
+  'Imponerande närspel','Slår höga och mjuka inspel','En jävel på att rädda bogey','Håller bollen i spel',
+  'Grym på att läsa av banan','Hittar rätt klubba direkt','Kan spela alla typer av slag','Stark från tight lie',
+  'Excellent med hybriden','Sätter alltid ner bollen mjukt på green','Bra på att spela från nedförslut','Bra på att spela från upförslut',
+  'Kontrollerad med drivern trots längden','Snabb återhämtning efter dubbelbogey','Bra tempo i svingen hela rundan','Slår raka utslag även under press',
+  'Bra på att döda fart i chippen','Hittar green från konstiga vinklar','Kall från 3 meter','Aggressiv med rätt omdöme',
+  'Bra strategisk banläsning hål för hål','Sparar energi till de sista hålen','Väljer alltid säkraste percentage-slaget vid rätt tillfälle','Stark avslutare på ronder',
+  'Bra på att spela runt vattenhinder','Kan attackera flaggor med precision','Excellent lag-putt från långt håll','Slår längre än vad handicapet antyder',
+  'Slår längre än GPS:en tror','Kan förklara exakt varför slaget blev bra','Har alltid en klubba för mycket','Har alltid en klubba för lite',
+  'Har en otrolig förmåga att sänka puttar som inte borde gå i','Spelar bäst när ingen tittar','Spelar bäst när någon tittar','Har tourtempo – oavsett score',
+  'Ser ut som scratch från första tee','Har världens självförtroende efter en birdie','Kan få en trippelbogey att låta som en otursgrej','Kan hitta fairway på de mest kreativa sätt',
+  'Slår alltid "en säker järnfemma"','Har 100 % förtroende för sitt järn-7','Är bäst på att välja fel klubba','Kan hitta vatten på en torr golfbana',
+  'Har en unik förmåga att få dåliga lägen att se planerade ut','Har alltid en anledning till varför putten inte gick i','Kan prata sig ur vilken dålig rond som helst','Har fler golfbollar i bagen än i spel',
+  'Vet exakt hur långt 7-järnet går – teoretiskt','Kan slå ett fantastiskt slag direkt efter ett katastrofslag','Är scratch på rangen','Har tourkänsla – åtminstone på första tee',
+  'Puttar som om prispengarna står på spel','Kan göra birdie från vilket håll som helst','Mentalt starkare än sitt handicap','Har alltid ett slag till i sig',
+  'Kylig när andra börjar darra','Är som bäst när det gäller','Spelar som ett proffs – ibland','Har en farlig tro på sin egen förmåga',
+  'Kan sälja in en trea som ett proffs','Har alltid en teori som förklarar en bra rond','Blir bäst precis när det inte spelar någon roll','Firar en birdie som om det vore en major',
+  'Vet exakt vilket klubbval "proffsen" hade valt','Har en overklig förmåga att lugna ner sig i sista sekund','Spelar som mästare på söndagar utan matcher','Kallar varje bra slag "helt enligt planen"',
+  'Har alltid högsta förtroende – trots statistiken','Vaknar upp som en helt annan spelare efter fikat','Blir oslagbar efter en enda bra birdie','Har alltid samma pre-shot-rutin, oavsett resultat',
+  'Räknar aldrig slag förrän sista green','Håller samma tempo hela rundan, upp eller ner','Litar blint på sin egen yardagebok'
 ];
 var SW_WEAKNESSES = [
   'Slår bara järn från tee','Slice Slice Babe','Snappy hooks','Kan inte chippa',
-  'Har alltid en ny svingteori redo','Får många extra steg – utmärkt vardagsmotion',
-  'Tror att vinden alltid är emot','Har svårt att skilja på "lay up" och "go for it"',
-  'Blir aggressiv efter en bra drive','Håller bollförrådet hos proshopen vid liv',
-  'Chansar hellre än räknar','Skyller på greenerna',
-  'Kan inte spela vid nederbörd','Klarar inte av psykningar',
-  'Tappar rytmen vid lågt tempo',
-  'Kan göra trippelbogey från ingenstans',
-  'Tre puttar i överflöd'
+  'Har alltid en ny svingteori redo','Får många extra steg – utmärkt vardagsmotion','Tror att vinden alltid är emot','Har svårt att skilja på "lay up" och "go for it"',
+  'Blir aggressiv efter en bra drive','Håller bollförrådet hos proshopen vid liv','Chansar hellre än räknar','Skyller på greenerna',
+  'Kan inte spela vid nederbörd','Klarar inte av psykningar','Tappar rytmen vid lågt tempo','Kan göra trippelbogey från ingenstans',
+  'Tre puttar i överflöd','Expert på att toppa bollen','Kungen av duffar','Svårt att träffa fairway',
+  'Dålig från bunker','Svag på korta puttar','Har svårt med chippar','Svårt att slå långa järn',
+  'Svårt att slå från tjock ruff','Tappar fokus efter en dålig start','Dålig på att spela safe','Överskattar sin längd',
+  'Underskattar vind','För aggressiv från tee','Svårt att välja rätt klubba','Dålig på layups',
+  'Har svårt att stänga en rond','Tappar slag på par 5','Svag på par 3','Svårt att spela med ledning',
+  'Blir stressad av långsamt spel','Dålig på att läsa greener','För mycket golfteknik i huvudet','Slår ofta för långt på inspelen',
+  'Slår ofta för kort på inspelen','Svårt att slå bollen lågt','Svårt att slå bollen högt','Problem med utslag på smala hål',
+  'Första tee är alltid dagens svåraste hål','Behöver tre provsvingar för varje slag','Har svårt att släppa ett dåligt slag','Dålig på att rädda par',
+  'Tappar många slag runt green','Svag med driver','Svag med långa puttar','Svårt att spela ur trubbel',
+  'Dålig på att hålla tempo','Har svårt att spela defensivt','Svårt att hålla bollen under kontroll','Svag på nedförslut',
+  'Svag på upförslut','Får panik i bunker med kort svängrum','Tappar riktningen med hybriden','Kan inte spela från barkflis',
+  'Svårt att döma avstånd i motljus','Tappar fokus vid dubbla hcp-hål','Svag i regnigt väder','Svårt att anpassa sig till snabba greener',
+  'Svårt att anpassa sig till långsamma greener','Kan inte spela draw när det krävs','Kan inte spela fade när det krävs','Svag på att läsa sidledslut',
+  'Får för mycket spinn på wedge-slagen','Tappar koncentrationen efter väntetider','Svårt att hålla balansen på ojämna lägen','Kämpar med korta uppspel över bunker',
+  'Svag för intag av alkohol','Allergisk mot layups','Kan inte säga nej till en chansning','Har svårt att lämna drivern i bagen',
+  'Birdie = omedelbart självförtroendeproblem','Bogey = mentalt sammanbrott','Har ett komplicerat förhållande till vattenhinder','Slår alltid "bara en liten draw"',
+  'Har aldrig träffat en pinne han inte ville jaga','Tror att alla hål är birdiehål','Har ett personligt krig mot bunkrar','Förhandlar med sig själv efter varje dåligt slag',
+  'Letar efter bollen trots att alla andra vet var den är','"Den där var ren" – efter en duff','Har svårt att acceptera en bogey','Tar alltid den svåra vägen',
+  'Kan inte se en flagga utan att gå för den','Köper ny putter efter tre dåliga rundor','Skyller gärna på greenerna','Skyller gärna på klubborna',
+  'Skyller gärna på bollen','Skyller gärna på vädret','Skyller gärna på banan','Skyller aldrig på sig själv',
+  'Har fler teorier än birdies','Spelar med tourbollar men tourtempo saknas','Har "en bra rond runt hörnet" sedan 2018','Kan förvandla ett enkelt par till en äventyrsresa',
+  'Tror alltid att nästa slag löser allt','Har svårt att hålla sig borta från golfshopen','Behöver kaffe innan första tee','Behöver öl efter sista green',
+  'Behöver både kaffe och öl för att hitta balansen','Har aldrig träffat ett vattenhinder som han inte ville testa','Gör birdie på hål 1 och spelar sedan som om han redan vunnit','Har ett osunt förhållande till sin driver',
+  'Litar mer på magkänslan än statistiken','Har fler ursäkter än klubbor','Kan diskutera ett slag längre än han spelade det','Har en personlig fejd med fairways',
+  'Tror att driver är obligatorisk på alla hål','Expert på att göra par till bogey','Kan göra en enkel chip till ett konstprojekt','Har aldrig hört talas om säkerhetsmarginal',
+  'Spelar varje hål som om det vore sista chansen','Kungen av "den där brukar jag slå bättre"','Golfens svar på YOLO','Behöver ibland påminnas om att hålet faktiskt har en green',
+  'Har ett magiskt förhållande till träd','Ser vatten som en personlig utmaning','Kan hitta problem även på en helt rak fairway','Har fler misslyckade birdieförsök än birdies',
+  'Spelar bäst när han inte räknar','Har aldrig sett ett hål som inte går att attackera','Kan göra 6 av ett perfekt läge','Har en fantastisk förmåga att välja exakt fel klubba',
+  'Hans största motståndare är hans egen strategi','Håller bollförlusten på en professionell nivå','Har ett närspel som kräver försäkring','Har fler golfteorier än rundor spelade',
+  'Tror att en ny driver löser allt','Har ett hatkärleksförhållande till rangen','Kan hitta ursäkter snabbare än han hittar bollen','Ser varje bunker som en personlig förolämpning',
+  'Blir expert på regler precis när det gynnar honom','Har spelat "bästa rundan någonsin" minst tio gånger','Litar mer på GPS:en än på ögonen – och tvärtom','Kallar tre-putt för "strategisk två-putt som gick fel"',
+  'Har testat fler grepp än han har spelat rundor','Ser en OB-pinne som en utmaning, inte en varning','Kan hitta en anledning att köpa nya bollar varje vecka','Blir religiös efter en riktigt dålig bunkerlie',
+  'Har en klubba i bagen han aldrig använder men aldrig plockar bort'
 ];
 
 // Skjuter upp den obligatoriska styrkor/svagheter-rutan - dyker upp igen vid nästa inloggning.
@@ -8527,6 +8575,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (45)',
+    items: [
+      { type: 'added', text: 'Utökat styrkor/svagheter-väljaren rejält – från 19 till 115 valbara styrkor och från 17 till 145 valbara svagheter. Detta var innehållet från listan du skickade förra gången, som av misstag bara hamnade i en fristående fil istället för att kopplas in i appens faktiska chip-väljare. Nu är det åtgärdat och synligt när man redigerar sina styrkor/svagheter på profilsidan.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (44)',
     items: [
