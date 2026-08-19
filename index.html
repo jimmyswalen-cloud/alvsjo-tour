@@ -1838,7 +1838,7 @@ function renderHomeNextRoundWidget() {
   var dateLabel = formatSvDateFull(info.date);
   var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
   el.innerHTML =
-    '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
+    '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
       '<div style="display:flex;align-items:stretch">'+
         (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0">' : '<div style="width:88px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="font-size:28px;color:var(--text-3)"></i></div>')+
         '<div style="padding:12px 14px;flex:1;min-width:0">'+
@@ -1852,10 +1852,11 @@ function renderHomeNextRoundWidget() {
           '</div>'+
         '</div>'+
       '</div>'+
-      '<div style="padding:0 14px 12px">'+
-        '<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
+      '<div class="row" style="justify-content:flex-end;padding:0 14px 12px">'+
+        '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
-    '</div>';
+    '</div>'+
+    '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
 }
 
 function renderToursList() {
@@ -8972,6 +8973,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (67)',
+    items: [
+      { type: 'fixed', text: '"Mitt resultat"-knappen i "Kommande runda"-rutan på startsidan var för bred (spände hela kortets bredd). Gjord till normal knappstorlek, samma som knappen redan har inne i en deltävling, högerjusterad i kortet.' },
+      { type: 'improved', text: 'Lagt till mer luft och en tunn avdelarlinje mellan "Kommande runda"-rutan och de färgade menyrutorna på startsidan, så de inte flyter ihop visuellt.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (66)',
     items: [
