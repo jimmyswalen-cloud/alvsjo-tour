@@ -5025,7 +5025,13 @@ function computeCareerStats(username) {
     var wins = results.filter(function(x){ return x.pos===1; }).length;
     var podiums = results.filter(function(x){ return x.pos<=3; }).length;
     var bestPos = Math.min.apply(null, results.map(function(x){ return x.pos; }));
-    var tourPts = nonFinal.reduce(function(s,x){ return s+(x.result.points||0); }, 0);
+    // Samma "räkna bara bästa N deltävlingar"-regel som computeOomStandings() använder för den
+    // officiella OoM-tabellen (t.bestRounds) - annars blir karriärstatistikens poängsumma för hög
+    // för tourer som bara räknar t.ex. de 5 bästa av 8 deltävlingar.
+    var bestN = t.bestRounds || 0;
+    var nonFinalPtsSorted = nonFinal.map(function(x){ return x.result.points||0; }).sort(function(a,b){ return b-a; });
+    var countedPts = bestN > 0 ? nonFinalPtsSorted.slice(0, bestN) : nonFinalPtsSorted;
+    var tourPts = countedPts.reduce(function(s,p){ return s+p; }, 0);
     nonFinal.forEach(function(x){
       var isStab = x.event.type==='stableford';
       if(isStab && x.result.score>0) allStabScores.push(x.result.score);
@@ -9038,6 +9044,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (73)',
+    items: [
+      { type: 'fixed', text: 'Karriärstatistikens "OoM-poäng totalt" (på spelarprofilen) räknade felaktigt ihop poängen från ALLA spelade deltävlingar i en tour, istället för att bara räkna de bästa N deltävlingarna enligt tourens "räkna bara bästa X deltävlingar"-inställning – samma regel som redan användes korrekt i den officiella OoM-tabellen. Fixat så att karriärstatistiken nu sorterar deltävlingarnas poäng fallande och bara summerar de bästa N per tour, precis som OoM-tabellen gör. Detta korrigerar även poängkolumnen i tour-listan längst ner på karriärstatistik-kortet.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (72)',
     items: [
