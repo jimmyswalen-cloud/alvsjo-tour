@@ -1126,8 +1126,11 @@ function saveHcpUpdateFromHome() {
   var inp = document.getElementById('hcp-update-inp');
   var val = parseFloat(inp.value);
   if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
-  currentUser.hcp = val;
-  currentUser.hcpLastConfirmed = new Date().toISOString();
+  var u = findUser(currentUser.username); // se kommentar i selfRegisterTour om varför detta krävs
+  if(!u) return;
+  u.hcp = val;
+  u.hcpLastConfirmed = new Date().toISOString();
+  currentUser = u;
   save();
   closeModal();
   renderHomeUserBar();
@@ -1942,8 +1945,16 @@ function renderTourSearchList() {
 
 function selfRegisterTour(id) {
   if(!currentUser) return;
-  if(!currentUser.tourAccess) currentUser.tourAccess = [];
-  if(currentUser.tourAccess.indexOf(id) < 0) currentUser.tourAccess.push(id);
+  // Viktigt: hämta en färsk referens via findUser() istället för att mutera currentUser direkt.
+  // S.users byts ut mot helt nya objekt varje gång Firestore-synken triggar (initFirebaseSync),
+  // vilket händer efter varje sparning - av vem som helst. Om currentUser då råkar peka på en
+  // gammal, frånkopplad kopia sparas aldrig ändringen till den faktiska S.users-arrayen, även om
+  // det lokalt ser ut som att det fungerade (samma bugg som tidigare fixades i submitMyProfile).
+  var u = findUser(currentUser.username);
+  if(!u) return;
+  if(!u.tourAccess) u.tourAccess = [];
+  if(u.tourAccess.indexOf(id) < 0) u.tourAccess.push(id);
+  currentUser = u;
   save();
   renderTourSearchList();
 }
@@ -1957,7 +1968,10 @@ function selfUnregisterTour(id) {
     return;
   }
   if(!confirm('Anmäla av dig från "'+t.name+'"?')) return;
-  currentUser.tourAccess = (currentUser.tourAccess||[]).filter(function(x){ return x!==id; });
+  var u = findUser(currentUser.username); // se kommentar i selfRegisterTour
+  if(!u) return;
+  u.tourAccess = (u.tourAccess||[]).filter(function(x){ return x!==id; });
+  currentUser = u;
   save();
   renderTourSearchList();
 }
@@ -8878,6 +8892,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (65)',
+    items: [
+      { type: 'fixed', text: 'Fixat en bugg där en spelares egen anmälan/avanmälan till en tour (samt HCP-bekräftelse och lösenordsbyte) bara syntes i den egna sessionen, inte för andra användare eller admin. Orsak: dessa funktioner muterade "currentUser" direkt, men Firestore-synken byter ut hela användarlistan mot nya objekt varje gång någon annan sparar något - så om det hände mellan inloggning och knapptryck pekade "currentUser" på en föräldralös kopia som aldrig nådde den riktiga datan. Alla berörda funktioner (anmäl/avanmäl till tour, HCP-uppdatering vid inloggning och från startsidan, lösenordsbyte) hämtar nu alltid en färsk referens innan de sparar, samma mönster som redan användes korrekt i Kontouppgifter-formuläret.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (64)',
     items: [
       { type: 'changed', text: 'Flyttat Tour-diagnostik, Databasstorlek och listan över största bidragsgivarna till databaslagringen från Användare-vyn till Inställningar-vyn (längst ner, under Märkeslogotyper). Användare-vyn visar nu bara spelarkorten, ren och enkel.' }
@@ -9979,7 +9999,8 @@ function checkHcpConfirmation() {
 }
 
 function confirmHcpCorrect() {
-  currentUser.hcpLastConfirmed = new Date().toISOString();
+  var u = findUser(currentUser.username); // se kommentar i selfRegisterTour om varför detta krävs
+  if(u) { u.hcpLastConfirmed = new Date().toISOString(); currentUser = u; }
   save();
   closeModal();
 }
@@ -10002,8 +10023,11 @@ function saveHcpUpdate() {
   var inp = document.getElementById('hcp-update-inp');
   var val = parseFloat(inp.value);
   if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
-  currentUser.hcp = val;
-  currentUser.hcpLastConfirmed = new Date().toISOString();
+  var u = findUser(currentUser.username); // se kommentar i selfRegisterTour om varför detta krävs
+  if(!u) return;
+  u.hcp = val;
+  u.hcpLastConfirmed = new Date().toISOString();
+  currentUser = u;
   save();
   closeModal();
 }
@@ -10142,7 +10166,7 @@ function submitChangePassword() {
   if(newP !== newP2) { err.textContent='Lösenorden matchar inte.'; err.style.display=''; return; }
   var u = findUser(currentUser.username);
   u.passHash = simpleHash(newP);
-  currentUser.passHash = u.passHash;
+  currentUser = u;
   save();
   closeModal();
   alert('Lösenord ändrat!');
