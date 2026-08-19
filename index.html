@@ -8868,6 +8868,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (57)',
+    items: [
+      { type: 'fixed', text: 'Rutan runt sponsor-/utrustningsloggan på användarkorten hade en grå bakgrund som klippte fult runt logotyper med vit botten (t.ex. Titleist). Bytt till vit bakgrund med en tunn kantlinje istället.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (56)',
     items: [
       { type: 'added', text: 'Lagt till profilbild för JOLE i STATIC_PLAYER_PHOTOS, kopplad till den uppladdade player-photos/jole.jpg.' }
@@ -10228,7 +10234,7 @@ function renderUsersList() {
           '</div>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px" onclick="event.stopPropagation()">'+
-          (pLogo ? '<div style="background:var(--surface2);border-radius:8px;padding:5px 10px;display:flex;align-items:center">'+pLogo+'</div>' : '')+
+          (pLogo ? '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;align-items:center">'+pLogo+'</div>' : '')+
           (admin ? '<div class="row" style="gap:6px">'+
             (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
