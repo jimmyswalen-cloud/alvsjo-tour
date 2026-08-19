@@ -1871,18 +1871,6 @@ function renderTourSearchList() {
     el.innerHTML = '<p class="empty">Inga tourer hittades.</p>';
     return;
   }
-  // Sortera pågående/kommande överst (med snarast startdatum överst), avslutade sist.
-  function sortKey(t) {
-    var range = tourDateRange(t);
-    var grp = tourStatusGroup(t);
-    var order = grp === 'ongoing' ? 0 : grp === 'upcoming' ? 1 : 2;
-    return [order, range ? range.start : '9999-99-99'];
-  }
-  tours.sort(function(a,b){
-    var ka = sortKey(a), kb = sortKey(b);
-    if(ka[0] !== kb[0]) return ka[0]-kb[0];
-    return ka[1].localeCompare(kb[1]);
-  });
 
   function statusBadge(t) {
     var grp = tourStatusGroup(t);
@@ -1891,7 +1879,7 @@ function renderTourSearchList() {
     return '<span class="badge badge-gray">Avslutad</span>';
   }
 
-  el.innerHTML = tours.map(function(t){
+  function cardHTML(t) {
     var events = t.events || [];
     var regularCount = events.filter(function(e){return !e.isFinal;}).length;
     var finalsCount = events.filter(function(e){return e.isFinal;}).length;
@@ -1920,7 +1908,26 @@ function renderTourSearchList() {
         '</div>'+
       '</div>'+
     '</div>';
-  }).join('');
+  }
+
+  var groups = { ongoing: [], upcoming: [], finished: [] };
+  tours.forEach(function(t){ groups[tourStatusGroup(t)].push(t); });
+  function sortAsc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var sa=ra?ra.start:'9999-99-99', sb=rb?rb.start:'9999-99-99'; return sa.localeCompare(sb); }
+  function sortDesc(a,b){ var ra=tourDateRange(a), rb=tourDateRange(b); var ea=ra?ra.end:'0000-00-00', eb=rb?rb.end:'0000-00-00'; return eb.localeCompare(ea); }
+  groups.ongoing.sort(sortAsc);
+  groups.upcoming.sort(sortAsc);
+  groups.finished.sort(sortDesc);
+
+  function sectionHTML(label, list, emptyText) {
+    var h = '<p class="section-title" style="margin-top:0">'+label+'</p>';
+    h += list.length ? list.map(cardHTML).join('') : '<p class="empty" style="margin-bottom:20px">'+emptyText+'</p>';
+    return h;
+  }
+
+  el.innerHTML =
+    sectionHTML('Pågående', groups.ongoing, 'Inga pågående tourer just nu.') +
+    sectionHTML('Kommande', groups.upcoming, 'Inga kommande tourer just nu.') +
+    sectionHTML('Avslutade', groups.finished, 'Inga avslutade tourer ännu.');
 }
 
 function selfRegisterTour(id) {
@@ -8834,6 +8841,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (51)',
+    items: [
+      { type: 'improved', text: '"Sök & anmäl till tour" visar nu tydliga rubriker mellan grupperna – Pågående, Kommande och Avslutade – med respektive tourer samlade under sin rubrik. Alla tre rubriker visas alltid, även om en grupp är tom (t.ex. "Inga avslutade tourer ännu"), så det alltid är tydligt vad som saknas.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (50)',
     items: [
