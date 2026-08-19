@@ -21,7 +21,8 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .hero{position:relative;width:100%;height:280px;background:#1a2e22 center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 .hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.12) 0%,rgba(3,30,18,.70) 100%);}
-.hero-content{position:relative;text-align:center;padding:0 20px}
+.hero-content{position:relative;text-align:center;padding:0 20px;transition:opacity .15s}
+.hero-content:hover{opacity:.85}
 .hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px;}
 .hero-title{font-size:clamp(36px,9vw,72px);font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1;text-shadow:0 3px 28px rgba(0,0,0,.5);margin-bottom:0;}
 .hero-sub{font-size:14px;color:rgba(255,255,255,.6);margin-top:8px;}
@@ -144,7 +145,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
 <div class="hero" id="hero-bg">
-  <div class="hero-content">
+  <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
       <img src="logo-hero.png" style="height:clamp(56px,11vw,90px);width:auto" alt="ÄGCC Tour">
@@ -832,6 +833,9 @@ function deleteComment(eid, idx) {
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function ini(n) { return n.trim().split(/\s+/).map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
+// Formaterar HCP med exakt en decimal för visning (t.ex. "6" -> "6.0", "12.3" -> "12.3").
+// Används bara på visningsställen - inmatningsfälten för HCP behåller sina rå värden.
+function fmtHcp(v) { var n = Number(v); if(isNaN(n)) n = 0; return n.toFixed(1); }
 function weekdaySv(dateStr) {
   if(!dateStr) return '';
   var days = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
@@ -1089,7 +1093,7 @@ function renderHomeUserBar() {
   var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; }) || currentUser;
   var initials = ini(u.name||u.username);
   var uImg = playerPhoto(u.username, u.img);
-  var hcpVal = (u.hcp!=null ? u.hcp : 0);
+  var hcpVal = fmtHcp(u.hcp);
   el.innerHTML =
     (uImg ? '<img src="'+uImg+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
       '<div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
@@ -2652,7 +2656,7 @@ function renderPlayers() {
       return '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px;align-items:center">'+
         (uImg?'<img src="'+uImg+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+ini(u.name||u.username)+'</div>')+
         '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(u.name||u.username)+'</div>'+
-        '<div style="font-size:12px;color:var(--text-2)">HCP '+(u.hcp||'–')+'</div></div>'+
+        '<div style="font-size:12px;color:var(--text-2)">HCP '+fmtHcp(u.hcp)+'</div></div>'+
         '<button class="btn btn-sm btn-primary" onclick="addPlayerToTour(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i> Lägg till</button>'+
       '</div>';
     }).join('');
@@ -2712,7 +2716,7 @@ function renderPlayers() {
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
         (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
-        '<div style="font-size:13px;color:var(--text-2)">HCP '+p.hcp+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
+        '<div style="font-size:13px;color:var(--text-2)">HCP '+fmtHcp(p.hcp)+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
         (isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
@@ -5810,7 +5814,7 @@ function buildProfileHTML(pi){
         ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
         : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(p.name)+'</div>')+
       '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(p.name)+'</div>'+
-      '<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+p.hcp+' &nbsp;·&nbsp; '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+fmtHcp(p.hcp)+' &nbsp;·&nbsp; '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
       '<div style="font-size:12px;color:var(--text-3);margin-top:2px">'+ptsLabel+'</div></div>'+
     '</div>'+
     '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px">Denna tour – '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
@@ -8872,6 +8876,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (62)',
+    items: [
+      { type: 'improved', text: 'Alla spelares HCP visas nu konsekvent med en decimal (t.ex. "6.0" istället för bara "6") på alla ställen i appen – användarraden på startsidan, spelarprofiler, Spelare-listan i en tour, "Lägg till spelare"-sökningen och profilkortet på Min profil. Inmatningsfälten där man ändrar HCP är opåverkade.' }
+    ]
+  },
+  {
+    date: '19 augusti 2026 (61)',
+    items: [
+      { type: 'new', text: 'Hela hero-rubriken (logga + "TOURER"/tourens namn högst upp) är nu klickbar på alla sidor och tar dig direkt tillbaka till startsidan – ett enklare sätt att komma hem än att leta efter en hem-knapp, och fungerar oavsett om telefonens bakåtknapp beter sig konstigt. Muspekaren blir en hand och rubriken tonas svagt vid hover som en tydlig indikation på att den går att klicka.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (60)',
     items: [
       { type: 'fixed', text: 'Fixat att spelare kunde avanmäla sig (och admin kunde ta bort spelare) från en tour som redan börjat, även om spelaren själv inte hunnit spela någon deltävling än. Regeln är nu enklare och striktare: så fort en tour inte längre räknas som "Kommande" (dvs pågående eller avslutad) går det inte att avanmäla sig eller ta bort spelare alls, för att inte rubba OoM och resultathistorik. "Avanmäl"-knappen (för spelaren) och "Ta bort från touren"-knappen (för admin) syns nu bara på tourer som fortfarande är i "Kommande"-läge, istället för att visas och sedan blockeras med ett felmeddelande efter klick.' }
@@ -10152,7 +10168,7 @@ function buildGlobalPlayerProfileHTML(username) {
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
     '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
     (playerBrandLogoTag(u.username, 20)?'<div style="background:#fff;border-radius:8px;padding:4px 9px;display:inline-flex;align-items:center;margin-top:5px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
-    (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
+    (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+fmtHcp(u.hcp)+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
   h += '</div>';
