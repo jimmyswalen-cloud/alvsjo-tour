@@ -8868,6 +8868,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '19 augusti 2026 (58)',
+    items: [
+      { type: 'fixed', text: 'Sponsor-/utrustningsloggan på spelarprofilsidan (rubriken högst upp med bild, namn och HCP) satt direkt mot den grå sidbakgrunden. Lagt in samma vita bakgrundsruta som på användarkorten, så vita logotyper (t.ex. Titleist) syns snyggt.' }
+    ]
+  },
+  {
     date: '19 augusti 2026 (57)',
     items: [
       { type: 'fixed', text: 'Rutan runt sponsor-/utrustningsloggan på användarkorten hade en grå bakgrund som klippte fult runt logotyper med vit botten (t.ex. Titleist). Bytt till vit bakgrund med en tunn kantlinje istället.' }
@@ -10128,7 +10134,7 @@ function buildGlobalPlayerProfileHTML(username) {
       ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
     '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
-    (playerBrandLogoTag(u.username, 20)?'<div style="margin-top:4px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
+    (playerBrandLogoTag(u.username, 20)?'<div style="background:#fff;border-radius:8px;padding:4px 9px;display:inline-flex;align-items:center;margin-top:5px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
     (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+u.hcp+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
