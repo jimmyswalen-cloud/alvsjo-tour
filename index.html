@@ -1907,7 +1907,7 @@ function renderTourSearchList() {
         '<div class="row" style="gap:6px">'+
           (registered
             ? ('<button class="btn btn-primary btn-sm" onclick="enterTour(\''+t.id+'\')"><i class="ti ti-arrow-right"></i> Öppna</button>'+
-               '<button class="btn btn-sm" onclick="selfUnregisterTour(\''+t.id+'\')"><i class="ti ti-user-minus"></i> Avanmäl</button>')
+               (tourStatusGroup(t) === 'upcoming' ? '<button class="btn btn-sm" onclick="selfUnregisterTour(\''+t.id+'\')"><i class="ti ti-user-minus"></i> Avanmäl</button>' : ''))
             : '<button class="btn btn-primary btn-sm" onclick="selfRegisterTour(\''+t.id+'\')"><i class="ti ti-user-plus"></i> Anmäl dig</button>')+
         '</div>'+
       '</div>'+
@@ -1946,8 +1946,8 @@ function selfUnregisterTour(id) {
   if(!currentUser) return;
   var t = (S.tours||[]).find(function(x){ return x.id===id; });
   if(!t) return;
-  if(playerHasParticipatedInTour(t, currentUser.username)) {
-    alert('Du har redan spelat minst en deltävling i "'+t.name+'" och kan därför inte anmäla av dig. Det skulle bryta resultathistoriken. Kontakta din admin om du vill lösa detta på annat sätt.');
+  if(tourStatusGroup(t) !== 'upcoming') {
+    alert('"'+t.name+'" har redan börjat (eller är avslutad) och du kan därför inte anmäla av dig längre. Det skulle rubba resultathistorik och OoM. Kontakta din admin om du vill lösa detta på annat sätt.');
     return;
   }
   if(!confirm('Anmäla av dig från "'+t.name+'"?')) return;
@@ -2716,7 +2716,7 @@ function renderPlayers() {
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
         (isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
-        (isAdmin() ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removePlayerFromTour(&quot;'+p.username+'&quot;)" title="Ta bort från touren"><i class="ti ti-user-minus"></i></button>' : '')+
+        (isAdmin() && tourStatusGroup(t) === 'upcoming' ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removePlayerFromTour(&quot;'+p.username+'&quot;)" title="Ta bort från touren"><i class="ti ti-user-minus"></i></button>' : '')+
       '</div>'+
       swBadges+
     '</div>';
@@ -2754,13 +2754,17 @@ function playerHasParticipatedInTour(t, username) {
 // och redan sparade resultat/side bets rörs inte - de finns kvar i historiken, men spelaren
 // försvinner från aktuell spelarlista, OoM och framtida anmälningar eftersom getPlayersForTour
 // filtrerar på tourAccess. Samma append-only-princip som redan gäller för borttagen åtkomst.
+//
+// Spärras helt så fort touren inte längre räknas som "Kommande" (dvs pågående eller avslutad),
+// oavsett om just den här spelaren hunnit spela någon deltävling än - annars kan roster ändras
+// mitt i en redan startad säsong vilket rubbar OoM och resultathistorik.
 function removePlayerFromTour(username) {
   if(!isAdmin()) return;
   var u = findUser(username);
   if(!u) return;
   var t = getTour();
-  if(playerHasParticipatedInTour(t, username)) {
-    alert((u.name||u.username)+' har redan spelat minst en deltävling i "'+t.name+'" och kan därför inte tas bort. Det skulle bryta resultathistoriken. Du kan istället avmarkera "Spelare i tourer" på kontot om personen inte längre ska synas som aktiv spelare.');
+  if(tourStatusGroup(t) !== 'upcoming') {
+    alert('"'+t.name+'" har redan börjat (eller är avslutad) - spelare kan då inte tas bort längre, för att inte rubba OoM och resultathistorik. Du kan istället avmarkera "Spelare i tourer" på kontot om personen inte längre ska synas som aktiv spelare.');
     return;
   }
   if(!confirm('Ta bort '+(u.name||u.username)+' från touren "'+t.name+'"?\n\nSpelaren försvinner från aktuell spelarlista, OoM och anmälningar framåt. Du kan när som helst lägga till spelaren igen.')) return;
@@ -8867,6 +8871,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 augusti 2026 (60)',
+    items: [
+      { type: 'fixed', text: 'Fixat att spelare kunde avanmäla sig (och admin kunde ta bort spelare) från en tour som redan börjat, även om spelaren själv inte hunnit spela någon deltävling än. Regeln är nu enklare och striktare: så fort en tour inte längre räknas som "Kommande" (dvs pågående eller avslutad) går det inte att avanmäla sig eller ta bort spelare alls, för att inte rubba OoM och resultathistorik. "Avanmäl"-knappen (för spelaren) och "Ta bort från touren"-knappen (för admin) syns nu bara på tourer som fortfarande är i "Kommande"-läge, istället för att visas och sedan blockeras med ett felmeddelande efter klick.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (59)',
     items: [
