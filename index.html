@@ -1982,7 +1982,7 @@ function renderHomeNextRoundWidget() {
       '</div>'+
     '</div>'+
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
-  checkHomeLiveTableButton(e.id);
+  checkHomeLiveTableButton(e.id, t.id);
 }
 
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
@@ -1990,7 +1990,7 @@ function renderHomeNextRoundWidget() {
 // har fått ett resultat inmatat för deltävlingen) - inte bara att en boll finns.
 // Ren ikonknapp (ingen text) för att ta minimalt utrymme bredvid "Live scoring"
 // som ska vara den tydliga, framträdande genvägen.
-function checkHomeLiveTableButton(eid) {
+function checkHomeLiveTableButton(eid, tourId) {
   LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
     var started = snap.docs.some(function(doc){
       var d = doc.data();
@@ -2003,7 +2003,7 @@ function checkHomeLiveTableButton(eid) {
     var el = document.getElementById('home-live-table-btn');
     if(!el) return;
     el.innerHTML = started
-      ? '<button class="btn btn-sm" title="Live-tabell" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\')"><i class="ti ti-trophy" style="font-size:16px;color:var(--gold)"></i></button>'
+      ? '<button class="btn btn-sm" title="Live-tabell" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\',\''+tourId+'\')"><i class="ti ti-trophy" style="font-size:16px;color:var(--gold)"></i></button>'
       : '';
   }).catch(function(err){ console.error('Kunde inte kontrollera livescoring-status', err); });
 }
@@ -6804,8 +6804,12 @@ function currentLiveScoringDocIds(e) {
   return ids;
 }
 
-function openLiveFollow(eid) {
-  var t = getTour();
+// tourId är valfritt - behövs bara om funktionen anropas UTANFÖR en aktiv tour-kontext
+// (t.ex. från "Live-tabell"-genvägen i "Kommande runda" på startsidan, där getTour()
+// annars skulle returnera undefined eftersom ingen tour är "aktiv" där).
+function openLiveFollow(eid, tourId) {
+  var t = tourId ? S.tours.find(function(x){ return x.id === tourId; }) : getTour();
+  if(!t) { alert('Kunde inte hitta touren.'); return; }
   var e = t.events.find(function(x){ return x.id === eid; });
   if(!e) return;
   _liveFollow = { eid: eid, unsub: null, docs: [] };
@@ -10448,6 +10452,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (95)',
+    items: [
+      { type: 'fixed', text: 'JS-fel "Cannot read properties of undefined (reading \'events\')" när man tryckte på "Live-tabell"-ikonen i "Kommande runda" på STARTSIDAN. Orsak: openLiveFollow() antog att man redan befann sig inne i en tour (getTour(), som bygger på att en tour är "aktiv"), men på startsidan är ingen tour aktiv än. Fixat genom att skicka med tourId direkt från startsidans knapp, så openLiveFollow numera fungerar oavsett varifrån den anropas.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (94)',
     items: [
