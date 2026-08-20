@@ -3253,23 +3253,97 @@ function computeHoleStablefordPoints(gross, par, strokesReceived) {
 
 var _myScorecardCtx = null; // { isStab, holePars, holeHcpIndex, totalHoles }
 
+// Öppnar "Mitt resultat". Om spelaren har en boll i livescoring för den här
+// deltävlingen hämtas den datan asynkront för att kunna förifylla scorekortet -
+// annars byggs vyn direkt utan väntetid.
 function openMyScoreSubmission(ei) {
   var t = getTour(), e = t.events[ei];
   var myPi = getMyPi(t);
   if(myPi < 0) { alert('Du är inte registrerad som spelare i den här touren.'); return; }
+  showModal('<div id="my-score-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
+  var gIdx = (e.teeGroups||[]).findIndex(function(g){ return g.playerPis.indexOf(myPi) >= 0; });
+  if(gIdx >= 0) {
+    LIVE_SCORING_COL.doc(liveScoringDocId(e.id, gIdx)).get().then(function(doc){
+      buildMyScoreContext(ei, myPi, doc.exists ? doc.data() : null);
+    }).catch(function(){
+      buildMyScoreContext(ei, myPi, null);
+    });
+  } else {
+    buildMyScoreContext(ei, myPi, null);
+  }
+}
+
+function buildMyScoreContext(ei, myPi, liveDoc) {
+  var t = getTour(), e = t.events[ei];
   var isStab = e.type==='stableford';
   var existing = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
   var otherPis = getEventRegPis(e).filter(function(pi){ return pi!==myPi && t.players[pi]; });
-
-  var markerOpts = '<option value="">Välj markör...</option>'+otherPis.map(function(pi){
-    return '<option value="'+pi+'"'+(existing&&existing.markerPi===pi?' selected':'')+'>'+esc(t.players[pi].name)+'</option>';
-  }).join('');
-
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
   var hasScorecard = !!(course && course.holePars && course.holePars.length);
   var myHcp = t.players[myPi].hcp!=null ? t.players[myPi].hcp : 0;
+
+  var sourceHoles = null, sourcePutts = null;
   // SHCP (spelhandicap) är alltid ett heltal antal slag - till skillnad från rå HCP som kan ha en decimal.
-  var shcpVal = Math.round(existing&&existing.shcp!=null ? existing.shcp : myHcp);
+  var sourceShcp = Math.round(existing && existing.shcp!=null ? existing.shcp : myHcp);
+  var fromLive = false;
+
+  if(hasScorecard) {
+    var n = course.holePars.length;
+    if(existing && existing.holes) {
+      sourceHoles = existing.holes.slice();
+      if(existing.holePutts) sourcePutts = existing.holePutts.slice();
+    } else if(liveDoc && liveDoc.scores && liveDoc.scores[myPi]) {
+      sourceHoles = new Array(n).fill(null);
+      var liveSc = liveDoc.scores[myPi];
+      for(var i=0; i<n; i++) { var v = liveSc[i+1]; if(typeof v === 'number') sourceHoles[i] = v; }
+      if(liveDoc.putts && liveDoc.putts[myPi]) {
+        sourcePutts = new Array(n).fill(null);
+        var livePu = liveDoc.putts[myPi];
+        for(var j=0; j<n; j++) { var pv = livePu[j+1]; if(typeof pv === 'number') sourcePutts[j] = pv; }
+      }
+      fromLive = true;
+      var liveP = (liveDoc.players||[]).filter(function(x){ return x.pi===myPi; })[0];
+      if(liveP && liveP.shcp!=null) sourceShcp = liveP.shcp;
+    }
+  }
+
+  var allFilled = hasScorecard && sourceHoles && sourceHoles.length===course.holePars.length && sourceHoles.every(function(v){ return v!=null; });
+
+  _myScorecardCtx = {
+    ei: ei, myPi: myPi, isStab: isStab, hasScorecard: hasScorecard,
+    holePars: hasScorecard ? course.holePars : null,
+    holeHcpIndex: hasScorecard ? (course.holeHcpIndex||[]) : null,
+    totalHoles: hasScorecard ? course.holePars.length : 0,
+    sourceHoles: sourceHoles, sourcePutts: sourcePutts, sourceShcp: sourceShcp,
+    existing: existing, otherPis: otherPis, fromLive: fromLive,
+    originallyComplete: allFilled,
+    mode: allFilled ? 'review' : 'edit'
+  };
+  renderMyScoreModalBody();
+}
+
+function computeScorecardHoleResult(gross, par, hcpIdx, shcp, totalHoles, isStab) {
+  if(gross==null || isNaN(gross)) return null;
+  var strokesRecv = computeHcpStrokesForHole(shcp, hcpIdx, totalHoles);
+  return isStab ? computeHoleStablefordPoints(gross, par, strokesRecv) : (gross - strokesRecv);
+}
+
+function switchMyScoreMode(mode) {
+  if(!_myScorecardCtx) return;
+  _myScorecardCtx.mode = mode;
+  renderMyScoreModalBody();
+}
+
+function renderMyScoreModalBody() {
+  var ctx = _myScorecardCtx;
+  var el = document.getElementById('my-score-modal-body');
+  if(!ctx || !el) return;
+  var t = getTour(), e = t.events[ctx.ei];
+  var existing = ctx.existing;
+
+  var markerOpts = '<option value="">Välj markör...</option>'+ctx.otherPis.map(function(pi){
+    return '<option value="'+pi+'"'+(existing&&existing.markerPi===pi?' selected':'')+'>'+esc(t.players[pi].name)+'</option>';
+  }).join('');
 
   var h = '<h3><i class="ti ti-edit"></i> Mitt resultat – '+esc(e.name)+'</h3>';
   if(existing) {
@@ -3277,50 +3351,28 @@ function openMyScoreSubmission(ei) {
       ? (existing.adminApproved ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt av admin</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på admin-godkännande</span>')
       : ((existing.markerApproved||existing.adminApproved) ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på godkännande från '+esc(t.players[existing.markerPi]?t.players[existing.markerPi].name:'markör')+'</span>');
     h += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px">'+statusLabel+'</div>';
+  } else if(ctx.fromLive && ctx.mode==='review') {
+    h += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px"><i class="ti ti-broadcast" style="color:#123A4D"></i> Förifyllt från din livescoring - granska och skicka in, eller redigera om något behöver rättas.</div>';
   }
 
-  if(!hasScorecard) {
-    // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning.
+  if(!ctx.hasScorecard) {
+    // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning. Inget granskningsläge här.
     h += '<p style="font-size:12px;color:#854F0B;background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Banan "'+esc(e.course)+'" saknar scorekortsdata (par/hcp per hål) i Bandatabasen ännu. Be admin fylla i det, eller ange totalresultat direkt här under.</p>';
-    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+shcpVal+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>';
-    if(!isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
-    h += '<div class="field"><label>'+(isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!isStab?'readonly':'')+'></div>';
-    _myScorecardCtx = null;
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>';
+    if(!ctx.isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
+    h += '<div class="field"><label>'+(ctx.isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!ctx.isStab?'readonly':'')+'></div>';
+  } else if(ctx.mode==='review') {
+    h += renderMyScoreReviewTableHTML(ctx);
+    h += '<div class="row" style="justify-content:flex-end;margin:2px 0 14px">'+
+      '<button class="btn btn-sm" onclick="switchMyScoreMode(\'edit\')"><i class="ti ti-edit"></i> Redigera scorekort</button>'+
+    '</div>';
   } else {
-    var n = course.holePars.length;
-    _myScorecardCtx = { isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex, totalHoles: n };
-    h += '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+shcpVal+'" oninput="recalcMyScorecard()"></div>';
-    h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(isStab?'Poäng':'Netto')+' räknas ut automatiskt.</p>';
-    h += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-    h += '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
-      '<th style="padding:6px;text-align:left">Hål</th>'+
-      '<th style="padding:6px;text-align:center">Par</th>'+
-      '<th style="padding:6px;text-align:center">Hcp</th>'+
-      '<th style="padding:6px;text-align:center">Extra<br>slag</th>'+
-      '<th style="padding:6px;text-align:center">Slag</th>'+
-      '<th style="padding:6px;text-align:center">'+(isStab?'Poäng':'Netto')+'</th>'+
-    '</tr></thead><tbody>';
-    course.holePars.forEach(function(par, idx){
-      var hcpIdx = (course.holeHcpIndex && course.holeHcpIndex[idx]!=null) ? course.holeHcpIndex[idx] : (idx+1);
-      var existingGross = (existing && existing.holes && existing.holes[idx]!=null) ? existing.holes[idx] : '';
-      h += '<tr style="border-top:1px solid var(--border)">'+
-        '<td style="padding:7px;font-weight:600">'+(idx+1)+'</td>'+
-        '<td style="padding:7px;text-align:center;color:var(--text-2)">'+par+'</td>'+
-        '<td style="padding:7px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
-        '<td style="padding:7px;text-align:center;color:var(--gold);font-weight:600" id="my-extra-'+idx+'">–</td>'+
-        '<td style="padding:5px;text-align:center"><input type="number" min="1" max="15" class="my-hole-inp" data-idx="'+idx+'" value="'+existingGross+'" oninput="recalcMyScorecard()" style="width:52px;margin:0;padding:6px;text-align:center;font-size:14px"></td>'+
-        '<td style="padding:7px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-hole-result-'+idx+'">–</td>'+
-      '</tr>';
-    });
-    h += '<tr style="border-top:2px solid var(--border);background:var(--surface2)">'+
-      '<td colspan="4" style="padding:8px;font-weight:700">Totalt</td>'+
-      '<td style="padding:8px;text-align:center;font-weight:700" id="my-total-brutto">–</td>'+
-      '<td style="padding:8px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-total-result">–</td>'+
-    '</tr>';
-    h += '</tbody></table></div>';
-    h += '<div id="my-scorecard-summary" style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px"></div>';
-    h += '<input type="hidden" id="my-score" value="'+(existing?existing.score:'')+'">';
-    h += '<input type="hidden" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'">';
+    h += renderMyScoreEditTableHTML(ctx);
+    if(ctx.originallyComplete) {
+      h += '<div class="row" style="justify-content:flex-end;margin:-4px 0 10px">'+
+        '<button class="btn btn-sm" onclick="switchMyScoreMode(\'review\')"><i class="ti ti-x"></i> Avbryt redigering</button>'+
+      '</div>';
+    }
   }
 
   h += '<hr class="divider">';
@@ -3330,15 +3382,99 @@ function openMyScoreSubmission(ei) {
   h += '<p id="my-dispens-note" style="font-size:12px;color:var(--gold);margin-bottom:8px;display:'+(existing&&existing.dispens?'block':'none')+'"><i class="ti ti-info-circle"></i> Ditt resultat måste då godkännas av admin istället.</p>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
     '<button class="btn" onclick="closeModal()">Avbryt</button>'+
-    '<button class="btn btn-primary" onclick="submitMyScore('+ei+','+myPi+')"><i class="ti ti-send"></i> Skicka in</button>'+
+    '<button class="btn btn-primary" onclick="submitMyScore('+ctx.ei+','+ctx.myPi+')"><i class="ti ti-send"></i> Skicka in</button>'+
   '</div>';
-  showModal(h, hasScorecard, true);
-  if(hasScorecard) setTimeout(function(){ recalcMyScorecard(); }, 30);
+
+  document.getElementById('my-score-modal-body').innerHTML = h;
+  if(ctx.hasScorecard && ctx.mode==='edit') setTimeout(function(){ recalcMyScorecard(); }, 30);
+}
+
+// Läsvänlig granskning av ett komplett scorekort (antingen redan inskickat, eller
+// helt förifyllt från livescoring men ännu inte skickat in). Inga redigerbara fält.
+function renderMyScoreReviewTableHTML(ctx) {
+  var rows = '';
+  var totalBrutto = 0, totalResult = 0;
+  var hasPutts = ctx.sourcePutts && ctx.sourcePutts.some(function(v){ return v!=null; });
+  var totalPutts = 0;
+  for(var idx=0; idx<ctx.totalHoles; idx++) {
+    var par = ctx.holePars[idx];
+    var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+    var gross = ctx.sourceHoles[idx];
+    var putt = ctx.sourcePutts ? ctx.sourcePutts[idx] : null;
+    var strokesRecv = computeHcpStrokesForHole(ctx.sourceShcp, hcpIdx, ctx.totalHoles);
+    var result = computeScorecardHoleResult(gross, par, hcpIdx, ctx.sourceShcp, ctx.totalHoles, ctx.isStab);
+    totalBrutto += gross; totalResult += result; if(putt!=null) totalPutts += putt;
+    rows += '<tr style="border-top:1px solid var(--border)">'+
+      '<td style="padding:6px;font-weight:600">'+(idx+1)+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-2)">'+par+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--gold);font-weight:600">'+(strokesRecv>0?'+'+strokesRecv:'0')+'</td>'+
+      '<td style="padding:6px;text-align:center;font-weight:700">'+gross+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-3)">'+(putt!=null?putt:'–')+'</td>'+
+      '<td style="padding:6px;text-align:center;font-weight:700;color:var(--green-dark)">'+result+'</td>'+
+    '</tr>';
+  }
+  return '<div class="field" style="max-width:160px;margin-bottom:10px"><label>Spelhandicap (SHCP)</label>'+
+      '<div style="padding:9px 10px;background:var(--surface2);border-radius:8px;font-weight:700">'+ctx.sourceShcp+'</div></div>'+
+    '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
+      '<th style="padding:6px;text-align:left">Hål</th><th style="padding:6px;text-align:center">Par</th><th style="padding:6px;text-align:center">Hcp</th>'+
+      '<th style="padding:6px;text-align:center">Extra<br>slag</th><th style="padding:6px;text-align:center">Slag</th><th style="padding:6px;text-align:center">Puttar</th>'+
+      '<th style="padding:6px;text-align:center">'+(ctx.isStab?'Poäng':'Netto')+'</th>'+
+    '</tr></thead><tbody>'+rows+
+    '<tr style="border-top:2px solid var(--border);background:var(--surface2);font-weight:700">'+
+      '<td colspan="4" style="padding:8px">Totalt</td>'+
+      '<td style="padding:8px;text-align:center">'+totalBrutto+'</td>'+
+      '<td style="padding:8px;text-align:center;color:var(--text-3)">'+(hasPutts?totalPutts:'–')+'</td>'+
+      '<td style="padding:8px;text-align:center;color:var(--green-dark)">'+totalResult+'</td>'+
+    '</tr></tbody></table></div>';
+}
+
+// Den redigerbara scorekorts-vyn (samma tabell som tidigare varit den enda vyn),
+// nu med en frivillig Puttar-kolumn och förifylld från livescoring/tidigare inskick.
+function renderMyScoreEditTableHTML(ctx) {
+  var h = '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="recalcMyScorecard()"></div>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt. Puttar är frivilligt.</p>';
+  h += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h += '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
+    '<th style="padding:6px;text-align:left">Hål</th>'+
+    '<th style="padding:6px;text-align:center">Par</th>'+
+    '<th style="padding:6px;text-align:center">Hcp</th>'+
+    '<th style="padding:6px;text-align:center">Extra<br>slag</th>'+
+    '<th style="padding:6px;text-align:center">Slag</th>'+
+    '<th style="padding:6px;text-align:center">Puttar</th>'+
+    '<th style="padding:6px;text-align:center">'+(ctx.isStab?'Poäng':'Netto')+'</th>'+
+  '</tr></thead><tbody>';
+  ctx.holePars.forEach(function(par, idx){
+    var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+    var existingGross = (ctx.sourceHoles && ctx.sourceHoles[idx]!=null) ? ctx.sourceHoles[idx] : '';
+    var existingPutt = (ctx.sourcePutts && ctx.sourcePutts[idx]!=null) ? ctx.sourcePutts[idx] : '';
+    h += '<tr style="border-top:1px solid var(--border)">'+
+      '<td style="padding:7px;font-weight:600">'+(idx+1)+'</td>'+
+      '<td style="padding:7px;text-align:center;color:var(--text-2)">'+par+'</td>'+
+      '<td style="padding:7px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
+      '<td style="padding:7px;text-align:center;color:var(--gold);font-weight:600" id="my-extra-'+idx+'">–</td>'+
+      '<td style="padding:5px;text-align:center"><input type="number" min="1" max="15" class="my-hole-inp" data-idx="'+idx+'" value="'+existingGross+'" oninput="recalcMyScorecard()" style="width:52px;margin:0;padding:6px;text-align:center;font-size:14px"></td>'+
+      '<td style="padding:5px;text-align:center"><input type="number" min="0" max="10" class="my-putt-inp" data-idx="'+idx+'" value="'+existingPutt+'" style="width:44px;margin:0;padding:6px;text-align:center;font-size:13px;color:var(--text-2)"></td>'+
+      '<td style="padding:7px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-hole-result-'+idx+'">–</td>'+
+    '</tr>';
+  });
+  h += '<tr style="border-top:2px solid var(--border);background:var(--surface2)">'+
+    '<td colspan="4" style="padding:8px;font-weight:700">Totalt</td>'+
+    '<td style="padding:8px;text-align:center;font-weight:700" id="my-total-brutto">–</td>'+
+    '<td></td>'+
+    '<td style="padding:8px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-total-result">–</td>'+
+  '</tr>';
+  h += '</tbody></table></div>';
+  h += '<div id="my-scorecard-summary" style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px"></div>';
+  h += '<input type="hidden" id="my-score" value="'+(ctx.existing?ctx.existing.score:'')+'">';
+  h += '<input type="hidden" id="my-brutto" value="'+(ctx.existing&&ctx.existing.brutto!=null?ctx.existing.brutto:'')+'">';
+  return h;
 }
 
 function recalcMyScorecard() {
   var ctx = _myScorecardCtx;
-  if(!ctx) return;
+  if(!ctx || ctx.mode!=='edit' || !ctx.hasScorecard) return;
   var shcpEl = document.getElementById('my-shcp');
   var shcp = Math.round(parseFloat(shcpEl.value)||0);
 
@@ -3412,11 +3548,22 @@ function recalcMyNet() {
 function submitMyScore(ei, pi) {
   var t = getTour(), e = t.events[ei];
   var ctx = _myScorecardCtx;
-  var shcpEl = document.getElementById('my-shcp');
-  var shcp = shcpEl && shcpEl.value!=='' ? Math.round(parseFloat(shcpEl.value)) : null;
-  var holes = null;
+  var shcp, holes = null, putts = null, score, brutto = null;
 
-  if(ctx) {
+  if(ctx && ctx.hasScorecard && ctx.mode==='review') {
+    // Skickas in direkt från granskningen, oredigerat - inga DOM-inputs att läsa från.
+    shcp = ctx.sourceShcp;
+    holes = ctx.sourceHoles.slice();
+    putts = ctx.sourcePutts ? ctx.sourcePutts.slice() : null;
+    brutto = 0; score = 0;
+    holes.forEach(function(gross, idx){
+      brutto += gross;
+      var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+      score += computeScorecardHoleResult(gross, ctx.holePars[idx], hcpIdx, shcp, ctx.totalHoles, ctx.isStab);
+    });
+  } else if(ctx && ctx.hasScorecard) {
+    var shcpEl = document.getElementById('my-shcp');
+    shcp = shcpEl && shcpEl.value!=='' ? Math.round(parseFloat(shcpEl.value)) : null;
     var inputs = document.querySelectorAll('.my-hole-inp');
     holes = new Array(ctx.totalHoles).fill(null);
     var filled = 0;
@@ -3426,25 +3573,38 @@ function submitMyScore(ei, pi) {
       if(!isNaN(v)) { holes[idx] = v; filled++; }
     });
     if(filled < ctx.totalHoles) { alert('Fyll i slag för alla '+ctx.totalHoles+' hål innan du skickar in.'); return; }
+    putts = new Array(ctx.totalHoles).fill(null);
+    document.querySelectorAll('.my-putt-inp').forEach(function(inp){
+      var idx = parseInt(inp.getAttribute('data-idx'));
+      var v = parseInt(inp.value);
+      if(!isNaN(v)) putts[idx] = v;
+    });
+    if(putts.every(function(v){ return v==null; })) putts = null;
     recalcMyScorecard(); // säkerställ att totalerna är uppdaterade innan vi läser ut dem
+    var scoreEl = document.getElementById('my-score');
+    score = parseFloat(scoreEl.value);
+    var bruttoEl = document.getElementById('my-brutto');
+    brutto = (bruttoEl && bruttoEl.value!=='') ? parseFloat(bruttoEl.value) : null;
+  } else {
+    var shcpEl2 = document.getElementById('my-shcp');
+    shcp = shcpEl2 && shcpEl2.value!=='' ? Math.round(parseFloat(shcpEl2.value)) : null;
+    var scoreEl2 = document.getElementById('my-score');
+    score = parseFloat(scoreEl2.value);
+    if(isNaN(score)) { alert('Ange ett resultat.'); return; }
+    var bruttoEl2 = document.getElementById('my-brutto');
+    brutto = (bruttoEl2 && bruttoEl2.value!=='') ? parseFloat(bruttoEl2.value) : null;
   }
 
-  var scoreEl = document.getElementById('my-score');
-  var score = parseFloat(scoreEl.value);
-  if(isNaN(score)) { alert('Ange ett resultat.'); return; }
   var markerSel = document.getElementById('my-marker');
   var dispensChk = document.getElementById('my-dispens');
   var dispens = dispensChk.checked;
   var markerPi = (!dispens && markerSel.value!=='') ? parseInt(markerSel.value) : null;
   if(!dispens && markerPi==null) { alert('Välj en markör, eller kryssa i att du har dispens.'); return; }
 
-  var bruttoEl = document.getElementById('my-brutto');
   if(!e.scoreSubmissions) e.scoreSubmissions = [];
   var existing = e.scoreSubmissions.find(function(s){ return s.pi===pi; });
   var entry = {
-    pi: pi, score: score,
-    brutto: (bruttoEl && bruttoEl.value!=='') ? parseFloat(bruttoEl.value) : null,
-    shcp: shcp, holes: holes,
+    pi: pi, score: score, brutto: brutto, shcp: shcp, holes: holes, holePutts: putts,
     markerPi: markerPi, dispens: dispens,
     markerApproved: false, adminApproved: false,
     submittedAt: new Date().toISOString()
@@ -3459,6 +3619,178 @@ function submitMyScore(ei, pi) {
   alert(dispens
     ? 'Resultat inskickat. Väntar på godkännande av admin.'
     : 'Resultat inskickat. Väntar på godkännande av '+(t.players[markerPi]?t.players[markerPi].name:'din markör')+'.');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGISTRERA FÖR HELA BOLLEN - en spelare (t.ex. den som håller poäng åt
+// gruppen på mobilen) kan fylla i och skicka in det OFFICIELLA resultatet
+// (samma e.scoreSubmissions som "Mitt resultat" använder, dvs det som räknas
+// i OoM/Top3/handicaphistorik) för upp till fyra spelare i en boll samtidigt,
+// istället för att var och en måste göra det själv. Om en livescoring-runda
+// redan finns för bollen förifylls hål-för-hål-resultaten därifrån.
+//
+// Godkännande: är man själv med i bollen och matar in åt de andra räknas det
+// som att man agerar markör för dem - deras resultat markeras direkt som
+// markör-godkänt. Sitt EGET resultat i samma inmatning kan man inte godkänna
+// själv (samma princip som dispens i "Mitt resultat") - det går till admin
+// för godkännande. Är man inte med i bollen alls (t.ex. admin som fyller in
+// åt en grupp som inte fyllt i själva) går ALLA resultat till admin-kö, men
+// godkänns direkt om det är admin själv som matar in.
+// ═══════════════════════════════════════════════════════════════════════════
+var _bulkScoreCtx = null;
+
+function openBulkScoreSubmission(eid, gIdx) {
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id === eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  if(!g.playerPis || !g.playerPis.length) { alert('Bollen saknar spelare.'); return; }
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+  if(!course || !course.holePars || !course.holePars.length) {
+    alert('Banan "'+(e.course||'Okänd')+'" saknar scorekortsdata (par per hål) i Bandatabasen. Lägg till det innan du kan registrera för hela bollen.');
+    return;
+  }
+  showModal('<div id="bulk-score-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, gIdx)).get().then(function(doc){
+    renderBulkScoreForm(eid, gIdx, course, doc.exists ? doc.data() : null);
+  }).catch(function(){
+    renderBulkScoreForm(eid, gIdx, course, null);
+  });
+}
+
+function renderBulkScoreForm(eid, gIdx, course, liveData) {
+  var el = document.getElementById('bulk-score-modal-body');
+  if(!el) return;
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id === eid; });
+  var g = e.teeGroups[gIdx];
+  var isStab = e.type === 'stableford';
+  var myPi = getMyPi(t);
+  var isMember = g.playerPis.indexOf(myPi) >= 0;
+  var totalHoles = course.holePars.length;
+
+  var players = g.playerPis.map(function(pi){
+    var p = t.players[pi];
+    var existingSub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+    var liveEntry = (liveData && liveData.players) ? liveData.players.filter(function(x){ return x.pi===pi; })[0] : null;
+    var shcp = (existingSub && existingSub.shcp!=null) ? existingSub.shcp
+      : (liveEntry && liveEntry.shcp!=null) ? liveEntry.shcp
+      : (p && p.hcp!=null ? Math.round(p.hcp) : 0);
+    var liveHoles = (liveData && liveData.scores) ? liveData.scores[pi] : null;
+    var existingHoles = (existingSub && existingSub.holes) ? existingSub.holes : null;
+    return { pi: pi, name: p?p.name:'?', shcp: shcp, liveHoles: liveHoles, existingHoles: existingHoles };
+  });
+
+  _bulkScoreCtx = { eid: eid, gIdx: gIdx, isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex||[], totalHoles: totalHoles, playerPis: g.playerPis };
+
+  var shcpRow = '<tr><th style="padding:6px;text-align:left;position:sticky;left:0;background:var(--surface)">SHCP</th>'+players.map(function(pl){
+    return '<th style="padding:4px"><input type="number" step="1" class="bulk-shcp-inp" data-pi="'+pl.pi+'" value="'+pl.shcp+'" style="width:52px;margin:0;padding:5px;text-align:center;font-size:12px" oninput="recalcBulkScore()"></th>';
+  }).join('')+'</tr>';
+
+  var headerRow = '<tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
+    '<th style="padding:6px;text-align:left;position:sticky;left:0;background:var(--surface)">Hål</th><th style="padding:4px;text-align:center">Par</th>'+
+    players.map(function(pl){ return '<th style="padding:4px;text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(pl.name)+'">'+esc(pl.name)+'</th>'; }).join('')+
+  '</tr>';
+
+  var bodyRows = '';
+  for(var idx=0; idx<totalHoles; idx++){
+    var par = course.holePars[idx];
+    bodyRows += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px;font-weight:600;position:sticky;left:0;background:var(--surface)">'+(idx+1)+'</td><td style="padding:6px;text-align:center;color:var(--text-2)">'+par+'</td>';
+    players.forEach(function(pl){
+      var prefill = (pl.liveHoles && typeof pl.liveHoles[idx+1]==='number') ? pl.liveHoles[idx+1]
+        : (pl.existingHoles && pl.existingHoles[idx]!=null) ? pl.existingHoles[idx] : '';
+      bodyRows += '<td style="padding:4px;text-align:center"><input type="number" min="1" max="15" class="bulk-hole-inp" data-pi="'+pl.pi+'" data-idx="'+idx+'" value="'+prefill+'" oninput="recalcBulkScore()" style="width:46px;margin:0;padding:5px;text-align:center;font-size:13px"></td>';
+    });
+    bodyRows += '</tr>';
+  }
+
+  var totalRow = '<tr style="border-top:2px solid var(--border);background:var(--surface2);font-weight:700"><td style="padding:6px" colspan="2">'+(isStab?'Poäng':'Netto')+'</td>'+
+    players.map(function(pl){ return '<td style="padding:6px;text-align:center" id="bulk-total-'+pl.pi+'">–</td>'; }).join('')+
+  '</tr>';
+
+  var h = '<h3><i class="ti ti-users"></i> Registrera resultat – hela bollen</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">'+esc(e.name)+(liveData?' · förifyllt från livescoring':'')+'</p>';
+  h += '<div style="overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead style="position:sticky;top:0;background:var(--surface);z-index:1">'+shcpRow+headerRow+'</thead><tbody>'+bodyRows+totalRow+'</tbody></table></div>';
+
+  h += isMember
+    ? '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px"><i class="ti ti-info-circle"></i> Eftersom du är med i bollen räknas övriga spelares resultat som markör-godkända direkt (du agerar markör för dem). Ditt eget resultat i samma inmatning måste ändå godkännas av admin.</p>'
+    : '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px"><i class="ti ti-info-circle"></i> Du är inte med i bollen - alla resultat går till admin-godkännande'+(isAdmin()?' (godkänns direkt eftersom du är admin).':'.')+'</p>';
+
+  h += '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="submitBulkScore()"><i class="ti ti-send"></i> Skicka in för alla</button></div>';
+
+  el.innerHTML = h;
+  setTimeout(recalcBulkScore, 30);
+}
+
+function recalcBulkScore() {
+  var ctx = _bulkScoreCtx;
+  if(!ctx) return;
+  var shcpByPi = {};
+  document.querySelectorAll('.bulk-shcp-inp').forEach(function(inp){ shcpByPi[inp.getAttribute('data-pi')] = Math.round(parseFloat(inp.value)||0); });
+  ctx.playerPis.forEach(function(pi){
+    var total = 0, filled = 0;
+    document.querySelectorAll('.bulk-hole-inp[data-pi="'+pi+'"]').forEach(function(inp){
+      var idx = parseInt(inp.getAttribute('data-idx'));
+      var gross = parseInt(inp.value);
+      if(isNaN(gross)) return;
+      filled++;
+      var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+      var strokesRecv = computeHcpStrokesForHole(shcpByPi[pi]||0, hcpIdx, ctx.totalHoles);
+      total += ctx.isStab ? computeHoleStablefordPoints(gross, ctx.holePars[idx], strokesRecv) : (gross - strokesRecv);
+    });
+    var totalEl = document.getElementById('bulk-total-'+pi);
+    if(totalEl) totalEl.textContent = filled ? total : '–';
+  });
+}
+
+function submitBulkScore() {
+  var ctx = _bulkScoreCtx;
+  if(!ctx) return;
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id === ctx.eid; });
+  if(!e) return;
+  var myPi = getMyPi(t);
+  var isMember = ctx.playerPis.indexOf(myPi) >= 0;
+  if(!e.scoreSubmissions) e.scoreSubmissions = [];
+
+  var incomplete = [];
+  ctx.playerPis.forEach(function(pi){
+    var shcpInp = document.querySelector('.bulk-shcp-inp[data-pi="'+pi+'"]');
+    var shcp = shcpInp ? Math.round(parseFloat(shcpInp.value)||0) : 0;
+    var holes = new Array(ctx.totalHoles).fill(null);
+    var filled = 0, brutto = 0, score = 0;
+    document.querySelectorAll('.bulk-hole-inp[data-pi="'+pi+'"]').forEach(function(inp){
+      var idx = parseInt(inp.getAttribute('data-idx'));
+      var gross = parseInt(inp.value);
+      if(isNaN(gross)) return;
+      holes[idx] = gross; filled++; brutto += gross;
+      var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
+      var strokesRecv = computeHcpStrokesForHole(shcp, hcpIdx, ctx.totalHoles);
+      score += ctx.isStab ? computeHoleStablefordPoints(gross, ctx.holePars[idx], strokesRecv) : (gross - strokesRecv);
+    });
+    if(filled < ctx.totalHoles) { incomplete.push((t.players[pi]&&t.players[pi].name)||'?'); return; }
+
+    var isSelf = (pi === myPi);
+    var entry = { pi: pi, score: score, brutto: brutto, shcp: shcp, holes: holes, submittedAt: new Date().toISOString() };
+    if(isMember && !isSelf) {
+      entry.markerPi = myPi; entry.dispens = false; entry.markerApproved = true; entry.adminApproved = false;
+    } else {
+      entry.markerPi = null; entry.dispens = true; entry.markerApproved = false; entry.adminApproved = isAdmin();
+    }
+
+    var existing = e.scoreSubmissions.find(function(s){ return s.pi===pi; });
+    if(existing) { for(var k in entry) existing[k] = entry[k]; }
+    else e.scoreSubmissions.push(entry);
+  });
+
+  if(incomplete.length) { alert('Fyll i slag på alla '+ctx.totalHoles+' hål för: '+incomplete.join(', ')); return; }
+
+  save();
+  closeModal();
+  _bulkScoreCtx = null;
+  renderEvents();
+  renderHomeApprovalWidget();
+  alert('Resultat inskickat för hela bollen!');
 }
 
 // Godkänn ett inskickat resultat, antingen som vald markör eller som admin (admin kan godkänna åt andra).
@@ -4159,6 +4491,7 @@ function buildDateGroupingHTML(e, t) {
           ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
           : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
         html += '<button class="btn btn-sm btn-primary" onclick="openLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-scoreboard"></i> Livescoring</button>';
+        html += '<button class="btn btn-sm" onclick="openBulkScoreSubmission(\''+e.id+'\','+gIdx+')"><i class="ti ti-users"></i> Registrera för bollen</button>';
         if(isAdmin()) html += '<button class="btn btn-sm" title="Nollställ livescoring för bollen" onclick="resetLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-refresh-dot"></i></button>';
         if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
         html += '</div>';
@@ -4579,7 +4912,10 @@ function saveResults(i) {
     var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
     // Bevara hål-för-hål-slag från en godkänd spelarinskickning, så statistik (birdies, hio m.m.) går att räkna senare.
     var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
-    if(sub && sub.holes && isSubmissionApproved(sub)) entry.holes = sub.holes;
+    if(sub && sub.holes && isSubmissionApproved(sub)) {
+      entry.holes = sub.holes;
+      if(sub.holePutts) entry.holePutts = sub.holePutts;
+    }
     if(e.isFinal) {
       var hs = getHeadStart(t,e,pi);
       entry.headStart = hs;
@@ -5888,12 +6224,12 @@ function openLiveScoring(eid, gIdx) {
         var p = t.players[pi];
         return { pi: pi, name: p ? p.name : '?', shcp: (p && p.hcp != null) ? Math.round(p.hcp) : 0 };
       });
-      var scores = {};
-      players.forEach(function(p){ scores[p.pi] = {}; });
+      var scores = {}, putts = {};
+      players.forEach(function(p){ scores[p.pi] = {}; putts[p.pi] = {}; });
       var initData = {
         eventId: eid, teeGroupIdx: gIdx, courseName: e.course || '',
         holePars: course.holePars, holeHcpIndex: course.holeHcpIndex || [],
-        players: players, scores: scores, shcpConfirmed: false, updatedAt: Date.now()
+        players: players, scores: scores, putts: putts, shcpConfirmed: false, updatedAt: Date.now()
       };
       ref.set(initData).then(function(){ subscribeLiveScoring(ref); });
     } else {
@@ -5992,8 +6328,11 @@ function renderLiveGridHTML() {
 
   var rows = d.players.map(function(p){
     var sc = d.scores[p.pi] || {};
+    var pu = (d.putts && d.putts[p.pi]) || {};
     var val = sc[hole];
+    var puttVal = pu[hole];
     var inpVal = (val === undefined || val === null) ? '' : val;
+    var puttInpVal = (puttVal === undefined || puttVal === null) ? '' : puttVal;
     var lbl = (typeof val === 'number') ? liveScoreLabel(val, par) : '';
     var extraStrokes = computeHcpStrokesForHole(p.shcp||0, idxHcp, totalHoles);
     var total = 0, played = 0;
@@ -6005,7 +6344,8 @@ function renderLiveGridHTML() {
       '</div>'+
       '<div style="width:44px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
       '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
-      '<input type="number" min="1" max="15" value="'+inpVal+'" style="width:60px;margin:0;padding:8px 4px;text-align:center;font-size:17px;font-weight:700" onchange="onLiveScoreInput('+p.pi+',this.value)">'+
+      '<input type="number" min="1" max="15" value="'+inpVal+'" title="Slag" style="width:60px;margin:0;padding:8px 4px;text-align:center;font-size:17px;font-weight:700" onchange="onLiveScoreInput('+p.pi+',this.value)">'+
+      '<input type="number" min="0" max="10" value="'+puttInpVal+'" title="Puttar (frivilligt)" placeholder="putt" style="width:52px;margin:0;padding:8px 2px;text-align:center;font-size:13px;color:var(--text-2)" onchange="onLivePuttInput('+p.pi+',this.value)">'+
     '</div>';
   }).join('');
 
@@ -6023,7 +6363,7 @@ function renderLiveGridHTML() {
       '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:60px;text-align:center">Slag</div>'+
+      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:60px;text-align:center">Slag</div><div style="width:52px;text-align:center">Puttar</div>'+
     '</div>'+
     rows+
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
@@ -6052,6 +6392,22 @@ function onLiveScoreInput(pi, rawValue) {
   liveScoringRef().update(update).catch(function(err){
     console.error('Livescoring: kunde inte spara', err);
     alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
+  });
+}
+
+// Puttar är frivilligt och blockerar aldrig något - sparas separat från slag,
+// och används senare för puttstatistik på spelarprofilen och som underlag för
+// side bets av typen "Minst antal puttar".
+function onLivePuttInput(pi, rawValue) {
+  if(!_liveScoring.data) return;
+  var hole = _liveScoring.activeHole;
+  var update = {};
+  var n = parseInt(rawValue, 10);
+  update['putts.'+pi+'.'+hole] = isNaN(n) ? firebase.firestore.FieldValue.delete() : n;
+  update.updatedAt = Date.now();
+  liveScoringRef().update(update).catch(function(err){
+    console.error('Livescoring: kunde inte spara puttar', err);
+    alert('Kunde inte spara puttarna. Kontrollera internetanslutningen och försök igen.');
   });
 }
 
@@ -6325,6 +6681,64 @@ function buildHoleStatsHTML(stats, title) {
   return h;
 }
 
+// Puttstatistik - bygger på "holePutts" som sparas dels via livescoring (frivilligt
+// per hål), dels via "Mitt resultat"/"Registrera för bollen", och som bevaras till
+// e.results när tävlingen stängs (se closeEvent). Frivilligt fält, så bara ronder
+// där puttar faktiskt fyllts i räknas med.
+function computePlayerPuttingStats(username) {
+  var totalPutts = 0, totalHolesWithPutts = 0, roundsWithPutts = 0;
+  var bestRoundAvg = null;
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    var pi = players.findIndex(function(p){ return p && p.username===username; });
+    if(pi < 0) return;
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || !e.results) return;
+      var r = e.results.find(function(x){ return x.pi===pi; });
+      if(!r || !r.holePutts) return;
+      var roundPutts = 0, roundHoles = 0;
+      r.holePutts.forEach(function(pt){
+        if(typeof pt === 'number') { totalPutts += pt; totalHolesWithPutts++; roundPutts += pt; roundHoles++; }
+      });
+      if(roundHoles) {
+        roundsWithPutts++;
+        var avg = roundPutts / roundHoles;
+        if(bestRoundAvg == null || avg < bestRoundAvg) bestRoundAvg = avg;
+      }
+    });
+  });
+  return {
+    hasData: totalHolesWithPutts > 0,
+    avgPerHole: totalHolesWithPutts ? (totalPutts/totalHolesWithPutts) : null,
+    totalPutts: totalPutts, totalHolesWithPutts: totalHolesWithPutts,
+    roundsWithPutts: roundsWithPutts, bestRoundAvg: bestRoundAvg
+  };
+}
+
+function buildPuttingStatsHTML(stats) {
+  if(!stats.hasData) return '';
+  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-golf"></i> Puttstatistik</div>';
+  h += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Baserat på '+stats.roundsWithPutts+' rond'+(stats.roundsWithPutts===1?'':'er')+' med registrerade puttar ('+stats.totalHolesWithPutts+' hål)</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:2px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'+
+    '<span style="font-size:13px;color:var(--text-2)">Snitt puttar/hål</span>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+stats.avgPerHole.toFixed(2)+'</span>'+
+  '</div>';
+  if(stats.bestRoundAvg != null) {
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="font-size:13px;color:var(--text-2)">Bästa rond (snitt/hål)</span>'+
+      '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+stats.bestRoundAvg.toFixed(2)+'</span>'+
+    '</div>';
+  }
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0">'+
+    '<span style="font-size:13px;color:var(--text-2)">Totalt antal puttar</span>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--text)">'+stats.totalPutts+'</span>'+
+  '</div>';
+  h += '</div></div>';
+  return h;
+}
+
 function buildProfileHTML(pi){
   var t=getTour(), p=t.players[pi]; if(!p) return '';
   var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
@@ -6474,6 +6888,7 @@ function buildProfileHTML(pi){
     '</div>'+
     buildCareerStatsHTML(p.username)+
     buildHoleStatsHTML(computePlayerHoleStats(p.username), 'Hålstatistik')+
+    buildPuttingStatsHTML(computePlayerPuttingStats(p.username))+
     buildSideBetStatsHTML(computePlayerSideBetStats(p.username), 'Side bets')+
     buildPlayerGolfMapStatsHTML(p.username, p.name)+
     swHtml+
@@ -9513,6 +9928,21 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (83)',
+    items: [
+      { type: 'new', text: '"Mitt resultat" förifylls nu automatiskt från livescoringen om du har spelat en boll med livescoring för deltävlingen - slipper skriva in samma resultat två gånger.' },
+      { type: 'new', text: 'Nytt granskningsläge i "Mitt resultat": är scorekortet redan komplett (antingen förifyllt från livescoring, eller redan inskickat) visas det som en läsvänlig sammanställning av alla 18 hål istället för tomma inmatningsfält - med en "Redigera scorekort"-knapp om något behöver rättas. Är scorekortet ofullständigt går man som förut direkt till inmatningsläget.' },
+      { type: 'new', text: 'Frivilligt "Puttar"-fält tillagt både i livescoringen (bredvid slag-fältet per hål) och i "Mitt resultat"/"Registrera för bollen" (egen kolumn i scorekortet). Blockerar aldrig inskickning - helt valfritt att fylla i. Puttdata bevaras till den permanenta resultathistoriken när en tävling stängs.' },
+      { type: 'new', text: 'Ny puttstatistik på spelarprofilen (snitt puttar/hål, bästa rond, totalt antal puttar), byggd på den frivilliga puttdatan. Underlättar också för admin att avgöra side bets av typen "Minst antal puttar", som redan fanns som valbar typ.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (82)',
+    items: [
+      { type: 'new', text: 'Ny funktion "Registrera för bollen" - hittas bredvid "Livescoring" i bollistan under en deltävling. Låter en person (t.ex. den som håller poäng åt gruppen på mobilen) fylla i och skicka in det OFFICIELLA resultatet (samma som räknas i Top 3/OoM/handicaphistorik) för alla upp till fyra spelare i bollen samtidigt, i en gemensam tabell med en kolumn per spelare - istället för att varje spelare måste göra det själv, en och en, som tidigare varit enda vägen. Finns redan en livescoring-runda för bollen förifylls hål-för-hål-resultaten automatiskt därifrån. Är man själv med i bollen räknas övriga spelares resultat som markör-godkända direkt (man agerar markör för dem) - men sitt eget resultat i samma inmatning måste ändå godkännas av admin, för att förhindra självgodkännande.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (81)',
     items: [
       { type: 'fixed', text: 'Kryssrutorna för att skapa en gemensam boll visades bara för spelare som helt saknade boll ("Ej tilldelade"). Hade alla redan fått varsin egen boll (t.ex. via "Skapa bollar") syntes inga kryssrutor alls - bara "Välj boll"-listan med de befintliga en-spelar-bollarna. Nu visas kryssrutor för ALLA anmälda spelare för datumet, oavsett om de redan har en boll (märks ut med "egen boll" / "i boll med X" / "ej tilldelad"). Väljer man en spelare som redan är i en boll flyttas hen dit ur sin gamla boll, som tas bort om den blir tom - så flera 1-spelar-bollar enkelt kan slås ihop till en gemensam.' }
@@ -11043,6 +11473,7 @@ function buildGlobalPlayerProfileHTML(username) {
 
   h += buildCareerStatsHTML(u.username);
   h += buildHoleStatsHTML(computePlayerHoleStats(u.username), 'Hålstatistik');
+  h += buildPuttingStatsHTML(computePlayerPuttingStats(u.username));
   h += buildSideBetStatsHTML(computePlayerSideBetStats(u.username), 'Side bets');
 
   // Styrkor och svagheter
