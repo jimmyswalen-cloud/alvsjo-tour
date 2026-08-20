@@ -4599,6 +4599,17 @@ function setTeeGroupTime(eid, gIdx, time) {
   save();
 }
 
+// Raderar (best-effort, ingen bekräftelse behövs) livescoring-dokument som hörde
+// till bollar som just upplösts/tömts - annars blir de kvarliggande "spöken" i
+// databasen som (utan filtreringen i currentLiveScoringDocIds) skulle kunna dyka
+// upp igen, t.ex. om samma eventId+id-kombination någonsin återanvänds.
+function cleanupOrphanedLiveScoringDocs(eid, removedGroups) {
+  removedGroups.forEach(function(g){
+    if(!g.id) return;
+    LIVE_SCORING_COL.doc(liveScoringDocId(eid, g.id)).delete().catch(function(){});
+  });
+}
+
 function createOwnTeeGroup(ei, pi, date) {
   var t = getTour(), e = t.events[ei];
   var p = t.players[pi];
@@ -4611,7 +4622,9 @@ function createOwnTeeGroup(ei, pi, date) {
   e.teeGroups.forEach(function(g){
     if(g.date===date) g.playerPis = g.playerPis.filter(function(x){ return x!==pi; });
   });
+  var emptied = e.teeGroups.filter(function(g){ return g.playerPis.length === 0; });
   e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
+  cleanupOrphanedLiveScoringDocs(e.id, emptied);
   var timeInp = document.getElementById('new-boll-time-'+pi);
   var time = timeInp ? timeInp.value : '';
   e.teeGroups.push({ id: 'tg_'+uid(), date: date, time: time, playerPis: [pi] });
@@ -4636,7 +4649,9 @@ function createTeeGroupFromSelection(eid, date) {
   e.teeGroups.forEach(function(g){
     if(g.date===date) g.playerPis = g.playerPis.filter(function(pi){ return pis.indexOf(pi)<0; });
   });
+  var emptied = e.teeGroups.filter(function(g){ return g.playerPis.length === 0; });
   e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
+  cleanupOrphanedLiveScoringDocs(e.id, emptied);
   var dateSafe = date.replace(/[^0-9]/g,'');
   var timeInp = document.getElementById('new-group-time-'+dateSafe);
   var time = timeInp ? timeInp.value : '';
@@ -4657,7 +4672,10 @@ function leaveTeeGroup(eid, gIdx, pi, ei) {
     return;
   }
   e.teeGroups[gIdx].playerPis = e.teeGroups[gIdx].playerPis.filter(function(x){ return x!==pi; });
-  if(!e.teeGroups[gIdx].playerPis.length) e.teeGroups.splice(gIdx,1);
+  if(!e.teeGroups[gIdx].playerPis.length) {
+    cleanupOrphanedLiveScoringDocs(e.id, [e.teeGroups[gIdx]]);
+    e.teeGroups.splice(gIdx,1);
+  }
   save();
   refreshRegisterModal(ei);
 }
@@ -4666,6 +4684,7 @@ function deleteTeeGroup(eid, gIdx) {
   var t = getTour();
   var e = t.events.find(function(x){return x.id===eid;});
   if(!e) return;
+  cleanupOrphanedLiveScoringDocs(e.id, [e.teeGroups[gIdx]]);
   e.teeGroups.splice(gIdx,1);
   save();
   var ei = t.events.indexOf(e);
@@ -6486,6 +6505,19 @@ function onLivePuttInput(pi, rawValue) {
 // och visar en gemensam, live-uppdaterad resultatlista.
 var _liveFollow = { eid: null, unsub: null, docs: [] };
 
+// Bygger en uppsättning med de doc-id:n som faktiskt hör till EN boll som finns
+// kvar i e.teeGroups just nu. Används för att filtrera bort "spöken" - övergivna
+// livescoring-dokument som blev kvar i databasen efter att en boll slagits ihop,
+// tagits bort eller skapats om (deras gamla dokument raderas inte automatiskt).
+function currentLiveScoringDocIds(e) {
+  var ids = {};
+  (e.teeGroups||[]).forEach(function(g){
+    var gid = ensureTeeGroupId(g);
+    ids[liveScoringDocId(e.id, gid)] = true;
+  });
+  return ids;
+}
+
 function openLiveFollow(eid) {
   var t = getTour();
   var e = t.events.find(function(x){ return x.id === eid; });
@@ -6495,8 +6527,9 @@ function openLiveFollow(eid) {
 
   showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
 
+  var validIds = currentLiveScoringDocIds(e);
   _liveFollow.unsub = LIVE_SCORING_COL.where('eventId','==',eid).onSnapshot(function(snap){
-    _liveFollow.docs = snap.docs.map(function(doc){ return doc.data(); });
+    _liveFollow.docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
     renderLiveFollowHTML(e);
   }, function(err){ console.error('Följ live: lyssnarfel', err); });
 }
@@ -6584,9 +6617,14 @@ function subscribeTourLiveStandings(t) {
   if(!liveEvents.length) { if(el) el.innerHTML = ''; return; }
 
   var eventIds = liveEvents.map(function(e){ return e.id; }).slice(0, 10); // Firestore 'in' tillåter max 10
+  var validIds = {};
+  liveEvents.forEach(function(e){
+    var ids = currentLiveScoringDocIds(e);
+    for(var k in ids) validIds[k] = true;
+  });
   _tourLiveStandings.tourId = t.id;
   _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
-    var docs = snap.docs.map(function(doc){ return doc.data(); });
+    var docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
     renderTourLiveStandingsHTML(docs);
   }, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
@@ -9997,6 +10035,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (86)',
+    items: [
+      { type: 'fixed', text: 'Live-tabellen (både "Följ live" och tourvyns live-standingstabell) kunde visa samma spelare flera gånger, med olika resultat. Orsak: när en boll slogs ihop, ändrades eller togs bort raderades inte det gamla livescoring-dokumentet i databasen - det blev kvar som ett "spöke" och räknades felaktigt med i tabellen tillsammans med den nya, aktuella datan. Fixat på två sätt: (1) tabellerna filtrerar nu bort dokument som inte längre hör till en boll som faktiskt finns kvar, och (2) övergivna dokument raderas nu proaktivt så fort en boll slås ihop, töms eller tas bort, så de inte samlas på hög i databasen. Redan uppkomna spökdokument från tidigare tester är ofarliga tack vare filtreringen, men kan även nollställas manuellt om du vill städa bort dem helt.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (85)',
     items: [
