@@ -1976,11 +1976,34 @@ function renderHomeNextRoundWidget() {
         '</div>'+
       '</div>'+
       '<div class="row" style="justify-content:flex-end;gap:8px;padding:0 14px 12px">'+
+        '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
+  checkHomeLiveTableButton(e.id);
+}
+
+// Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
+// om livescoringen faktiskt har startats (dvs. minst en spelare i minst en boll
+// har fått ett resultat inmatat för deltävlingen) - inte bara att en boll finns.
+function checkHomeLiveTableButton(eid) {
+  LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
+    var started = snap.docs.some(function(doc){
+      var d = doc.data();
+      var scores = d.scores || {};
+      return Object.keys(scores).some(function(pi){
+        var holeScores = scores[pi] || {};
+        return Object.keys(holeScores).some(function(h){ return typeof holeScores[h] === 'number'; });
+      });
+    });
+    var el = document.getElementById('home-live-table-btn');
+    if(!el) return;
+    el.innerHTML = started
+      ? '<button class="btn btn-sm" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'
+      : '';
+  }).catch(function(err){ console.error('Kunde inte kontrollera livescoring-status', err); });
 }
 
 function renderToursList() {
@@ -6350,6 +6373,7 @@ function renderLiveScoringView() {
   if(!document.getElementById('live-scoring-modal-body')) return;
   if(_liveScoring.mode === 'shcp') renderLiveShcpHTML();
   else if(_liveScoring.mode === 'picker') renderLivePickerHTML();
+  else if(_liveScoring.mode === 'puttPicker') renderLivePuttPickerHTML();
   else renderLiveGridHTML();
 }
 
@@ -6410,6 +6434,12 @@ function confirmLiveShcp() {
 // man matar in en i taget istället för att se alla fyra fält samtidigt. Att
 // mata in görs genom att trycka på en knapp som öppnar en sifferpicker
 // (1–10, tryck för att välja) - man slipper telefonens tangentbord helt.
+// Inmatningsvy: alla spelare visas alltid, i valfri ordning - man väljer själv
+// vem som är klar först (t.ex. Jon eller Jimmy) genom att trycka på dennes
+// slag-knapp. Trycket öppnar först en sifferpicker för antal slag, och direkt
+// efter det en picker för antal puttar (frivilligt, går att hoppa över) -
+// sen är man tillbaka här och kan välja NÄSTA spelare, i valfri ordning,
+// tills alla är klara för hålet.
 function renderLiveGridHTML() {
   var d = _liveScoring.data;
   var el = document.getElementById('live-scoring-modal-body');
@@ -6419,23 +6449,15 @@ function renderLiveGridHTML() {
   var par = d.holePars[hole-1];
   var idxHcp = (d.holeHcpIndex && d.holeHcpIndex[hole-1] != null) ? d.holeHcpIndex[hole-1] : (hole);
 
-  // Hur många spelarrader som ska visas just nu: alla som redan har ett resultat
-  // för hålet, plus EN till (nästa som ska fyllas i). Har alla fått ett resultat
-  // visas samtliga.
-  var visibleCount = 0;
-  for(var vi=0; vi<d.players.length; vi++){
-    var hasScore = typeof (d.scores[d.players[vi].pi]||{})[hole] === 'number';
-    visibleCount = vi+1;
-    if(!hasScore) break;
-  }
-
-  var rows = d.players.slice(0, visibleCount).map(function(p){
+  var filledCount = 0;
+  var rows = d.players.map(function(p){
     var sc = d.scores[p.pi] || {};
     var pu = (d.putts && d.putts[p.pi]) || {};
     var val = sc[hole];
     var puttVal = pu[hole];
     var hasVal = typeof val === 'number';
-    var puttInpVal = (puttVal === undefined || puttVal === null) ? '' : puttVal;
+    if(hasVal) filledCount++;
+    var puttLabel = (puttVal !== undefined && puttVal !== null) ? (puttVal+' putt'+(puttVal===1?'':'ar')) : '–';
     var lbl = hasVal ? liveScoreLabel(val, par) : '';
     var extraStrokes = computeHcpStrokesForHole(p.shcp||0, idxHcp, totalHoles);
     var total = 0, played = 0;
@@ -6448,11 +6470,9 @@ function renderLiveGridHTML() {
       '<div style="width:44px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
       '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
       '<button onclick="openLivePicker('+p.pi+')" style="width:56px;height:44px;margin:0;padding:0;text-align:center;font-size:19px;font-weight:800;border-radius:8px;border:2px solid '+(hasVal?'var(--green-dark)':'var(--border)')+';background:'+(hasVal?'var(--surface2)':'#fff')+';color:var(--text)">'+(hasVal?val:'?')+'</button>'+
-      '<input type="number" min="0" max="10" value="'+puttInpVal+'" title="Puttar (frivilligt)" placeholder="putt" style="width:48px;margin:0;padding:8px 2px;text-align:center;font-size:13px;color:var(--text-2)" onchange="onLivePuttInput('+p.pi+',this.value)">'+
+      '<div style="width:56px;text-align:center;font-size:10px;color:var(--text-3)">'+puttLabel+'</div>'+
     '</div>';
   }).join('');
-
-  var allDone = visibleCount === d.players.length && typeof (d.scores[d.players[d.players.length-1].pi]||{})[hole] === 'number';
 
   el.innerHTML =
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
@@ -6465,13 +6485,13 @@ function renderLiveGridHTML() {
         '<div style="font-weight:800;font-size:26px;line-height:1.1">Hål '+hole+'</div>'+
         '<div style="font-size:16px;color:var(--text-2);font-weight:600;margin-top:2px">Par '+par+' &nbsp;·&nbsp; Index '+idxHcp+'</div>'+
       '</div>'+
-      '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+(allDone?'':' title="Alla spelare måste ha ett resultat innan du kan gå vidare"')+'><i class="ti ti-chevron-right"></i></button>'+
+      '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div><div style="width:48px;text-align:center">Putt</div>'+
+      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div><div style="width:56px;text-align:center">Puttar</div>'+
     '</div>'+
     rows+
-    (!allDone ? '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0"><i class="ti ti-arrow-down"></i> Tryck på "?" ovan för att mata in nästa spelares resultat.</p>' : '')+
+    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">'+filledCount+' av '+d.players.length+' klara för hålet. Tryck på en spelares slag-knapp för att mata in - valfri ordning.</p>'+
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
       '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '</div>';
@@ -6486,8 +6506,9 @@ function liveGridChangeHole(delta) {
   renderLiveGridHTML();
 }
 
-// Öppnar sifferpickern (1–10, tryck för att välja) för en spelares resultat på
-// aktuellt hål - istället för att skriva in via telefonens tangentbord.
+// Öppnar sifferpickern (1–10, tryck för att välja) för valfri spelares resultat
+// på aktuellt hål - istället för att skriva in via telefonens tangentbord.
+// Spelaren väljs fritt (ingen fast ordning) genom att trycka på dennes knapp.
 function openLivePicker(pi) {
   _liveScoring.pickerPi = pi;
   _liveScoring.mode = 'picker';
@@ -6516,25 +6537,79 @@ function renderLivePickerHTML() {
 
   el.innerHTML =
     '<div class="row" style="margin-bottom:10px">'+
-      '<button class="btn btn-sm" onclick="closeLivePicker()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
+      '<button class="btn btn-sm" onclick="cancelLivePicker()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
     '</div>'+
     '<div style="text-align:center;margin-bottom:16px">'+
-      '<div style="font-size:13px;color:var(--text-3)">Hål '+hole+' · Par '+par+'</div>'+
+      '<div style="font-size:13px;color:var(--text-3)">Hål '+hole+' · Par '+par+' · Steg 1/2</div>'+
       '<div style="font-weight:800;font-size:22px">'+esc(p.name)+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2);margin-top:2px">Hur många slag?</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
     '<button onclick="clearLivePickerScore()" style="width:100%;padding:12px 0;border-radius:8px;background:#fdecec;color:#B42318;border:none;font-size:14px;font-weight:600"><i class="ti ti-backspace"></i> Radera resultat</button>';
 }
 
+// Steg 1: sparar antal slag, går sedan direkt vidare till steg 2 (puttar) för
+// SAMMA spelare - inte tillbaka till huvudvyn ännu.
 function pickLiveScore(n) {
   var pi = _liveScoring.pickerPi;
+  _liveScoring.lastPickedGross = n; // undviker flimmer i steg 2 innan Firestore hunnit bekräfta
   onLiveScoreInput(pi, n);
-  closeLivePicker();
+  _liveScoring.mode = 'puttPicker';
+  renderLivePuttPickerHTML();
 }
 
+// Raderar slaget helt (och lämnar puttsteget - inget resultat betyder inga puttar heller).
 function clearLivePickerScore() {
   var pi = _liveScoring.pickerPi;
   onLiveScoreInput(pi, '');
+  onLivePuttInput(pi, '');
+  closeLivePicker();
+}
+
+// Avbryter picker-flödet helt utan att ändra något, tillbaka till huvudvyn.
+function cancelLivePicker() {
+  closeLivePicker();
+}
+
+// Steg 2: hur många puttar hade spelaren på hålet. Frivilligt - "Hoppa över"
+// går vidare utan att spara/ändra något. Tryck på en siffra sparar direkt och
+// avslutar rundan för den här spelaren/hålet - tillbaka till huvudvyn, redo
+// att välja NÄSTA spelare i valfri ordning.
+function renderLivePuttPickerHTML() {
+  var d = _liveScoring.data;
+  var el = document.getElementById('live-scoring-modal-body');
+  if(!d || !el) return;
+  var hole = _liveScoring.activeHole;
+  var pi = _liveScoring.pickerPi;
+  var p = d.players.filter(function(x){ return x.pi===pi; })[0];
+  if(!p) { closeLivePicker(); return; }
+  var currentPutt = (d.putts && d.putts[pi]) ? d.putts[pi][hole] : undefined;
+  var gross = (d.scores[pi]||{})[hole];
+  if(gross == null && _liveScoring.lastPickedGross != null) gross = _liveScoring.lastPickedGross;
+
+  var btns = '';
+  for(var n=0; n<=8; n++){
+    var active = currentPutt === n;
+    btns += '<button onclick="pickLivePutt('+n+')" style="padding:16px 0;border-radius:10px;border:2px solid '+(active?'var(--green-dark)':'var(--border)')+';background:'+(active?'var(--surface2)':'#fff')+';font-size:20px;font-weight:800;color:var(--text)">'+n+'</button>';
+  }
+
+  el.innerHTML =
+    '<div style="text-align:center;margin-bottom:16px">'+
+      '<div style="font-size:13px;color:var(--text-3)">Hål '+hole+' · Slag: '+gross+' · Steg 2/2</div>'+
+      '<div style="font-weight:800;font-size:22px">'+esc(p.name)+'</div>'+
+      '<div style="font-size:13px;color:var(--text-2);margin-top:2px">Hur många puttar? (frivilligt)</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
+    '<button onclick="skipLivePutt()" style="width:100%;padding:12px 0;border-radius:8px;background:var(--surface2);color:var(--text-2);border:none;font-size:14px;font-weight:600">Hoppa över</button>';
+}
+
+function pickLivePutt(n) {
+  var pi = _liveScoring.pickerPi;
+  onLivePuttInput(pi, n);
+  closeLivePicker();
+}
+
+function skipLivePutt() {
   closeLivePicker();
 }
 
@@ -10171,6 +10246,25 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (90)',
+    items: [
+      { type: 'improved', text: 'Livescoringens hål-inmatning är nu helt fri i ordning - alla spelare visas alltid, och man väljer själv vem som är klar först (t.ex. Jon eller Jimmy) genom att trycka på dennes slag-knapp. Ingen fast tur-ordning längre.' },
+      { type: 'new', text: 'Inmatningen är nu ett tvåstegsflöde per spelare: först en sifferpicker för antal slag, och direkt efter (utan att gå tillbaka till huvudvyn) en picker för antal puttar (0–8, frivilligt - "Hoppa över" går vidare utan att spara). Efter steg 2 är man tillbaka i huvudvyn och kan välja nästa spelare, i valfri ordning, tills alla är klara för hålet. "X av Y klara"-text visar hur långt bollen kommit på hålet.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (89)',
+    items: [
+      { type: 'fixed', text: 'På ett nytt hål kunde det se ut som att spelare försvann helt ur livescoringen (bara den första spelaren syntes). Det var egentligen den avsedda stegvisa inmatningen som startar om för varje nytt hål, men det såg ut som ett fel eftersom spelarna helt saknades i listan. Nu visas ALLA spelare hela tiden - de som inte kommit i tur än visas gråtonade med texten "Väntar på tur" istället för att döljas, så det är tydligt att ingen data försvunnit.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (88)',
+    items: [
+      { type: 'new', text: 'Ny "Live-tabell"-genväg (trofé-ikon) i "Kommande runda"-rutan på startsidan, bredvid "Live scoring" och "Mitt resultat" - men bara om livescoringen faktiskt har startats (minst en spelare i minst en boll har fått ett resultat inmatat). Har ingen ännu börjat mata in visas ingen knapp, för att inte peka mot en tom tabell.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (87)',
     items: [
