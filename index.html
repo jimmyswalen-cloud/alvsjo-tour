@@ -6931,14 +6931,25 @@ function openLiveFollow(eid, tourId) {
 // och tourvyns live-standingstabell (samtliga live-deltävlingar i touren).
 // Sparar även hål-för-hål-data per rad, så man kan klicka på en spelare och
 // se hela scorekortet (se openPlayerLiveScorecard).
+// Hittar en deltävlings tävlingsform (stableford/slag) via dess id, oavsett
+// vilken tour den tillhör - id:n är unika över hela appen.
+function findEventTypeById(eid) {
+  for(var i=0; i<(S.tours||[]).length; i++){
+    var ev = (S.tours[i].events||[]).find(function(e){ return e.id===eid; });
+    if(ev) return ev.type;
+  }
+  return null;
+}
+
 function computeLiveStandingsRows(docs) {
   var rows = [];
   docs.forEach(function(d){
     var holePars = d.holePars||[], holeHcpIndex = d.holeHcpIndex||[];
     var totalHoles = holePars.length || 18;
+    var isStab = findEventTypeById(d.eventId) === 'stableford';
     (d.players||[]).forEach(function(p){
       var sc = (d.scores||{})[p.pi] || {};
-      var brutto = 0, netto = 0, poang = 0, thru = 0;
+      var brutto = 0, netto = 0, poang = 0, thru = 0, parSoFar = 0;
       var holesGross = new Array(totalHoles).fill(null);
       for(var idx=0; idx<totalHoles; idx++){
         var gross = sc[idx+1];
@@ -6950,10 +6961,15 @@ function computeLiveStandingsRows(docs) {
         brutto += gross;
         netto += (gross - strokesRecv);
         poang += computeHoleStablefordPoints(gross, par, strokesRecv);
+        parSoFar += par;
         thru++;
       }
+      // "Diff": vid stableford - hur många poäng över/under vad hcp:et "ska" ge
+      // (2 poäng/hål är nettopar), vid slaggolf - netto mot banans par så här långt.
+      var diff = isStab ? (poang - thru*2) : (netto - parSoFar);
       rows.push({
         name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
+        diff: diff, isStab: isStab,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
     });
@@ -6966,6 +6982,26 @@ function computeLiveStandingsRows(docs) {
     return b.poang - a.poang;
   });
   return rows;
+}
+
+// Formaterar diff-värdet som "+2"/"E"/"-3", med grön/röd/neutral färg.
+function formatLiveDiff(diff, thru) {
+  if(!thru) return { text: '–', color: 'var(--text-3)' };
+  if(diff === 0) return { text: 'E', color: 'var(--text-2)' };
+  return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : '#B42318' };
+}
+
+// Kortar "Förnamn Efternamn(en)" till "F. Efternamn(en)" - tar bara bort första
+// ordet och ersätter det med dess första bokstav, resten av namnet (även om det
+// är flera ord, t.ex. "Jonsson Wråkk") lämnas orört. Ingen separat för-/efternamn-
+// fältuppdelning behövs - fungerar direkt på det befintliga namnet som en sträng.
+function abbreviateFirstName(fullName) {
+  if(!fullName) return fullName;
+  var firstSpace = fullName.indexOf(' ');
+  if(firstSpace < 1) return fullName; // inget mellanslag - bara ett ord, lämna orört
+  var first = fullName.slice(0, firstSpace);
+  var rest = fullName.slice(firstSpace + 1);
+  return first.charAt(0) + '. ' + rest;
 }
 
 // Bakgrundsfärg för en enskild hål-cell, baserat på resultat relativt par:
@@ -6989,13 +7025,15 @@ var _liveStandingsRowsCache = [];
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
-    return '<div class="row" style="justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
-      '<div style="display:flex;gap:12px;font-size:13px;flex-shrink:0">'+
-        '<span style="width:32px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
-        '<span style="width:32px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
-        '<span style="width:32px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
-        '<span style="width:44px;text-align:right;color:var(--text-3);font-size:11px">Thru '+r.thru+'</span>'+
+    var diffFmt = formatLiveDiff(r.diff, r.thru);
+    return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(idx+1)+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+'</span></div>'+
+      '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
+        '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+'">'+diffFmt.text+'</span>'+
+        '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
+        '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
+        '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
+        '<span style="width:36px;text-align:right;color:var(--text-3);font-size:10px">T'+r.thru+'</span>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -7072,7 +7110,7 @@ function renderLiveFollowHTML(e) {
   var rows = computeLiveStandingsRows(_liveFollow.docs);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:32px;text-align:center">Brt</span><span style="width:32px;text-align:center">Nto</span><span style="width:32px;text-align:center">Pts</span><span style="width:44px"></span>'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -7125,7 +7163,7 @@ function renderTourLiveStandingsHTML(docs) {
       '<h3 style="margin:0"><i class="ti ti-broadcast" style="color:#123A4D"></i> Live scoring</h3>'+
     '</div>'+
     '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<span style="width:32px;text-align:center">Brt</span><span style="width:32px;text-align:center">Nto</span><span style="width:32px;text-align:center">Pts</span><span style="width:44px"></span>'+
+      '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
     '</div>'+
     body+
   '</div>';
@@ -10554,6 +10592,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (101)',
+    items: [
+      { type: 'new', text: 'Ny "+/-"-kolumn i live-tabellen (både "Live-tabell"/"Följ live" och tourvyns live-standingstabell): vid slaggolf visas netto mot banans par så här långt ("-2"/"E"/"+3"), vid stableford visas hur många poäng man ligger över/under vad sitt eget hcp "ska" ge (2 poäng/hål i nettopar) - t.ex. "+1" om man tjänar in mer än väntat. Grön färg = bättre än förväntat, röd = sämre, grå = jämnt ("E").' },
+      { type: 'improved', text: 'Live-tabellen gjord mer kompakt för mobilen: mindre kolumnbredder/typsnitt, "Thru" förkortat till "T2" osv. Spelarnamnen visas nu som "F. Efternamn" (t.ex. "J. Swalén") istället för fullt namn, för att spara plats - härleds automatiskt från det befintliga namnfältet (tar bort första ordet och ersätter det med dess första bokstav), ingen ny datastruktur för för-/efternamn behövdes.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (100)',
     items: [
