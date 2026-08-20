@@ -6460,7 +6460,10 @@ function openLiveScoring(eid, gIdx) {
 
   var groupId = ensureTeeGroupId(g);
   var docId = liveScoringDocId(eid, groupId);
-  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: 1, activePi: g.playerPis[0], mode: null };
+  // activeHole:null - sätts till rätt hål (första ej helt ifyllda) när datan laddats,
+  // se computeLiveResumeHole i subscribeLiveScoring. Annars hamnade man alltid på
+  // hål 1 varje gång man öppnade livescoringen, oavsett hur långt man kommit.
+  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null };
   _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
 
   showModal('<div id="live-scoring-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar livescoring…</p></div>', true, true);
@@ -6490,6 +6493,21 @@ function openLiveScoring(eid, gIdx) {
   });
 }
 
+// Räknar ut vilket hål bollen ligger på just nu: det första hålet där INTE
+// alla spelare fått ett resultat inmatat ännu. Är alla hål klara stannar den
+// på sista hålet. Används för att återuppta på rätt hål istället för att
+// alltid börja om på hål 1 varje gång livescoringen öppnas.
+function computeLiveResumeHole(d) {
+  var totalHoles = (d.holePars||[]).length || 18;
+  var players = d.players || [];
+  if(!players.length) return 1;
+  for(var h=1; h<=totalHoles; h++){
+    var allFilled = players.every(function(p){ return typeof (d.scores[p.pi]||{})[h] === 'number'; });
+    if(!allFilled) return h;
+  }
+  return totalHoles;
+}
+
 function subscribeLiveScoring(ref) {
   if(_liveScoring.unsub) _liveScoring.unsub();
   _liveScoring.unsub = ref.onSnapshot(function(doc){
@@ -6500,6 +6518,12 @@ function subscribeLiveScoring(ref) {
     // hål-inmatningen. Ändras inte igen förrän man själv trycker "Ändra SHCP".
     if(_liveScoring.mode === null) {
       _liveScoring.mode = _liveScoring.data.shcpConfirmed ? 'grid' : 'shcp';
+    }
+    // Första gången datan laddas: hoppa till rätt hål (där bollen ligger),
+    // inte alltid hål 1. Ändras inte igen av snapshot-uppdateringar efteråt -
+    // bara navigeringspilarna (liveGridChangeHole) styr aktivt hål därefter.
+    if(_liveScoring.activeHole === null) {
+      _liveScoring.activeHole = computeLiveResumeHole(_liveScoring.data);
     }
     renderLiveScoringView();
   }, function(err){ console.error('Livescoring-lyssnare fel', err); });
@@ -10452,6 +10476,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (97)',
+    items: [
+      { type: 'fixed', text: 'Livescoringen hamnade alltid på hål 1 varje gång man öppnade den, oavsett hur långt bollen redan kommit - man fick manuellt bläddra fram till rätt hål varje gång. Nu räknas rätt hål ut automatiskt när livescoringen öppnas (det första hålet där inte alla spelare fått ett resultat än), så man hamnar direkt där bollen ligger. Navigeringspilarna fungerar som förut därefter.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (96)',
     items: [
