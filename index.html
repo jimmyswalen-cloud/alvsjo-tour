@@ -1889,6 +1889,7 @@ function openLiveScoringBollPicker(eventId, myGroupIdx) {
   var e = (t.events||[]).find(function(x){ return x.id === eventId; });
   if(!e) return;
   if(!e.teeGroups) e.teeGroups = [];
+  pruneUnregisteredFromTeeGroups(e);
 
   var rows = e.teeGroups.length
     ? e.teeGroups.map(function(g, gIdx){
@@ -4618,8 +4619,9 @@ function openRegister(i) {
 }
 
 function buildDateGroupingHTML(e, t) {
-  var regs = e.registrations || [];
+  var regs = (e.registrations || []).filter(function(r){ return !r.declined; });
   if(!regs.length) return '';
+  pruneUnregisteredFromTeeGroups(e);
   var groups = {};
   regs.forEach(function(r){
     if(!groups[r.date]) groups[r.date] = [];
@@ -4762,6 +4764,68 @@ function setTeeGroupTime(eid, gIdx, time) {
 // till bollar som just upplösts/tömts - annars blir de kvarliggande "spöken" i
 // databasen som (utan filtreringen i currentLiveScoringDocIds) skulle kunna dyka
 // upp igen, t.ex. om samma eventId+id-kombination någonsin återanvänds.
+// Självläkande städning: en spelare ska ALDRIG kunna sitta kvar i en boll om
+// hen inte längre är anmäld (aktivt "Anmäld", inte "Deltar ej"/"Oklart") för
+// just det datumet. Kan hända om någon avanmäler sig, admin ändrar status,
+// eller data skapades innan den här kontrollen fanns. Körs varje gång
+// Anmälningar eller bollväljaren byggs, så det rättar till sig automatiskt -
+// och även direkt vid statusändring (se setRegStatus/onRegCbChange) för
+// omedelbar effekt utan att behöva öppna vyn på nytt.
+// Självläkande städning: en spelare ska ALDRIG kunna sitta kvar i en boll om
+// hen inte längre är anmäld (aktivt "Anmäld", inte "Deltar ej"/"Oklart") för
+// just det datumet. Kan hända om någon avanmäler sig, admin ändrar status,
+// eller data skapades innan den här kontrollen fanns. Körs varje gång
+// Anmälningar eller bollväljaren byggs, så det rättar till sig automatiskt -
+// och även direkt vid statusändring (se setRegStatus/onRegCbChange), som då
+// även visar en tydlig bekräftelse till den som ändrar status om något
+// faktiskt påverkades (istället för att det sker helt tyst i bakgrunden).
+function pruneUnregisteredFromTeeGroups(e) {
+  var result = { changed: false, removedNames: [], deletedGroupTimes: [] };
+  if(!e.teeGroups || !e.teeGroups.length) return result;
+  var regsRaw = e.registrations || [];
+  var regsNorm = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){ return {pi:ri, date:e.date}; });
+  var validByDate = {}; // date -> {pi: true} för aktivt anmälda (ej "Deltar ej")
+  regsNorm.forEach(function(r){
+    if(r.declined) return;
+    if(!validByDate[r.date]) validByDate[r.date] = {};
+    validByDate[r.date][r.pi] = true;
+  });
+  e.teeGroups.forEach(function(g){
+    var validSet = validByDate[g.date] || {};
+    var keep = [], removedPis = [];
+    g.playerPis.forEach(function(pi){ if(validSet[pi]) keep.push(pi); else removedPis.push(pi); });
+    if(removedPis.length) {
+      result.changed = true;
+      result.removedNames = result.removedNames.concat(removedPis.map(function(pi){ return { pi: pi, groupTime: g.time }; }));
+    }
+    g.playerPis = keep;
+  });
+  var emptied = e.teeGroups.filter(function(g){ return g.playerPis.length === 0; });
+  if(emptied.length) {
+    result.deletedGroupTimes = emptied.map(function(g){ return g.time || 'Tid ej satt'; });
+    e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
+    cleanupOrphanedLiveScoringDocs(e.id, emptied);
+    result.changed = true;
+  }
+  if(result.changed) save();
+  return result;
+}
+
+// Bygger ett läsbart meddelande av pruneUnregisteredFromTeeGroups-resultatet,
+// för att informera admin direkt istället för att låta ändringen ske tyst.
+function describeTeeGroupPruneResult(t, result) {
+  if(!result || !result.removedNames.length) return null;
+  var names = result.removedNames.map(function(x){
+    var p = t.players[x.pi];
+    return (p ? p.name : '?') + ' (' + (x.groupTime||'tid ej satt') + ')';
+  });
+  var msg = 'Observera: ' + names.join(', ') + ' togs bort ur sin boll eftersom '+(names.length===1?'personen':'de')+' inte längre är anmäld.';
+  if(result.deletedGroupTimes.length) {
+    msg += ' ' + result.deletedGroupTimes.length + ' boll' + (result.deletedGroupTimes.length===1?' blev tom och togs bort helt.':'ar blev tomma och togs bort helt.');
+  }
+  return msg;
+}
+
 function cleanupOrphanedLiveScoringDocs(eid, removedGroups) {
   removedGroups.forEach(function(g){
     if(!g.id) return;
@@ -4871,8 +4935,11 @@ function setRegStatus(ei, pi, statusCode) {
     if(existing) { existing.declined = true; }
     else e.registrations.push({ pi:pi, date: e.date, declined: true });
   }
+  var pruneResult = pruneUnregisteredFromTeeGroups(e); // ta direkt bort spelaren ur ev. boll om hen inte längre är anmäld
   save();
   openRegister(ei);
+  var pruneMsg = describeTeeGroupPruneResult(t, pruneResult);
+  if(pruneMsg) alert(pruneMsg);
 }
 
 function onRegCbChange(ei, pi, cb) {
@@ -4893,8 +4960,11 @@ function onRegCbChange(ei, pi, cb) {
     dateInp.disabled = true;
     e.registrations = e.registrations.filter(function(r){return r.pi!==pi;});
   }
+  var pruneResult = pruneUnregisteredFromTeeGroups(e); // ta direkt bort spelaren ur ev. boll om anmälan togs bort
   save();
   refreshRegisterModal(ei);
+  var pruneMsg = describeTeeGroupPruneResult(t, pruneResult);
+  if(pruneMsg) alert(pruneMsg);
 }
 
 function onRegDateChange(ei, pi, inp) {
@@ -10476,6 +10546,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (99)',
+    items: [
+      { type: 'improved', text: 'Workaround för scenariot "admin skapar en boll, spelaren avanmäler sig sedan innan start": städningen som tar bort en icke-anmäld spelare ur sin boll skedde tidigare helt tyst i bakgrunden. Nu visas en tydlig bekräftelse direkt när man ändrar någons anmälningsstatus, om det faktiskt påverkade en boll - t.ex. "Observera: Niclas Lundevall (09:40) togs bort ur sin boll eftersom personen inte längre är anmäld. 1 boll blev tom och togs bort helt." Man vet alltså direkt vad som hände istället för att bara märka det senare i livescoringen.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (98)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: En spelare som inte längre var anmäld (avanmäld, satt till "Deltar ej", eller aldrig anmäld men råkat hamna i en boll från tidigare tester) kunde ändå sitta kvar i en boll och förväntas föra in/lämna livescore, trots att hen inte skulle kunna placeras där enligt reglerna. Orsak: ingen kod tog bort en spelare från dennes boll när anmälan togs bort eller ändrades till "Deltar ej"/"Oklart". Fixat på två sätt: (1) självläkande städning som körs varje gång Anmälningar eller "Välj boll" öppnas - en spelare som inte längre är aktivt anmäld plockas automatiskt bort ur sin boll (bollen tas bort helt om den blir tom), och (2) samma städning körs nu även direkt när man ändrar någons anmälningsstatus, för omedelbar effekt. "Spelare per datum"-listan och kryssruta-skaparen filtrerar dessutom nu bort "Deltar ej"-anmälningar, som tidigare av misstag kunde dyka upp där.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (97)',
     items: [
