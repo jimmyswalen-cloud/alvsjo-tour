@@ -1835,12 +1835,12 @@ function findMyNextRoundInfo() {
       var diffDays = Math.abs((new Date(dateStr+'T00:00:00') - today) / 86400000);
       if(diffDays < bestDiff) {
         bestDiff = diffDays;
-        var time = '';
+        var time = '', groupIndex = null;
         if(registered && e.teeGroups) {
-          var grp = e.teeGroups.find(function(g){ return g.date===dateStr && g.playerPis.indexOf(myPi)>=0; });
-          if(grp) time = grp.time || '';
+          var gIdx = e.teeGroups.findIndex(function(g){ return g.date===dateStr && g.playerPis.indexOf(myPi)>=0; });
+          if(gIdx >= 0) { time = e.teeGroups[gIdx].time || ''; groupIndex = gIdx; }
         }
-        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: isFuture, registered: registered };
+        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: isFuture, registered: registered, groupIndex: groupIndex };
       }
     });
   });
@@ -1855,6 +1855,11 @@ function goToMyNextRound(tourId, eventIndex) {
 function goToMyRegistration(tourId, eventIndex) {
   enterTour(tourId);
   setTimeout(function(){ openRegister(eventIndex); }, 60);
+}
+
+function goToMyLiveScoring(tourId, eventId, gIdx) {
+  enterTour(tourId);
+  setTimeout(function(){ openLiveScoring(eventId, gIdx); }, 60);
 }
 
 function renderHomeNextRoundWidget() {
@@ -1909,7 +1914,8 @@ function renderHomeNextRoundWidget() {
           '</div>'+
         '</div>'+
       '</div>'+
-      '<div class="row" style="justify-content:flex-end;padding:0 14px 12px">'+
+      '<div class="row" style="justify-content:flex-end;gap:8px;padding:0 14px 12px">'+
+        (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
@@ -2953,7 +2959,8 @@ function renderEvents() {
   var titleBlock = '<h2>Deltävlingar</h2>'+
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
   var top3Html = buildTop3HTML(t, false);
-  if(!t.events.length){el.innerHTML=top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';return;}
+  var liveStandingsHtml = '<div id="tour-live-standings"></div>';
+  if(!t.events.length){el.innerHTML=liveStandingsHtml+top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';subscribeTourLiveStandings(t);return;}
 
   // Säsongsberättelse (tourens egen "story", motsvarande deltävlingarnas story fast för hela touren)
   var tourConcluded = isTourConcluded(t);
@@ -3004,7 +3011,8 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = top3Html + storyBanner + feeCard + titleBlock + html;
+  el.innerHTML = liveStandingsHtml + top3Html + storyBanner + feeCard + titleBlock + html;
+  subscribeTourLiveStandings(t);
 }
 
 var _tourStoryImg = null;
@@ -4042,6 +4050,9 @@ function openRegister(i) {
     : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
 
   var h = '<h3>Anmälningar – '+e.name+'</h3>';
+  if(e.teeGroups && e.teeGroups.length) {
+    h += '<button class="btn btn-sm btn-primary" style="margin-bottom:10px" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-live-photo"></i> Följ live</button>';
+  }
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-calendar"></i> Speltidsperiod: '+e.periodStart+' &ndash; '+e.periodEnd+' (ordinarie datum: '+e.date+')</p>';
   h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Markera din status för tävlingen. "Anmäld" inkluderar dig i startlistan.</p>';
   h += rows;
@@ -4105,6 +4116,7 @@ function buildDateGroupingHTML(e, t) {
         html += isAdmin()
           ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
           : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
+        html += '<button class="btn btn-sm btn-primary" onclick="openLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-scoreboard"></i> Livescoring</button>';
         if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
         html += '</div>';
         html += '<div style="font-size:13px;color:var(--text-2)">'+g.playerPis.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
@@ -5717,6 +5729,355 @@ function categorizeHoleScore(gross, par) {
 function emptyHoleCounts() {
   return { hio:0, albatross:0, eagle:0, birdie:0, par:0, bogey:0, doubleplus:0 };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIVE SCORING (t.ex. "Deal Traveling") — hål-för-hål, brutto, upp till 4
+// spelare per boll. Sparas MEDVETET i en EGEN Firestore-collection
+// ('liveScoring'), ett dokument per boll, istället för i huvud-bloben S.
+// Anledning: inmatning sker ofta och samtidigt från flera telefoner ute på
+// banan (ofta dåligt nät) — separata, små dokument per boll undviker att
+// skriva över hela appens state vid varje enskilt hål, och håller nere
+// storleken på huvud-dokumentet (som redan varnar vid 850 KB).
+// Fältuppdateringar sker med punkt-notation (t.ex. "scores.3.7") så att
+// EN skrivning bara påverkar ett enda hål för en enda spelare.
+// ═══════════════════════════════════════════════════════════════════════════
+var LIVE_SCORING_COL = db.collection('liveScoring');
+var _liveScoring = { docId:null, unsub:null, data:null, activeHole:1, activePi:null, mode:null };
+
+function liveScoringDocId(eid, gIdx) { return eid + '_' + gIdx; }
+
+function liveScoringRef() { return LIVE_SCORING_COL.doc(_liveScoring.docId); }
+
+// Etikett under sifferknapparna i inmatningsvyn, relativt hålets par.
+function liveScoreLabel(gross, par) {
+  var cat = categorizeHoleScore(gross, par);
+  var map = { hio:'HIO', albatross:'ALBATR.', eagle:'EAGLE', birdie:'BIRDIE', par:'PAR', bogey:'BOGEY' };
+  if(cat === 'doubleplus') return (gross - par === 2) ? 'DB BOG.' : '';
+  return map[cat] || '';
+}
+
+// Anropas från bollistan (admin/spelare) — kräver att banan har scorekortsdata.
+function openLiveScoring(eid, gIdx) {
+  var t = getTour();
+  var e = t.events.find(function(x){ return x.id === eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  if(!g.playerPis || !g.playerPis.length) { alert('Bollen saknar spelare.'); return; }
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+  if(!course || !course.holePars || !course.holePars.length) {
+    alert('Banan "'+(e.course||'Okänd')+'" saknar scorekortsdata (par per hål) i Bandatabasen. Lägg till det under Inställningar innan livescoring kan startas.');
+    return;
+  }
+
+  var docId = liveScoringDocId(eid, gIdx);
+  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: 1, activePi: g.playerPis[0], mode: null };
+  _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
+
+  showModal('<div id="live-scoring-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar livescoring…</p></div>', true, true);
+
+  var ref = LIVE_SCORING_COL.doc(docId);
+  ref.get().then(function(doc){
+    if(!doc.exists) {
+      var players = g.playerPis.map(function(pi){
+        var p = t.players[pi];
+        return { pi: pi, name: p ? p.name : '?', shcp: (p && p.hcp != null) ? Math.round(p.hcp) : 0 };
+      });
+      var scores = {};
+      players.forEach(function(p){ scores[p.pi] = {}; });
+      var initData = {
+        eventId: eid, teeGroupIdx: gIdx, courseName: e.course || '',
+        holePars: course.holePars, holeHcpIndex: course.holeHcpIndex || [],
+        players: players, scores: scores, shcpConfirmed: false, updatedAt: Date.now()
+      };
+      ref.set(initData).then(function(){ subscribeLiveScoring(ref); });
+    } else {
+      subscribeLiveScoring(ref);
+    }
+  }).catch(function(err){
+    console.error('Kunde inte öppna livescoring', err);
+    alert('Kunde inte öppna livescoring. Kontrollera internetanslutningen.');
+    closeModal();
+  });
+}
+
+function subscribeLiveScoring(ref) {
+  if(_liveScoring.unsub) _liveScoring.unsub();
+  _liveScoring.unsub = ref.onSnapshot(function(doc){
+    if(!doc.exists) return;
+    _liveScoring.data = doc.data();
+    // Första gången datan laddas: gå automatiskt till SHCP-steget om det
+    // inte redan är bekräftat för den här bollen/rundan, annars rakt till
+    // hål-inmatningen. Ändras inte igen förrän man själv trycker "Ändra SHCP".
+    if(_liveScoring.mode === null) {
+      _liveScoring.mode = _liveScoring.data.shcpConfirmed ? 'grid' : 'shcp';
+    }
+    renderLiveScoringView();
+  }, function(err){ console.error('Livescoring-lyssnare fel', err); });
+}
+
+function renderLiveScoringView() {
+  if(!document.getElementById('live-scoring-modal-body')) return;
+  if(_liveScoring.mode === 'shcp') renderLiveShcpHTML(); else renderLiveGridHTML();
+}
+
+// Steg 1, innan hål-inmatningen börjar: varje spelares SHCP (spelhandicap)
+// för dagens runda bekräftas eller justeras. Körs automatiskt första gången
+// bollen öppnas, och kan öppnas igen via "Ändra SHCP" i inmatningsvyn.
+function renderLiveShcpHTML() {
+  var d = _liveScoring.data;
+  var el = document.getElementById('live-scoring-modal-body');
+  if(!d || !el) return;
+
+  var rows = d.players.map(function(p){
+    return '<div class="row" style="justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="font-weight:600;font-size:14px">'+esc(p.name)+'</span>'+
+      '<input type="number" step="1" min="0" max="54" value="'+(p.shcp!=null?p.shcp:0)+'" class="live-shcp-inp" data-pi="'+p.pi+'" style="width:70px;margin:0;text-align:center">'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<h3 style="margin-bottom:4px">Spelhandicap (SHCP)</h3>'+
+    '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Bekräfta varje spelares spelhandicap för dagens runda innan livescoringen startar.</p>'+
+    rows+
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">'+
+      (d.shcpConfirmed ? '<button class="btn" onclick="cancelShcpEdit()">Avbryt</button>' : '')+
+      '<button class="btn btn-primary" onclick="confirmLiveShcp()"><i class="ti ti-check"></i> '+(d.shcpConfirmed?'Spara':'Starta livescoring')+'</button>'+
+    '</div>';
+}
+
+function cancelShcpEdit() { _liveScoring.mode = 'grid'; renderLiveGridHTML(); }
+
+function confirmLiveShcp() {
+  var inputs = document.querySelectorAll('.live-shcp-inp');
+  var players = _liveScoring.data.players.map(function(p){ return { pi: p.pi, name: p.name, shcp: p.shcp }; });
+  inputs.forEach(function(inp){
+    var pi = parseInt(inp.getAttribute('data-pi'), 10);
+    var val = Math.round(parseFloat(inp.value)) || 0;
+    var pl = players.filter(function(x){ return x.pi === pi; })[0];
+    if(pl) pl.shcp = val;
+  });
+  liveScoringRef().update({ players: players, shcpConfirmed: true, updatedAt: Date.now() }).then(function(){
+    _liveScoring.mode = 'grid';
+  }).catch(function(err){
+    console.error('Kunde inte spara SHCP', err);
+    alert('Kunde inte spara SHCP. Kontrollera internetanslutningen och försök igen.');
+  });
+}
+
+// Inmatningsvy: samma princip som "Mitt resultat" (ett sifferfält per hål),
+// men delat upp hål för hål och sparat live så snart man fyller i, istället
+// för att fyllas i som ett helt scorekort efter rundan. Markören (den som
+// matar in) väljer aktivt hål med pilarna och fyller i brutto för var och en
+// av bollens spelare - varje ändring sparas direkt och syns live hos alla.
+function renderLiveGridHTML() {
+  var d = _liveScoring.data;
+  var el = document.getElementById('live-scoring-modal-body');
+  if(!d || !el) return;
+  var hole = _liveScoring.activeHole;
+  var totalHoles = (d.holePars||[]).length || 18;
+  var par = d.holePars[hole-1];
+  var idxHcp = (d.holeHcpIndex && d.holeHcpIndex[hole-1] != null) ? d.holeHcpIndex[hole-1] : '–';
+
+  var rows = d.players.map(function(p){
+    var sc = d.scores[p.pi] || {};
+    var val = sc[hole];
+    var inpVal = (val === undefined || val === null) ? '' : val;
+    var lbl = (typeof val === 'number') ? liveScoreLabel(val, par) : '';
+    var total = 0, played = 0;
+    Object.keys(sc).forEach(function(h){ if(typeof sc[h] === 'number') { total += sc[h]; played++; } });
+    return '<div class="row" style="justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
+        (lbl?'<div style="font-size:10px;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'')+
+      '</div>'+
+      '<div style="width:40px;text-align:center;color:var(--text-3);font-size:12px">'+p.shcp+'</div>'+
+      '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
+      '<input type="number" min="1" max="15" value="'+inpVal+'" style="width:56px;margin:0;padding:6px;text-align:center;font-size:15px" onchange="onLiveScoreInput('+p.pi+',this.value)">'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div class="row" style="justify-content:flex-end;margin-bottom:6px">'+
+      '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
+    '</div>'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<button class="btn btn-sm" onclick="liveGridChangeHole(-1)" '+(hole<=1?'disabled':'')+'><i class="ti ti-chevron-left"></i></button>'+
+      '<div style="text-align:center"><div style="font-weight:700;font-size:16px">Hål '+hole+'</div><div style="font-size:12px;color:var(--text-3)">Par '+par+' · Index '+idxHcp+'</div></div>'+
+      '<button class="btn btn-sm" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
+    '</div>'+
+    '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+      '<div style="flex:1">Spelare</div><div style="width:40px;text-align:center">SHCP</div><div style="width:40px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div>'+
+    '</div>'+
+    rows+
+    '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
+      '<button class="btn" onclick="closeModal()">Stäng</button>'+
+    '</div>';
+}
+
+function liveGridChangeHole(delta) {
+  var total = (_liveScoring.data.holePars||[]).length || 18;
+  var h = _liveScoring.activeHole + delta;
+  if(h < 1) h = 1;
+  if(h > total) h = total;
+  _liveScoring.activeHole = h;
+  renderLiveGridHTML();
+}
+
+// Sparar brutto för given spelare/aktivt hål direkt till Firestore (live).
+// Tomt fält raderar hålets resultat igen.
+function onLiveScoreInput(pi, rawValue) {
+  if(!_liveScoring.data) return;
+  var hole = _liveScoring.activeHole;
+  var update = {};
+  var n = parseInt(rawValue, 10);
+  update['scores.'+pi+'.'+hole] = isNaN(n) ? firebase.firestore.FieldValue.delete() : n;
+  update.updatedAt = Date.now();
+  liveScoringRef().update(update).catch(function(err){
+    console.error('Livescoring: kunde inte spara', err);
+    alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
+  });
+}
+
+// ── FÖLJ LIVE (för övriga tourdeltagare, inte bara bollens egna spelare) ──
+// Läser ALLA bollars livescoring-dokument för en deltävling (query på eventId)
+// och visar en gemensam, live-uppdaterad resultatlista.
+var _liveFollow = { eid: null, unsub: null, docs: [] };
+
+function openLiveFollow(eid) {
+  var t = getTour();
+  var e = t.events.find(function(x){ return x.id === eid; });
+  if(!e) return;
+  _liveFollow = { eid: eid, unsub: null, docs: [] };
+  _afterModalClose = function(){ if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; } };
+
+  showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
+
+  _liveFollow.unsub = LIVE_SCORING_COL.where('eventId','==',eid).onSnapshot(function(snap){
+    _liveFollow.docs = snap.docs.map(function(doc){ return doc.data(); });
+    renderLiveFollowHTML(e);
+  }, function(err){ console.error('Följ live: lyssnarfel', err); });
+}
+
+function renderLiveFollowHTML(e) {
+  var el = document.getElementById('live-follow-modal-body');
+  if(!el) return;
+
+  var rows = [];
+  _liveFollow.docs.forEach(function(d){
+    (d.players||[]).forEach(function(p){
+      var sc = (d.scores||{})[p.pi] || {};
+      var total = 0, played = 0;
+      Object.keys(sc).forEach(function(h){ if(typeof sc[h] === 'number') { total += sc[h]; played++; } });
+      rows.push({ name: p.name, total: total, played: played, totalHoles: (d.holePars||[]).length || 18 });
+    });
+  });
+  rows.sort(function(a,b){
+    if(a.played === 0 && b.played === 0) return 0;
+    if(a.played === 0) return 1;
+    if(b.played === 0) return -1;
+    return a.total - b.total;
+  });
+
+  var body = rows.length
+    ? rows.map(function(r, idx){
+        return '<div class="row" style="justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="width:20px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px">'+esc(r.name)+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:14px">'+
+            '<span style="font-size:12px;color:var(--text-3)">Thru '+r.played+'/'+r.totalHoles+'</span>'+
+            '<span style="font-weight:700;font-size:15px">'+(r.played?r.total:'–')+'</span>'+
+          '</div>'+
+        '</div>';
+      }).join('')
+    : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
+
+  el.innerHTML =
+    '<h3 style="margin-bottom:4px">Live – '+esc(e.name)+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Uppdateras automatiskt · brutto, lägst vinner</p>'+
+    body+
+    '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+}
+
+// ── LIVE-STANDINGSTABELL I TOURVYN ──────────────────────────────────────────
+// Visas mellan flikmenyn och "Top 3 i ledning" i en tours Tävlingar-flik, så
+// länge minst en deltävling i touren har aktiva bollar. Aggregerar alla
+// spelares livescoring-dokument (över samtliga live-bollar i touren) och
+// räknar ut brutto, netto (mot banans hcp-index och spelarens SHCP) samt
+// stableford-poäng per spelare, hål för hål allteftersom resultat matas in.
+var _tourLiveStandings = { tourId: null, unsub: null };
+
+function subscribeTourLiveStandings(t) {
+  var liveEvents = (t.events||[]).filter(function(e){ return !e.closed && e.teeGroups && e.teeGroups.length; });
+  if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
+  var el = document.getElementById('tour-live-standings');
+  if(!liveEvents.length) { if(el) el.innerHTML = ''; return; }
+
+  var eventIds = liveEvents.map(function(e){ return e.id; }).slice(0, 10); // Firestore 'in' tillåter max 10
+  _tourLiveStandings.tourId = t.id;
+  _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
+    var docs = snap.docs.map(function(doc){ return doc.data(); });
+    renderTourLiveStandingsHTML(docs);
+  }, function(err){ console.error('Live-standings: lyssnarfel', err); });
+}
+
+function renderTourLiveStandingsHTML(docs) {
+  var el = document.getElementById('tour-live-standings');
+  if(!el) return;
+
+  var rows = [];
+  docs.forEach(function(d){
+    var holePars = d.holePars||[], holeHcpIndex = d.holeHcpIndex||[];
+    var totalHoles = holePars.length || 18;
+    (d.players||[]).forEach(function(p){
+      var sc = (d.scores||{})[p.pi] || {};
+      var brutto = 0, netto = 0, poang = 0, thru = 0;
+      for(var idx=0; idx<totalHoles; idx++){
+        var gross = sc[idx+1];
+        if(typeof gross !== 'number') continue;
+        var par = holePars[idx];
+        var hcpIdx = (holeHcpIndex[idx]!=null) ? holeHcpIndex[idx] : (idx+1);
+        var strokesRecv = computeHcpStrokesForHole(p.shcp||0, hcpIdx, totalHoles);
+        brutto += gross;
+        netto += (gross - strokesRecv);
+        poang += computeHoleStablefordPoints(gross, par, strokesRecv);
+        thru++;
+      }
+      rows.push({ name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles });
+    });
+  });
+
+  if(!rows.length) { el.innerHTML = ''; return; }
+
+  // Bäst placerad överst - flest stableford-poäng vinner (mer spelat rankas före ospelat vid lika poäng).
+  rows.sort(function(a,b){
+    if(a.thru===0 && b.thru===0) return 0;
+    if(a.thru===0) return 1;
+    if(b.thru===0) return -1;
+    return b.poang - a.poang;
+  });
+
+  var body = rows.map(function(r, idx){
+    return '<div class="row" style="justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
+      '<div style="display:flex;gap:12px;font-size:13px;flex-shrink:0">'+
+        '<span style="width:32px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
+        '<span style="width:32px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
+        '<span style="width:32px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
+        '<span style="width:44px;text-align:right;color:var(--text-3);font-size:11px">Thru '+r.thru+'</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML = '<div class="card" style="margin-bottom:16px">'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">'+
+      '<h3 style="margin:0"><i class="ti ti-broadcast" style="color:#123A4D"></i> Live scoring</h3>'+
+    '</div>'+
+    '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+      '<span style="width:32px;text-align:center">Brt</span><span style="width:32px;text-align:center">Nto</span><span style="width:32px;text-align:center">Pts</span><span style="width:44px"></span>'+
+    '</div>'+
+    body+
+  '</div>';
+}
+
 
 function computeCourseHoleStats(courseName) {
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(courseName||'').trim().toLowerCase(); });
@@ -9044,6 +9405,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (75)',
+    items: [
+      { type: 'new', text: '"Live scoring"-knapp tillagd i "Kommande runda"-rutan på startsidan (bredvid "Mitt resultat") - syns så fort du är bollagd, och hoppar direkt till din bolls livescoring.' },
+      { type: 'new', text: 'Ny live-standingstabell i en tours Tävlingar-flik, mellan flikmenyn och "Top 3 i ledning". Visas automatiskt så fort en deltävling har aktiva bollar, och listar alla spelare (över samtliga live-bollar) med brutto, netto (mot banans hcp-index och spelarens bekräftade SHCP) och stableford-poäng, samt hur många hål de kommit ("Thru"). Uppdateras live i takt med att resultat matas in.' }
+    ]
+  },
+  {
+    date: '19 augusti 2026 (74)',
+    items: [
+      { type: 'new', text: 'Ny "Livescoring"-funktion för bollar! Från bollistan under en deltävling finns nu en Livescoring-knapp per boll. Inmatningen fungerar precis som "Mitt resultat" (ett sifferfält för brutto per hål), men delas upp hål för hål och sparas live direkt när man fyller i - istället för att fyllas i som ett helt scorekort efter rundan. Bläddra mellan hål med pilarna och mata in för samtliga spelare i bollen (upp till fyra). Dessutom: en ny "Följ live"-knapp i anmälningsvyn låter ALLA i touren följa hela deltävlingen live - en gemensam resultatlista över samtliga bollar, sorterad efter brutto, med "Thru X/18" för hur långt var och en kommit. Allt sparas i en egen liten Firestore-collection per boll (inte i appens huvud-databas) så flera bollar kan mata in samtidigt utan att krocka eller belasta huvud-dokumentet.' },
+      { type: 'improved', text: 'Livescoringen inleds nu alltid med ett SHCP-steg: innan hål-inmatningen börjar visas en vy där varje spelares spelhandicap för dagens runda bekräftas/justeras. Går att öppna igen senare via "Ändra SHCP" i inmatningsvyn, t.ex. om fel SHCP råkade sparas.' }
+    ]
+  },
   {
     date: '19 augusti 2026 (73)',
     items: [
