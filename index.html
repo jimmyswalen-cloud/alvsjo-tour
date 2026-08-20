@@ -6748,7 +6748,7 @@ function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;color:var(--green-dark);text-decoration:underline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
       '<div style="display:flex;gap:12px;font-size:13px;flex-shrink:0">'+
         '<span style="width:32px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:32px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
@@ -6761,37 +6761,66 @@ function buildLiveStandingsRowsHTML(rows) {
 
 // Öppnar en spelares fullständiga live-scorekort och progress, färgkodat per hål:
 // röd birdie, gul eagle (eller bättre), ljusblå bogey, mörkblå dubbelbogey+.
-function openPlayerLiveScorecard(idx) {
-  var r = _liveStandingsRowsCache[idx];
-  if(!r) return;
-  var rows = '';
-  for(var i=0; i<r.totalHoles; i++){
+// Bygger en niohåls-tabell i liggande format (hål som kolumner) - Hcp/Par/Resultat/
+// Poäng-rader plus en summeringskolumn ("Ut"/"In"). Resultat-cellerna färgkodas
+// precis som liveScoreCellStyle (birdie/eagle/bogey/dubbelbogey).
+function buildNineHoleScorecardBlock(r, startIdx, sumLabel) {
+  var holeHeader = '', hcpRow = '', parRow = '', resultRow = '', poangRow = '';
+  var sumPar = 0, sumResult = 0, sumPoang = 0, filledCount = 0;
+  var count = Math.min(9, r.totalHoles - startIdx);
+  for(var k=0; k<count; k++){
+    var i = startIdx + k;
     var par = r.holePars[i];
     var hcpIdx = (r.holeHcpIndex[i]!=null) ? r.holeHcpIndex[i] : (i+1);
     var gross = r.holesGross[i];
+    sumPar += par;
+    holeHeader += '<th style="padding:6px 3px;text-align:center;font-size:13px;font-weight:700;color:var(--text)">'+(i+1)+'</th>';
+    hcpRow += '<td style="padding:4px 3px;text-align:center;color:var(--text-3);font-size:11px">'+hcpIdx+'</td>';
+    parRow += '<td style="padding:4px 3px;text-align:center;color:var(--text-2);font-size:12px">'+par+'</td>';
     var style = liveScoreCellStyle(gross, par);
     var lbl = (gross!=null) ? liveScoreLabel(gross, par) : '';
-    rows += '<tr style="border-top:1px solid var(--border)">'+
-      '<td style="padding:6px;font-weight:600">'+(i+1)+'</td>'+
-      '<td style="padding:6px;text-align:center;color:var(--text-2)">'+par+'</td>'+
-      '<td style="padding:6px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
-      '<td style="padding:6px;text-align:center;font-weight:700;'+style+'">'+(gross!=null?gross:'–')+(lbl?'<div style="font-size:8px;font-weight:600;opacity:.85">'+lbl+'</div>':'')+'</td>'+
-    '</tr>';
+    resultRow += '<td style="padding:4px 3px;text-align:center;font-weight:700;font-size:13px;border-radius:4px;'+style+'">'+(gross!=null?gross:'–')+(lbl?'<div style="font-size:7px;font-weight:600;opacity:.8">'+lbl+'</div>':'')+'</td>';
+    var poangVal = null;
+    if(gross != null) {
+      var strokesRecv = computeHcpStrokesForHole(r.shcp||0, hcpIdx, r.totalHoles);
+      poangVal = computeHoleStablefordPoints(gross, par, strokesRecv);
+      sumResult += gross; sumPoang += poangVal; filledCount++;
+    }
+    poangRow += '<td style="padding:4px 3px;text-align:center;font-size:12px;color:var(--green-dark);font-weight:600">'+(poangVal!=null?poangVal:'–')+'</td>';
   }
-  var h = '<h3 style="margin-bottom:4px">'+esc(r.name)+'</h3>'+
-    '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Thru '+r.thru+'/'+r.totalHoles+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin-bottom:10px">'+
+  return '<div style="overflow-x:auto;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;min-width:460px">'+
+    '<thead><tr style="border-bottom:2px solid var(--border)">'+
+      '<th style="padding:6px 6px;text-align:left;font-size:10px;color:var(--text-3);text-transform:uppercase">Hål</th>'+holeHeader+
+      '<th style="padding:6px 6px;text-align:center;font-size:10px;color:var(--text-3);text-transform:uppercase">'+sumLabel+'</th>'+
+    '</tr></thead><tbody>'+
+    '<tr><td style="padding:4px 6px;font-size:10px;color:var(--text-3);text-transform:uppercase">Hcp</td>'+hcpRow+'<td></td></tr>'+
+    '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px;font-size:12px;color:var(--text-2);font-weight:600">Par</td>'+parRow+'<td style="padding:4px 6px;text-align:center;font-weight:700">'+sumPar+'</td></tr>'+
+    '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px;font-size:12px;font-weight:700">Resultat</td>'+resultRow+'<td style="padding:4px 6px;text-align:center;font-weight:700">'+(filledCount?sumResult:'–')+'</td></tr>'+
+    '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px;font-size:12px;font-weight:700;color:var(--green-dark)">Poäng</td>'+poangRow+'<td style="padding:4px 6px;text-align:center;font-weight:700;color:var(--green-dark)">'+(filledCount?sumPoang:'–')+'</td></tr>'+
+  '</tbody></table></div>';
+}
+
+// Öppnar en spelares fullständiga live-scorekort och progress, i liggande
+// format (front 9 överst, back 9 underst) - färgkodat per hål: röd birdie,
+// gul eagle (eller bättre), ljusblå bogey, mörkblå dubbelbogey+.
+function openPlayerLiveScorecard(idx) {
+  var r = _liveStandingsRowsCache[idx];
+  if(!r) return;
+  var frontBlock = buildNineHoleScorecardBlock(r, 0, 'Ut');
+  var backBlock = r.totalHoles > 9 ? buildNineHoleScorecardBlock(r, 9, 'In') : '';
+  var totalPar = r.holePars.reduce(function(a,b){ return a+b; }, 0);
+
+  var h = '<h3 style="margin-bottom:2px">'+esc(r.name)+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin-bottom:12px">'+
       '<span><span style="display:inline-block;width:10px;height:10px;background:#E5484D;border-radius:2px;margin-right:4px"></span>Birdie</span>'+
       '<span><span style="display:inline-block;width:10px;height:10px;background:#F7C948;border-radius:2px;margin-right:4px"></span>Eagle+</span>'+
       '<span><span style="display:inline-block;width:10px;height:10px;background:#AEE3F5;border-radius:2px;margin-right:4px"></span>Bogey</span>'+
       '<span><span style="display:inline-block;width:10px;height:10px;background:#1E4E8C;border-radius:2px;margin-right:4px"></span>Dubbelbogey+</span>'+
     '</div>'+
-    '<div style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
-    '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
-      '<th style="padding:6px;text-align:left">Hål</th><th style="padding:6px;text-align:center">Par</th><th style="padding:6px;text-align:center">Hcp</th><th style="padding:6px;text-align:center">Slag</th>'+
-    '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    frontBlock + backBlock +
     '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, false, true);
+  showModal(h, true, true);
 }
 
 function renderLiveFollowHTML(e) {
@@ -10246,6 +10275,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (91)',
+    items: [
+      { type: 'improved', text: 'Spelarens live-scorekort (öppnas via klick på namn i live-tabellen) har nu liggande struktur, hål som kolumner - hål 1-9 överst med "Ut"-summering, hål 10-18 underst med "In"-summering, samt rader för Hcp/Par/Resultat/Poäng. Färgkodningen (birdie/eagle/bogey/dubbelbogey) behålls på Resultat-raden, men designen är gjord clean utan tungt grönt - vit bakgrund, tunna linjer.' },
+      { type: 'changed', text: 'Spelarnamnen i live-tabellen ser inte längre ut som klickbara länkar (grönt + understruket) - vanlig text nu, snyggare och mindre distraherande, men fortfarande klickbara för att öppna scorekortet.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (90)',
     items: [
