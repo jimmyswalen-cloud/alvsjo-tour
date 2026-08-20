@@ -6348,7 +6348,9 @@ function subscribeLiveScoring(ref) {
 
 function renderLiveScoringView() {
   if(!document.getElementById('live-scoring-modal-body')) return;
-  if(_liveScoring.mode === 'shcp') renderLiveShcpHTML(); else renderLiveGridHTML();
+  if(_liveScoring.mode === 'shcp') renderLiveShcpHTML();
+  else if(_liveScoring.mode === 'picker') renderLivePickerHTML();
+  else renderLiveGridHTML();
 }
 
 // Steg 1, innan hål-inmatningen börjar: varje spelares SHCP (spelhandicap)
@@ -6401,11 +6403,13 @@ function confirmLiveShcp() {
   });
 }
 
-// Inmatningsvy: samma princip som "Mitt resultat" (ett sifferfält per hål),
-// men delat upp hål för hål och sparat live så snart man fyller i, istället
-// för att fyllas i som ett helt scorekort efter rundan. Markören (den som
-// matar in) väljer aktivt hål med pilarna och fyller i brutto för var och en
-// av bollens spelare - varje ändring sparas direkt och syns live hos alla.
+// Inmatningsvy: samma princip som "Mitt resultat" (brutto per hål), men delat upp
+// hål för hål och sparat live så snart man matar in, istället för att fyllas i
+// som ett helt scorekort efter rundan. Spelarna visas STEGVIS - nästa spelares
+// inmatningsknapp dyker bara upp när föregående spelare fått sitt resultat, så
+// man matar in en i taget istället för att se alla fyra fält samtidigt. Att
+// mata in görs genom att trycka på en knapp som öppnar en sifferpicker
+// (1–10, tryck för att välja) - man slipper telefonens tangentbord helt.
 function renderLiveGridHTML() {
   var d = _liveScoring.data;
   var el = document.getElementById('live-scoring-modal-body');
@@ -6415,14 +6419,24 @@ function renderLiveGridHTML() {
   var par = d.holePars[hole-1];
   var idxHcp = (d.holeHcpIndex && d.holeHcpIndex[hole-1] != null) ? d.holeHcpIndex[hole-1] : (hole);
 
-  var rows = d.players.map(function(p){
+  // Hur många spelarrader som ska visas just nu: alla som redan har ett resultat
+  // för hålet, plus EN till (nästa som ska fyllas i). Har alla fått ett resultat
+  // visas samtliga.
+  var visibleCount = 0;
+  for(var vi=0; vi<d.players.length; vi++){
+    var hasScore = typeof (d.scores[d.players[vi].pi]||{})[hole] === 'number';
+    visibleCount = vi+1;
+    if(!hasScore) break;
+  }
+
+  var rows = d.players.slice(0, visibleCount).map(function(p){
     var sc = d.scores[p.pi] || {};
     var pu = (d.putts && d.putts[p.pi]) || {};
     var val = sc[hole];
     var puttVal = pu[hole];
-    var inpVal = (val === undefined || val === null) ? '' : val;
+    var hasVal = typeof val === 'number';
     var puttInpVal = (puttVal === undefined || puttVal === null) ? '' : puttVal;
-    var lbl = (typeof val === 'number') ? liveScoreLabel(val, par) : '';
+    var lbl = hasVal ? liveScoreLabel(val, par) : '';
     var extraStrokes = computeHcpStrokesForHole(p.shcp||0, idxHcp, totalHoles);
     var total = 0, played = 0;
     Object.keys(sc).forEach(function(h){ if(typeof sc[h] === 'number') { total += sc[h]; played++; } });
@@ -6433,10 +6447,12 @@ function renderLiveGridHTML() {
       '</div>'+
       '<div style="width:44px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
       '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
-      '<input type="number" min="1" max="15" value="'+inpVal+'" title="Slag" style="width:60px;margin:0;padding:8px 4px;text-align:center;font-size:17px;font-weight:700" onchange="onLiveScoreInput('+p.pi+',this.value)">'+
-      '<input type="number" min="0" max="10" value="'+puttInpVal+'" title="Puttar (frivilligt)" placeholder="putt" style="width:52px;margin:0;padding:8px 2px;text-align:center;font-size:13px;color:var(--text-2)" onchange="onLivePuttInput('+p.pi+',this.value)">'+
+      '<button onclick="openLivePicker('+p.pi+')" style="width:56px;height:44px;margin:0;padding:0;text-align:center;font-size:19px;font-weight:800;border-radius:8px;border:2px solid '+(hasVal?'var(--green-dark)':'var(--border)')+';background:'+(hasVal?'var(--surface2)':'#fff')+';color:var(--text)">'+(hasVal?val:'?')+'</button>'+
+      '<input type="number" min="0" max="10" value="'+puttInpVal+'" title="Puttar (frivilligt)" placeholder="putt" style="width:48px;margin:0;padding:8px 2px;text-align:center;font-size:13px;color:var(--text-2)" onchange="onLivePuttInput('+p.pi+',this.value)">'+
     '</div>';
   }).join('');
+
+  var allDone = visibleCount === d.players.length && typeof (d.scores[d.players[d.players.length-1].pi]||{})[hole] === 'number';
 
   el.innerHTML =
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
@@ -6449,12 +6465,13 @@ function renderLiveGridHTML() {
         '<div style="font-weight:800;font-size:26px;line-height:1.1">Hål '+hole+'</div>'+
         '<div style="font-size:16px;color:var(--text-2);font-weight:600;margin-top:2px">Par '+par+' &nbsp;·&nbsp; Index '+idxHcp+'</div>'+
       '</div>'+
-      '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
+      '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+(allDone?'':' title="Alla spelare måste ha ett resultat innan du kan gå vidare"')+'><i class="ti ti-chevron-right"></i></button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:60px;text-align:center">Slag</div><div style="width:52px;text-align:center">Puttar</div>'+
+      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div><div style="width:48px;text-align:center">Putt</div>'+
     '</div>'+
     rows+
+    (!allDone ? '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0"><i class="ti ti-arrow-down"></i> Tryck på "?" ovan för att mata in nästa spelares resultat.</p>' : '')+
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
       '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '</div>';
@@ -6466,6 +6483,64 @@ function liveGridChangeHole(delta) {
   if(h < 1) h = 1;
   if(h > total) h = total;
   _liveScoring.activeHole = h;
+  renderLiveGridHTML();
+}
+
+// Öppnar sifferpickern (1–10, tryck för att välja) för en spelares resultat på
+// aktuellt hål - istället för att skriva in via telefonens tangentbord.
+function openLivePicker(pi) {
+  _liveScoring.pickerPi = pi;
+  _liveScoring.mode = 'picker';
+  renderLivePickerHTML();
+}
+
+function renderLivePickerHTML() {
+  var d = _liveScoring.data;
+  var el = document.getElementById('live-scoring-modal-body');
+  if(!d || !el) return;
+  var hole = _liveScoring.activeHole;
+  var par = d.holePars[hole-1];
+  var pi = _liveScoring.pickerPi;
+  var p = d.players.filter(function(x){ return x.pi===pi; })[0];
+  if(!p) { _liveScoring.mode = 'grid'; renderLiveGridHTML(); return; }
+  var currentVal = (d.scores[pi]||{})[hole];
+
+  var btns = '';
+  for(var n=1; n<=10; n++){
+    var lbl = liveScoreLabel(n, par);
+    var active = currentVal === n;
+    btns += '<button onclick="pickLiveScore('+n+')" style="padding:16px 0;border-radius:10px;border:2px solid '+(active?'var(--green-dark)':'var(--border)')+';background:'+(active?'var(--surface2)':'#fff')+';font-size:22px;font-weight:800;color:var(--text)">'+n+
+      (lbl?'<div style="font-size:9px;font-weight:600;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'<div style="font-size:9px">&nbsp;</div>')+
+    '</button>';
+  }
+
+  el.innerHTML =
+    '<div class="row" style="margin-bottom:10px">'+
+      '<button class="btn btn-sm" onclick="closeLivePicker()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
+    '</div>'+
+    '<div style="text-align:center;margin-bottom:16px">'+
+      '<div style="font-size:13px;color:var(--text-3)">Hål '+hole+' · Par '+par+'</div>'+
+      '<div style="font-weight:800;font-size:22px">'+esc(p.name)+'</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
+    '<button onclick="clearLivePickerScore()" style="width:100%;padding:12px 0;border-radius:8px;background:#fdecec;color:#B42318;border:none;font-size:14px;font-weight:600"><i class="ti ti-backspace"></i> Radera resultat</button>';
+}
+
+function pickLiveScore(n) {
+  var pi = _liveScoring.pickerPi;
+  onLiveScoreInput(pi, n);
+  closeLivePicker();
+}
+
+function clearLivePickerScore() {
+  var pi = _liveScoring.pickerPi;
+  onLiveScoreInput(pi, '');
+  closeLivePicker();
+}
+
+function closeLivePicker() {
+  _liveScoring.mode = 'grid';
+  _liveScoring.pickerPi = null;
   renderLiveGridHTML();
 }
 
@@ -6537,6 +6612,8 @@ function openLiveFollow(eid) {
 // Räknar ut brutto/netto/stableford-poäng/thru per spelare från en lista
 // livescoring-dokument. Delad mellan "Live-tabell"-modalen (en deltävling)
 // och tourvyns live-standingstabell (samtliga live-deltävlingar i touren).
+// Sparar även hål-för-hål-data per rad, så man kan klicka på en spelare och
+// se hela scorekortet (se openPlayerLiveScorecard).
 function computeLiveStandingsRows(docs) {
   var rows = [];
   docs.forEach(function(d){
@@ -6545,9 +6622,11 @@ function computeLiveStandingsRows(docs) {
     (d.players||[]).forEach(function(p){
       var sc = (d.scores||{})[p.pi] || {};
       var brutto = 0, netto = 0, poang = 0, thru = 0;
+      var holesGross = new Array(totalHoles).fill(null);
       for(var idx=0; idx<totalHoles; idx++){
         var gross = sc[idx+1];
         if(typeof gross !== 'number') continue;
+        holesGross[idx] = gross;
         var par = holePars[idx];
         var hcpIdx = (holeHcpIndex[idx]!=null) ? holeHcpIndex[idx] : (idx+1);
         var strokesRecv = computeHcpStrokesForHole(p.shcp||0, hcpIdx, totalHoles);
@@ -6556,7 +6635,10 @@ function computeLiveStandingsRows(docs) {
         poang += computeHoleStablefordPoints(gross, par, strokesRecv);
         thru++;
       }
-      rows.push({ name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles });
+      rows.push({
+        name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
+        holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
+      });
     });
   });
   // Bäst placerad överst - flest stableford-poäng vinner (mer spelat rankas före ospelat vid lika poäng).
@@ -6569,10 +6651,29 @@ function computeLiveStandingsRows(docs) {
   return rows;
 }
 
+// Bakgrundsfärg för en enskild hål-cell, baserat på resultat relativt par:
+// birdie = rött, eagle (eller bättre) = gult, bogey = ljusblått, dubbelbogey
+// eller sämre = mörkblått. Par/inget resultat får ingen färg.
+function liveScoreCellStyle(gross, par) {
+  if(gross == null) return '';
+  var diff = gross - par;
+  if(diff <= -2) return 'background:#F7C948;color:#3B2E00'; // eagle eller bättre - gult
+  if(diff === -1) return 'background:#E5484D;color:#fff'; // birdie - rött
+  if(diff === 0) return ''; // par - ingen färg
+  if(diff === 1) return 'background:#AEE3F5;color:#0A3A4A'; // bogey - ljusblått
+  return 'background:#1E4E8C;color:#fff'; // dubbelbogey eller sämre - mörkblått
+}
+
+// Global cache över senast renderade live-standingsrader, så att ett klick på
+// ett spelarnamn (bara ett litet index i onclick-attributet) kan slå upp hela
+// spelarens hål-för-hål-data utan att behöva serialisera allt i HTML-strängen.
+var _liveStandingsRowsCache = [];
+
 function buildLiveStandingsRowsHTML(rows) {
+  _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:18px;color:var(--text-3);font-size:12px">'+(idx+1)+'</span><span style="font-weight:600;font-size:14px;color:var(--green-dark);text-decoration:underline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span></div>'+
       '<div style="display:flex;gap:12px;font-size:13px;flex-shrink:0">'+
         '<span style="width:32px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:32px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
@@ -6581,6 +6682,41 @@ function buildLiveStandingsRowsHTML(rows) {
       '</div>'+
     '</div>';
   }).join('');
+}
+
+// Öppnar en spelares fullständiga live-scorekort och progress, färgkodat per hål:
+// röd birdie, gul eagle (eller bättre), ljusblå bogey, mörkblå dubbelbogey+.
+function openPlayerLiveScorecard(idx) {
+  var r = _liveStandingsRowsCache[idx];
+  if(!r) return;
+  var rows = '';
+  for(var i=0; i<r.totalHoles; i++){
+    var par = r.holePars[i];
+    var hcpIdx = (r.holeHcpIndex[i]!=null) ? r.holeHcpIndex[i] : (i+1);
+    var gross = r.holesGross[i];
+    var style = liveScoreCellStyle(gross, par);
+    var lbl = (gross!=null) ? liveScoreLabel(gross, par) : '';
+    rows += '<tr style="border-top:1px solid var(--border)">'+
+      '<td style="padding:6px;font-weight:600">'+(i+1)+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-2)">'+par+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
+      '<td style="padding:6px;text-align:center;font-weight:700;'+style+'">'+(gross!=null?gross:'–')+(lbl?'<div style="font-size:8px;font-weight:600;opacity:.85">'+lbl+'</div>':'')+'</td>'+
+    '</tr>';
+  }
+  var h = '<h3 style="margin-bottom:4px">'+esc(r.name)+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Thru '+r.thru+'/'+r.totalHoles+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin-bottom:10px">'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#E5484D;border-radius:2px;margin-right:4px"></span>Birdie</span>'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#F7C948;border-radius:2px;margin-right:4px"></span>Eagle+</span>'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#AEE3F5;border-radius:2px;margin-right:4px"></span>Bogey</span>'+
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#1E4E8C;border-radius:2px;margin-right:4px"></span>Dubbelbogey+</span>'+
+    '</div>'+
+    '<div style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
+      '<th style="padding:6px;text-align:left">Hål</th><th style="padding:6px;text-align:center">Par</th><th style="padding:6px;text-align:center">Hcp</th><th style="padding:6px;text-align:center">Slag</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, false, true);
 }
 
 function renderLiveFollowHTML(e) {
@@ -10035,6 +10171,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (87)',
+    items: [
+      { type: 'new', text: 'Livescoringens hål-inmatning fungerar nu med knappar istället för telefonens tangentbord: "Slag"-fältet är en knapp som öppnar en sifferpicker (1–10, tryck för att välja). Spelarna visas dessutom stegvis - nästa spelares inmatningsknapp dyker bara upp när föregående spelare fått ett resultat, istället för att visa alla fyra samtidigt.' },
+      { type: 'new', text: 'Spelarnamn i live-tabellen (både "Följ live" och tourvyns live-standingstabell) är nu klickbara och öppnar spelarens fullständiga scorekort och progress hål för hål, färgkodat: birdie = rött, eagle eller bättre = gult, bogey = ljusblått, dubbelbogey eller sämre = mörkblått. En liten färgförklaring visas överst i vyn.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (86)',
     items: [
