@@ -6510,8 +6510,8 @@ function resetCurrentLiveScoring() {
 // Etikett under sifferknapparna i inmatningsvyn, relativt hålets par.
 function liveScoreLabel(gross, par) {
   var cat = categorizeHoleScore(gross, par);
-  var map = { hio:'HIO', albatross:'ALBATR.', eagle:'EAGLE', birdie:'BIRDIE', par:'PAR', bogey:'BOGEY' };
-  if(cat === 'doubleplus') return (gross - par === 2) ? 'DB BOG.' : '';
+  var map = { hio:'HIO', albatross:'ALBATROSS', eagle:'EAGLE', birdie:'BIRDIE', par:'PAR', bogey:'BOGEY' };
+  if(cat === 'doubleplus') return (gross - par === 2) ? 'DUBBELBOGEY' : '';
   return map[cat] || '';
 }
 
@@ -6760,8 +6760,10 @@ function renderLivePickerHTML() {
   for(var n=1; n<=10; n++){
     var lbl = liveScoreLabel(n, par);
     var active = currentVal === n;
-    btns += '<button onclick="pickLiveScore('+n+')" style="padding:16px 0;border-radius:10px;border:2px solid '+(active?'var(--green-dark)':'var(--border)')+';background:'+(active?'var(--surface2)':'#fff')+';font-size:22px;font-weight:800;color:var(--text)">'+n+
-      (lbl?'<div style="font-size:9px;font-weight:600;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'<div style="font-size:9px">&nbsp;</div>')+
+    var catStyle = liveScoreCellStyle(n, par); // t.ex. 'background:#E5484D;color:#fff' för birdie, tomt för par
+    var baseStyle = catStyle || 'background:#fff;color:var(--text)';
+    btns += '<button onclick="pickLiveScore('+n+')" style="padding:16px 0;border-radius:10px;border:'+(active?'3px solid #123A4D':'2px solid rgba(0,0,0,.12)')+';'+baseStyle+';font-size:22px;font-weight:800">'+n+
+      (lbl?'<div style="font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.85">'+lbl+'</div>':'<div style="font-size:9px">&nbsp;</div>')+
     '</button>';
   }
 
@@ -6769,10 +6771,16 @@ function renderLivePickerHTML() {
     '<div class="row" style="margin-bottom:10px">'+
       '<button class="btn btn-sm" onclick="cancelLivePicker()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
     '</div>'+
-    '<div style="text-align:center;margin-bottom:16px">'+
+    '<div style="text-align:center;margin-bottom:12px">'+
       '<div style="font-size:13px;color:var(--text-3)">Hål '+hole+' · Par '+par+' · Steg 1/2</div>'+
       '<div style="font-weight:800;font-size:22px">'+esc(p.name)+'</div>'+
       '<div style="font-size:13px;color:var(--text-2);margin-top:2px">Hur många slag?</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:10px;justify-content:center">'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#F7C948;border-radius:2px;margin-right:3px"></span>Eagle/Albatross/HIO</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#AEE3F5;border-radius:2px;margin-right:3px"></span>Bogey</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
     '<button onclick="clearLivePickerScore()" style="width:100%;padding:12px 0;border-radius:8px;background:#fdecec;color:#B42318;border:none;font-size:14px;font-weight:600"><i class="ti ti-backspace"></i> Radera resultat</button>';
@@ -10546,6 +10554,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (100)',
+    items: [
+      { type: 'improved', text: 'Sifferpickern för antal slag i livescoringen är nu färgkodad, exakt som live-tabellens scorekort: röd bakgrund för birdie, gul för eagle/albatross/hole-in-one, ljusblå för bogey, mörkblå för dubbelbogey eller sämre. En liten färgförklaring visas ovanför sifferknapparna. "Albatross" och "Dubbelbogey" skrivs nu ut fullt istället för förkortat ("ALBATR."/"DB BOG.").' }
+    ]
+  },
   {
     date: '20 augusti 2026 (99)',
     items: [
