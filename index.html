@@ -10047,8 +10047,37 @@ function computeGolfHeatmaps() {
     .map(function(x){ return { name:x.name, value:x.count, label:x.count+' birdies' }; });
   var mostHio = computePlayerHoleCategoryLeaders('hio')
     .map(function(x){ return { name:x.name, value:x.count, label:x.count+' hole-in-one' }; });
+  var bestPutters = computePuttingLeaders()
+    .map(function(x){ return { name:x.name, value:x.avgPerHole, label:x.avgPerHole.toFixed(2)+' putt/hål ('+x.totalHolesWithPutts+' hål)' }; });
 
-  return { mostPlayed: mostPlayed, highestAvg: highestAvg, hardest: hardest, topDistricts: topDistricts, mostBirdies: mostBirdies, mostHio: mostHio };
+  return { mostPlayed: mostPlayed, highestAvg: highestAvg, hardest: hardest, topDistricts: topDistricts, mostBirdies: mostBirdies, mostHio: mostHio, bestPutters: bestPutters };
+}
+
+// Global topplista över lägst snitt puttar/hål, över samtliga spelare och tourer.
+// Kräver minst 9 registrerade hål med puttdata för att vara med (undviker att en
+// enda bra putt-runda på 1-2 hål ger en missvisande "bäst puttare"-titel).
+function computePuttingLeaders() {
+  var byUser = {}; // username -> { name, totalPutts, totalHoles }
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || !e.results) return;
+      e.results.forEach(function(r){
+        if(!r.holePutts) return;
+        var p = players[r.pi];
+        if(!p) return;
+        if(!byUser[p.username]) byUser[p.username] = { name: p.name, totalPutts: 0, totalHoles: 0 };
+        r.holePutts.forEach(function(pt){
+          if(typeof pt === 'number') { byUser[p.username].totalPutts += pt; byUser[p.username].totalHoles++; }
+        });
+      });
+    });
+  });
+  return Object.keys(byUser).map(function(u){ return byUser[u]; })
+    .filter(function(x){ return x.totalHoles >= 9; })
+    .map(function(x){ return { name: x.name, avgPerHole: x.totalPutts/x.totalHoles, totalHolesWithPutts: x.totalHoles }; })
+    .sort(function(a,b){ return a.avgPerHole - b.avgPerHole; })
+    .slice(0, 10);
 }
 
 function buildHeatmapBarsHTML(items, barColor) {
@@ -10087,7 +10116,15 @@ function openGolfHeatmaps() {
   h += buildHeatmapBarsHTML(hm.mostBirdies, '#1D9E75')+'<hr class="divider">';
 
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-target-arrow" style="color:#BA7517"></i> Flest hole-in-one</div>';
-  h += buildHeatmapBarsHTML(hm.mostHio, '#BA7517');
+  h += buildHeatmapBarsHTML(hm.mostHio, '#BA7517')+'<hr class="divider">';
+
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-golf" style="color:#0F6E56"></i> Bäst puttare (lägst snitt/hål)</div>';
+  h += buildHeatmapBarsHTML(hm.bestPutters, '#0F6E56');
+  if(!hm.bestPutters.length) {
+    h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:6px">'+
+      '<div style="font-size:12px;color:var(--text-2)"><i class="ti ti-info-circle"></i> Kräver minst 9 registrerade hål med puttar för en spelare - fylls på i takt med att puttar matas in i livescoringen eller "Mitt resultat".</div>'+
+    '</div>';
+  }
 
   if(!hm.mostBirdies.length && !hm.mostHio.length) {
     h += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:10px">'+
@@ -10411,6 +10448,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (94)',
+    items: [
+      { type: 'new', text: 'Ny topplista "Bäst puttare" i Heatmaps-vyn (Banstatistik), bredvid flest birdies/hole-in-one - visar lägst snitt puttar/hål över samtliga spelare och tourer, byggd på samma puttdata som samlats in via livescoring och "Mitt resultat". Kräver minst 9 registrerade hål med puttar för att räknas med, så en enstaka bra putt-stund inte ger en missvisande titel.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (93)',
     items: [
