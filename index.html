@@ -1975,7 +1975,7 @@ function renderHomeNextRoundWidget() {
           '</div>'+
         '</div>'+
       '</div>'+
-      '<div class="row" style="justify-content:flex-end;gap:8px;padding:0 14px 12px">'+
+      '<div class="row" style="justify-content:flex-end;align-items:center;gap:8px;padding:10px 14px 12px">'+
         '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
@@ -1988,6 +1988,8 @@ function renderHomeNextRoundWidget() {
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
 // om livescoringen faktiskt har startats (dvs. minst en spelare i minst en boll
 // har fått ett resultat inmatat för deltävlingen) - inte bara att en boll finns.
+// Ren ikonknapp (ingen text) för att ta minimalt utrymme bredvid "Live scoring"
+// som ska vara den tydliga, framträdande genvägen.
 function checkHomeLiveTableButton(eid) {
   LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
     var started = snap.docs.some(function(doc){
@@ -2001,7 +2003,7 @@ function checkHomeLiveTableButton(eid) {
     var el = document.getElementById('home-live-table-btn');
     if(!el) return;
     el.innerHTML = started
-      ? '<button class="btn btn-sm" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'
+      ? '<button class="btn btn-sm" title="Live-tabell" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\')"><i class="ti ti-trophy" style="font-size:16px;color:var(--gold)"></i></button>'
       : '';
   }).catch(function(err){ console.error('Kunde inte kontrollera livescoring-status', err); });
 }
@@ -10275,6 +10277,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (92)',
+    items: [
+      { type: 'improved', text: '"Kommande runda"-rutan på startsidan var för kompakt i mobilen - knapparna gick nästan ihop med bilden ovanför. Lagt till mer luft mellan bilden och knappraden, och gjort "Live-tabell" till en liten ikonknapp (bara trofé-ikonen, ingen text) för att ta minimalt utrymme. "Live scoring" och "Mitt resultat" är oförändrade och förblir tydliga, framträdande knappar med text.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (91)',
     items: [
