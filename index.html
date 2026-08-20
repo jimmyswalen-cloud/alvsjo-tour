@@ -3969,6 +3969,10 @@ function renderHomeApprovalWidget() {
 // Hårdkodad lista på standardtyper, så statistiken inte splittras av stavfel eller varianter av samma namn.
 var SIDE_BET_TYPES = ['Längsta drive', 'Närmast hål', 'Minst antal puttar', 'Färst antal slag på ett hål', 'Flest birdies på rundan'];
 var SIDE_BET_TYPE_OTHER = 'Annat (eget namn)';
+// De här typerna går att räkna ut automatiskt från livescoring-/scorekortsdata (hål-för-hål
+// slag och puttar) - "Längsta drive" och "Närmast hål" kräver mätning på plats och kan
+// inte beräknas från datan vi har, så de förblir alltid helt manuella.
+var SIDE_BET_AUTO_TYPES = ['Minst antal puttar', 'Färst antal slag på ett hål', 'Flest birdies på rundan'];
 function dateMinusDays(dateStr, days) {
   var d = new Date(dateStr);
   d.setDate(d.getDate()-days);
@@ -4058,6 +4062,9 @@ function openSideBets(ei) {
           }).join('');
         }
         box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:8px 0 4px">Vinnare</div>';
+        if(SIDE_BET_AUTO_TYPES.indexOf(sb.betType) >= 0) {
+          box += '<div id="sb-suggestion-'+sb.id+'" style="font-size:12px;color:var(--text-3);margin-bottom:6px"><i class="ti ti-loader-2"></i> Beräknar förslag från scorekorten...</div>';
+        }
         box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:0">'+
           '<option value="">Ingen vinnare satt</option>'+
           participants.map(function(pi){
@@ -4094,6 +4101,7 @@ function openSideBets(ei) {
 
   h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
   showModal(h, true, true);
+  if(admin) refreshSideBetSuggestions(ei);
 }
 
 function onSideBetTypeChange() {
@@ -4163,6 +4171,132 @@ function setSideBetWinner(ei, betId, val) {
   sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
   save();
   renderEvents();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTOMATISKA FÖRSLAG FÖR SIDE BETS ("Minst antal puttar", "Färst antal slag på
+// ett hål", "Flest birdies på rundan") - räknas ut från hål-för-hål-data, i
+// turordning: pågående livescoring (mest aktuellt) > inskickat/godkänt
+// "Mitt resultat" > sparat slutresultat (e.results) om tävlingen är stängd.
+// Föreslår bara - admin väljer fortfarande vinnare manuellt i select-fältet,
+// men slipper räkna för hand. "Längsta drive" och "Närmast hål" kräver mätning
+// på plats och kan aldrig räknas ut automatiskt.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Samlar in hål-för-hål slag+puttar per spelare för en deltävling, från alla
+// tillgängliga källor. Returnerar en Promise (behöver hämta livescoring async).
+function collectEventHoleData(t, e) {
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
+  var holePars = course ? course.holePars : null;
+  var totalHoles = holePars ? holePars.length : 18;
+  var byPi = {};
+
+  // Bas: godkända "Mitt resultat"-inskick och (om stängd) sparade slutresultat.
+  (e.scoreSubmissions||[]).forEach(function(s){
+    if(!s.holes || !isSubmissionApproved(s)) return;
+    byPi[s.pi] = { holes: s.holes.slice(), putts: s.holePutts ? s.holePutts.slice() : new Array(totalHoles).fill(null) };
+  });
+  if(e.closed && e.results) {
+    e.results.forEach(function(r){
+      if(!r.holes) return;
+      byPi[r.pi] = { holes: r.holes.slice(), putts: r.holePutts ? r.holePutts.slice() : new Array(totalHoles).fill(null) };
+    });
+  }
+
+  // Överlagra med pågående livescoring, som är mest aktuellt om rundan inte är klar än.
+  var promises = (e.teeGroups||[]).map(function(g){
+    var gid = ensureTeeGroupId(g);
+    return LIVE_SCORING_COL.doc(liveScoringDocId(e.id, gid)).get().catch(function(){ return null; });
+  });
+  return Promise.all(promises).then(function(docs){
+    docs.forEach(function(doc){
+      if(!doc || !doc.exists) return;
+      var d = doc.data();
+      var dHolePars = d.holePars || holePars;
+      var dTotal = dHolePars ? dHolePars.length : totalHoles;
+      if(!holePars && dHolePars) { holePars = dHolePars; totalHoles = dTotal; }
+      (d.players||[]).forEach(function(p){
+        var sc = (d.scores||{})[p.pi] || {};
+        var pu = (d.putts||{})[p.pi] || {};
+        var holesArr = new Array(dTotal).fill(null);
+        var puttsArr = new Array(dTotal).fill(null);
+        var any = false;
+        for(var i=0; i<dTotal; i++){
+          if(typeof sc[i+1] === 'number') { holesArr[i] = sc[i+1]; any = true; }
+          if(typeof pu[i+1] === 'number') { puttsArr[i] = pu[i+1]; }
+        }
+        if(any) byPi[p.pi] = { holes: holesArr, putts: puttsArr };
+      });
+    });
+    return { byPi: byPi, holePars: holePars };
+  });
+}
+
+// Räknar ut en föreslagen vinnare för EN side bet, given insamlad hål-data.
+// Returnerar null om typen inte kan beräknas automatiskt, eller om ingen av
+// deltagarna har någon relevant data registrerad ännu.
+function computeSideBetSuggestion(sb, byPi, holePars) {
+  var participants = sb.participants || [];
+  if(sb.betType === 'Minst antal puttar') {
+    var best = null;
+    participants.forEach(function(pi){
+      var hd = byPi[pi]; if(!hd) return;
+      var sum = 0, any = false;
+      hd.putts.forEach(function(v){ if(typeof v === 'number') { sum += v; any = true; } });
+      if(any && (best===null || sum < best.value)) best = { pi: pi, value: sum, label: sum+' putt'+(sum===1?'':'ar') };
+    });
+    return best;
+  }
+  if(sb.betType === 'Färst antal slag på ett hål') {
+    var best2 = null;
+    participants.forEach(function(pi){
+      var hd = byPi[pi]; if(!hd) return;
+      var minGross = null;
+      hd.holes.forEach(function(v){ if(typeof v === 'number' && (minGross===null || v<minGross)) minGross = v; });
+      if(minGross!=null && (best2===null || minGross < best2.value)) best2 = { pi: pi, value: minGross, label: minGross+' slag' };
+    });
+    return best2;
+  }
+  if(sb.betType === 'Flest birdies på rundan') {
+    if(!holePars) return null;
+    var best3 = null;
+    participants.forEach(function(pi){
+      var hd = byPi[pi]; if(!hd) return;
+      var count = 0;
+      hd.holes.forEach(function(gross, idx){
+        if(typeof gross === 'number' && holePars[idx]!=null && categorizeHoleScore(gross, holePars[idx])==='birdie') count++;
+      });
+      if(best3===null || count > best3.value) best3 = { pi: pi, value: count, label: count+' birdie'+(count===1?'':'r') };
+    });
+    return (best3 && best3.value > 0) ? best3 : null;
+  }
+  return null;
+}
+
+// Hämtar hål-datan en gång och fyller i förslag för alla mätbara side bets i
+// den öppna Side bets-modalen. Körs asynkront efter att modalen visats, så
+// den öppnas direkt utan att vänta på nätverket.
+function refreshSideBetSuggestions(ei) {
+  var t = getTour(), e = t.events[ei];
+  if(!e || !e.sideBets || !e.sideBets.length) return;
+  var autoBets = e.sideBets.filter(function(sb){ return SIDE_BET_AUTO_TYPES.indexOf(sb.betType) >= 0; });
+  if(!autoBets.length) return;
+  collectEventHoleData(t, e).then(function(result){
+    autoBets.forEach(function(sb){
+      var el = document.getElementById('sb-suggestion-'+sb.id);
+      if(!el) return;
+      var suggestion = computeSideBetSuggestion(sb, result.byPi, result.holePars);
+      var players = getPlayersForTour(t);
+      if(!suggestion) {
+        el.innerHTML = '<span style="color:var(--text-3)"><i class="ti ti-info-circle"></i> Ingen data registrerad ännu för att föreslå en vinnare.</span>';
+        return;
+      }
+      var p = players[suggestion.pi];
+      var alreadySet = sb.winnerPi === suggestion.pi;
+      el.innerHTML = '<span style="color:var(--text-2)"><i class="ti ti-bulb" style="color:var(--gold)"></i> Förslag: <b>'+esc(p?p.name:'?')+'</b> ('+suggestion.label+')</span>'+
+        (alreadySet ? '' : ' <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="setSideBetWinner('+ei+',\''+sb.id+'\','+suggestion.pi+');openSideBets('+ei+')">Använd</button>');
+    });
+  }).catch(function(err){ console.error('Kunde inte beräkna side bet-förslag', err); });
 }
 
 // Sammanfattning av side bets som visas direkt i tävlingskortet, under knapparna.
@@ -10277,6 +10411,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (93)',
+    items: [
+      { type: 'new', text: 'Nu fortsatt på puttstatistiken från tidigare: Side bets av typen "Minst antal puttar", "Färst antal slag på ett hål" och "Flest birdies på rundan" visar nu ett automatiskt beräknat FÖRSLAG på vinnare, direkt i Side bets-vyn (endast admin) - baserat på hål-för-hål-data från pågående livescoring, godkända "Mitt resultat"-inskick, eller sparat slutresultat om tävlingen är stängd. En "Använd"-knapp sätter förslaget som vinnare direkt, men admin kan fortfarande välja valfri deltagare manuellt i select-fältet om förslaget inte stämmer. "Längsta drive" och "Närmast hål" kräver mätning på plats och förblir alltid helt manuella - ingen sådan data finns att beräkna från.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (92)',
     items: [
