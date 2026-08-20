@@ -1028,6 +1028,10 @@ function showHomeScreen() {
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
   updateSettingsCard();
+  // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
+  // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
+  // hem alls. enterTour()/showView() gör redan samma sak vid navigering.
+  window.scrollTo(0, 0);
 }
 
 function updateSettingsCard() {
@@ -4162,21 +4166,26 @@ function buildDateGroupingHTML(e, t) {
         html += '</div>';
       });
     }
-    if(unassigned.length) {
+    if(pisForDate.length) {
       var dateSafe = d.replace(/[^0-9]/g,'');
       html += '<div style="border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:6px">';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Skapa boll – kryssa vilka som ska spela ihop (max 4)</div>';
-      html += unassigned.map(function(pi){
+      html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Skapa/ändra boll – kryssa vilka som ska spela ihop (max 4)</div>';
+      html += pisForDate.map(function(pi){
         var p = t.players[pi];
         if(!p) return '';
+        var currentGroup = groupsForDate.find(function(g){ return g.playerPis.indexOf(pi)>=0; });
+        var hint = currentGroup
+          ? (currentGroup.playerPis.length>1 ? ' <span style="color:var(--text-3)">· i boll med '+currentGroup.playerPis.filter(function(x){return x!==pi;}).map(function(x){var pp=t.players[x];return pp?pp.name:'?';}).join(', ')+'</span>' : ' <span style="color:var(--text-3)">· egen boll</span>')
+          : ' <span style="color:var(--gold)">· ej tilldelad</span>';
         return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;cursor:pointer">'+
-          '<input type="checkbox" class="unassigned-cb" data-date="'+d+'" value="'+pi+'" style="width:auto;margin:0">'+esc(p.name)+
+          '<input type="checkbox" class="unassigned-cb" data-date="'+d+'" value="'+pi+'" style="width:auto;margin:0">'+esc(p.name)+hint+
         '</label>';
       }).join('');
       html += '<div class="row" style="gap:8px;margin-top:8px">'+
         '<input type="time" id="new-group-time-'+dateSafe+'" style="width:110px;margin:0" placeholder="Starttid">'+
         '<button class="btn btn-sm btn-primary" onclick="createTeeGroupFromSelection(\''+e.id+'\',\''+d+'\')"><i class="ti ti-users"></i> Skapa boll med valda</button>'+
       '</div>';
+      html += '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Väljer du en spelare som redan har en boll flyttas hen dit ur sin gamla boll (som tas bort om den blir tom).</p>';
       html += '</div>';
     }
     html += '</div>';
@@ -4252,6 +4261,12 @@ function createTeeGroupFromSelection(eid, date) {
   if(!pis.length) { alert('Kryssa i minst en spelare.'); return; }
   if(pis.length > 4) { alert('Max fyra spelare per boll.'); return; }
   if(!e.teeGroups) e.teeGroups = [];
+  // Plocka bort de valda spelarna ur ev. bollar de redan sitter i för det här datumet
+  // (man kan bara vara i en boll åt gången), och ta bort bollar som blir tomma.
+  e.teeGroups.forEach(function(g){
+    if(g.date===date) g.playerPis = g.playerPis.filter(function(pi){ return pis.indexOf(pi)<0; });
+  });
+  e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
   var dateSafe = date.replace(/[^0-9]/g,'');
   var timeInp = document.getElementById('new-group-time-'+dateSafe);
   var time = timeInp ? timeInp.value : '';
@@ -9498,6 +9513,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (81)',
+    items: [
+      { type: 'fixed', text: 'Kryssrutorna för att skapa en gemensam boll visades bara för spelare som helt saknade boll ("Ej tilldelade"). Hade alla redan fått varsin egen boll (t.ex. via "Skapa bollar") syntes inga kryssrutor alls - bara "Välj boll"-listan med de befintliga en-spelar-bollarna. Nu visas kryssrutor för ALLA anmälda spelare för datumet, oavsett om de redan har en boll (märks ut med "egen boll" / "i boll med X" / "ej tilldelad"). Väljer man en spelare som redan är i en boll flyttas hen dit ur sin gamla boll, som tas bort om den blir tom - så flera 1-spelar-bollar enkelt kan slås ihop till en gemensam.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (80)',
+    items: [
+      { type: 'fixed', text: '"Logga in som" (admins möjlighet att logga in som en annan användare) tog en faktiskt till startsidan i bakgrunden, men rullade inte upp sidan - var man scrollad långt ner i användarlistan såg det ut som att man inte kommit till startsidan alls. Nu rullas sidan alltid upp till toppen när man navigerar hem, precis som redan sker när man går in i en tour.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (79)',
     items: [
       { type: 'new', text: 'Ny bollskapare med kryssrutor i Anmälningar: bland "Ej tilldelade" spelare (anmälda men inte i någon boll ännu) kan man nu kryssa i flera samtidigt (upp till fyra) och trycka "Skapa boll med valda" - istället för att bara kunna skapa en boll åt sig själv i taget. Efter att bollen skapats hoppar man direkt in i livescoringen för den nya bollen, som (eftersom bollen är ny) automatiskt börjar med SHCP-steget innan man matar in resultat hål för hål.' }
@@ -10848,7 +10875,7 @@ function impersonateUser(username) {
   document.getElementById('user-badge').textContent = currentUser.username;
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'none';
   renderImpersonationBanner();
-  showToursView();
+  showHomeScreen();
 }
 
 function stopImpersonating() {
@@ -10860,7 +10887,7 @@ function stopImpersonating() {
   document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = '';
   renderImpersonationBanner();
-  showToursView();
+  showHomeScreen();
 }
 
 function renderImpersonationBanner() {
