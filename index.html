@@ -149,7 +149,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
       <img src="logo-hero.png" style="height:clamp(56px,11vw,90px);width:auto" alt="ÄGCC Tour">
-      <div class="hero-title" id="hero-title">TOURER</div>
+      <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
   </div>
@@ -1020,6 +1020,10 @@ function showHomeScreen() {
   });
   renderHomeUserBar();
   updateHero(null);
+  // Startsidan ska ha en egen, mer personlig hero-rubrik ("Älvsjö GCC TOUR") istället för
+  // den generiska "TOURER" som visas i Tourer-listvyn (showToursView) och övriga undersidor.
+  var homeHeroTitle = document.getElementById('hero-title');
+  if(homeHeroTitle) homeHeroTitle.textContent = 'ÄLVSJÖ GCC TOUR';
   renderHomeNextRoundWidget();
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
@@ -4159,7 +4163,21 @@ function buildDateGroupingHTML(e, t) {
       });
     }
     if(unassigned.length) {
-      html += '<div style="font-size:12px;color:var(--text-3);margin-top:4px">Ej tilldelade: '+unassigned.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
+      var dateSafe = d.replace(/[^0-9]/g,'');
+      html += '<div style="border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:6px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Skapa boll – kryssa vilka som ska spela ihop (max 4)</div>';
+      html += unassigned.map(function(pi){
+        var p = t.players[pi];
+        if(!p) return '';
+        return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;cursor:pointer">'+
+          '<input type="checkbox" class="unassigned-cb" data-date="'+d+'" value="'+pi+'" style="width:auto;margin:0">'+esc(p.name)+
+        '</label>';
+      }).join('');
+      html += '<div class="row" style="gap:8px;margin-top:8px">'+
+        '<input type="time" id="new-group-time-'+dateSafe+'" style="width:110px;margin:0" placeholder="Starttid">'+
+        '<button class="btn btn-sm btn-primary" onclick="createTeeGroupFromSelection(\''+e.id+'\',\''+d+'\')"><i class="ti ti-users"></i> Skapa boll med valda</button>'+
+      '</div>';
+      html += '</div>';
     }
     html += '</div>';
   });
@@ -4220,6 +4238,28 @@ function createOwnTeeGroup(ei, pi, date) {
   e.teeGroups.push({ date: date, time: time, playerPis: [pi] });
   save();
   refreshRegisterModal(ei);
+}
+
+// Skapar en ny boll av de spelare man kryssat i bland "Ej tilldelade" (upp till 4),
+// och hoppar sedan direkt in i livescoringen för den nya bollen - som (eftersom det
+// är en helt ny boll) automatiskt börjar med SHCP-steget innan hål-inmatningen.
+function createTeeGroupFromSelection(eid, date) {
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e) return;
+  var checked = Array.prototype.slice.call(document.querySelectorAll('.unassigned-cb[data-date="'+date+'"]:checked'));
+  var pis = checked.map(function(cb){ return parseInt(cb.value, 10); });
+  if(!pis.length) { alert('Kryssa i minst en spelare.'); return; }
+  if(pis.length > 4) { alert('Max fyra spelare per boll.'); return; }
+  if(!e.teeGroups) e.teeGroups = [];
+  var dateSafe = date.replace(/[^0-9]/g,'');
+  var timeInp = document.getElementById('new-group-time-'+dateSafe);
+  var time = timeInp ? timeInp.value : '';
+  e.teeGroups.push({ date: date, time: time, playerPis: pis });
+  var gIdx = e.teeGroups.length - 1;
+  save();
+  closeModal();
+  setTimeout(function(){ openLiveScoring(eid, gIdx); }, 60);
 }
 
 function leaveTeeGroup(eid, gIdx, pi, ei) {
@@ -9457,6 +9497,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (79)',
+    items: [
+      { type: 'new', text: 'Ny bollskapare med kryssrutor i Anmälningar: bland "Ej tilldelade" spelare (anmälda men inte i någon boll ännu) kan man nu kryssa i flera samtidigt (upp till fyra) och trycka "Skapa boll med valda" - istället för att bara kunna skapa en boll åt sig själv i taget. Efter att bollen skapats hoppar man direkt in i livescoringen för den nya bollen, som (eftersom bollen är ny) automatiskt börjar med SHCP-steget innan man matar in resultat hål för hål.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (78)',
+    items: [
+      { type: 'changed', text: 'Startsidans stora hero-rubrik visar nu "ÄLVSJÖ GCC TOUR" istället för "TOURER", så den skiljer sig från Tourer-listvyn (och övriga undersidor) som fortfarande visar "TOURER". Tidigare var rubriken identisk på båda ställena.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (77)',
     items: [
