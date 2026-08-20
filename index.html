@@ -3282,7 +3282,8 @@ function openMyScoreSubmission(ei) {
   showModal('<div id="my-score-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
   var gIdx = (e.teeGroups||[]).findIndex(function(g){ return g.playerPis.indexOf(myPi) >= 0; });
   if(gIdx >= 0) {
-    LIVE_SCORING_COL.doc(liveScoringDocId(e.id, gIdx)).get().then(function(doc){
+    var myGroupId = ensureTeeGroupId(e.teeGroups[gIdx]);
+    LIVE_SCORING_COL.doc(liveScoringDocId(e.id, myGroupId)).get().then(function(doc){
       buildMyScoreContext(ei, myPi, doc.exists ? doc.data() : null);
     }).catch(function(){
       buildMyScoreContext(ei, myPi, null);
@@ -3670,7 +3671,8 @@ function openBulkScoreSubmission(eid, gIdx) {
     return;
   }
   showModal('<div id="bulk-score-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
-  LIVE_SCORING_COL.doc(liveScoringDocId(eid, gIdx)).get().then(function(doc){
+  var groupId = ensureTeeGroupId(g);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
     renderBulkScoreForm(eid, gIdx, course, doc.exists ? doc.data() : null);
   }).catch(function(){
     renderBulkScoreForm(eid, gIdx, course, null);
@@ -4575,7 +4577,7 @@ function autoCreateTeeGroups(eid, date) {
   var unassigned = regs.map(function(r){return r.pi;}).filter(function(pi){return !assigned[pi];});
   while(unassigned.length) {
     var chunk = unassigned.splice(0,4);
-    e.teeGroups.push({ date: date, time: '', playerPis: chunk });
+    e.teeGroups.push({ id: 'tg_'+uid(), date: date, time: '', playerPis: chunk });
   }
   save();
   // re-render in place
@@ -4612,7 +4614,7 @@ function createOwnTeeGroup(ei, pi, date) {
   e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
   var timeInp = document.getElementById('new-boll-time-'+pi);
   var time = timeInp ? timeInp.value : '';
-  e.teeGroups.push({ date: date, time: time, playerPis: [pi] });
+  e.teeGroups.push({ id: 'tg_'+uid(), date: date, time: time, playerPis: [pi] });
   save();
   refreshRegisterModal(ei);
 }
@@ -4638,7 +4640,7 @@ function createTeeGroupFromSelection(eid, date) {
   var dateSafe = date.replace(/[^0-9]/g,'');
   var timeInp = document.getElementById('new-group-time-'+dateSafe);
   var time = timeInp ? timeInp.value : '';
-  e.teeGroups.push({ date: date, time: time, playerPis: pis });
+  e.teeGroups.push({ id: 'tg_'+uid(), date: date, time: time, playerPis: pis });
   var gIdx = e.teeGroups.length - 1;
   save();
   closeModal();
@@ -6205,7 +6207,19 @@ function emptyHoleCounts() {
 var LIVE_SCORING_COL = db.collection('liveScoring');
 var _liveScoring = { docId:null, unsub:null, data:null, activeHole:1, activePi:null, mode:null };
 
-function liveScoringDocId(eid, gIdx) { return eid + '_' + gIdx; }
+// VIKTIGT: docId får ALDRIG baseras på bollens array-index (gIdx) i e.teeGroups -
+// när bollar skapas/tas bort/slås ihop flyttar sig index, och en helt annan boll
+// kan då råka ärva en tidigare bolls Firestore-dokument (med fel spelare och gamla
+// resultat). Varje boll får därför ett eget stabilt "id" (se ensureTeeGroupId) som
+// används här istället, oberoende av var i listan bollen råkar ligga just nu.
+function liveScoringDocId(eid, groupId) { return eid + '_' + groupId; }
+
+// Tilldelar ett stabilt id åt en boll om den saknar ett (t.ex. bollar skapade innan
+// denna fix fanns). Sparar direkt om ett nytt id behövde skapas.
+function ensureTeeGroupId(g) {
+  if(!g.id) { g.id = 'tg_' + uid(); save(); }
+  return g.id;
+}
 
 function liveScoringRef() { return LIVE_SCORING_COL.doc(_liveScoring.docId); }
 
@@ -6214,10 +6228,30 @@ function liveScoringRef() { return LIVE_SCORING_COL.doc(_liveScoring.docId); }
 // Om man just då har bollens livescoring öppen i modalen stängs den och man kastas tillbaka,
 // eftersom dokumentet den lyssnar på inte längre finns.
 function resetLiveScoring(eid, gIdx) {
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id === eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
   if(!confirm('Nollställa livescoringen för den här bollen? Alla inmatade hål och SHCP-värden raderas permanent och kan inte ångras.')) return;
-  var docId = liveScoringDocId(eid, gIdx);
+  var groupId = ensureTeeGroupId(e.teeGroups[gIdx]);
+  var docId = liveScoringDocId(eid, groupId);
   LIVE_SCORING_COL.doc(docId).delete().then(function(){
     if(_liveScoring.docId === docId) { closeModal(); }
+    alert('Livescoringen för bollen är nollställd.');
+  }).catch(function(err){
+    console.error('Kunde inte nollställa livescoring', err);
+    alert('Kunde inte nollställa livescoringen. Kontrollera internetanslutningen och försök igen.');
+  });
+}
+
+// Nollställer den livescoring man just nu har öppen (SHCP-vyn), genom att radera
+// exakt det dokument man redan tittar på (_liveScoring.docId) - ingen omväg via
+// eventId+index som riskerar att ha blivit inaktuell om bollar ändrats sedan vyn öppnades.
+function resetCurrentLiveScoring() {
+  if(!_liveScoring || !_liveScoring.docId) return;
+  if(!confirm('Nollställa livescoringen för den här bollen? Alla inmatade hål och SHCP-värden raderas permanent och kan inte ångras.')) return;
+  var docId = _liveScoring.docId;
+  LIVE_SCORING_COL.doc(docId).delete().then(function(){
+    closeModal();
     alert('Livescoringen för bollen är nollställd.');
   }).catch(function(err){
     console.error('Kunde inte nollställa livescoring', err);
@@ -6246,7 +6280,8 @@ function openLiveScoring(eid, gIdx) {
     return;
   }
 
-  var docId = liveScoringDocId(eid, gIdx);
+  var groupId = ensureTeeGroupId(g);
+  var docId = liveScoringDocId(eid, groupId);
   _liveScoring = { docId: docId, unsub: null, data: null, activeHole: 1, activePi: g.playerPis[0], mode: null };
   _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
 
@@ -6262,7 +6297,7 @@ function openLiveScoring(eid, gIdx) {
       var scores = {}, putts = {};
       players.forEach(function(p){ scores[p.pi] = {}; putts[p.pi] = {}; });
       var initData = {
-        eventId: eid, teeGroupIdx: gIdx, courseName: e.course || '',
+        eventId: eid, groupId: groupId, courseName: e.course || '',
         holePars: course.holePars, holeHcpIndex: course.holeHcpIndex || [],
         players: players, scores: scores, putts: putts, shcpConfirmed: false, updatedAt: Date.now()
       };
@@ -6320,7 +6355,7 @@ function renderLiveShcpHTML() {
     '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Bekräfta varje spelares spelhandicap för dagens runda innan livescoringen startar.</p>'+
     rows+
     '<div class="row" style="justify-content:space-between;gap:8px;margin-top:16px">'+
-      (isAdmin() ? '<button class="btn" style="color:#dc2626" onclick="resetLiveScoring(\''+d.eventId+'\','+d.teeGroupIdx+')"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
+      (isAdmin() ? '<button class="btn" style="color:#dc2626" onclick="resetCurrentLiveScoring()"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
       '<div class="row" style="gap:8px">'+
         (d.shcpConfirmed ? '<button class="btn" onclick="cancelShcpEdit()">Avbryt</button>' : '')+
         '<button class="btn btn-primary" onclick="confirmLiveShcp()"><i class="ti ti-check"></i> '+(d.shcpConfirmed?'Spara':'Starta livescoring')+'</button>'+
@@ -9962,6 +9997,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (85)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: Livescoring kunde av misstag visa fel spelare och gamla resultat från en helt annan boll. Orsak: varje bolls livescoring-dokument kopplades till bollens PLATS i listan (index) istället för bollen själv - skapade, tog bort eller slog man ihop bollar (t.ex. via kryssruta-skaparen) flyttade sig index, och en ny/ihopslagen boll kunde då råka ärva en tidigare bolls Firestore-dokument med fel spelare och gamla slag/puttar kvar. Varje boll får nu istället ett eget permanent id när den skapas, som livescoringen kopplas till oavsett var i listan bollen ligger eller hur andra bollar ändras runtomkring. Bollar skapade innan denna fix får automatiskt ett id tilldelat första gången de öppnas. OBS: eventuell livescoring som redan påverkats av buggen (fel spelare visade) bör nollställas via "Nollställ"-knappen och fyllas i på nytt, eftersom den gamla, felaktigt kopplade datan annars kan finnas kvar overksam i databasen.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (84)',
     items: [
