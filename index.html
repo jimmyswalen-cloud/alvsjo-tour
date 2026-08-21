@@ -10919,6 +10919,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (128)',
+    items: [
+      { type: 'improved', text: 'Användare-vyn (admin) sorteras nu likadant som Spelare-listan: admin-profiler först, sedan övriga användare/spelare - båda grupperna i bokstavsordning på namn, med en avgränsare ("SPELARE") mellan grupperna. "Redigera"/"Ta bort"-knapparna fungerar oförändrat korrekt trots omsorteringen - rätt användare pekas alltid ut oavsett var i listan hen visas.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (127)',
     items: [
       { type: 'improved', text: 'Spelare-listan sorteras nu alltid i bokstavsordning på namn, istället för i den ordning spelarna lades till i touren. Ändrar bara visningsordningen - påverkar inte spelarnas underliggande index (pi) som resultat, poäng och placeringar bygger på.' }
@@ -12816,7 +12822,24 @@ function renderUsersList() {
   var headerEl = document.getElementById('users-screen-title');
   if(headerEl) headerEl.textContent = admin ? 'Användare' : 'Spelare';
   if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
-  el.innerHTML = users.map(function(u, i) {
+
+  // Admin-profiler först, spelare därefter - båda grupperna i bokstavsordning
+  // på namn. openEditUser/delUser förväntar sig index i den ORÖRDA S.users-
+  // arrayen, så det räknas fram separat per rad (indexOf på objektreferensen)
+  // istället för att använda loop-indexet, som nu skiljer sig från originalet
+  // eftersom listan sorteras om för visningen.
+  var sortedUsers = users.slice().sort(function(a, b){
+    var aAdmin = a.role === 'admin', bAdmin = b.role === 'admin';
+    if(aAdmin !== bAdmin) return aAdmin ? -1 : 1;
+    return (a.name||a.username).localeCompare(b.name||b.username, 'sv');
+  });
+
+  el.innerHTML = sortedUsers.map(function(u, idx) {
+    var origIdx = getUsers().indexOf(u);
+    var i = origIdx; // openEditUser/delUser/openEditUser nedan förväntar sig detta
+    var divider = (idx > 0 && sortedUsers[idx-1].role==='admin' && u.role!=='admin')
+      ? '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Spelare</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
+      : '';
     var tourNames = (u.tourAccess||[]).map(function(tid){
       var t = S.tours.find(function(x){return x.id===tid;});
       return t ? t.name : null;
@@ -12828,7 +12851,7 @@ function renderUsersList() {
     var avatar = img
       ? '<img src="'+img+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--surface2)">'
       : '<div class="avatar-ph" style="width:48px;height:48px;font-size:15px;flex-shrink:0">'+ini(displayName)+'</div>';
-    return '<div class="card" style="cursor:pointer;padding:16px 18px" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')">'+
+    return divider + '<div class="card" style="cursor:pointer;padding:16px 18px" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">'+
         '<div class="row" style="gap:12px;align-items:center">'+
           avatar+
