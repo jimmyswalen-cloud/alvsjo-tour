@@ -7115,81 +7115,102 @@ function renderLiveFollowHTML(e) {
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
 
+  var periodLabel = formatEventPeriodLabel(e);
   el.innerHTML =
     '<h3 style="margin-bottom:4px">Live – '+esc(e.name)+'</h3>'+
-    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Uppdateras automatiskt · brutto / netto / stableford-poäng</p>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">'+(periodLabel?esc(periodLabel)+' · ':'')+(e.course?esc(e.course)+' · ':'')+'Uppdateras automatiskt · brutto / netto / stableford-poäng</p>'+
     body+
     '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
 }
 
+// Bygger "27 aug – 3 sep 2026" (spelperiod) eller bara datumet om perioden
+// bara är en enda dag / saknas. Används i alla live-scoring-vyer för att
+// tydliggöra vilket tidsspann deltävlingen faktiskt tillåter spel inom.
+function formatEventPeriodLabel(e) {
+  if(!e) return '';
+  if(e.periodStart && e.periodEnd && e.periodStart !== e.periodEnd) return e.periodStart+' – '+e.periodEnd;
+  return e.periodStart || e.date || '';
+}
+
 // ── LIVE-STANDINGSTABELL I TOURVYN ──────────────────────────────────────────
-// Visas mellan flikmenyn och "Top 3 i ledning" i en tours Tävlingar-flik, så
-// länge minst en deltävling i touren har aktiva bollar. Aggregerar alla
-// spelares livescoring-dokument (över samtliga live-bollar i touren) och
-// räknar ut brutto, netto (mot banans hcp-index och spelarens SHCP) samt
-// stableford-poäng per spelare, hål för hål allteftersom resultat matas in.
+// Visas mellan flikmenyn och "Top 3 i ledning" i en tours Tävlingar-flik. En
+// EGEN tabell renderas per deltävling som faktiskt har livescoring-data
+// inmatad just nu (inte bara att en boll är skapad - en tom, nyss skapad boll
+// räknas inte som "live"). Detta hanterar korrekt scenariot att flera
+// deltävlingar kan vara live samtidigt (t.ex. några spelare avslutar en
+// tidigare deltävling medan andra redan påbörjat nästa) - då visas en
+// separat, tydligt namngiven tabell per deltävling, aldrig en ihopslagen lista.
 var _tourLiveStandings = { tourId: null, unsub: null };
 
 function subscribeTourLiveStandings(t) {
-  var liveEvents = (t.events||[]).filter(function(e){ return !e.closed && e.teeGroups && e.teeGroups.length; });
+  var candidateEvents = (t.events||[]).filter(function(e){ return !e.closed && e.teeGroups && e.teeGroups.length; });
   if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
   var el = document.getElementById('tour-live-standings');
-  if(!liveEvents.length) { if(el) el.innerHTML = ''; return; }
+  if(!candidateEvents.length) { if(el) el.innerHTML = ''; return; }
 
-  var eventIds = liveEvents.map(function(e){ return e.id; }).slice(0, 10); // Firestore 'in' tillåter max 10
-  var validIds = {};
-  liveEvents.forEach(function(e){
-    var ids = currentLiveScoringDocIds(e);
-    for(var k in ids) validIds[k] = true;
-  });
+  var eventIds = candidateEvents.map(function(e){ return e.id; }).slice(0, 10); // Firestore 'in' tillåter max 10
+  var validIdsByEvent = {}; // eventId -> {docId: true}
+  candidateEvents.forEach(function(e){ validIdsByEvent[e.id] = currentLiveScoringDocIds(e); });
+
   _tourLiveStandings.tourId = t.id;
   _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
-    var docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
-    renderTourLiveStandingsHTML(docs, liveEvents);
+    var docsByEvent = {};
+    snap.docs.forEach(function(doc){
+      var d = doc.data();
+      var validSet = validIdsByEvent[d.eventId];
+      if(!validSet || !validSet[doc.id]) return; // spöke från en boll som inte längre finns
+      // "Live" = minst en spelare i dokumentet har fått minst ett hål ifyllt -
+      // en helt tom, precis skapad boll ska inte räknas som en pågående deltävling.
+      var hasScore = Object.keys(d.scores||{}).some(function(pi){
+        var hs = d.scores[pi] || {};
+        return Object.keys(hs).some(function(h){ return typeof hs[h] === 'number'; });
+      });
+      if(!hasScore) return;
+      if(!docsByEvent[d.eventId]) docsByEvent[d.eventId] = [];
+      docsByEvent[d.eventId].push(d);
+    });
+    renderTourLiveStandingsHTML(docsByEvent, candidateEvents);
   }, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
 
-function renderTourLiveStandingsHTML(docs, liveEvents) {
+function renderTourLiveStandingsHTML(docsByEvent, candidateEvents) {
   var el = document.getElementById('tour-live-standings');
   if(!el) return;
 
-  var rows = computeLiveStandingsRows(docs);
-  if(!rows.length) { el.innerHTML = ''; return; }
+  var liveEventIds = Object.keys(docsByEvent).filter(function(eid){ return docsByEvent[eid].length > 0; });
+  if(!liveEventIds.length) { el.innerHTML = ''; return; }
 
-  var body = buildLiveStandingsRowsHTML(rows);
+  el.innerHTML = liveEventIds.map(function(eid){
+    var ev = candidateEvents.find(function(e){ return e.id === eid; });
+    var rows = computeLiveStandingsRows(docsByEvent[eid]);
+    if(!rows.length) return '';
+    var body = buildLiveStandingsRowsHTML(rows);
+    var periodLabel = formatEventPeriodLabel(ev);
+    var subLine = (ev ? esc(ev.name) : '')+(periodLabel?' · '+esc(periodLabel):'')+(ev && ev.course?' · '+esc(ev.course):'');
+    return '<div class="card" style="margin-bottom:16px">'+
+      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:2px">'+
+        '<h3 style="margin:0"><i class="ti ti-broadcast" style="color:#123A4D"></i> Live scoring</h3>'+
+        '<span class="tour-live-clock" style="font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--green-dark)">--:--:--</span>'+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
+      '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
+      '</div>'+
+      body+
+    '</div>';
+  }).join('');
 
-  // Förtydligar VILKEN deltävling live-tabellen gäller, med datum (och bana om bara
-  // en deltävling är live samtidigt - annars visas bara antalet).
-  var eventLabel = '';
-  if(liveEvents && liveEvents.length === 1) {
-    var ev = liveEvents[0];
-    eventLabel = '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+esc(ev.name)+' · '+esc(ev.date||'')+(ev.course?' · '+esc(ev.course):'')+'</div>';
-  } else if(liveEvents && liveEvents.length > 1) {
-    eventLabel = '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+liveEvents.length+' deltävlingar live samtidigt</div>';
-  }
-
-  el.innerHTML = '<div class="card" style="margin-bottom:16px">'+
-    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:2px">'+
-      '<h3 style="margin:0"><i class="ti ti-broadcast" style="color:#123A4D"></i> Live scoring</h3>'+
-      '<span id="tour-live-clock" style="font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--green-dark)">--:--:--</span>'+
-    '</div>'+
-    eventLabel+
-    '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
-    '</div>'+
-    body+
-  '</div>';
-  var clockEl = document.getElementById('tour-live-clock');
-  if(clockEl) clockEl.textContent = new Date().toLocaleTimeString('sv-SE');
+  document.querySelectorAll('.tour-live-clock').forEach(function(c){ c.textContent = new Date().toLocaleTimeString('sv-SE'); });
 }
 
-// Tickar den lilla "live"-klockan (HH:MM:SS) i live-standingswidgeten varje
-// sekund. Global, enkel setInterval istället för en per rendering - kollar
-// bara om elementet finns just nu (annars noop), så den fungerar oavsett hur
-// många gånger widgeten ritas om av Firestore-uppdateringar.
+// Tickar alla synliga "live"-klockor (HH:MM:SS) varje sekund - kan finnas
+// flera samtidigt om flera deltävlingar är live parallellt. Global, enkel
+// setInterval istället för en per rendering - kollar bara vilka element som
+// finns just nu (annars noop), så den fungerar oavsett hur ofta widgeten
+// ritas om av Firestore-uppdateringar.
 setInterval(function(){
-  var clockEl = document.getElementById('tour-live-clock');
-  if(clockEl) clockEl.textContent = new Date().toLocaleTimeString('sv-SE');
+  var now = new Date().toLocaleTimeString('sv-SE');
+  document.querySelectorAll('.tour-live-clock').forEach(function(c){ c.textContent = now; });
 }, 1000);
 
 
@@ -10614,6 +10635,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (111)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: Live-standingswidgeten i tourvyn räknade fel "antal deltävlingar live samtidigt" - en deltävling räknades som "live" så fort en boll bara var SKAPAD, även om ingen faktiskt matat in ett enda resultat än. Nu krävs att minst ett resultat faktiskt är inmatat för att en deltävling ska räknas som live.' },
+      { type: 'changed', text: 'När flera deltävlingar RIKTIGT är live samtidigt (t.ex. några spelare avslutar en tidigare deltävling medan andra redan påbörjat nästa) visas nu en EGEN, tydligt namngiven live-tabell per deltävling - istället för att alla spelare från olika deltävlingar slogs ihop i en enda lista som tidigare.' },
+      { type: 'new', text: 'Deltävlingens tillåtna speltidsperiod (t.ex. "9 maj – 12 maj 2026") visas nu i alla live-scoring-tabellvyer - både tourvyns widget och "Följ live"-modalen - så det är tydligt inom vilket tidsspann deltävlingen faktiskt tillåter spel.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (110)',
     items: [
