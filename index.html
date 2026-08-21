@@ -7044,7 +7044,7 @@ function openLiveFollow(eid, tourId) {
   var validIds = currentLiveScoringDocIds(e);
   _liveFollow.unsub = LIVE_SCORING_COL.where('eventId','==',eid).onSnapshot(function(snap){
     _liveFollow.docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
-    renderLiveFollowHTML(e, players);
+    renderLiveFollowHTML(e, players, t);
   }, function(err){ console.error('Följ live: lyssnarfel', err); });
 }
 
@@ -7063,8 +7063,16 @@ function findEventTypeById(eid) {
   return null;
 }
 
-function computeLiveStandingsRows(docs) {
+// t och ev är valfria - anges de, och ev.isFinal är sant, räknas finalens
+// slagförsprång (samma getHeadStart-funktion som resten av appen använder)
+// in i "+/-"-kolumnen och sorteringen live, precis som det redan görs när
+// finalen stängs och det slutgiltiga "adjusted"-resultatet räknas fram.
+// Brutto/netto/poäng visar fortfarande RENA rond-siffror (ärligt vad man
+// faktiskt gjort på rundan) - det är bara ställningen (+/- och placering)
+// som justeras för försprånget.
+function computeLiveStandingsRows(docs, t, ev) {
   var rows = [];
+  var isFinal = !!(ev && ev.isFinal && t);
   docs.forEach(function(d){
     var holePars = d.holePars||[], holeHcpIndex = d.holeHcpIndex||[];
     var totalHoles = holePars.length || 18;
@@ -7089,19 +7097,28 @@ function computeLiveStandingsRows(docs) {
       // "Diff": vid stableford - hur många poäng över/under vad hcp:et "ska" ge
       // (2 poäng/hål är nettopar), vid slaggolf - netto mot banans par så här långt.
       var diff = isStab ? (poang - thru*2) : (netto - parSoFar);
+      var headStart = null, sortValue = isStab ? poang : -netto;
+      if(isFinal) {
+        headStart = getHeadStart(t, ev, p.pi);
+        // Samma formel som när finalen stängs: adjusted = poäng+hs (stableford,
+        // högre bättre) eller netto-hs (slaggolf, lägre bättre).
+        diff = isStab ? (poang + headStart - thru*2) : (netto - headStart - parSoFar);
+        sortValue = isStab ? (poang + headStart) : -(netto - headStart);
+      }
       rows.push({
         name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab,
+        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
     });
   });
-  // Bäst placerad överst - flest stableford-poäng vinner (mer spelat rankas före ospelat vid lika poäng).
+  // Bäst placerad överst - flest stableford-poäng (eller lägst netto) vinner, justerat
+  // för finalens slagförsprång om tillämpligt. Mer spelat rankas före ospelat vid lika.
   rows.sort(function(a,b){
     if(a.thru===0 && b.thru===0) return 0;
     if(a.thru===0) return 1;
     if(b.thru===0) return -1;
-    return b.poang - a.poang;
+    return b.sortValue - a.sortValue;
   });
   return rows;
 }
@@ -7148,10 +7165,13 @@ function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     var diffFmt = formatLiveDiff(r.diff, r.thru);
+    var hsBadge = (r.headStart != null && r.headStart !== 0)
+      ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
+      : '';
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(idx+1)+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(idx+1)+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
-        '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+'">'+diffFmt.text+'</span>'+
+        '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
@@ -7225,11 +7245,11 @@ function openPlayerLiveScorecard(idx) {
   showModal(h, false, true);
 }
 
-function renderLiveFollowHTML(e, players) {
+function renderLiveFollowHTML(e, players, t) {
   var el = document.getElementById('live-follow-modal-body');
   if(!el) return;
 
-  var rows = computeLiveStandingsRows(_liveFollow.docs);
+  var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
         '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
@@ -7341,7 +7361,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
 
   el.innerHTML = liveEventIds.map(function(eid){
     var ev = candidateEvents.find(function(e){ return e.id === eid; });
-    var rows = computeLiveStandingsRows(docsByEvent[eid]);
+    var rows = computeLiveStandingsRows(docsByEvent[eid], t, ev);
     if(!rows.length) return '';
     var body = buildLiveStandingsRowsHTML(rows);
     var periodLabel = formatEventPeriodLabel(ev);
@@ -10823,6 +10843,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (118)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: Live-tabellen tog inte hänsyn till finalens slagförsprång under själva spelets gång - den visade bara rundans råa poäng/netto, som om alla startade från scratch. Nu räknas samma slagförsprång (getHeadStart) som redan används när finalen stängs in live: "+/-"-kolumnen och placeringen i tabellen justeras kontinuerligt för försprånget medan man spelar. Brutto/Netto/Pts-kolumnerna visar fortfarande de rena rond-siffrorna (vad man faktiskt gjort på rundan) - det är bara ställningen som justeras. En liten guldmärkning, t.ex. "(-10)", visas bredvid namnet så försprånget syns tydligt. Inmatningen av scorekortet i sig är oförändrad - man matar in precis som vanligt, det är bara live-tabellen som nu räknar rätt.' },
+      { type: 'improved', text: 'Passade även på att fixa live-tabellens sortering för slaggolf-deltävlingar (icke-final) - sorterades tidigare felaktigt efter stableford-poäng oavsett tävlingsform, sorteras nu korrekt efter netto (lägst vinner) när deltävlingen faktiskt är slaggolf.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (117)',
     items: [
