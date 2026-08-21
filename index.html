@@ -191,10 +191,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;padding:10px 0;font-size:12px;color:var(--text-2)">
   <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
   <span style="display:flex;gap:14px">
-    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:2px" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><br>Användare</span>
-    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><br>Min profil</span>
-    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><br>Byt lösenord</span>
-    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><br>Logga ut</span>
+    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><span>Användare</span></span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><span>Min profil</span></span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><span>Byt lösenord</span></span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><span>Logga ut</span></span>
   </span>
 </div>
 
@@ -216,6 +216,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
+    <div id="home-activity-feed"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
         <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
@@ -778,6 +779,19 @@ function findEventById(eid) {
   return null;
 }
 
+// Som findEventById, men returnerar även touren eventet tillhör - används av
+// aktivitetsfeeden för att kunna slå upp spelarens username/bild (som bara
+// finns på tourens egen players-lista, inte i livescoring-dokumentet) och
+// tourens namn/id för filtrering.
+function findTourAndEventById(eid) {
+  for(var i=0; i<(S.tours||[]).length; i++){
+    var t = S.tours[i];
+    var ev = (t.events||[]).find(function(e){ return e.id===eid; });
+    if(ev) return { tour: t, event: ev };
+  }
+  return null;
+}
+
 function openComments(eid) {
 
   var e = findEventById(eid);
@@ -1038,6 +1052,7 @@ function showHomeScreen() {
   renderHomeNextRoundWidget();
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
+  subscribeHomeActivityFeed();
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
   // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
@@ -4045,6 +4060,111 @@ function renderHomeSideBetWidget() {
   '</div>';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// AKTIVITETSFEED - "X gjorde birdie på hål Y", med gilla-möjlighet. Triggas
+// automatiskt från livescoringen (se postActivityFeedIfBirdiePlus) så fort
+// någon sparar ett resultat som är birdie eller bättre. Visas på startsidan,
+// begränsat till de tourer den inloggade användaren faktiskt har åtkomst till.
+// ═══════════════════════════════════════════════════════════════════════════
+var _homeFeedUnsub = null;
+
+// Etiketter/färger för feed-texten, separata från liveScoreLabel (som är gjord
+// för scorekortsknappar med versaler) - här vill vi ha vanlig löptext.
+var ACTIVITY_FEED_CATEGORY_META = {
+  birdie:    { text: 'gjorde birdie',      color: '#A32D2D', bg: '#FCEBEB' },
+  eagle:     { text: 'gjorde eagle',       color: '#854F0B', bg: '#FAEEDA' },
+  albatross: { text: 'gjorde albatross',   color: '#854F0B', bg: '#FAEEDA' },
+  hio:       { text: 'gjorde hole-in-one', color: '#854F0B', bg: '#FAEEDA' }
+};
+
+function subscribeHomeActivityFeed() {
+  if(_homeFeedUnsub) { _homeFeedUnsub(); _homeFeedUnsub = null; }
+  var el = document.getElementById('home-activity-feed');
+  if(!el || !currentUser) { if(el) el.innerHTML = ''; return; }
+  var tourIds = (currentUser.tourAccess||[]).slice(0, 10); // Firestore 'in' tillåter max 10
+  if(!tourIds.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<p style="text-align:center;color:var(--text-3);font-size:12px;padding:10px 0">Laddar aktivitetsflöde…</p>';
+  _homeFeedUnsub = ACTIVITY_FEED_COL.where('tourId','in', tourIds).orderBy('createdAt','desc').limit(20)
+    .onSnapshot(function(snap){
+      var items = snap.docs.map(function(doc){ var d = doc.data(); d._id = doc.id; return d; });
+      renderHomeActivityFeed(items);
+    }, function(err){
+      console.error('Aktivitetsfeed: lyssnarfel', err);
+      var el2 = document.getElementById('home-activity-feed');
+      if(el2) el2.innerHTML = '';
+    });
+}
+
+function renderHomeActivityFeed(items) {
+  var el = document.getElementById('home-activity-feed');
+  if(!el) return;
+  if(!items.length) { el.innerHTML = ''; return; }
+
+  var rows = items.map(function(it){
+    var img = playerPhoto(it.playerUsername, null);
+    var avatar = img
+      ? '<img src="'+img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+      : '<div class="avatar-ph" style="width:36px;height:36px;font-size:13px;flex-shrink:0">'+ini(it.playerName)+'</div>';
+    var likes = it.likes || {};
+    var likeCount = Object.keys(likes).length;
+    var iLiked = currentUser && !!likes[currentUser.username];
+    var lineHtml;
+    if(it.category === 'goodround') {
+      var resultLabel = it.isStab
+        ? (it.poang+' poäng')
+        : (it.diffToPar===0 ? 'jämnt med par' : Math.abs(it.diffToPar)+' under par');
+      lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:#EAF3DE;color:#3B6D11;font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px"><i class="ti ti-trophy" style="font-size:11px"></i> stark rond</span> – '+resultLabel;
+    } else {
+      var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
+      lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
+    }
+    return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'+
+      avatar+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:13px;color:var(--text)">'+lineHtml+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+esc(it.eventName)+' · '+formatRelativeTime(it.createdAt)+'</div>'+
+      '</div>'+
+      '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 6px;color:'+(iLiked?'#1D9E75':'var(--text-3)')+';flex-shrink:0" title="Gilla">'+
+        '<i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:16px"></i>'+
+        (likeCount>0?'<span style="font-size:12px;font-weight:600">'+likeCount+'</span>':'')+
+      '</button>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+    '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class="ti ti-bolt" style="color:var(--gold)"></i> Senaste händelser</div>'+
+    rows+
+  '</div>';
+}
+
+function toggleActivityFeedLike(docId) {
+  if(!currentUser) return;
+  var ref = ACTIVITY_FEED_COL.doc(docId);
+  ref.get().then(function(doc){
+    if(!doc.exists) return;
+    var likes = doc.data().likes || {};
+    var update = {};
+    if(likes[currentUser.username]) update['likes.'+currentUser.username] = firebase.firestore.FieldValue.delete();
+    else update['likes.'+currentUser.username] = true;
+    ref.update(update).catch(function(err){ console.error('Kunde inte gilla', err); });
+  }).catch(function(err){ console.error('Kunde inte läsa feed-inlägget', err); });
+}
+
+// "2 min sedan" / "3 tim sedan" / "Igår" / datum om äldre än ett dygn.
+function formatRelativeTime(ms) {
+  if(!ms) return '';
+  var diff = Date.now() - ms;
+  var min = Math.floor(diff / 60000);
+  if(min < 1) return 'Just nu';
+  if(min < 60) return min+' min sedan';
+  var hrs = Math.floor(min / 60);
+  if(hrs < 24) return hrs+' tim sedan';
+  var days = Math.floor(hrs / 24);
+  if(days === 1) return 'Igår';
+  if(days < 7) return days+' dagar sedan';
+  return new Date(ms).toLocaleDateString('sv-SE');
+}
+
 function openSideBets(ei) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
@@ -6515,6 +6635,10 @@ function emptyHoleCounts() {
 // EN skrivning bara påverkar ett enda hål för en enda spelare.
 // ═══════════════════════════════════════════════════════════════════════════
 var LIVE_SCORING_COL = db.collection('liveScoring');
+// Aktivitetsfeed: "X gjorde birdie på hål Y" osv, med gilla-möjlighet. Egen liten
+// collection av samma anledning som liveScoring - frekventa småskrivningar från
+// flera spelare samtidigt ska inte belasta/krocka med huvud-dokumentet.
+var ACTIVITY_FEED_COL = db.collection('activityFeed');
 var _liveScoring = { docId:null, unsub:null, data:null, activeHole:1, activePi:null, mode:null };
 
 // VIKTIGT: docId får ALDRIG baseras på bollens array-index (gIdx) i e.teeGroups -
@@ -7001,6 +7125,7 @@ function advanceSideBetPromptQueue() {
 function onLiveScoreInput(pi, rawValue) {
   if(!_liveScoring.data) return;
   var hole = _liveScoring.activeHole;
+  var d = _liveScoring.data;
   var update = {};
   var n = parseInt(rawValue, 10);
   update['scores.'+pi+'.'+hole] = isNaN(n) ? firebase.firestore.FieldValue.delete() : n;
@@ -7009,6 +7134,82 @@ function onLiveScoreInput(pi, rawValue) {
     console.error('Livescoring: kunde inte spara', err);
     alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
   });
+  if(!isNaN(n)) {
+    postActivityFeedIfBirdiePlus(d.eventId, pi, hole, n, d.holePars ? d.holePars[hole-1] : null);
+    checkGoodRoundForFeed(pi, hole, n);
+  }
+}
+
+// Skapar ett aktivitetsfeed-inlägg ("X gjorde birdie på hål Y") om resultatet är
+// birdie eller bättre (birdie/eagle/albatross/hio) - inget skrivs för par eller
+// sämre. Fire-and-forget: misslyckas det tyst i bakgrunden stör det aldrig
+// själva resultatinmatningen, som redan sparats separat ovan.
+function postActivityFeedIfBirdiePlus(eid, pi, hole, gross, par) {
+  if(par == null) return;
+  var cat = categorizeHoleScore(gross, par);
+  if(['birdie','eagle','albatross','hio'].indexOf(cat) < 0) return;
+  var found = findTourAndEventById(eid);
+  if(!found) return;
+  var t = found.tour, e = found.event;
+  var p = t.players[pi];
+  if(!p) return;
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name, eventId: eid, eventName: e.name,
+    playerUsername: p.username, playerName: p.name,
+    hole: hole, par: par, gross: gross, category: cat,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte posta i aktivitetsfeeden', err); });
+}
+
+// Kollar om spelaren precis blivit klar med HELA rundan (18 hål ifyllda) och om
+// den var "bra": 36 poäng eller mer (stableford), eller på/under par (slaggolf).
+// Kollas mot en lokalt sammansatt kopia av hål-datan (befintlig data + värdet
+// som just sparats) - _liveScoring.data hinner annars inte uppdateras från
+// Firestore förrän efter denna funktion redan körts, vilket annars skulle
+// missa exakt det sista, avgörande hålet. Postar bara en gång per rond (flaggan
+// roundPostedToFeed sparas på livescoring-dokumentet) - redigerar man om ett
+// redan klart scorekort skickas inget nytt inlägg.
+function checkGoodRoundForFeed(pi, justSetHole, justSetValue) {
+  var d = _liveScoring.data;
+  if(!d) return;
+  var totalHoles = (d.holePars||[]).length || 18;
+  var sc = {};
+  var existing = d.scores[pi] || {};
+  for(var k in existing) sc[k] = existing[k];
+  sc[justSetHole] = justSetValue;
+
+  for(var h=1; h<=totalHoles; h++){ if(typeof sc[h] !== 'number') return; } // rundan inte klar än
+  if(d.roundPostedToFeed && d.roundPostedToFeed[pi]) return; // redan postat för den här rundan
+
+  var found = findTourAndEventById(d.eventId);
+  if(!found) return;
+  var tp = found.tour.players[pi];
+  if(!tp) return;
+  var isStab = found.event.type === 'stableford';
+
+  var poang = 0, netto = 0, totalPar = 0;
+  for(var idx=0; idx<totalHoles; idx++){
+    var gross = sc[idx+1];
+    var par = d.holePars[idx];
+    var hcpIdx = (d.holeHcpIndex && d.holeHcpIndex[idx]!=null) ? d.holeHcpIndex[idx] : (idx+1);
+    var strokesRecv = computeHcpStrokesForHole(tp.shcp||0, hcpIdx, totalHoles);
+    poang += computeHoleStablefordPoints(gross, par, strokesRecv);
+    netto += (gross - strokesRecv);
+    totalPar += par;
+  }
+  var diffToPar = netto - totalPar; // <=0 betyder på eller under par
+  var isGood = isStab ? (poang >= 36) : (diffToPar <= 0);
+  if(!isGood) return;
+
+  var flagUpdate = {}; flagUpdate['roundPostedToFeed.'+pi] = true;
+  liveScoringRef().update(flagUpdate).catch(function(){});
+
+  ACTIVITY_FEED_COL.add({
+    tourId: found.tour.id, tourName: found.tour.name, eventId: d.eventId, eventName: found.event.name,
+    playerUsername: tp.username, playerName: tp.name,
+    category: 'goodround', isStab: isStab, poang: poang, netto: netto, totalPar: totalPar, diffToPar: diffToPar,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte posta bra rond i aktivitetsfeeden', err); });
 }
 
 // Puttar är frivilligt och blockerar aldrig något - sparas separat från slag,
@@ -10919,6 +11120,25 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (132)',
+    items: [
+      { type: 'new', text: 'Ny "Byt användarnamn"-knapp i Redigera användare (admin). Byter man bara namnet i databasen direkt hade personens historik (resultat, poäng, placeringar) av misstag kunnat lossna i alla tourer, eftersom varje tour internt kopplar spelare till användarnamn via en separat karta - den kartan flyttas nu med automatiskt, så historiken följer med personen vid namnbytet.' },
+      { type: 'fixed', text: 'Fixat ett stort onödigt mellanrum under ikonerna i topp-navigeringen (Användare/Min profil/Byt lösenord/Logga ut) - orsakades av att en <br>-tagg blev ett eget, för högt element i flex-kolumnen. Ersatt med korrekt uppbyggd ikon+text-layout, betydligt tightare.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (131)',
+    items: [
+      { type: 'new', text: 'Aktivitetsfeeden triggar nu även på en "bra rond": 36 poäng eller mer (stableford), eller på/under par (slaggolf) - utöver birdie+ per hål. Kollas automatiskt så fort scorekortet blir komplett (alla 18 hål ifyllda) i livescoringen, och postas bara en gång per rond även om man redigerar ett redan klart scorekort efteråt. Visas som "[Namn] stark rond – 38 poäng" eller "[Namn] stark rond – 2 under par".' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (130)',
+    items: [
+      { type: 'new', text: 'Ny aktivitetsfeed på startsidan: "X gjorde birdie/eagle/albatross/hole-in-one på hål Y" - dyker upp automatiskt så fort någon sparar ett sådant resultat i livescoringen (par eller sämre triggar inget). Andra användare kan gilla ett inlägg (tumme upp, samma som Facebook) - antalet gillningar syns direkt och uppdateras live för alla. Feeden visar bara aktivitet från tourer man själv har åtkomst till, senaste 20 händelserna.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (129)',
     items: [
       { type: 'improved', text: 'Topp-navigeringen (Användare/Min profil/Byt lösenord/Logga ut) radbryter nu så ikonen hamnar ovanför texten istället för bredvid - snyggare och tar mindre horisontell plats.' }
@@ -13192,7 +13412,7 @@ function openEditUser(i) {
   _editUserImg = null;
   var u = getUsers()[i];
   _pendingTourAccess = (u.tourAccess||[]).slice();
-  var h = '<h3>Redigera ' + u.username + '</h3>';
+  var h = '<h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px">Redigera ' + u.username + ' <button class="btn btn-sm" style="font-weight:400;font-size:12px" onclick="promptRenameUsername(\''+esc(u.username)+'\')"><i class="ti ti-signature"></i> Byt användarnamn</button></h3>';
   h += '<div class="field"><label>E-postadress (valfritt)</label><input id="u-email" type="email" value="'+esc(u.email||'')+'" placeholder="t.ex. namn@exempel.se"></div>';
   h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
   h += '<hr class="divider">';
@@ -13246,6 +13466,48 @@ function onEditUserImgFile(file) {
     var prev = document.getElementById('u-img-prev');
     if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
   });
+}
+
+// Byter en användares inloggningsnamn (@handle). VIKTIGT: t.players byggs
+// dynamiskt från S.users varje gång (se getPlayersForTour) via en karta
+// playerIndexMap som kopplar username -> spelarens stabila index (pi) inom
+// varje tour. Bytte man bara u.username utan att också flytta med den kartan
+// skulle spelaren tappa sitt gamla pi i varje tour (eftersom kartans nyckel
+// inte längre matchar) - all historik (resultat, poäng, placeringar, side
+// bets) hade då av misstag "flyttats" till en helt ny, tom spelarplats.
+// Denna funktion flyttar med kartposten i alla tourer, så historiken följer med.
+function promptRenameUsername(oldUsername) {
+  if(!isAdmin()) return;
+  var u = (S.users||[]).find(function(x){ return x.username===oldUsername; });
+  if(!u) return;
+  var newUsername = prompt('Nytt användarnamn för '+(u.name||oldUsername)+':', oldUsername);
+  if(newUsername == null) return; // avbrutet
+  newUsername = newUsername.trim();
+  if(!newUsername) { alert('Användarnamnet kan inte vara tomt.'); return; }
+  if(newUsername === oldUsername) return;
+  var taken = (S.users||[]).some(function(x){ return x.username.toLowerCase()===newUsername.toLowerCase(); });
+  if(taken) { alert('Användarnamnet "'+newUsername+'" är redan taget.'); return; }
+  if(!confirm('Byta användarnamn från "'+oldUsername+'" till "'+newUsername+'"? Personen loggar in med det nya namnet härefter. Resultat, poäng och placeringar i alla tourer följer med och påverkas inte.')) return;
+
+  renameUsernameEverywhere(oldUsername, newUsername);
+  save();
+  alert('Användarnamn ändrat till "'+newUsername+'".');
+  var idx = getUsers().findIndex(function(x){ return x.username===newUsername; });
+  if(idx >= 0) openEditUser(idx); else closeModal();
+  renderUsersList();
+}
+
+function renameUsernameEverywhere(oldUsername, newUsername) {
+  var u = (S.users||[]).find(function(x){ return x.username===oldUsername; });
+  if(!u) return;
+  u.username = newUsername;
+  (S.tours||[]).forEach(function(t){
+    if(t.playerIndexMap && t.playerIndexMap[oldUsername] != null) {
+      t.playerIndexMap[newUsername] = t.playerIndexMap[oldUsername];
+      delete t.playerIndexMap[oldUsername];
+    }
+  });
+  if(currentUser && currentUser.username === oldUsername) currentUser = u;
 }
 
 function saveEditUser(i) {
