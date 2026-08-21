@@ -4330,6 +4330,7 @@ function setSideBetWinner(ei, betId, val) {
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
   if(!sb) return;
   sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
+  sb.winnerAutoHole = null; // manuell ändring - ska inte kunna ångras automatiskt längre
   save();
   renderEvents();
 }
@@ -7069,6 +7070,29 @@ function checkSideBetPromptForCurrentHole() {
   renderSideBetPromptHTML();
 }
 
+// Ångrar en automatiskt satt side bet-vinnare (se answerSideBetPrompt) om hålet
+// den avgjordes på inte längre är komplett - t.ex. om någon går tillbaka och
+// tar bort ett resultat efteråt. Rör ALDRIG en vinnare som admin satt manuellt
+// via select-fältet i Side bets-vyn (den saknar winnerAutoHole-markeringen).
+// Nästa gång hålet blir komplett igen dyker frågan "Vem vann?" upp på nytt.
+function revertAutoSideBetWinnerIfHoleIncomplete(eid, hole) {
+  var d = _liveScoring.data;
+  if(!d) return;
+  var allDone = d.players.every(function(p){ return typeof (d.scores[p.pi]||{})[hole] === 'number'; });
+  if(allDone) return; // hålet är fortfarande komplett - inget att ångra
+  var ev = findEventById(eid);
+  if(!ev || !ev.sideBets) return;
+  var changed = false;
+  ev.sideBets.forEach(function(sb){
+    if(sb.hole === hole && sb.winnerAutoHole === hole && sb.winnerPi != null) {
+      sb.winnerPi = null;
+      sb.winnerAutoHole = null;
+      changed = true;
+    }
+  });
+  if(changed) save();
+}
+
 function renderSideBetPromptHTML() {
   var el = document.getElementById('live-scoring-modal-body');
   var d = _liveScoring.data, sb = _liveScoring.pendingSideBet;
@@ -7099,7 +7123,16 @@ function answerSideBetPrompt(pi) {
   if(sb && d) {
     var ev = findEventById(d.eventId);
     var actualSb = ev && ev.sideBets ? ev.sideBets.find(function(x){ return x.id===sb.id; }) : null;
-    if(actualSb) { actualSb.winnerPi = pi; save(); }
+    if(actualSb) {
+      actualSb.winnerPi = pi;
+      // Markerar att vinnaren sattes automatiskt via just det här hålet, så den
+      // kan ångras (se revertAutoSideBetWinnerIfHoleIncomplete) om någon senare
+      // går tillbaka och tar bort ett resultat så hålet inte längre är komplett.
+      // En vinnare som admin satt manuellt via select-fältet i Side bets-vyn
+      // påverkas inte av detta (winnerAutoHole sätts bara här).
+      actualSb.winnerAutoHole = _liveScoring.activeHole;
+      save();
+    }
   }
   advanceSideBetPromptQueue();
 }
@@ -7128,38 +7161,60 @@ function onLiveScoreInput(pi, rawValue) {
   var d = _liveScoring.data;
   var update = {};
   var n = parseInt(rawValue, 10);
-  update['scores.'+pi+'.'+hole] = isNaN(n) ? firebase.firestore.FieldValue.delete() : n;
+  var cleared = isNaN(n);
+  update['scores.'+pi+'.'+hole] = cleared ? firebase.firestore.FieldValue.delete() : n;
   update.updatedAt = Date.now();
   liveScoringRef().update(update).catch(function(err){
     console.error('Livescoring: kunde inte spara', err);
     alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
   });
-  if(!isNaN(n)) {
-    postActivityFeedIfBirdiePlus(d.eventId, pi, hole, n, d.holePars ? d.holePars[hole-1] : null);
-    checkGoodRoundForFeed(pi, hole, n);
+  var par = d.holePars ? d.holePars[hole-1] : null;
+  syncActivityFeedForHole(d.eventId, pi, hole, cleared ? null : n, par);
+  if(!cleared) checkGoodRoundForFeed(pi, hole, n);
+  else revertAutoSideBetWinnerIfHoleIncomplete(d.eventId, hole);
+}
+
+// Skapar, uppdaterar ELLER tar bort ett aktivitetsfeed-inlägg för en given
+// spelare/hål, beroende på om det NYA resultatet är birdie+ eller inte. Håller
+// koll på vilket feed-dokument som hör till vilket hål via en liten karta
+// (feedPosts.pi.hole -> dokument-id) sparad direkt på livescoring-dokumentet -
+// så att om någon går tillbaka och ändrar/tar bort ett resultat, försvinner
+// (eller uppdateras) rätt inlägg i feeden istället för att bli kvar felaktigt.
+function syncActivityFeedForHole(eid, pi, hole, gross, par) {
+  var d = _liveScoring.data;
+  if(!d) return;
+  var existingId = (d.feedPosts && d.feedPosts[pi] && d.feedPosts[pi][hole]) || null;
+  var cat = (gross != null && par != null) ? categorizeHoleScore(gross, par) : null;
+  var isBirdiePlus = cat && ['birdie','eagle','albatross','hio'].indexOf(cat) >= 0;
+
+  if(isBirdiePlus) {
+    if(existingId) {
+      // Redan ett inlägg för det här hålet (t.ex. ändrat från birdie till eagle) - uppdatera det istället för att skapa ett nytt.
+      ACTIVITY_FEED_COL.doc(existingId).update({ category: cat, gross: gross, par: par }).catch(function(){});
+    } else {
+      var found = findTourAndEventById(eid);
+      if(!found) return;
+      var p = found.tour.players[pi];
+      if(!p) return;
+      ACTIVITY_FEED_COL.add({
+        tourId: found.tour.id, tourName: found.tour.name, eventId: eid, eventName: found.event.name,
+        playerUsername: p.username, playerName: p.name,
+        hole: hole, par: par, gross: gross, category: cat,
+        createdAt: Date.now(), likes: {}
+      }).then(function(docRef){
+        var upd = {}; upd['feedPosts.'+pi+'.'+hole] = docRef.id;
+        liveScoringRef().update(upd).catch(function(){});
+      }).catch(function(err){ console.error('Kunde inte posta i aktivitetsfeeden', err); });
+    }
+  } else if(existingId) {
+    // Resultatet är inte längre birdie+ (ändrat till par/bogey, eller helt borttaget) - ta bort inlägget.
+    ACTIVITY_FEED_COL.doc(existingId).delete().catch(function(){});
+    var upd2 = {}; upd2['feedPosts.'+pi+'.'+hole] = firebase.firestore.FieldValue.delete();
+    liveScoringRef().update(upd2).catch(function(){});
   }
 }
 
-// Skapar ett aktivitetsfeed-inlägg ("X gjorde birdie på hål Y") om resultatet är
-// birdie eller bättre (birdie/eagle/albatross/hio) - inget skrivs för par eller
-// sämre. Fire-and-forget: misslyckas det tyst i bakgrunden stör det aldrig
-// själva resultatinmatningen, som redan sparats separat ovan.
-function postActivityFeedIfBirdiePlus(eid, pi, hole, gross, par) {
-  if(par == null) return;
-  var cat = categorizeHoleScore(gross, par);
-  if(['birdie','eagle','albatross','hio'].indexOf(cat) < 0) return;
-  var found = findTourAndEventById(eid);
-  if(!found) return;
-  var t = found.tour, e = found.event;
-  var p = t.players[pi];
-  if(!p) return;
-  ACTIVITY_FEED_COL.add({
-    tourId: t.id, tourName: t.name, eventId: eid, eventName: e.name,
-    playerUsername: p.username, playerName: p.name,
-    hole: hole, par: par, gross: gross, category: cat,
-    createdAt: Date.now(), likes: {}
-  }).catch(function(err){ console.error('Kunde inte posta i aktivitetsfeeden', err); });
-}
+
 
 // Kollar om spelaren precis blivit klar med HELA rundan (18 hål ifyllda) och om
 // den var "bra": 36 poäng eller mer (stableford), eller på/under par (slaggolf).
@@ -11119,6 +11174,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (133)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: Ett aktivitetsfeed-inlägg ("X gjorde birdie") blev tidigare kvar för alltid även om man senare gick tillbaka och ändrade eller tog bort resultatet på det hålet. Nu synkas feed-inlägget med resultatet: ändras det till en annan birdie+-kategori uppdateras inlägget (t.ex. birdie → eagle), och blir resultatet inte längre birdie+ (ändrat till par/bogey, eller helt borttaget) tas inlägget bort automatiskt.' },
+      { type: 'fixed', text: 'Samma typ av bugg fanns för side bets av typen "Längsta drive"/"Närmast hål": vann någon automatiskt (via "Vem vann?"-frågan när hålet blev klart) men man sedan tog bort ett resultat så hålet inte längre var komplett, blev vinnaren felaktigt kvar satt. En sådan automatiskt satt vinnare ångras nu om hålet blir ofullständigt igen - frågan "Vem vann?" dyker upp på nytt nästa gång hålet blir klart. En vinnare som admin satt manuellt via select-fältet i Side bets-vyn påverkas aldrig av detta.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (132)',
     items: [
