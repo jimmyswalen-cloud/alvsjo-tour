@@ -7909,9 +7909,9 @@ function buildTop3HTML(t, compact) {
   var players = t.players || getPlayersForTour(t);
   var events = t.events || [];
   var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
-  var top = isClosed ? standings.slice(0,1) : standings.slice(0,3);
+  var top = standings.slice(0,3);
   var medals = ['🥇','🥈','🥉'];
-  var title = isClosed ? 'Vinnare' : 'Top 3 i ledning';
+  var title = isClosed ? 'Slutresultat' : 'Top 3 i ledning';
   var avatarSize = compact ? 22 : 28;
   var rows = top.map(function(s, idx){
     var p = players[s.pi]; if(!p) return '';
@@ -10612,6 +10612,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (108)',
+    items: [
+      { type: 'improved', text: '"Top 3 i ledning"-widgeten (på tourkort och i Tävlingar-fliken) visade tidigare bara VINNAREN när touren var helt avslutad, inte topp 3. Nu visas alltid topp 3 med medaljer (🥇🥈🥉) - rubriken byter bara till "Slutresultat" istället för "Top 3 i ledning" när sista deltävlingen/finalen är stängd, så man ser hela pallen direkt.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (107)',
     items: [
