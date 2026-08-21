@@ -2939,7 +2939,14 @@ function renderPlayers() {
       : '<p class="empty">Inga spelare ännu.</p>');
     return;
   }
-  var playerCards = t.players.map(function(p,i){
+  // Sorteras i bokstavsordning på namn för visningen - men det ursprungliga
+  // index i (spelarens "pi", som används överallt annars i appen för resultat,
+  // poäng m.m.) följer med varje spelare och rörs aldrig.
+  var sortedPlayers = t.players.map(function(p, i){ return { p: p, i: i }; })
+    .filter(function(x){ return x.p; })
+    .sort(function(a, b){ return (a.p.name||'').localeCompare(b.p.name||'', 'sv'); });
+  var playerCards = sortedPlayers.map(function(entry){
+    var p = entry.p, i = entry.i;
     if(!p) return '';
     var tourUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     // Admin är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
@@ -10911,6 +10918,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (127)',
+    items: [
+      { type: 'improved', text: 'Spelare-listan sorteras nu alltid i bokstavsordning på namn, istället för i den ordning spelarna lades till i touren. Ändrar bara visningsordningen - påverkar inte spelarnas underliggande index (pi) som resultat, poäng och placeringar bygger på.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (126)',
     items: [
