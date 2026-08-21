@@ -7145,11 +7145,11 @@ function subscribeTourLiveStandings(t) {
   _tourLiveStandings.tourId = t.id;
   _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
     var docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
-    renderTourLiveStandingsHTML(docs);
+    renderTourLiveStandingsHTML(docs, liveEvents);
   }, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
 
-function renderTourLiveStandingsHTML(docs) {
+function renderTourLiveStandingsHTML(docs, liveEvents) {
   var el = document.getElementById('tour-live-standings');
   if(!el) return;
 
@@ -7158,16 +7158,39 @@ function renderTourLiveStandingsHTML(docs) {
 
   var body = buildLiveStandingsRowsHTML(rows);
 
+  // Förtydligar VILKEN deltävling live-tabellen gäller, med datum (och bana om bara
+  // en deltävling är live samtidigt - annars visas bara antalet).
+  var eventLabel = '';
+  if(liveEvents && liveEvents.length === 1) {
+    var ev = liveEvents[0];
+    eventLabel = '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+esc(ev.name)+' · '+esc(ev.date||'')+(ev.course?' · '+esc(ev.course):'')+'</div>';
+  } else if(liveEvents && liveEvents.length > 1) {
+    eventLabel = '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+liveEvents.length+' deltävlingar live samtidigt</div>';
+  }
+
   el.innerHTML = '<div class="card" style="margin-bottom:16px">'+
-    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:2px">'+
       '<h3 style="margin:0"><i class="ti ti-broadcast" style="color:#123A4D"></i> Live scoring</h3>'+
+      '<span id="tour-live-clock" style="font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--green-dark)">--:--:--</span>'+
     '</div>'+
+    eventLabel+
     '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
       '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
     '</div>'+
     body+
   '</div>';
+  var clockEl = document.getElementById('tour-live-clock');
+  if(clockEl) clockEl.textContent = new Date().toLocaleTimeString('sv-SE');
 }
+
+// Tickar den lilla "live"-klockan (HH:MM:SS) i live-standingswidgeten varje
+// sekund. Global, enkel setInterval istället för en per rendering - kollar
+// bara om elementet finns just nu (annars noop), så den fungerar oavsett hur
+// många gånger widgeten ritas om av Firestore-uppdateringar.
+setInterval(function(){
+  var clockEl = document.getElementById('tour-live-clock');
+  if(clockEl) clockEl.textContent = new Date().toLocaleTimeString('sv-SE');
+}, 1000);
 
 
 function computeCourseHoleStats(courseName) {
@@ -10591,6 +10614,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (106)',
+    items: [
+      { type: 'new', text: 'Tourvyns "Live scoring"-widget förtydligar nu vilken deltävling det gäller (namn, datum och bana under rubriken - eller antalet om flera deltävlingar råkar vara live samtidigt), samt en tickande live-klocka (HH:MM:SS, rörlig sekundvisning) uppe till höger i widgeten, för att göra "live"-känslan tydligare.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (105)',
     items: [
