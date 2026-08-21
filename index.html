@@ -1192,11 +1192,12 @@ function renderGlobalSettings() {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
   }
-  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div><div id="db-diagnostics"></div>';
+  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div><div id="login-log-section"></div><div id="db-diagnostics"></div>';
   el.innerHTML = html;
   renderCourseBankSection();
   renderCourseDbSection();
   renderLogoManagerSection();
+  renderLoginLogSection();
   renderDbDiagnostics();
 }
 
@@ -4063,6 +4064,33 @@ var SIDE_BET_AUTO_TYPES = ['Minst antal puttar', 'Färst antal slag på ett hål
 // Dessa typer avgörs fysiskt på ett specifikt hål ute på banan - kopplas till ett
 // hålnummer så livescoringen kan fråga om vinnaren automatiskt när hålet är klart.
 var SIDE_BET_HOLE_TYPES = ['Längsta drive', 'Närmast hål'];
+// Egen liten emoji per typ, visas direkt efter namnet - grön/flagga för
+// "Närmast hål" (klassiskt golf-hål-motiv), bomb för "Längsta drive" (kraft/smäll).
+function sideBetEmoji(betType) {
+  if(betType === 'Närmast hål') return '⛳ ';
+  if(betType === 'Längsta drive') return '💣 ';
+  return '';
+}
+
+// Postar en side bet-vinst i aktivitetsfeeden - t.ex. "Andreas placerade precis
+// sin boll närmast flaggan på hål 12 på Lindö Dal, Andreas plockar hem hela
+// potten på 75 kr". Anropas varje gång en vinnare sätts, oavsett om det sker
+// automatiskt (Vem vann?-prompten) eller manuellt (select-fältet i Side bets-
+// vyn) - fire-and-forget, stör aldrig själva vinnar-sättningen om det misslyckas.
+function postSideBetWinFeedEntry(t, e, sb) {
+  if(!t || !e || !sb || sb.winnerPi == null) return;
+  var p = t.players[sb.winnerPi];
+  if(!p) return;
+  var participants = sb.participants || [];
+  var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name, eventId: e.id, eventName: e.name,
+    playerUsername: p.username, playerName: p.name,
+    category: 'sidebetwin', sideBetName: sb.name, sideBetType: sb.betType,
+    hole: sb.hole || null, course: e.course || '', pot: pot,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte posta side bet-vinst i aktivitetsfeeden', err); });
+}
 function dateMinusDays(dateStr, days) {
   var d = new Date(dateStr);
   d.setDate(d.getDate()-days);
@@ -4177,20 +4205,32 @@ function renderHomeActivityFeed(items) {
         ? (it.poang+' poäng')
         : (it.diffToPar===0 ? 'jämnt med par' : Math.abs(it.diffToPar)+' under par');
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:#EAF3DE;color:#3B6D11;font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px"><i class="ti ti-trophy" style="font-size:11px"></i> stark rond</span> – '+resultLabel;
+    } else if(it.category === 'sidebetwin') {
+      var actionText = it.sideBetType === 'Närmast hål'
+        ? 'placerade precis sin boll närmast flaggan på hål '+it.hole
+        : it.sideBetType === 'Längsta drive'
+          ? 'slog precis den längsta driven på hål '+it.hole
+          : 'vann '+esc(it.sideBetName);
+      var courseText = it.course ? (' på '+esc(it.course)) : '';
+      var winText = it.pot > 0
+        ? esc(it.playerName)+' plockar hem hela potten på '+it.pot+' kr'
+        : esc(it.playerName)+' vinner äran';
+      lineHtml = sideBetEmoji(it.sideBetType)+'<b>'+esc(it.playerName)+'</b> '+actionText+courseText+', '+winText;
     } else {
       var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
     }
-    return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'+
+    return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start">'+
       avatar+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;color:var(--text)">'+lineHtml+'</div>'+
         '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+esc(it.eventName)+' · '+formatRelativeTime(it.createdAt)+'</div>'+
       '</div>'+
-      '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:4px 6px;color:'+(iLiked?'#1D9E75':'var(--text-3)')+';flex-shrink:0" title="Gilla">'+
-        '<i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:16px"></i>'+
-        (likeCount>0?'<span style="font-size:12px;font-weight:600">'+likeCount+'</span>':'')+
-      '</button>'+
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">'+
+        '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:6px;color:'+(iLiked?'#1D9E75':'var(--text-3)')+'" title="Gilla"><i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:18px"></i></button>'+
+        (likeCount>0 ? '<button onclick="showFeedLikers(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:11px;color:var(--text-3);text-decoration:underline">'+likeCount+'</button>' : '')+
+      '</div>'+
+      (isAdmin() ? '<button onclick="deleteActivityFeedItem(\''+it._id+'\')" title="Radera inlägget (admin)" style="background:none;border:none;cursor:pointer;padding:6px 2px;color:var(--text-3);flex-shrink:0"><i class="ti ti-trash" style="font-size:15px"></i></button>' : '')+
     '</div>';
   }).join('');
 
@@ -4198,6 +4238,41 @@ function renderHomeActivityFeed(items) {
     '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class="ti ti-bolt" style="color:var(--gold)"></i> Senaste händelser</div>'+
     rows+
   '</div>';
+}
+
+// Visar en enkel lista med vilka som gillat ett feed-inlägg - klickbar via
+// "X"-länken bredvid gilla-knappen (separerad från själva gilla-knappen så man
+// inte råkar gilla/ogilla av misstag när man bara ville se listan - viktigt på
+// mobil där tryckytorna annars lätt hamnar för nära varandra).
+function showFeedLikers(docId) {
+  ACTIVITY_FEED_COL.doc(docId).get().then(function(doc){
+    if(!doc.exists) { alert('Inlägget finns inte längre.'); return; }
+    var likes = doc.data().likes || {};
+    var usernames = Object.keys(likes);
+    if(!usernames.length) { alert('Ingen har gillat än.'); return; }
+    var rows = usernames.map(function(un){
+      var u = (S.users||[]).find(function(x){ return x.username===un; });
+      var name = u ? (u.name||u.username) : un;
+      var img = playerPhoto(un, u&&u.img);
+      var avatar = img
+        ? '<img src="'+img+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+        : '<div class="avatar-ph" style="width:32px;height:32px;font-size:12px;flex-shrink:0">'+ini(name)+'</div>';
+      return '<div class="row" style="gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">'+avatar+'<span style="font-size:13px;font-weight:600">'+esc(name)+'</span></div>';
+    }).join('');
+    showModal('<h3 style="margin-bottom:10px"><i class="ti ti-thumb-up"></i> Gillat av ('+usernames.length+')</h3>'+rows+'<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>', false, true);
+  }).catch(function(err){ console.error('Kunde inte hämta gillningar', err); alert('Kunde inte hämta listan just nu.'); });
+}
+
+// Admin kan radera ett feed-inlägg direkt i appen - t.ex. ett gammalt inlägg
+// som fastnat (se cleanupOrphanedLiveScoringDocs-fixen ovan för grundorsaken),
+// eller om något postades av misstag.
+function deleteActivityFeedItem(docId) {
+  if(!isAdmin()) return;
+  if(!confirm('Radera det här inlägget från aktivitetsfeeden? Går inte att ångra.')) return;
+  ACTIVITY_FEED_COL.doc(docId).delete().catch(function(err){
+    console.error('Kunde inte radera feed-inlägget', err);
+    alert('Kunde inte radera inlägget. Kontrollera internetanslutningen och försök igen.');
+  });
 }
 
 function toggleActivityFeedLike(docId) {
@@ -4256,7 +4331,7 @@ function openSideBets(ei) {
       var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
       var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
         '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
-          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
+          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
           (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
           (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>':'')+
@@ -4396,6 +4471,7 @@ function setSideBetWinner(ei, betId, val) {
   sb.winnerAutoHole = null; // manuell ändring - ska inte kunna ångras automatiskt längre
   save();
   renderEvents();
+  if(sb.winnerPi != null) postSideBetWinFeedEntry(t, e, sb);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4539,7 +4615,7 @@ function buildSideBetsSummaryHTML(t, e, ei) {
     var canJoin = myPi>=0 && sb.winnerPi==null && participants.indexOf(myPi)===-1;
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
-      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+'</div>'+
+      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
       (sb.description?'<div style="font-size:11px;color:var(--text-3)">'+esc(sb.description)+'</div>':'')+
       '</div>'+
       (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
@@ -5050,10 +5126,19 @@ function describeTeeGroupPruneResult(t, result) {
   return msg;
 }
 
+// Städar även bort ev. aktivitetsfeed-inlägg (birdies, starka ronder) som hörde
+// till en boll INNAN dess livescoring-dokument raderas - annars blir ett gammalt
+// feed-inlägg permanent kvar med ingen väg tillbaka att rensa det, eftersom
+// kopplingen (feedPosts-kartan) fanns bara på just det dokumentet som nu tas bort.
 function cleanupOrphanedLiveScoringDocs(eid, removedGroups) {
   removedGroups.forEach(function(g){
     if(!g.id) return;
-    LIVE_SCORING_COL.doc(liveScoringDocId(eid, g.id)).delete().catch(function(){});
+    var docId = liveScoringDocId(eid, g.id);
+    var ref = LIVE_SCORING_COL.doc(docId);
+    ref.get().then(function(doc){
+      if(doc.exists) deleteActivityFeedPostsFromMap(doc.data().feedPosts);
+      return ref.delete();
+    }).catch(function(){});
   });
 }
 
@@ -6703,6 +6788,9 @@ var LIVE_SCORING_COL = db.collection('liveScoring');
 // collection av samma anledning som liveScoring - frekventa småskrivningar från
 // flera spelare samtidigt ska inte belasta/krocka med huvud-dokumentet.
 var ACTIVITY_FEED_COL = db.collection('activityFeed');
+// Inloggningslogg för admin: vem loggade in, när, med vilken webbläsare/OS,
+// och ungefärlig plats (stad/land) via en gratis IP-baserad geolocation-tjänst.
+var LOGIN_LOG_COL = db.collection('loginLog');
 var _liveScoring = { docId:null, unsub:null, data:null, activeHole:1, activePi:null, mode:null };
 
 // VIKTIGT: docId får ALDRIG baseras på bollens array-index (gIdx) i e.teeGroups -
@@ -7216,7 +7304,7 @@ function renderSideBetPromptHTML() {
   el.innerHTML =
     '<div style="text-align:center;margin-bottom:16px">'+
       '<div style="font-size:13px;color:var(--text-3)">Hål '+_liveScoring.activeHole+' klart</div>'+
-      '<div style="font-weight:800;font-size:19px;margin-top:2px"><i class="ti ti-target-arrow" style="color:var(--gold)"></i> '+esc(sb.name)+'</div>'+
+      '<div style="font-weight:800;font-size:19px;margin-top:2px"><i class="ti ti-target-arrow" style="color:var(--gold)"></i> '+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
       '<div style="font-size:14px;color:var(--text-2);margin-top:2px">Vem vann?</div>'+
     '</div>'+
     (options || '<p style="font-size:13px;color:var(--text-3);text-align:center">Ingen av deltagarna i det här betet finns med i den här bollen.</p>')+
@@ -7229,7 +7317,8 @@ function answerSideBetPrompt(pi) {
   var sb = _liveScoring.pendingSideBet;
   var d = _liveScoring.data;
   if(sb && d) {
-    var ev = findEventById(d.eventId);
+    var found = findTourAndEventById(d.eventId);
+    var ev = found ? found.event : null;
     var actualSb = ev && ev.sideBets ? ev.sideBets.find(function(x){ return x.id===sb.id; }) : null;
     if(actualSb) {
       actualSb.winnerPi = pi;
@@ -7240,6 +7329,7 @@ function answerSideBetPrompt(pi) {
       // påverkas inte av detta (winnerAutoHole sätts bara här).
       actualSb.winnerAutoHole = _liveScoring.activeHole;
       save();
+      if(found) postSideBetWinFeedEntry(found.tour, found.event, actualSb);
     }
   }
   advanceSideBetPromptQueue();
@@ -7709,7 +7799,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
     return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:6px">'+
         '<div style="flex:1;min-width:0">'+
-          '<div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+'</div>'+
+          '<div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
           holeLabel+
         '</div>'+
         '<div style="text-align:center;flex-shrink:0;width:52px">'+
@@ -11283,6 +11373,32 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (141)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX (grundorsak): Ett feed-inlägg kunde bli permanent kvar utan möjlighet att rensas automatiskt om bollen det hörde till slogs ihop/skapades om (t.ex. via kryssruta-skaparen). Orsaken var att den funktionen (cleanupOrphanedLiveScoringDocs) raderade livescoring-dokumentet direkt utan att först städa bort dess kopplade feed-inlägg - kopplingen fanns bara på just det dokumentet, och gick förlorad för alltid när det togs bort. Fixat vid källan: feed-inlägg städas nu bort korrekt innan dokumentet raderas, oavsett anledning (sammanslagning, borttagning av spelare ur boll, m.m.).' },
+      { type: 'new', text: 'Admin kan nu radera vilket feed-inlägg som helst direkt i appen (papperskorgs-ikon på varje rad) - som ett säkerhetsnät för äldre inlägg som redan hunnit fastna innan grundorsaken fixades, eller om något postades av misstag.' },
+      { type: 'new', text: 'Klicka på antalet gillningar i aktivitetsfeeden för att se EXAKT vilka som gillat (namn + bild) i en liten lista. Gilla-knappen och "se vem"-länken är medvetet separerade tryckytor (ikon ovanför, siffra under) - viktigt på mobil så man inte råkar gilla/ogilla av misstag när man egentligen bara ville se listan.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (140)',
+    items: [
+      { type: 'new', text: 'Aktivitetsfeeden postar nu även vinst av side bets: "⛳ Andreas placerade precis sin boll närmast flaggan på hål 12 på Lindö Dal, Andreas plockar hem hela potten på 75 kr" (motsvarande text för Längsta drive med 💣, och en generisk "vann [betnamn]"-text för övriga typer som Minst antal puttar/Flest birdies/Annat). Spelare, hål, bana och pott är helt dynamiska. Postas oavsett om vinnaren sattes automatiskt (Vem vann?-prompten) eller manuellt av admin i Side bets-vyn.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (139)',
+    items: [
+      { type: 'improved', text: '"Närmast hål" har nu en ⛳-emoji och "Längsta drive" en 💣-emoji direkt efter namnet, på alla ställen side bets visas: live-sammanfattningen, admin-vyn, event-kortets sammanfattning och "Vem vann?"-prompten under livescoringen.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (138)',
+    items: [
+      { type: 'new', text: 'Ny inloggningslogg för admin (Inställningar → "Inloggningslogg"): visar de senaste 50 inloggningarna med användarnamn, datum/tid, webbläsare/OS, och ungefärlig plats (stad/land) via en gratis IP-baserad geolocation-tjänst. Loggas bara vid faktiska inloggningar (inte automatisk session-återställning vid sidladdning, och inte vid "logga in som"). Notera: platsen är IP-baserad (ungefärlig stads-/landsnivå), inte exakt GPS-position, och kräver inget behörighetstillstånd av användaren - men är ändå personuppgifter värda att känna till ur ett integritetsperspektiv om ni informerar era medlemmar om det.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (137)',
     items: [
       { type: 'new', text: '"Glöm inte anmäla dig"-widgeten på startsidan har nu en "Deltar ej"-knapp bredvid "Anmäl dig" - ett tryck räcker, ingen navigering krävs. Har man tackat nej visas det som ett eget, tydligt (men neutralt, inte varnande) status-läge: "Deltar ej" med tävlingsinfo och en "Ändra - anmäl dig ändå"-knapp, så man alltid kan ändra sig och anmäla sig igen.' }
@@ -12889,7 +13005,100 @@ function doLogin() {
   }
   currentUser = user;
   sessionStorage.setItem('tourapp_session', JSON.stringify({username:user.username}));
+  logLoginEvent(user.username);
   afterLogin();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INLOGGNINGSLOGG (admin) - vem loggade in, när, med vilken webbläsare/OS, och
+// ungefärlig plats. Loggas bara vid en FAKTISK inloggning (doLogin), inte vid
+// automatisk session-återställning (tryAutoLogin, t.ex. en vanlig sidladdning)
+// eller vid "logga in som" (impersonateUser) - det är admins egen inloggning
+// som redan loggats, inte ett nytt inloggningstillfälle.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Enkel webbläsare/OS-tolkning från User-Agent-strängen - "bra nog", inte
+// hundraprocentigt exakt (ingen extern bibliotek behövs för det här syftet).
+function parseUserAgent(ua) {
+  ua = ua || '';
+  var browser = 'Okänd webbläsare';
+  if(/Edg\//.test(ua)) browser = 'Edge';
+  else if(/OPR\//.test(ua)) browser = 'Opera';
+  else if(/Chrome\//.test(ua) && !/Chromium/.test(ua)) browser = 'Chrome';
+  else if(/CriOS\//.test(ua)) browser = 'Chrome (iOS)';
+  else if(/FxiOS\//.test(ua)) browser = 'Firefox (iOS)';
+  else if(/Firefox\//.test(ua)) browser = 'Firefox';
+  else if(/Safari\//.test(ua) && /Version\//.test(ua)) browser = 'Safari';
+  var os = 'Okänt OS';
+  if(/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+  else if(/Android/.test(ua)) os = 'Android';
+  else if(/Windows/.test(ua)) os = 'Windows';
+  else if(/Macintosh|Mac OS X/.test(ua)) os = 'macOS';
+  else if(/Linux/.test(ua)) os = 'Linux';
+  return { browser: browser, os: os };
+}
+
+// Skriver en logg-rad, med bästa-försök på plats (IP-baserad, ingen exakt GPS-
+// position och ingen behörighetsprompt behövs). Misslyckas geolocation-anropet
+// (t.ex. nätverksfel, tjänsten nere) loggas raden ändå, bara utan plats -
+// själva inloggningen ska aldrig blockeras eller synas störas av detta.
+function logLoginEvent(username) {
+  var ua = navigator.userAgent;
+  var parsed = parseUserAgent(ua);
+  var base = {
+    username: username, timestamp: Date.now(), userAgent: ua,
+    browser: parsed.browser, os: parsed.os
+  };
+  fetch('https://ipapi.co/json/').then(function(r){ return r.json(); }).then(function(loc){
+    base.city = loc.city || null;
+    base.region = loc.region || null;
+    base.country = loc.country_name || null;
+    LOGIN_LOG_COL.add(base).catch(function(){});
+  }).catch(function(){
+    LOGIN_LOG_COL.add(base).catch(function(){});
+  });
+}
+
+// Visar de senaste 50 inloggningarna i Inställningar (admin). Engångshämtning
+// (inte en live-lyssnare) - man öppnar sidan för att kolla, inget som behöver
+// uppdateras i realtid.
+function renderLoginLogSection() {
+  var el = document.getElementById('login-log-section');
+  if(!el || !isAdmin()) { if(el) el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="section-title" style="margin-top:20px"><i class="ti ti-shield-lock"></i> Inloggningslogg</div>'+
+    '<p id="login-log-status" style="font-size:12px;color:var(--text-3);margin-bottom:10px">Hämtar de senaste inloggningarna...</p>'+
+    '<div id="login-log-list"></div>';
+  LOGIN_LOG_COL.orderBy('timestamp','desc').limit(50).get().then(function(snap){
+    var statusEl = document.getElementById('login-log-status');
+    var listEl = document.getElementById('login-log-list');
+    if(!listEl) return;
+    if(snap.empty) {
+      if(statusEl) statusEl.textContent = 'Inga inloggningar loggade ännu.';
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Senaste '+snap.size+' inloggningarna, nyast överst.';
+    listEl.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+
+      snap.docs.map(function(doc, idx){
+        var l = doc.data();
+        var when = new Date(l.timestamp).toLocaleString('sv-SE', { dateStyle:'short', timeStyle:'short' });
+        var place = [l.city, l.country].filter(Boolean).join(', ');
+        return '<div style="padding:10px 14px;'+(idx<snap.size-1?'border-bottom:1px solid var(--border)':'')+'">'+
+          '<div class="row" style="justify-content:space-between;align-items:center">'+
+            '<span style="font-weight:600;font-size:13px">'+esc(l.username)+'</span>'+
+            '<span style="font-size:12px;color:var(--text-3)">'+when+'</span>'+
+          '</div>'+
+          '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+
+            '<i class="ti ti-device-desktop-analytics" style="font-size:11px"></i> '+esc(l.browser||'Okänd')+' · '+esc(l.os||'Okänt OS')+
+            (place ? ' &nbsp;·&nbsp; <i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(place) : '')+
+          '</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }).catch(function(err){
+    console.error('Kunde inte hämta inloggningsloggen', err);
+    var statusEl2 = document.getElementById('login-log-status');
+    if(statusEl2) statusEl2.textContent = 'Kunde inte hämta inloggningsloggen (se webbläsarkonsolen för detaljer).';
+  });
 }
 
 function tryAutoLogin() {
