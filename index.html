@@ -188,13 +188,13 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   </div>
 </div>
 
-<div id="user-bar" style="display:none;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;color:var(--text-2)">
+<div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;padding:10px 0;font-size:12px;color:var(--text-2)">
   <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
-  <span style="display:flex;gap:10px">
-    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600" onclick="showUsersView()"><i class="ti ti-users-group"></i> Användare</span>
-    <span style="cursor:pointer" onclick="viewMyProfile()"><i class="ti ti-user-edit"></i> Min profil</span>
-    <span style="cursor:pointer" onclick="openChangePassword()"><i class="ti ti-key"></i> Byt lösenord</span>
-    <span style="cursor:pointer" onclick="logout()"><i class="ti ti-logout"></i> Logga ut</span>
+  <span style="display:flex;gap:14px">
+    <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:2px" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><br>Användare</span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><br>Min profil</span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><br>Byt lösenord</span>
+    <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><br>Logga ut</span>
   </span>
 </div>
 
@@ -10919,6 +10919,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (129)',
+    items: [
+      { type: 'improved', text: 'Topp-navigeringen (Användare/Min profil/Byt lösenord/Logga ut) radbryter nu så ikonen hamnar ovanför texten istället för bredvid - snyggare och tar mindre horisontell plats.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (128)',
     items: [
       { type: 'improved', text: 'Användare-vyn (admin) sorteras nu likadant som Spelare-listan: admin-profiler först, sedan övriga användare/spelare - båda grupperna i bokstavsordning på namn, med en avgränsare ("SPELARE") mellan grupperna. "Redigera"/"Ta bort"-knapparna fungerar oförändrat korrekt trots omsorteringen - rätt användare pekas alltid ut oavsett var i listan hen visas.' }
@@ -12501,7 +12507,7 @@ function afterLogin() {
   document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
   document.getElementById('user-bar').style.display = 'flex';
   if(currentUser.role === 'admin') {
-    document.getElementById('nav-users-btn').style.display = '';
+    document.getElementById('nav-users-btn').style.display = 'flex';
   }
   showHomeScreen();
   renderImpersonationBanner();
@@ -12589,7 +12595,7 @@ function stopImpersonating() {
   if(!admin) { logout(); return; }
   currentUser = admin;
   document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
-  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = '';
+  if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'flex';
   renderImpersonationBanner();
   showHomeScreen();
 }
