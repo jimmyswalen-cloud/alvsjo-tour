@@ -7281,18 +7281,20 @@ function buildSideBetsLiveSummaryHTML(e, players) {
   if(!e || !e.sideBets || !e.sideBets.length) return '';
   var rows = e.sideBets.map(function(sb){
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
-    var holeLabel = sb.hole ? ('Hål '+sb.hole+' · ') : '';
     var participants = sb.participants || [];
     var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
     var potLabel = sb.fee>0 ? ('💰 '+pot+' kr') : '🆓 Gratis';
-    return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'+
-      '<div class="row" style="justify-content:space-between;align-items:center">'+
-        '<span style="font-size:12px;color:var(--text)">'+holeLabel+esc(sb.name)+'</span>'+
+    return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
+      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
+        '<div style="min-width:0">'+
+          '<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+'</div>'+
+          (sb.hole ? '<div style="font-size:10px;color:var(--text-3);margin-top:1px">Hål '+sb.hole+'</div>' : '')+
+        '</div>'+
         (winner
-          ? '<span style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
-          : '<span style="font-size:12px;color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</span>')+
+          ? '<span style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap;flex-shrink:0"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
+          : '<span style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap;flex-shrink:0">Aktiv</span>')+
       '</div>'+
-      '<div style="font-size:12px;color:var(--text-2);font-weight:700;text-align:center;margin-top:3px">'+potLabel+'</div>'+
+      '<div style="font-size:11px;color:var(--text-2);font-weight:700;margin-top:5px">'+potLabel+'</div>'+
     '</div>';
   }).join('');
   return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
@@ -10843,6 +10845,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (119)',
+    items: [
+      { type: 'improved', text: 'Side bets-sammanfattningen i live-vyerna gjord grafiskt tydligare: varje bet får nu ett eget lätt inramat kort med rätt baslinje-justering (namn + hål-etikett vänsterjusterat, vinnare/"Aktiv" högerjusterat i linje med första raden istället för att hamna snett), och potten som en egen liten rad längst ner i kortet.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (118)',
     items: [
