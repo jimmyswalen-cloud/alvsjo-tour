@@ -7272,7 +7272,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
           ? '<span style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
           : '<span style="font-size:12px;color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</span>')+
       '</div>'+
-      '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+potLabel+'</div>'+
+      '<div style="font-size:12px;color:var(--text-2);font-weight:700;text-align:center;margin-top:3px">'+potLabel+'</div>'+
     '</div>';
   }).join('');
   return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
@@ -10823,6 +10823,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (117)',
+    items: [
+      { type: 'improved', text: 'Pengarpåsen och beloppet (potten) på side bets-raden i live-vyerna är nu centrerad, tydligare framhävd.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (116)',
     items: [
