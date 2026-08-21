@@ -1860,9 +1860,11 @@ function findMyNextRoundInfo() {
       if(e.closed) return;
       var regsRaw = e.registrations || [];
       var regsNorm = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
-      var myReg = regsNorm.find(function(r){ return r.pi===myPi && !r.declined; });
+      var myAnyReg = regsNorm.find(function(r){ return r.pi===myPi; });
+      var myReg = (myAnyReg && !myAnyReg.declined) ? myAnyReg : null;
       var registered = !!myReg;
-      var dateStr = (myReg && myReg.date) || e.date;
+      var declined = !!(myAnyReg && myAnyReg.declined);
+      var dateStr = (myAnyReg && myAnyReg.date) || e.date;
       if(!dateStr) return;
       var isFuture = dateStr >= todayStr;
       if(!registered && !isFuture) return; // för sent att anmäla sig - ingen mening med en påminnelse
@@ -1874,7 +1876,7 @@ function findMyNextRoundInfo() {
           var gIdx = e.teeGroups.findIndex(function(g){ return g.date===dateStr && g.playerPis.indexOf(myPi)>=0; });
           if(gIdx >= 0) { time = e.teeGroups[gIdx].time || ''; groupIndex = gIdx; }
         }
-        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: isFuture, registered: registered, groupIndex: groupIndex };
+        best = { tour: t, event: e, eventIndex: ei, date: dateStr, time: time, isFuture: isFuture, registered: registered, declined: declined, groupIndex: groupIndex };
       }
     });
   });
@@ -1889,6 +1891,27 @@ function goToMyNextRound(tourId, eventIndex) {
 function goToMyRegistration(tourId, eventIndex) {
   enterTour(tourId);
   setTimeout(function(){ openRegister(eventIndex); }, 60);
+}
+
+// Snabbmarkerar "Deltar ej" direkt från startsidans påminnelse-widget, utan att
+// behöva navigera in i touren och öppna hela anmälningsvyn - "declined" kräver
+// inget datum (till skillnad från "registered"), så det går att göra rent.
+function quickDeclineFromHome(tourId, eventIndex) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = t.events[eventIndex];
+  if(!e) return;
+  var myPi = getMyPi(t);
+  if(myPi < 0) return;
+  if(!e.registrations) e.registrations = [];
+  var existing = e.registrations.find(function(r){ return r.pi===myPi; });
+  if(existing) existing.declined = true;
+  else e.registrations.push({ pi: myPi, date: e.date, declined: true });
+  var pruneResult = pruneUnregisteredFromTeeGroups(e);
+  save();
+  renderHomeNextRoundWidget();
+  var pruneMsg = describeTeeGroupPruneResult(t, pruneResult);
+  if(pruneMsg) alert(pruneMsg);
 }
 
 function goToMyLiveScoring(tourId, eventId, gIdx) {
@@ -1959,6 +1982,33 @@ function renderHomeNextRoundWidget() {
   var img = getEventImage(e);
   var dateLabel = formatSvDateFull(info.date);
 
+  if(info.declined) {
+    // Spelaren har AKTIVT tackat nej till deltävlingen - visa det som ett tydligt,
+    // neutralt (inte varnande) status-läge, med möjlighet att ändra sig och
+    // anmäla sig igen. Skiljer sig medvetet från "Glöm inte anmäla dig" (gult/
+    // uppmanande) genom grå/neutral färgsättning - det här är redan ett aktivt beslut.
+    el.innerHTML =
+      '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;border:1px solid var(--border)">'+
+        '<div style="display:flex;align-items:stretch">'+
+          (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0;filter:grayscale(60%)">' : '<div style="width:88px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-user-x" style="font-size:28px;color:var(--text-3)"></i></div>')+
+          '<div style="padding:12px 14px;flex:1;min-width:0">'+
+            '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px"><i class="ti ti-user-x"></i> Deltar ej</div>'+
+            '<div style="font-weight:700;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'+
+            '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
+              (e.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course)+'</span>' : '')+
+              '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="row" style="justify-content:flex-end;padding:0 14px 12px">'+
+          '<button class="btn btn-sm" onclick="goToMyRegistration(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-refresh"></i> Ändra - anmäl dig ändå</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
+    return;
+  }
+
   if(!info.registered) {
     // Spelaren är inte anmäld till sin närmast kommande deltävling än - visa en påminnelse att
     // anmäla sig istället för en "Mitt resultat"-genväg (det finns ju inget resultat att fylla i).
@@ -1978,7 +2028,8 @@ function renderHomeNextRoundWidget() {
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div class="row" style="justify-content:flex-end;padding:0 14px 12px">'+
+        '<div class="row" style="justify-content:flex-end;gap:8px;padding:0 14px 12px">'+
+          '<button class="btn btn-sm" onclick="event.stopPropagation();quickDeclineFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-user-x"></i> Deltar ej</button>'+
           '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyRegistration(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-clipboard-check"></i> Anmäl dig</button>'+
         '</div>'+
       '</div>'+
@@ -11231,6 +11282,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (137)',
+    items: [
+      { type: 'new', text: '"Glöm inte anmäla dig"-widgeten på startsidan har nu en "Deltar ej"-knapp bredvid "Anmäl dig" - ett tryck räcker, ingen navigering krävs. Har man tackat nej visas det som ett eget, tydligt (men neutralt, inte varnande) status-läge: "Deltar ej" med tävlingsinfo och en "Ändra - anmäl dig ändå"-knapp, så man alltid kan ändra sig och anmäla sig igen.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (136)',
     items: [
