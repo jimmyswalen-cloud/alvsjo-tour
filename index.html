@@ -4050,7 +4050,15 @@ function openSideBets(ei) {
   if(!e.sideBets.length) {
     h += '<p style="font-size:13px;color:var(--text-3);margin-bottom:14px">Inga side bets inlagda ännu för den här deltävlingen.</p>';
   } else {
+    var sbMigrated = false;
     h += e.sideBets.map(function(sb){
+      // Självläkning: hämta upp ett hålnummer som råkat hamna i beskrivningen
+      // istället för det dedikerade hål-fältet (t.ex. äldre bets, eller bets
+      // där bara en ren siffra skrevs in), och spara det på riktigt.
+      if(!sb.hole && SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0) {
+        var extracted = extractHoleFromText(sb.description);
+        if(extracted) { sb.hole = extracted; sbMigrated = true; }
+      }
       var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
       var participants = sb.participants || [];
       var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
@@ -4092,6 +4100,7 @@ function openSideBets(ei) {
       box += '</div>';
       return box;
     }).join('');
+    if(sbMigrated) save();
   }
 
   if(admin) {
@@ -7277,35 +7286,66 @@ function formatEventPeriodLabel(e) {
 
 // Kompakt sammanfattning av side bets (aktiva och avslutade) för live-vyerna -
 // visas underst i både "Följ live"-modalen och tourvyns live-standingstabell.
+// Extraherar ett hålnummer ur fri text, t.ex. "Hål 4" eller "hål14" - används
+// för att självläka äldre side bets som skapades innan det dedikerade
+// hål-fältet fanns, där hålet av misstag bara skrevs i beskrivningen.
+function extractHoleFromText(text) {
+  if(!text) return null;
+  var trimmed = text.trim();
+  var m = /h[åa]l\s*(\d{1,2})/i.exec(trimmed);
+  if(m) {
+    var n = parseInt(m[1], 10);
+    if(n>=1 && n<=18) return n;
+  }
+  // Fallback: beskrivningen är bara en ren siffra (t.ex. "12"), utan ordet "hål" framför.
+  if(/^\d{1,2}$/.test(trimmed)) {
+    var n2 = parseInt(trimmed, 10);
+    if(n2>=1 && n2<=18) return n2;
+  }
+  return null;
+}
+
 function buildSideBetsLiveSummaryHTML(e, players) {
   if(!e || !e.sideBets || !e.sideBets.length) return '';
+  var migrated = false;
   var rows = e.sideBets.map(function(sb){
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
     var participants = sb.participants || [];
     var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
     var isHoleType = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+    // Självläkning: om hål saknas men står skrivet i beskrivningen (äldre bets
+    // skapade innan det dedikerade hål-fältet fanns), plocka upp det därifrån
+    // och spara det på riktigt, så det inte behöver gissas fram varje gång.
+    if(!sb.hole && isHoleType) {
+      var extracted = extractHoleFromText(sb.description);
+      if(extracted) { sb.hole = extracted; migrated = true; }
+    }
     var holeLabel = sb.hole
-      ? '<div style="font-size:10px;color:var(--text-3);margin-top:1px">Hål '+sb.hole+'</div>'
-      : (isHoleType ? '<div style="font-size:10px;color:var(--gold);margin-top:1px"><i class="ti ti-alert-triangle"></i> Hål ej angivet</div>' : '');
+      ? '<div style="font-size:10px;color:var(--text-3);margin-top:2px">Hål '+sb.hole+'</div>'
+      : (isHoleType ? '<div style="font-size:10px;color:var(--gold);margin-top:2px"><i class="ti ti-alert-triangle"></i> Hål ej angivet</div>' : '');
+    var potInner = '<div style="display:inline-flex;align-items:center;gap:3px">'+
+      '<span>'+(sb.fee>0?'💰':'🆓')+'</span><span>'+(sb.fee>0?(pot+' kr'):'Gratis')+'</span>'+
+    '</div>';
     return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
         '<div style="flex:1;min-width:0">'+
-          '<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+'</div>'+
+          '<div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+'</div>'+
           holeLabel+
         '</div>'+
-        '<div style="text-align:center;flex-shrink:0;min-width:56px">'+
-          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase">Pott</div>'+
-          '<div style="font-size:12px;font-weight:700;color:var(--text-2)">'+(sb.fee>0 ? ('💰 '+pot+' kr') : '🆓 Gratis')+'</div>'+
+        '<div style="text-align:center;flex-shrink:0;width:64px">'+
+          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;line-height:1.3">Pott</div>'+
+          '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin-top:2px">'+potInner+'</div>'+
         '</div>'+
-        '<div style="text-align:right;flex-shrink:0;min-width:70px">'+
-          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase">Vinnare</div>'+
+        '<div style="text-align:right;flex-shrink:0;width:76px">'+
+          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;line-height:1.3">Vinnare</div>'+
           (winner
-            ? '<div style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</div>'
-            : '<div style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</div>')+
+            ? '<div style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap;margin-top:2px"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</div>'
+            : '<div style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap;margin-top:2px">Aktiv</div>')+
         '</div>'+
       '</div>'+
     '</div>';
   }).join('');
+  if(migrated) save(); // sparar det självläkta hål-numret så det inte behöver gissas fram igen
   return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
     '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px"><i class="ti ti-target-arrow"></i> Side bets</div>'+
     rows+
@@ -10854,6 +10894,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (122)',
+    items: [
+      { type: 'fixed', text: 'Hål-extraheringen missade beskrivningar som bara var en ren siffra (t.ex. "12" utan ordet "hål" framför) - fångade bara mönster som "Hål 12". Breddat till att även läsa av en helt ren siffra. Samma självläkning tillagd i admin-vyns Side bets-lista (inte bara live-sammanfattningen), så "Längsta drive · Hål 12" nu visas konsekvent på samma sätt som "Närmast hål · Hål 4".' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (121)',
+    items: [
+      { type: 'fixed', text: '"Hål ej angivet" visades felaktigt för side bets där hålet redan fanns angivet - men i beskrivningsfältet (t.ex. "Hål 4") istället för det nya dedikerade hål-fältet, eftersom betet skapades innan det fältet fanns. Livescoringen läser nu även av hålnumret ur beskrivningen som en fallback, och sparar det automatiskt i det riktiga hål-fältet första gången det upptäcks - självläker alltså gamla side bets utan att man behöver göra något manuellt.' },
+      { type: 'improved', text: 'Potten (och Vinnare-kolumnen) i side bets-sammanfattningen linjerar nu upp jämnare - fasta kolumnbredder och konsekventa marginaler mellan rubrik och värde, så pengarpåsen/beloppet alltid hamnar på samma plats oavsett hur långt de andra fälten är.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (120)',
     items: [
