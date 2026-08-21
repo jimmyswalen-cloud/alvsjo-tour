@@ -630,6 +630,10 @@ var STATIC_COURSE_IMAGES = {
   'nynashamn': 'nynashamn-berg-sjo.jpg',
   'nynäshamn gk': 'nynashamn-berg-sjo.jpg',
   'nynashamn gk': 'nynashamn-berg-sjo.jpg',
+  'nynäshamn berg-sjö': 'nynashamn-berg-sjo.jpg',
+  'nynashamn berg-sjo': 'nynashamn-berg-sjo.jpg',
+  'nynäshamns berg-sjö': 'nynashamn-berg-sjo.jpg',
+  'nynashamns berg-sjo': 'nynashamn-berg-sjo.jpg',
 };
 
 // Statically hosted player profile photos (uploaded to the GitHub repo alongside
@@ -8536,6 +8540,31 @@ function updateScorecardTotal() {
   totalEl.innerHTML = lines.join('<br>');
 }
 
+// Byter plats på scorekortets första och sista nio hål (par, hcp-index och
+// längd) direkt i redigeringsgridens fält - utan att röra bannamn, bild eller
+// något annat. Praktiskt när en 18-hålsbana har två namngivna nior (t.ex.
+// "Sjö" och "Berg") och de visar sig ligga i fel ordning i scorekortet.
+// Fungerar bara för exakt 18 hål (annars är "första/sista nio" odefinierat).
+function swapScorecardNines() {
+  var parInputs = document.querySelectorAll('.cd-holepar-inp');
+  var hcpInputs = document.querySelectorAll('.cd-holehcp-inp');
+  var lenInputs = document.querySelectorAll('.cd-holelength-inp');
+  if(parInputs.length !== 18) {
+    alert('Byt-plats-funktionen fungerar bara för banor med exakt 18 hål (denna bana har '+parInputs.length+').');
+    return;
+  }
+  [parInputs, hcpInputs, lenInputs].forEach(function(inputs){
+    if(inputs.length !== 18) return; // längd kan sakna värden men fälten finns ändå - kolla ändå längden på NodeList
+    for(var i=0; i<9; i++){
+      var a = inputs[i], b = inputs[i+9];
+      var tmp = a.value;
+      a.value = b.value;
+      b.value = tmp;
+    }
+  });
+  updateScorecardTotal();
+}
+
 function readCourseFormFields() {
   var get = function(id){ var el=document.getElementById(id); return el ? el.value.trim() : ''; };
   var getNum = function(id){ var v = get(id); return v===''?null:parseFloat(v); };
@@ -8620,6 +8649,9 @@ function openEditCourse(id) {
       '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata (t.ex. "Par 4 - Index 9" per rad, en per hål)</label>' +
       '<textarea id="cd-scorecard-paste" rows="3" placeholder="Par 5 - Index 7&#10;Par 4 - Index 9&#10;Par 3 - Index 17 ..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
       '<button type="button" class="btn btn-sm" onclick="parseScorecardPaste()"><i class="ti ti-wand"></i> Tolka & fyll i</button>' +
+    '</div>' +
+    '<div class="row" style="justify-content:flex-end;margin-bottom:6px">' +
+      '<button type="button" class="btn btn-sm" title="T.ex. om banans två nior namngivits i fel ordning (första nio blir sista och tvärtom)" onclick="swapScorecardNines()"><i class="ti ti-arrows-left-right"></i> Byt plats på första/sista nio</button>' +
     '</div>' +
     '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
     '<div id="cd-scorecard-total" style="font-size:12px;margin-bottom:14px"></div>' +
@@ -10791,6 +10823,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (115)',
+    items: [
+      { type: 'new', text: 'Ny knapp "Byt plats på första/sista nio" i Bandatabasens scorekorts-redigerare - byter par, hcp-index och längd mellan hål 1-9 och hål 10-18 med ett klick. Praktiskt när en banas två namngivna nior (t.ex. "Sjö" och "Berg") visar sig ligga i fel ordning.' },
+      { type: 'fixed', text: 'Lagt till bildmappning för "Nynäshamn Berg-Sjö" (och stavningsvarianter) i STATIC_COURSE_IMAGES, pekande på samma befintliga bildfil (nynashamn-berg-sjo.jpg) som redan används för "Nynäshamn" - banbilden fortsätter fungera oavsett vad banan döps om till, ingen omdöpning av jpg-filen behövs.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (114)',
     items: [
