@@ -261,10 +261,12 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
       <h2 style="margin:0;flex:1;text-align:center">Tourer</h2>
       <button class="btn btn-primary btn-sm" id="new-tour-btn" onclick="openNewTourWizard()" style="display:none"><i class="ti ti-plus"></i> Ny tour</button>
     </div>
-    <div class="home-card" onclick="showTourSearch()" style="background:#CFE8FB;border:none;margin-bottom:16px">
-      <i class="ti ti-search" style="font-size:28px;color:#0C447C" aria-hidden="true"></i>
-      <div class="home-card-label" style="color:#0C447C">Sök &amp; anmäl till tour</div>
-      <div class="home-card-sub" style="color:#185FA5">Hitta tourer och anmäl dig själv</div>
+    <div class="home-card" onclick="showTourSearch()" style="background:#CFE8FB;border:none;margin-bottom:16px;flex-direction:row;align-items:center;justify-content:flex-start;text-align:left;gap:14px;padding:0.9rem 1.1rem">
+      <i class="ti ti-search" style="font-size:24px;color:#0C447C;flex-shrink:0" aria-hidden="true"></i>
+      <div>
+        <div class="home-card-label" style="color:#0C447C;text-align:left">Sök &amp; anmäl till tour</div>
+        <div class="home-card-sub" style="color:#185FA5;text-align:left">Hitta tourer och anmäl dig själv</div>
+      </div>
     </div>
     <div id="tours-list"></div>
   </div>
@@ -11372,6 +11374,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (142)',
+    items: [
+      { type: 'improved', text: '"Sök & anmäl till tour"-widgeten på Tourer-sidan omdesignad: förstoringsglaset sitter nu till vänster med texten (namn + undertext) vänsterjusterad bredvid, istället för allt centrerat i en kolumn. Widgeten är därmed betydligt lägre i höjd - en smal rad istället för en hög, fyrkantig ruta.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (141)',
     items: [
