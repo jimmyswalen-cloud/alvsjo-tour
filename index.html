@@ -7260,7 +7260,7 @@ function renderLiveFollowHTML(e, players, t) {
 
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
-    ? '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+    ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
         '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
@@ -7430,7 +7430,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
         '<span class="tour-live-clock" style="font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--green-dark)">--:--:--</span>'+
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
-      '<div class="row" style="justify-content:flex-end;gap:12px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+      '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
         '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
       '</div>'+
       body+
@@ -10901,6 +10901,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (124)',
+    items: [
+      { type: 'fixed', text: 'Live-tabellens kolumnrubriker (+/-, BRT, NTO, PTS) var inte i linje med värdena under - orsaken var att rubrikraden hade ett annat mellanrum mellan kolumnerna (gap:12px) än själva värderaden (gap:7px), trots att kolumnbredderna i övrigt matchade. Rättat till samma mellanrum överallt, så siffrorna nu ligger centrerat rakt under respektive rubrik.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (123)',
     items: [
