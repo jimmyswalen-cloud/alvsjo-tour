@@ -7799,7 +7799,6 @@ function renderOomTable() {
   var playerPis = Object.keys(totals).map(Number).sort(function(a,b){ return totals[b]-totals[a]; });
   if(!playerPis.length) { el.innerHTML = '<p class="empty">Inga resultat ännu.</p>'; return; }
 
-  var medals = ['🥇','🥈','🥉'];
   var html = '<div class="card" style="padding:14px 0 4px">';
   html += '<div style="padding:0 16px 10px"><p style="font-size:12px;color:var(--text-2)">Varje spelares poäng per deltävling &nbsp; <span style="color:var(--gold)">★</span> markerar vinnare av tävling &nbsp; <span class="badge badge-gold" style="font-size:10px">M</span> markerar major-tävling</p></div>';
   html += '<div style="overflow-x:auto"><table class="hist-table leaderboard-table" style="white-space:nowrap"><thead><tr>';
@@ -7816,7 +7815,7 @@ function renderOomTable() {
     if(!p) return;
     var countedIds = playerCountedIds[pi] || {};
     html += '<tr onclick="showPlayerProfile('+pi+')" style="cursor:pointer">';
-    html += '<td class="stk-pos">'+(medals[idx]||(idx+1))+'</td>';
+    html += '<td class="stk-pos">'+(idx+1)+'</td>';
     html += '<td class="stk-name" style="font-weight:600">'+esc(p.name)+'</td>';
     closedEvents.forEach(function(e){
       var r = e.results.find(function(x){ return x.pi==pi; });
@@ -7942,7 +7941,6 @@ function renderOOM(){
   var bestN = t.bestRounds || 0;
   var sorted = computeOomStandings(t);
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
-  var medals=['🥇','🥈','🥉'];
   var winningsData = (t.fee>0 && isTourConcluded(t)) ? computeTourWinnings(t) : null;
   el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
     sorted.map(function(d,idx){
@@ -7952,7 +7950,7 @@ function renderOOM(){
       var pLogo = playerBrandLogoTag(p.username, 16);
       var won = winningsData ? (winningsData.winnings[pi]||0) : 0;
       return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
-        '<div style="font-size:20px;min-width:30px">'+(medals[idx]||idx+1)+'</div>'+
+        '<div style="font-size:15px;font-weight:700;color:var(--text-3);min-width:30px">'+(idx+1)+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%" alt="'+p.name+'">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
         (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
@@ -10614,6 +10612,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (107)',
+    items: [
+      { type: 'improved', text: 'Medaljerna borttagna i Order of Merit (både Lista- och Tabell-vyn) - visar nu bara platsnummer (1, 2, 3...). OoM är en löpande ranking inför final, inte ett avslutat resultat, så medaljer hörde inte hemma där. Podiet för avslutade deltävlingar (🥇🥈🥉) och Top 3-widgeten är oförändrade.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (106)',
     items: [
