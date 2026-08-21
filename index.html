@@ -6662,6 +6662,40 @@ function liveScoringRef() { return LIVE_SCORING_COL.doc(_liveScoring.docId); }
 // Anropas från bollistan (t.ex. för att nollställa efter test) - kräver admin och bekräftelse.
 // Om man just då har bollens livescoring öppen i modalen stängs den och man kastas tillbaka,
 // eftersom dokumentet den lyssnar på inte längre finns.
+// Tar bort alla aktivitetsfeed-inlägg som hörde till en boll som nollställs
+// (samma feedPosts-karta som syncActivityFeedForHole använder för att hitta
+// rätt dokument) - annars blir t.ex. en birdie kvar i feeden för alltid även
+// om hela scorekortet raderas.
+function deleteActivityFeedPostsFromMap(feedPosts) {
+  if(!feedPosts) return;
+  Object.keys(feedPosts).forEach(function(pi){
+    var holes = feedPosts[pi] || {};
+    Object.keys(holes).forEach(function(hole){
+      var docId = holes[hole];
+      if(docId) ACTIVITY_FEED_COL.doc(docId).delete().catch(function(){});
+    });
+  });
+}
+
+// Ångrar automatiskt satta side bet-vinnare (via "Vem vann?"-prompten, se
+// winnerAutoHole-markeringen) för spelare som ingår i den boll som just
+// nollställs - annars blir en vinnare felaktigt kvar trots att all data den
+// byggde på (scorekortet) raderats. En vinnare admin satt manuellt via
+// select-fältet i Side bets-vyn (utan winnerAutoHole) rörs aldrig av detta.
+function revertAutoSideBetWinnersForPlayers(eid, playerPis) {
+  var ev = findEventById(eid);
+  if(!ev || !ev.sideBets) return;
+  var changed = false;
+  ev.sideBets.forEach(function(sb){
+    if(sb.winnerAutoHole != null && sb.winnerPi != null && playerPis.indexOf(sb.winnerPi) >= 0) {
+      sb.winnerPi = null;
+      sb.winnerAutoHole = null;
+      changed = true;
+    }
+  });
+  if(changed) save();
+}
+
 function resetLiveScoring(eid, gIdx) {
   var t = getTour();
   var e = (t.events||[]).find(function(x){ return x.id === eid; });
@@ -6669,7 +6703,13 @@ function resetLiveScoring(eid, gIdx) {
   if(!confirm('Nollställa livescoringen för den här bollen? Alla inmatade hål och SHCP-värden raderas permanent och kan inte ångras.')) return;
   var groupId = ensureTeeGroupId(e.teeGroups[gIdx]);
   var docId = liveScoringDocId(eid, groupId);
-  LIVE_SCORING_COL.doc(docId).delete().then(function(){
+  var playerPis = e.teeGroups[gIdx].playerPis.slice();
+  var ref = LIVE_SCORING_COL.doc(docId);
+  ref.get().then(function(doc){
+    deleteActivityFeedPostsFromMap(doc.exists ? doc.data().feedPosts : null);
+    return ref.delete();
+  }).then(function(){
+    revertAutoSideBetWinnersForPlayers(eid, playerPis);
     if(_liveScoring.docId === docId) { closeModal(); }
     alert('Livescoringen för bollen är nollställd.');
   }).catch(function(err){
@@ -6685,7 +6725,12 @@ function resetCurrentLiveScoring() {
   if(!_liveScoring || !_liveScoring.docId) return;
   if(!confirm('Nollställa livescoringen för den här bollen? Alla inmatade hål och SHCP-värden raderas permanent och kan inte ångras.')) return;
   var docId = _liveScoring.docId;
+  var d = _liveScoring.data;
+  var eid = d ? d.eventId : null;
+  var playerPis = d ? d.players.map(function(p){ return p.pi; }) : [];
+  deleteActivityFeedPostsFromMap(d ? d.feedPosts : null);
   LIVE_SCORING_COL.doc(docId).delete().then(function(){
+    if(eid) revertAutoSideBetWinnersForPlayers(eid, playerPis);
     closeModal();
     alert('Livescoringen för bollen är nollställd.');
   }).catch(function(err){
@@ -11174,6 +11219,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (135)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: "Nollställ"-knappen för livescoring raderade bara själva scorekortet - en automatiskt satt side bet-vinnare (via "Vem vann?"-prompten) och eventuella aktivitetsfeed-inlägg ("X gjorde birdie") för den bollen blev felaktigt kvar, trots att all data de byggde på var borta. Nollställ städar nu även bort dessa: auto-satta side bet-vinnare för bollens spelare återställs till "ingen vinnare", och feed-inläggen tas bort. En vinnare admin satt manuellt via select-fältet i Side bets-vyn påverkas aldrig av detta.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (134)',
     items: [
