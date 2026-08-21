@@ -5055,6 +5055,11 @@ function findRelevantFinal(t) {
   return closedFinals.length ? closedFinals[closedFinals.length-1] : finals[0];
 }
 
+// Håller reda på om "Visa alla"-knappen tryckts, så listan över 20 spelare
+// kan expanderas/kollapsas utan att behöva någon egen datamodell för det.
+var _leaderboardExpanded = false;
+function toggleLeaderboardExpand() { _leaderboardExpanded = !_leaderboardExpanded; renderLeaderboardSection(); }
+
 function renderLeaderboardSection() {
   var t = getTour();
   var el = document.getElementById('leaderboard-section');
@@ -5062,9 +5067,18 @@ function renderLeaderboardSection() {
   var final = findRelevantFinal(t);
   if(!final) { el.innerHTML = ''; return; }
 
-  var regsRaw = final.registrations || [];
-  var regPis = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
-  var pis = regPis.filter(function(pi){ return t.players[pi]; });
+  var pis;
+  if(final.closed && final.results && final.results.length) {
+    // Färdigspelad final: visa de som faktiskt har ett resultat.
+    pis = final.results.map(function(r){ return r.pi; }).filter(function(pi){ return t.players[pi]; });
+  } else {
+    // Förhandsvisning inför finalen: ALLA spelare med OoM-poäng ska synas här
+    // och få ett beräknat startläge - oavsett om de redan hunnit anmäla sig
+    // till finalen specifikt än eller inte (annars "försvinner" spelare som
+    // ligger bra till i OoM bara för att de inte anmält sig till finalen ännu).
+    pis = computeOomStandings(t).filter(function(o){ return o.events > 0; })
+      .map(function(o){ return o.pi; }).filter(function(pi){ return t.players[pi]; });
+  }
   if(!pis.length) { el.innerHTML = ''; return; }
 
   var isStab = final.type === 'stableford';
@@ -5076,7 +5090,9 @@ function renderLeaderboardSection() {
   // Sort by head start descending: a HIGHER head start means a bigger advantage (better position).
   rows.sort(function(a,b){ return b.headStart - a.headStart; });
 
-  var finalLabel = final.closed ? 'Resultat' : (final.name);
+  var showAll = _leaderboardExpanded || rows.length <= 20;
+  var visibleRows = showAll ? rows : rows.slice(0, 20);
+
   var html = '<div class="card" style="border-color:var(--gold);box-shadow:0 0 0 1px var(--gold);margin-bottom:20px">';
   html += '<div class="row" style="justify-content:space-between;margin-bottom:10px">';
   html += '<h3 style="margin:0;display:flex;align-items:center;gap:6px"><i class="ti ti-flag" style="color:var(--gold)"></i> Leaderboard – '+esc(final.name)+'</h3>';
@@ -5084,7 +5100,7 @@ function renderLeaderboardSection() {
   html += '</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+(final.closed?'Slutställning för finalen.':'Startläge inför finalen, baserat på ställningen i föregående OoM/final. Uppdateras inte under spelets gång.')+'</p>';
   html += '<div style="overflow-x:auto"><table class="hist-table leaderboard-table"><thead><tr><th>Plac.</th><th>Spelare</th><th style="text-align:right">'+(final.closed?'Resultat':'Startläge')+'</th></tr></thead><tbody>';
-  rows.forEach(function(r, idx){
+  visibleRows.forEach(function(r, idx){
     var p = t.players[r.pi];
     var hsLabel = r.headStart > 0 ? ('-'+r.headStart) : 'Scratch';
     var cell;
@@ -5100,7 +5116,13 @@ function renderLeaderboardSection() {
       '<td style="text-align:right">'+cell+'</td>'+
     '</tr>';
   });
-  html += '</tbody></table></div></div>';
+  html += '</tbody></table></div>';
+  if(rows.length > 20) {
+    html += '<div class="row" style="justify-content:center;margin-top:10px">'+
+      '<button class="btn btn-sm" onclick="toggleLeaderboardExpand()">'+(showAll?'Visa färre':'Visa alla ('+rows.length+')')+'</button>'+
+    '</div>';
+  }
+  html += '</div>';
   el.innerHTML = html;
 }
 
@@ -7297,6 +7319,15 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
 
   var liveEventIds = Object.keys(docsByEvent).filter(function(eid){ return docsByEvent[eid].length > 0; });
   if(!liveEventIds.length) { el.innerHTML = ''; return; }
+
+  // Vid flera samtidigt live: äldst deltävling (lägst datum/periodStart) visas först.
+  liveEventIds.sort(function(a,b){
+    var ea = candidateEvents.find(function(e){ return e.id===a; });
+    var eb = candidateEvents.find(function(e){ return e.id===b; });
+    var da = (ea && (ea.periodStart || ea.date)) || '';
+    var db = (eb && (eb.periodStart || eb.date)) || '';
+    return da < db ? -1 : (da > db ? 1 : 0);
+  });
 
   el.innerHTML = liveEventIds.map(function(eid){
     var ev = candidateEvents.find(function(e){ return e.id === eid; });
@@ -10754,6 +10785,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (113)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: "Leaderboard – [Final]"-widgeten (startläge inför finalen) visade tidigare bara spelare som redan anmält sig till finalen specifikt - en spelare som ligger bra till i OoM men inte hunnit anmäla sig till finalen än "försvann" helt från listan (t.ex. Tommy Liljegren, som låg före Kalle Pettersson i OoM men saknades i final-tabellen). Så länge finalen inte är färdigspelad visas nu ALLA spelare med OoM-poäng, oavsett anmälningsstatus till finalen.' },
+      { type: 'new', text: 'Finalens leaderboard-widget visar nu en "Visa alla (N)"-knapp om fler än 20 spelare finns, istället för att bara visa en avklippt lista.' },
+      { type: 'improved', text: 'Tourvyns live-standingstabell(er) sorteras nu så att den ÄLDSTA deltävlingen (lägst datum/speltidsperiod) visas överst, om flera deltävlingar råkar vara live samtidigt.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (112)',
     items: [
