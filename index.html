@@ -7712,30 +7712,38 @@ function buildProfileHTML(pi){
       '<span style="font-size:13px;font-weight:600;color:'+(green?'#0F6E56':'var(--text)')+'">'+val+'</span></div>';
   };
 
-  // Strengths/weaknesses section
+  // Strengths/weaknesses section - "Alt 1": punktlista på en genomgående ljusgrå
+  // bakgrund som sträcker sig hela vägen till kortets nedre kanter (istället för
+  // separata gråa boxar eller fristående färgade pills), vald efter förhandsvisning.
   var canEditSW = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
-  var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
-  swHtml += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Styrkor och svagheter</div>';
+  var swHtml = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
+  swHtml += '<div style="padding:14px 16px 10px;font-size:13px;font-weight:600;color:var(--text)">Styrkor och svagheter</div>';
   if(strengths.length||weaknesses.length) {
+    swHtml += '<div style="background:var(--surface2);padding:14px 16px 12px">';
     if(strengths.length) {
-      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
-      strengths.forEach(function(s){
-        swHtml += '<span style="background:#E1F5EE;color:#0F6E56;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-up" style="font-size:12px"></i>'+esc(s)+'</span>';
+      swHtml += '<div style="font-size:12px;font-weight:600;color:#0F6E56;margin-bottom:6px"><i class="ti ti-trending-up" style="font-size:13px"></i> Styrkor</div>';
+      strengths.forEach(function(s, idx){
+        swHtml += '<div style="display:flex;gap:8px;margin-bottom:'+(idx===strengths.length-1?'14px':'4px')+'">'+
+          '<span style="width:5px;height:5px;border-radius:50%;background:#1D9E75;margin-top:8px;flex-shrink:0"></span>'+
+          '<p style="font-size:13px;margin:0;color:var(--text)">'+esc(s)+'</p>'+
+        '</div>';
       });
-      swHtml += '</div>';
     }
     if(weaknesses.length) {
-      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-      weaknesses.forEach(function(w){
-        swHtml += '<span style="background:#FCEBEB;color:#A32D2D;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-down" style="font-size:12px"></i>'+esc(w)+'</span>';
+      swHtml += '<div style="font-size:12px;font-weight:600;color:#A32D2D;margin-bottom:6px"><i class="ti ti-trending-down" style="font-size:13px"></i> Svagheter</div>';
+      weaknesses.forEach(function(w, idx){
+        swHtml += '<div style="display:flex;gap:8px;margin-bottom:'+(idx===weaknesses.length-1?'0':'4px')+'">'+
+          '<span style="width:5px;height:5px;border-radius:50%;background:#E24B4A;margin-top:8px;flex-shrink:0"></span>'+
+          '<p style="font-size:13px;margin:0;color:var(--text)">'+esc(w)+'</p>'+
+        '</div>';
       });
-      swHtml += '</div>';
     }
+    swHtml += '</div>';
   } else {
-    swHtml += '<p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p>';
+    swHtml += '<div style="padding:0 16px 14px"><p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p></div>';
   }
   if(canEditSW) {
-    swHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+    swHtml += '<div style="padding:10px 16px 14px;border-top:1px solid var(--border)">'+
       '<button class="btn btn-sm" onclick="openStrengthsEdit(\''+esc(p.username||'')+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
   }
   swHtml += '</div>';
@@ -10902,6 +10910,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '20 augusti 2026 (125)',
+    items: [
+      { type: 'improved', text: '"Styrkor och svagheter"-sektionen på spelarprofilen (både tourns egen och den globala via Användare) omdesignad efter förhandsvisning: en genomgående ljusgrå bakgrund sträcker sig nu över hela nedre delen av kortet (istället för fristående färgade pills på vit botten), med varje styrka/svaghet som en punktlista med en liten färgad prick (grön/röd) - grön rubrik "Styrkor" och röd rubrik "Svagheter" ovanför respektive lista.' }
+    ]
+  },
+  {
     date: '20 augusti 2026 (124)',
     items: [
       { type: 'fixed', text: 'Live-tabellens kolumnrubriker (+/-, BRT, NTO, PTS) var inte i linje med värdena under - orsaken var att rubrikraden hade ett annat mellanrum mellan kolumnerna (gap:12px) än själva värderaden (gap:7px), trots att kolumnbredderna i övrigt matchade. Rättat till samma mellanrum överallt, så siffrorna nu ligger centrerat rakt under respektive rubrik.' }
@@ -12709,29 +12723,36 @@ function buildGlobalPlayerProfileHTML(username) {
   h += buildPuttingStatsHTML(computePlayerPuttingStats(u.username));
   h += buildSideBetStatsHTML(computePlayerSideBetStats(u.username), 'Side bets');
 
-  // Styrkor och svagheter
-  var swHtml = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
-  swHtml += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">Styrkor och svagheter</div>';
+  // Styrkor och svagheter - samma "Alt 1"-design (punktlista på genomgående grå
+  // bakgrund) som på tourns spelarprofil, för konsekvens mellan de två vyerna.
+  var swHtml = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
+  swHtml += '<div style="padding:14px 16px 10px;font-size:13px;font-weight:600;color:var(--text)">Styrkor och svagheter</div>';
   if(strengths.length||weaknesses.length) {
+    swHtml += '<div style="background:var(--surface2);padding:14px 16px 12px">';
     if(strengths.length) {
-      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
-      strengths.forEach(function(s){
-        swHtml += '<span style="background:#E1F5EE;color:#0F6E56;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-up" style="font-size:12px"></i>'+esc(s)+'</span>';
+      swHtml += '<div style="font-size:12px;font-weight:600;color:#0F6E56;margin-bottom:6px"><i class="ti ti-trending-up" style="font-size:13px"></i> Styrkor</div>';
+      strengths.forEach(function(s, idx){
+        swHtml += '<div style="display:flex;gap:8px;margin-bottom:'+(idx===strengths.length-1?'14px':'4px')+'">'+
+          '<span style="width:5px;height:5px;border-radius:50%;background:#1D9E75;margin-top:8px;flex-shrink:0"></span>'+
+          '<p style="font-size:13px;margin:0;color:var(--text)">'+esc(s)+'</p>'+
+        '</div>';
       });
-      swHtml += '</div>';
     }
     if(weaknesses.length) {
-      swHtml += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-      weaknesses.forEach(function(w){
-        swHtml += '<span style="background:#FCEBEB;color:#A32D2D;font-size:12px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:4px"><i class="ti ti-arrow-down" style="font-size:12px"></i>'+esc(w)+'</span>';
+      swHtml += '<div style="font-size:12px;font-weight:600;color:#A32D2D;margin-bottom:6px"><i class="ti ti-trending-down" style="font-size:13px"></i> Svagheter</div>';
+      weaknesses.forEach(function(w, idx){
+        swHtml += '<div style="display:flex;gap:8px;margin-bottom:'+(idx===weaknesses.length-1?'0':'4px')+'">'+
+          '<span style="width:5px;height:5px;border-radius:50%;background:#E24B4A;margin-top:8px;flex-shrink:0"></span>'+
+          '<p style="font-size:13px;margin:0;color:var(--text)">'+esc(w)+'</p>'+
+        '</div>';
       });
-      swHtml += '</div>';
     }
+    swHtml += '</div>';
   } else {
-    swHtml += '<p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p>';
+    swHtml += '<div style="padding:0 16px 14px"><p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p></div>';
   }
   if(canEditSW) {
-    swHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+    swHtml += '<div style="padding:10px 16px 14px;border-top:1px solid var(--border)">'+
       '<button class="btn btn-sm" onclick="editStrengthsFromGlobalProfile(\''+esc(u.username)+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
   }
   swHtml += '</div>';
