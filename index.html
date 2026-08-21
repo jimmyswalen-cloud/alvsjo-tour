@@ -7283,18 +7283,27 @@ function buildSideBetsLiveSummaryHTML(e, players) {
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
     var participants = sb.participants || [];
     var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
-    var potLabel = sb.fee>0 ? ('💰 '+pot+' kr') : '🆓 Gratis';
+    var isHoleType = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+    var holeLabel = sb.hole
+      ? '<div style="font-size:10px;color:var(--text-3);margin-top:1px">Hål '+sb.hole+'</div>'
+      : (isHoleType ? '<div style="font-size:10px;color:var(--gold);margin-top:1px"><i class="ti ti-alert-triangle"></i> Hål ej angivet</div>' : '');
     return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
-        '<div style="min-width:0">'+
+        '<div style="flex:1;min-width:0">'+
           '<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sb.name)+'</div>'+
-          (sb.hole ? '<div style="font-size:10px;color:var(--text-3);margin-top:1px">Hål '+sb.hole+'</div>' : '')+
+          holeLabel+
         '</div>'+
-        (winner
-          ? '<span style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap;flex-shrink:0"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
-          : '<span style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap;flex-shrink:0">Aktiv</span>')+
+        '<div style="text-align:center;flex-shrink:0;min-width:56px">'+
+          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase">Pott</div>'+
+          '<div style="font-size:12px;font-weight:700;color:var(--text-2)">'+(sb.fee>0 ? ('💰 '+pot+' kr') : '🆓 Gratis')+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0;min-width:70px">'+
+          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase">Vinnare</div>'+
+          (winner
+            ? '<div style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</div>'
+            : '<div style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</div>')+
+        '</div>'+
       '</div>'+
-      '<div style="font-size:11px;color:var(--text-2);font-weight:700;margin-top:5px">'+potLabel+'</div>'+
     '</div>';
   }).join('');
   return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
@@ -10845,6 +10854,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (120)',
+    items: [
+      { type: 'improved', text: 'Side bets-sammanfattningen i live-vyerna omgjord till en tydlig 3-kolumnslayout: Tävlingstyp (vänster) · Pott (mitten) · Vinnare (höger), var och en med egen liten rubrik ("Pott"/"Vinnare") ovanför värdet för snygg, konsekvent uppradning.' },
+      { type: 'fixed', text: 'Side bets av typen "Längsta drive"/"Närmast hål" som saknar ett angivet hål visar nu en tydlig varning ("⚠ Hål ej angivet") istället för att bara vara tomt - så det syns direkt att admin behöver komplettera betet i Side bets-vyn.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (119)',
     items: [
