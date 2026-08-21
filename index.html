@@ -4091,7 +4091,19 @@ function subscribeHomeActivityFeed() {
     }, function(err){
       console.error('Aktivitetsfeed: lyssnarfel', err);
       var el2 = document.getElementById('home-activity-feed');
-      if(el2) el2.innerHTML = '';
+      if(!el2) return;
+      // Vanligaste orsaken: Firestore-frågan (filter på flera tourer + sortering
+      // på tid) kräver ett sammansatt index första gången den körs. Felet
+      // brukar innehålla en direktlänk till att skapa det med ett klick -
+      // visa den tydligt istället för att bara logga felet tyst i konsolen.
+      var msg = (err && err.message) || String(err);
+      var linkMatch = /https:\/\/console\.firebase\.google\.com\S*/.exec(msg);
+      el2.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:#dc2626">'+
+        '<div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> Aktivitetsfeeden kunde inte laddas</div>'+
+        (linkMatch
+          ? '<p style="font-size:12px;color:var(--text-2);margin:0">Firestore behöver ett index för den här frågan (skapas automatiskt en gång). <a href="'+linkMatch[0]+'" target="_blank" rel="noopener">Klicka här för att skapa det</a>, vänta någon minut, ladda sedan om sidan.</p>'
+          : '<p style="font-size:12px;color:var(--text-2);margin:0">'+esc(msg)+'</p>')+
+      '</div>';
     });
 }
 
@@ -11219,6 +11231,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (136)',
+    items: [
+      { type: 'fixed', text: 'Aktivitetsfeeden på startsidan visade tidigare inget alls om Firestore-frågan misslyckades (t.ex. pga ett saknat sammansatt index första gången frågan körs) - felet loggades bara tyst i webbläsarkonsolen. Nu visas ett tydligt felmeddelande direkt i feed-rutan, med en klickbar länk till att skapa det saknade indexet om det är orsaken.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (135)',
     items: [
