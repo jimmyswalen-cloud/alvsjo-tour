@@ -7899,7 +7899,6 @@ function buildTop3HTML(t, compact) {
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
       '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
-      (!compact?'<span style="font-size:11px;color:var(--text-3)">'+s.events+' rundor</span>':'')+
       '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.pts+' p</span>'+
     '</div>';
   }).join('');
@@ -10564,8 +10563,8 @@ function updateHero(tourId) {
     var t=S.tours.find(function(x){return x.id===tourId;});
     if(!t) return;
     heroBg.style.backgroundImage = t.img ? "url('"+t.img+"')" : DEFAULT_BG;
-    heroTitle.textContent=t.name; heroSub.textContent=t.season||''; heroSub.style.display='';
-    heroEye.textContent='\u26f3 '+(t.season?t.season:'Tour');
+    heroTitle.textContent=t.name; heroSub.textContent=''; heroSub.style.display='none';
+    heroEye.textContent='';
   }
 }
 
@@ -10592,6 +10591,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (104)',
+    items: [
+      { type: 'improved', text: 'Tagit bort den lilla texten ovanför och under tournamnet i hero-rubriken när man är inne i en tour-vy (golf-emoji + säsongsår ovanför, säsongsår igen under) - renare rubrik med bara tournamnet.' }
+    ]
+  },
+  {
+    date: '20 augusti 2026 (103)',
+    items: [
+      { type: 'improved', text: '"X rundor"-texten borttagen från "Top 3 i ledning"-widgeten, så namnet och teamloggan (t.ex. "Titleist") får mer plats och inte klipps av lika lätt.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (102)',
     items: [
