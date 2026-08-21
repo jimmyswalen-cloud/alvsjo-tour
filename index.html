@@ -1385,7 +1385,7 @@ function renderEditTourBtn() {
   } else {
     // Touren är låst strukturellt (deltävlingar kan inte ändras), men namn/säsong/
     // omslagsbild är helt ofarligt att ändra ändå - så vi erbjuder en lättare variant.
-    wrap.innerHTML = '<button class="btn btn-sm" onclick="openRenameTour()" style="margin-left:8px"><i class="ti ti-edit"></i> Byt namn/bild</button>';
+    wrap.innerHTML = '<button class="btn btn-sm" title="Byt namn/bild" onclick="openRenameTour()" style="margin-left:8px;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center"><i class="ti ti-edit"></i></button>';
   }
 }
 
@@ -10592,6 +10592,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (102)',
+    items: [
+      { type: 'improved', text: '"Byt namn/bild"-knappen bredvid tournamnet visar nu bara pennikonen, ingen text - mindre knapp som tar mindre plats bredvid rubriken. Fungerar precis som innan (öppnar samma dialog), och har fortfarande en textetikett som visas vid hover/långtryck.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (101)',
     items: [
