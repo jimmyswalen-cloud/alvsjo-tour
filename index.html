@@ -8092,7 +8092,7 @@ function buildTop3HTML(t, compact) {
   var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
   var top = standings.slice(0,3);
   var medals = isClosed ? ['🥇','🥈','🥉'] : [];
-  var title = isClosed ? 'Slutresultat' : 'Top 3 i ledning';
+  var title = isClosed ? 'Slutresultat' : 'Top 3 i ledning (OoM)';
   var avatarSize = compact ? 22 : 28;
   var rows = top.map(function(s, idx){
     var p = players[s.pi]; if(!p) return '';
@@ -10823,6 +10823,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (116)',
+    items: [
+      { type: 'improved', text: '"Top 3 i ledning"-widgeten heter nu "Top 3 i ledning (OoM)" så det är tydligt att rankingen baseras på Order of Merit-poäng.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (115)',
     items: [
