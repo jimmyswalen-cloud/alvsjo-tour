@@ -2950,25 +2950,27 @@ function renderPlayers() {
     if(tourUser && tourUser.role==='admin' && !tourUserIsPlayer && !isAdmin()) return '';
     var strengths  = (tourUser&&tourUser.strengths)  || [];
     var weaknesses = (tourUser&&tourUser.weaknesses) || [];
-    var swBadges = '';
-    if(strengths.length||weaknesses.length) {
-      swBadges = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px">';
-      if(strengths.length) {
-        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
-          '<span style="font-size:11px;font-weight:700;color:#0F6E56;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-up" style="font-size:11px"></i> Styrkor</span>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
-        strengths.forEach(function(s){ swBadges += '<span style="background:#E1F5EE;color:#0F6E56;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(s)+'</span>'; });
-        swBadges += '</div></div>';
+    // Alltid 3 rader per kategori (platshållartext om ofylld), så alla kort i
+    // listan får samma höjd oavsett hur många styrkor/svagheter en spelare
+    // fyllt i - samma Alt 1-stil (punktlista på genomgående grå bakgrund)
+    // som redan används på den fulla spelarprofilen.
+    var buildSwRows = function(items, emptyLabel, dotColor){
+      var rows = '';
+      for(var idx=0; idx<3; idx++){
+        var val = items[idx];
+        rows += '<div style="display:flex;gap:8px;margin-bottom:'+(idx===2?'0':'4px')+'">'+
+          '<span style="width:5px;height:5px;border-radius:50%;background:'+(val?dotColor:'var(--text-3)')+';margin-top:8px;flex-shrink:0"></span>'+
+          '<p style="font-size:12px;margin:0;color:'+(val?'var(--text)':'var(--text-3)')+(val?'':';font-style:italic')+'">'+(val?esc(val):emptyLabel)+'</p>'+
+        '</div>';
       }
-      if(weaknesses.length) {
-        swBadges += '<div style="display:flex;align-items:flex-start;gap:8px">'+
-          '<span style="font-size:11px;font-weight:700;color:#A32D2D;white-space:nowrap;padding-top:3px;min-width:60px"><i class="ti ti-arrow-down" style="font-size:11px"></i> Svagheter</span>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:5px">';
-        weaknesses.forEach(function(w){ swBadges += '<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;padding:3px 10px;border-radius:20px">'+esc(w)+'</span>'; });
-        swBadges += '</div></div>';
-      }
-      swBadges += '</div>';
-    }
+      return rows;
+    };
+    var swBadges = '<div style="background:var(--surface2);margin:10px -16px -14px;padding:12px 16px 14px;border-radius:0 0 12px 12px">'+
+      '<div style="font-size:11px;font-weight:700;color:#0F6E56;margin-bottom:6px"><i class="ti ti-trending-up" style="font-size:12px"></i> Styrkor</div>'+
+      buildSwRows(strengths, 'Ingen styrka angiven', '#1D9E75')+
+      '<div style="font-size:11px;font-weight:700;color:#A32D2D;margin:10px 0 6px"><i class="ti ti-trending-down" style="font-size:12px"></i> Svagheter</div>'+
+      buildSwRows(weaknesses, 'Ingen svaghet angiven', '#E24B4A')+
+    '</div>';
     var pLogo = playerBrandLogoTag(p.username, 17);
     return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
       '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
@@ -10909,6 +10911,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (126)',
+    items: [
+      { type: 'improved', text: 'Spelarkorten i Spelare-listan visar nu alltid 3 rader per kategori (Styrkor/Svagheter), med platshållartexten "Ingen styrka angiven"/"Ingen svaghet angiven" (gråtonad, kursiv) för ofyllda rader - så alla kort får samma höjd i listan, oavsett om spelaren fyllt i allt, delvis, eller inget alls. Samma Alt 1-stil (punktlista på genomgående grå bakgrund) som redan används på den fulla spelarprofilen.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (125)',
     items: [
