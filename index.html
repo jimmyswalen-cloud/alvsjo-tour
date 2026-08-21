@@ -7258,11 +7258,17 @@ function buildSideBetsLiveSummaryHTML(e, players) {
   var rows = e.sideBets.map(function(sb){
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
     var holeLabel = sb.hole ? ('Hål '+sb.hole+' · ') : '';
-    return '<div class="row" style="justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">'+
-      '<span style="color:var(--text-2)">'+holeLabel+esc(sb.name)+'</span>'+
-      (winner
-        ? '<span style="font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
-        : '<span style="color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</span>')+
+    var participants = sb.participants || [];
+    var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
+    var potLabel = sb.fee>0 ? ('💰 '+pot+' kr') : '🆓 Gratis';
+    return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'+
+      '<div class="row" style="justify-content:space-between;align-items:center">'+
+        '<span style="font-size:12px;color:var(--text)">'+holeLabel+esc(sb.name)+'</span>'+
+        (winner
+          ? '<span style="font-size:12px;font-weight:700;color:var(--green-dark);white-space:nowrap"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+esc(winner.name)+'</span>'
+          : '<span style="font-size:12px;color:var(--text-3);font-style:italic;white-space:nowrap">Aktiv</span>')+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+potLabel+'</div>'+
     '</div>';
   }).join('');
   return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
@@ -10785,6 +10791,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 augusti 2026 (114)',
+    items: [
+      { type: 'improved', text: 'Side bets-sammanfattningen i live-vyerna visar nu konsekvent information för alla bets (hål om satt, typ/namn), och en ny rad med potten - 💰 summan i kronor (deltagare × avgift), eller 🆓 Gratis om ingen avgift satts.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (113)',
     items: [
