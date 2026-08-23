@@ -4261,6 +4261,7 @@ function computeSideBetDues() {
         var hasPaid = !!(sb.payments && sb.payments[myPi]);
         if(sb.fee > 0 && isParticipant && !hasPaid) {
           dues.push({
+            tourId: t.id, eventId: e.id, betId: sb.id,
             tourName: t.name+(t.season?' '+t.season:''), eventName: e.name, eventDate: e.date,
             betName: sb.name, fee: sb.fee, deadline: dateMinusDays(e.date, 1)
           });
@@ -4281,12 +4282,39 @@ function renderHomeSideBetWidget() {
     '<div style="font-size:13px;font-weight:700;color:#dc2626;margin-bottom:8px"><i class="ti ti-alert-circle"></i> Du har en avgift att betala ('+dues.length+')</div>'+
     dues.map(function(d){
       return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">'+
-        '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(d.betName)+' <span style="color:#dc2626">– '+d.fee+' kr</span></div>'+
-        '<div style="font-size:12px;color:var(--text-2)">'+esc(d.eventName)+' · '+esc(d.tourName)+'</div>'+
-        '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+'</div>'+
+        '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
+          '<div>'+
+            '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(d.betName)+' <span style="color:#dc2626">– '+d.fee+' kr</span></div>'+
+            '<div style="font-size:12px;color:var(--text-2)">'+esc(d.eventName)+' · '+esc(d.tourName)+'</div>'+
+            '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+'</div>'+
+          '</div>'+
+          '<button class="btn btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="markMySideBetPaid(\''+d.tourId+'\',\''+d.eventId+'\',\''+d.betId+'\')"><i class="ti ti-check"></i> Jag har betalat</button>'+
+        '</div>'+
       '</div>';
     }).join('')+
   '</div>';
+}
+
+// Låter en spelare själv markera sin egen side bet-avgift som betald (t.ex.
+// direkt efter att ha swishat) - rent förtroendebaserad självrapportering,
+// precis som resten av betalningsspårningen (ingen riktig betalningskoppling
+// finns). Rör ALDRIG andra spelares betalstatus - bara sin egen (myPi i just
+// den touren) - till skillnad från toggleSideBetPayment som är adminverktyget
+// för att markera/avmarkera VEM SOM HELST i Side bets-vyn.
+function markMySideBetPaid(tourId, eventId, betId) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = t.events.find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  var myPi = getMyPi(t);
+  if(myPi < 0) return;
+  if(!confirm('Markera "'+sb.name+'" ('+sb.fee+' kr) som betald? Bekräfta bara om du redan swishat avgiften.')) return;
+  if(!sb.payments) sb.payments = {};
+  sb.payments[myPi] = true;
+  save();
+  renderHomeSideBetWidget();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -11807,6 +11835,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (156)',
+    items: [
+      { type: 'new', text: 'Ny knapp "Jag har betalat" på varje rad i "Du har en avgift att betala"-widgeten på startsidan - spelaren kan nu själv markera sin egen side bet-avgift som betald direkt efter att ha swishat, istället för att behöva be admin göra det manuellt i Side bets-vyn. Ren förtroendebaserad självrapportering (samma princip som resten av betalningsspårningen) med en bekräftelseruta innan den markeras. Rör aldrig andra spelares betalstatus.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (155)',
     items: [
