@@ -4084,7 +4084,7 @@ function postSideBetWinFeedEntry(t, e, sb) {
   var p = t.players[sb.winnerPi];
   if(!p) return;
   var participants = sb.participants || [];
-  var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
+  var pot = (sb.fee>0 ? (participants.length * sb.fee) : 0) + (sb.carriedOverPot||0);
   ACTIVITY_FEED_COL.add({
     tourId: t.id, tourName: t.name, eventId: e.id, eventName: e.name,
     playerUsername: p.username, playerName: p.name,
@@ -4092,6 +4092,86 @@ function postSideBetWinFeedEntry(t, e, sb) {
     hole: sb.hole || null, course: e.course || '', pot: pot,
     createdAt: Date.now(), likes: {}
   }).catch(function(err){ console.error('Kunde inte posta side bet-vinst i aktivitetsfeeden', err); });
+}
+
+// ── SKICKA VIDARE / ÅTERBETALA (om ingen vann) ──────────────────────────────
+// Om ingen träffade t.ex. "Närmast hål" ska potten antingen rulla vidare till
+// samma typ av bet i NÄSTA kommande deltävling i touren (klassisk "carryover"),
+// eller betalas tillbaka till deltagarna om det inte finns någon kommande att
+// föra den till. Bara ETT av utfallen kan gälla åt gången (pushOutcome).
+
+// Hittar nästa OBESVARADE side bet av samma typ, i en senare deltävling
+// (kronologiskt, efter periodStart/date) i samma tour.
+function findNextSideBetForCarryover(t, currentEventId, betType) {
+  var events = (t.events||[]).slice().sort(function(a,b){
+    return (a.periodStart||a.date||'').localeCompare(b.periodStart||b.date||'');
+  });
+  var currentIdx = events.findIndex(function(e){ return e.id===currentEventId; });
+  if(currentIdx < 0) return null;
+  for(var i=currentIdx+1; i<events.length; i++){
+    var ev = events[i];
+    var match = (ev.sideBets||[]).find(function(sb){ return sb.betType===betType && sb.winnerPi==null && !sb.pushOutcome; });
+    if(match) return { event: ev, bet: match };
+  }
+  return null;
+}
+
+function carrySideBetForward(ei, betId) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  var target = findNextSideBetForCarryover(t, e.id, sb.betType);
+  if(!target) {
+    alert('Hittade inget kommande obesvarat side bet av samma typ ("'+sb.betType+'") att skicka vidare potten till. Använd "Återbetala till spelare" istället.');
+    return;
+  }
+  var pot = sb.fee>0 ? ((sb.participants||[]).length * sb.fee) : 0;
+  if(!confirm('Skicka '+pot+' kr vidare till "'+target.bet.name+'" i '+target.event.name+'?')) return;
+  target.bet.carriedOverPot = (target.bet.carriedOverPot||0) + pot;
+  sb.pushOutcome = 'carried';
+  sb.carriedToEventName = target.event.name;
+  sb.carriedToBetName = target.bet.name;
+  sb.carriedToEventId = target.event.id;
+  sb.carriedToBetId = target.bet.id;
+  save();
+  openSideBets(ei);
+}
+
+function refundSideBet(ei, betId) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(!confirm('Markera "'+sb.name+'" som återbetald? Det här bara markerar betet som avslutat utan vinnare i appen - insatserna behöver fortfarande betalas tillbaka manuellt (Swish/kontant) till deltagarna.')) return;
+  sb.pushOutcome = 'refunded';
+  save();
+  openSideBets(ei);
+}
+
+// Ångrar en "skicka vidare"/"återbetala"-markering, t.ex. om den gjordes av
+// misstag. Vid en vidareskickning dras potten också bort från mottagarbetet
+// igen (om det fortfarande finns kvar).
+function undoSideBetPushOutcome(ei, betId) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(sb.pushOutcome === 'carried' && sb.carriedToEventId && sb.carriedToBetId) {
+    var targetEv = t.events.find(function(x){ return x.id===sb.carriedToEventId; });
+    var targetBet = targetEv ? (targetEv.sideBets||[]).find(function(x){ return x.id===sb.carriedToBetId; }) : null;
+    if(targetBet) {
+      var pot = sb.fee>0 ? ((sb.participants||[]).length * sb.fee) : 0;
+      targetBet.carriedOverPot = Math.max(0, (targetBet.carriedOverPot||0) - pot);
+    }
+  }
+  sb.pushOutcome = null;
+  sb.carriedToEventName = null; sb.carriedToBetName = null; sb.carriedToEventId = null; sb.carriedToBetId = null;
+  save();
+  openSideBets(ei);
 }
 function dateMinusDays(dateStr, days) {
   var d = new Date(dateStr);
@@ -4331,12 +4411,15 @@ function openSideBets(ei) {
       var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
       var participants = sb.participants || [];
       var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
+      var totalPot = (sb.fee>0 ? (participants.length*sb.fee) : 0) + (sb.carriedOverPot||0);
       var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
         '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
           '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
-          (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
-          (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>':'')+
+          (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt'+(sb.carriedOverPot?' · +'+sb.carriedOverPot+' kr vidareskickat = '+totalPot+' kr totalt':'')+'</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
+          (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+(totalPot>0?' ('+totalPot+' kr)':'')+'</div>':'')+
+          (sb.pushOutcome==='carried'?'<div style="font-size:12px;color:#0C447C;font-weight:600;margin-top:6px"><i class="ti ti-arrow-forward-up"></i> Potten ('+((sb.fee>0?participants.length*sb.fee:0))+' kr) fördes vidare till "'+esc(sb.carriedToBetName||'?')+'" i '+esc(sb.carriedToEventName||'?')+'</div>':'')+
+          (sb.pushOutcome==='refunded'?'<div style="font-size:12px;color:var(--text-2);font-weight:600;margin-top:6px"><i class="ti ti-receipt-refund"></i> Återbetalt till deltagarna</div>':'')+
           '</div>'+
           (admin?'<button class="btn btn-sm btn-danger" onclick="deleteSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-trash"></i></button>':'')+
         '</div>';
@@ -4354,16 +4437,26 @@ function openSideBets(ei) {
           }).join('');
         }
         box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:8px 0 4px">Vinnare</div>';
-        if(SIDE_BET_AUTO_TYPES.indexOf(sb.betType) >= 0) {
-          box += '<div id="sb-suggestion-'+sb.id+'" style="font-size:12px;color:var(--text-3);margin-bottom:6px"><i class="ti ti-loader-2"></i> Beräknar förslag från scorekorten...</div>';
+        if(sb.pushOutcome) {
+          box += '<button class="btn btn-sm" onclick="undoSideBetPushOutcome('+ei+',\''+sb.id+'\')"><i class="ti ti-arrow-back-up"></i> Ångra ('+(sb.pushOutcome==='carried'?'vidareskickat':'återbetalt')+')</button>';
+        } else {
+          if(SIDE_BET_AUTO_TYPES.indexOf(sb.betType) >= 0) {
+            box += '<div id="sb-suggestion-'+sb.id+'" style="font-size:12px;color:var(--text-3);margin-bottom:6px"><i class="ti ti-loader-2"></i> Beräknar förslag från scorekorten...</div>';
+          }
+          box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:0">'+
+            '<option value="">Ingen vinnare satt</option>'+
+            participants.map(function(pi){
+              var p = players[pi]; if(!p) return '';
+              return '<option value="'+pi+'" '+(sb.winnerPi===pi?'selected':'')+'>'+esc(p.name)+'</option>';
+            }).join('')+
+          '</select>';
+          if(sb.winnerPi == null) {
+            box += '<div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">'+
+              '<button class="btn btn-sm" title="Ingen vann - för potten vidare till nästa side bet av samma typ i en kommande deltävling" onclick="carrySideBetForward('+ei+',\''+sb.id+'\')"><i class="ti ti-arrow-forward-up"></i> Skicka vidare</button>'+
+              '<button class="btn btn-sm" title="Ingen vann - markera att insatsen betalas tillbaka till deltagarna" onclick="refundSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-receipt-refund"></i> Återbetala till spelare</button>'+
+            '</div>';
+          }
         }
-        box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:0">'+
-          '<option value="">Ingen vinnare satt</option>'+
-          participants.map(function(pi){
-            var p = players[pi]; if(!p) return '';
-            return '<option value="'+pi+'" '+(sb.winnerPi===pi?'selected':'')+'>'+esc(p.name)+'</option>';
-          }).join('')+
-        '</select>';
         box += '</div>';
       }
       box += '</div>';
@@ -4471,6 +4564,7 @@ function setSideBetWinner(ei, betId, val) {
   if(!sb) return;
   sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
   sb.winnerAutoHole = null; // manuell ändring - ska inte kunna ångras automatiskt längre
+  sb.pushOutcome = null; // defensivt - UI:t döljer annars select när pushOutcome är satt
   save();
   renderEvents();
   if(sb.winnerPi != null) postSideBetWinFeedEntry(t, e, sb);
@@ -4810,6 +4904,7 @@ function eventCardHTML(i,e) {
       chatBtn
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
       myResultBtn+
+      ((e.teeGroups && e.teeGroups.length) ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Ställning & scorekort</button>' : '')+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Bana/bild</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
@@ -6918,7 +7013,7 @@ function openLiveScoring(eid, gIdx) {
   // activeHole:null - sätts till rätt hål (första ej helt ifyllda) när datan laddats,
   // se computeLiveResumeHole i subscribeLiveScoring. Annars hamnade man alltid på
   // hål 1 varje gång man öppnade livescoringen, oavsett hur långt man kommit.
-  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null };
+  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null, eid: eid, gIdx: gIdx };
   _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
 
   showModal('<div id="live-scoring-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar livescoring…</p></div>', true, true);
@@ -7065,6 +7160,36 @@ function renderLiveGridHTML() {
   var par = d.holePars[hole-1];
   var idxHcp = (d.holeHcpIndex && d.holeHcpIndex[hole-1] != null) ? d.holeHcpIndex[hole-1] : (hole);
 
+  // ── ROND KLAR? ──────────────────────────────────────────────────────────
+  // Så fort ALLA spelare i bollen har fyllt i ALLA hål visas en tydlig
+  // avslutningsbanner istället för att man bara lämnas kvar i hål-vyn. Länkar
+  // vidare till den redan befintliga "Registrera för bollen"-funktionen (som
+  // redan kan förifylla från livescoringen, låta var och en välja markör, och
+  // skicka in det OFFICIELLA resultatet - samma som räknas i OoM och sparas i
+  // spelarens profil/rond-historik) istället för att bygga ett parallellt system.
+  var allComplete = d.players.every(function(p){
+    var sc = d.scores[p.pi] || {};
+    for(var h=1; h<=totalHoles; h++){ if(typeof sc[h] !== 'number') return false; }
+    return true;
+  });
+  var completionBanner = '';
+  if(allComplete) {
+    var found = findTourAndEventById(d.eventId);
+    var alreadySubmitted = found && found.event.scoreSubmissions
+      ? d.players.every(function(p){ return found.event.scoreSubmissions.some(function(s){ return s.pi===p.pi; }); })
+      : false;
+    completionBanner = alreadySubmitted
+      ? '<div style="background:#EAF3DE;border:1px solid #B9DD8C;border-radius:10px;padding:12px 14px;margin-bottom:14px;text-align:center">'+
+          '<div style="font-weight:700;color:#3B6D11;font-size:15px"><i class="ti ti-circle-check"></i> Rond klar och inskickad!</div>'+
+          '<div style="font-size:12px;color:#3B6D11;margin-top:2px">Alla i bollen har fyllt i '+totalHoles+' hål och skickat in sina officiella scorekort.</div>'+
+        '</div>'
+      : '<div style="background:#FFF6E5;border:1px solid #F3D19E;border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">'+
+          '<div style="font-weight:800;color:#8A5A00;font-size:17px;margin-bottom:2px"><i class="ti ti-flag-2"></i> Rond klar!</div>'+
+          '<div style="font-size:13px;color:#8A5A00;margin-bottom:10px">Alla '+totalHoles+' hål är ifyllda för hela bollen. Välj markörer och skicka in de officiella scorekorten.</div>'+
+          '<button class="btn btn-primary" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Välj markörer & skicka in rond</button>'+
+        '</div>';
+  }
+
   var filledCount = 0;
   var rows = d.players.map(function(p){
     var sc = d.scores[p.pi] || {};
@@ -7091,6 +7216,7 @@ function renderLiveGridHTML() {
   }).join('');
 
   el.innerHTML =
+    completionBanner+
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
       '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
       '<button class="btn btn-sm" title="Se hela live-tabellen" onclick="openLiveFollow(\''+d.eventId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'+
@@ -7547,6 +7673,7 @@ function findEventTypeById(eid) {
 function computeLiveStandingsRows(docs, t, ev) {
   var rows = [];
   var isFinal = !!(ev && ev.isFinal && t);
+  var seenPis = {};
   docs.forEach(function(d){
     var holePars = d.holePars||[], holeHcpIndex = d.holeHcpIndex||[];
     var totalHoles = holePars.length || 18;
@@ -7579,13 +7706,39 @@ function computeLiveStandingsRows(docs, t, ev) {
         diff = isStab ? (poang + headStart - thru*2) : (netto - headStart - parSoFar);
         sortValue = isStab ? (poang + headStart) : -(netto - headStart);
       }
+      // Har spelaren redan skickat in ett officiellt scorekort (Mitt resultat/
+      // Registrera för bollen) för den här deltävlingen? Visas som "Klar"
+      // istället för "T18" i tabellen.
+      var submitted = !!(ev && ev.scoreSubmissions && ev.scoreSubmissions.some(function(s){ return s.pi===p.pi; }));
       rows.push({
-        name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue,
+        pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
+        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, submitted: submitted,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
+      seenPis[p.pi] = true;
     });
   });
+  // Lägg till anmälda spelare som ännu inte startat sin rond (t.ex. om de
+  // spelar en annan dag av samma deltävling) - visas i tabellen med "Ej
+  // startat" istället för att helt saknas tills de faktiskt börjar spela.
+  if(ev && t) {
+    var regsRaw = ev.registrations || [];
+    var regPis = (regsRaw.length && typeof regsRaw[0] === 'object')
+      ? regsRaw.filter(function(r){ return !r.declined; }).map(function(r){ return r.pi; })
+      : regsRaw;
+    regPis.forEach(function(pi){
+      if(seenPis[pi]) return;
+      var p = t.players[pi];
+      if(!p) return;
+      rows.push({
+        pi: pi, name: p.name, brutto: 0, netto: 0, poang: 0, thru: 0, totalHoles: 18,
+        diff: 0, isStab: ev.type==='stableford', headStart: isFinal ? getHeadStart(t, ev, pi) : null,
+        sortValue: -Infinity, submitted: false, notStarted: true,
+        holesGross: [], holePars: [], holeHcpIndex: [], shcp: p.shcp||0
+      });
+      seenPis[pi] = true;
+    });
+  }
   // Bäst placerad överst - flest stableford-poäng (eller lägst netto) vinner, justerat
   // för finalens slagförsprång om tillämpligt. Mer spelat rankas före ospelat vid lika.
   rows.sort(function(a,b){
@@ -7642,14 +7795,17 @@ function buildLiveStandingsRowsHTML(rows) {
     var hsBadge = (r.headStart != null && r.headStart !== 0)
       ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
       : '';
-    return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(idx+1)+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
+    // Ej startat: gråtonat namn, streck överallt, "Ej startat" istället för "T0".
+    // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
+    var holeLabel = r.notStarted ? 'Ej startat' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
+    return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
+      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
         '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
-        '<span style="width:36px;text-align:right;color:var(--text-3);font-size:10px">T'+r.thru+'</span>'+
+        '<span style="width:52px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px">'+holeLabel+'</span>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -7702,6 +7858,12 @@ function buildNineHoleScorecardBlock(r, startIdx, sumLabel) {
 function openPlayerLiveScorecard(idx) {
   var r = _liveStandingsRowsCache[idx];
   if(!r) return;
+  if(r.notStarted) {
+    showModal('<h3 style="margin-bottom:6px;font-size:16px">'+esc(r.name)+'</h3>'+
+      '<p style="font-size:13px;color:var(--text-3)">Har inte startat sin rond än - kanske spelas den en annan dag.</p>'+
+      '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>');
+    return;
+  }
   var frontBlock = buildNineHoleScorecardBlock(r, 0, 'Ut');
   var backBlock = r.totalHoles > 9 ? buildNineHoleScorecardBlock(r, 9, 'In') : '';
   var totalPar = r.holePars.reduce(function(a,b){ return a+b; }, 0);
@@ -7726,7 +7888,7 @@ function renderLiveFollowHTML(e, players, t) {
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -7776,7 +7938,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
   var rows = e.sideBets.map(function(sb){
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
     var participants = sb.participants || [];
-    var pot = sb.fee>0 ? (participants.length * sb.fee) : 0;
+    var pot = (sb.fee>0 ? (participants.length * sb.fee) : 0) + (sb.carriedOverPot||0);
     var isHoleType = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
     // Självläkning: om hål saknas men står skrivet i beskrivningen (äldre bets
     // skapade innan det dedikerade hål-fältet fanns), plocka upp det därifrån
@@ -7789,7 +7951,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
       ? '<div style="font-size:10px;color:var(--text-3);margin-top:2px">Hål '+sb.hole+'</div>'
       : (isHoleType ? '<div style="font-size:10px;color:var(--gold);margin-top:2px"><i class="ti ti-alert-triangle"></i> Hål ej angivet</div>' : '');
     var potInner = '<div style="display:inline-flex;align-items:center;gap:2px">'+
-      '<span>'+(sb.fee>0?'💰':'🆓')+'</span><span>'+(sb.fee>0?(pot+' kr'):'Gratis')+'</span>'+
+      '<span>'+(sb.fee>0||sb.carriedOverPot?'💰':'🆓')+'</span><span>'+(sb.fee>0||sb.carriedOverPot?(pot+' kr'):'Gratis')+'</span>'+
     '</div>';
     // Radbryt vinnarnamnet mellan för- och efternamn (istället för nowrap) så
     // långa namn som "Andreas Jonsson Wråkk" får plats utan att klämmas ihop.
@@ -7797,6 +7959,16 @@ function buildSideBetsLiveSummaryHTML(e, players) {
     if(winner) {
       var sp = winner.name.indexOf(' ');
       winnerNameHtml = sp > 0 ? (esc(winner.name.slice(0,sp))+'<br>'+esc(winner.name.slice(sp+1))) : esc(winner.name);
+    }
+    var statusHtml;
+    if(winner) {
+      statusHtml = '<div style="font-size:11px;font-weight:700;color:var(--green-dark);line-height:1.25;margin-top:2px"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+winnerNameHtml+'</div>';
+    } else if(sb.pushOutcome === 'carried') {
+      statusHtml = '<div style="font-size:10px;color:#0C447C;font-weight:700;margin-top:2px"><i class="ti ti-arrow-forward-up"></i> Vidareskickad</div>';
+    } else if(sb.pushOutcome === 'refunded') {
+      statusHtml = '<div style="font-size:10px;color:var(--text-3);font-weight:700;margin-top:2px"><i class="ti ti-receipt-refund"></i> Återbetald</div>';
+    } else {
+      statusHtml = '<div style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap;margin-top:2px">Aktiv</div>';
     }
     return '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:6px">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:6px">'+
@@ -7810,9 +7982,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
         '</div>'+
         '<div style="text-align:right;flex-shrink:0;width:92px">'+
           '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;line-height:1.3">Vinnare</div>'+
-          (winner
-            ? '<div style="font-size:11px;font-weight:700;color:var(--green-dark);line-height:1.25;margin-top:2px"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+winnerNameHtml+'</div>'
-            : '<div style="font-size:11px;color:var(--text-3);font-style:italic;white-space:nowrap;margin-top:2px">Aktiv</div>')+
+          statusHtml+
         '</div>'+
       '</div>'+
     '</div>';
@@ -7835,7 +8005,16 @@ function buildSideBetsLiveSummaryHTML(e, players) {
 var _tourLiveStandings = { tourId: null, unsub: null };
 
 function subscribeTourLiveStandings(t) {
-  var candidateEvents = (t.events||[]).filter(function(e){ return !e.closed && e.teeGroups && e.teeGroups.length; });
+  var todayStr = new Date().toISOString().slice(0,10);
+  // "Live" = deltävlingen har minst en boll vars datum faktiskt kommit (annars
+  // skulle en boll skapad långt i förväg för en helt framtida dag felaktigt
+  // visas som "live" bara för att den existerar). Kräver INTE längre att någon
+  // faktiskt hunnit slå ett slag - anmälda spelare som ännu inte startat (t.ex.
+  // om de spelar en annan dag av samma deltävling) ska ändå synas i tabellen.
+  var candidateEvents = (t.events||[]).filter(function(e){
+    if(e.closed || !e.teeGroups || !e.teeGroups.length) return false;
+    return e.teeGroups.some(function(g){ return g.date && g.date <= todayStr; });
+  });
   if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
   var el = document.getElementById('tour-live-standings');
   if(!candidateEvents.length) { if(el) el.innerHTML = ''; return; }
@@ -7847,18 +8026,11 @@ function subscribeTourLiveStandings(t) {
   _tourLiveStandings.tourId = t.id;
   _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
     var docsByEvent = {};
+    candidateEvents.forEach(function(e){ docsByEvent[e.id] = []; }); // alla kandidat-event får ett värde, även utan ett enda dokument än
     snap.docs.forEach(function(doc){
       var d = doc.data();
       var validSet = validIdsByEvent[d.eventId];
       if(!validSet || !validSet[doc.id]) return; // spöke från en boll som inte längre finns
-      // "Live" = minst en spelare i dokumentet har fått minst ett hål ifyllt -
-      // en helt tom, precis skapad boll ska inte räknas som en pågående deltävling.
-      var hasScore = Object.keys(d.scores||{}).some(function(pi){
-        var hs = d.scores[pi] || {};
-        return Object.keys(hs).some(function(h){ return typeof hs[h] === 'number'; });
-      });
-      if(!hasScore) return;
-      if(!docsByEvent[d.eventId]) docsByEvent[d.eventId] = [];
       docsByEvent[d.eventId].push(d);
     });
     renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t);
@@ -7870,7 +8042,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
   if(!el) return;
   var players = t ? (t.players || getPlayersForTour(t)) : [];
 
-  var liveEventIds = Object.keys(docsByEvent).filter(function(eid){ return docsByEvent[eid].length > 0; });
+  var liveEventIds = Object.keys(docsByEvent);
   if(!liveEventIds.length) { el.innerHTML = ''; return; }
 
   // Vid flera samtidigt live: äldst deltävling (lägst datum/periodStart) visas först.
@@ -7896,7 +8068,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:36px"></span>'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
       '</div>'+
       body+
       buildSideBetsLiveSummaryHTML(ev, players)+
@@ -11374,6 +11546,16 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (143)',
+    items: [
+      { type: 'new', text: 'Side bets: nya knappar "Skicka vidare" och "Återbetala till spelare" för ett obesvarat bet (t.ex. om ingen träffade green på "Närmast hål"). "Skicka vidare" hittar automatiskt nästa obesvarade bet av samma typ i en kommande deltävling i touren och lägger på potten där (klassisk carryover) - vinnaren av mottagarbetet får då hela den samlade potten. "Återbetala" markerar betet som avslutat utan vinnare (insatserna behöver fortfarande betalas tillbaka manuellt, t.ex. via Swish). Båda går att ångra. Status syns tydligt i både admin-vyn och live-sammanfattningen.' },
+      { type: 'new', text: 'Live-scoring visar nu en tydlig "Rond klar!"-banner så fort alla spelare i bollen fyllt i alla 18 hål, med en knapp "Välj markörer & skicka in rond" som leder direkt till den befintliga "Registrera för bollen"-funktionen (markörgodkännande, sparas som officiellt resultat i OoM och spelarens rond-historik/profil). Redan inskickat visas istället en grön bekräftelse.' },
+      { type: 'new', text: 'Ny knapp "Ställning & scorekort" under varje icke-stängd deltävling (bredvid Anmälningar/Mitt resultat) - öppnar samma ställningstabell och klickbara scorekort som livescoringen använder, oavsett om man är inne i själva livescoring-vyn eller bara vill kika in utifrån.' },
+      { type: 'improved', text: 'Live-tabellen visar nu ALLA anmälda spelare, inte bara de som redan börjat spela - de som inte startat än (t.ex. om de spelar en annan dag av samma deltävling) visas med "Ej startat" istället för att helt saknas. Tabellen visas nu så fort tävlingsdagen kommit, inte bara efter att någon fysiskt slagit första slaget.' },
+      { type: 'improved', text: 'Live-tabellens kolumnrubriker har nu en "Hål"-rubrik för den sista kolumnen. Ett komplett scorekort visar "Klar" (grönmarkerat) istället för "T18" så fort det officiella resultatet faktiskt skickats in - inte bara när alla hål råkar vara ifyllda.' }
+    ]
+  },
   {
     date: '20 augusti 2026 (142)',
     items: [
