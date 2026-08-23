@@ -1947,9 +1947,12 @@ function openLiveScoringBollPicker(eventId, myGroupIdx) {
     ? e.teeGroups.map(function(g, gIdx){
         var names = g.playerPis.map(function(pi){ var p=t.players[pi]; return p?p.name:'?'; }).join(', ');
         var isMine = gIdx === myGroupIdx;
+        var isLocked = g.playerPis.length>0 && g.playerPis.every(function(pi){
+          return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi; });
+        });
         return '<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'+
           '<div style="min-width:0">'+
-            '<div style="font-weight:600;font-size:14px">'+esc(g.time||'Tid ej satt')+(isMine?' <span style="font-size:11px;color:var(--green-dark)">· din boll</span>':'')+'</div>'+
+            '<div style="font-weight:600;font-size:14px">'+esc(g.time||'Tid ej satt')+(isMine?' <span style="font-size:11px;color:var(--green-dark)">· din boll</span>':'')+(isLocked?' <span style="font-size:11px;color:var(--green-dark)"><i class="ti ti-lock"></i> klar</span>':'')+'</div>'+
             '<div style="font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(names)+'</div>'+
           '</div>'+
           '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="closeModal();setTimeout(function(){openLiveScoring(\''+eventId+'\','+gIdx+')},60)">Välj</button>'+
@@ -1959,13 +1962,24 @@ function openLiveScoringBollPicker(eventId, myGroupIdx) {
 
   // Kryssruta-skaparen behöver veta vilka datum som har anmälda spelare, och vilka
   // av dem som redan är tilldelade en boll (samma underlag som i Anmälningar).
-  var regs = e.registrations || [];
+  // VIKTIGT: filtrera bort "Deltar ej" (declined) - annars går det att skapa en
+  // boll med spelare som aktivt tackat nej till att vara med.
+  var regs = (e.registrations || []).filter(function(r){ return !r.declined; });
   var groups = {};
   regs.forEach(function(r){ if(!groups[r.date]) groups[r.date] = []; groups[r.date].push(r.pi); });
   var dates = Object.keys(groups).sort();
   var checkboxSections = dates.map(function(d){
     var groupsForDate = e.teeGroups.filter(function(g){ return g.date===d; });
-    return buildBollCheckboxSectionHTML(e, t, d, groups[d], groupsForDate);
+    // Samma "redan spelat, låst"-logik som i Anmälningar - en spelare vars boll
+    // redan har alla resultat inskickade ska inte gå att flytta till en ny boll.
+    var lockedPisForDate = {};
+    groupsForDate.forEach(function(g){
+      var isLocked = g.playerPis.length>0 && g.playerPis.every(function(pi){
+        return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi; });
+      });
+      if(isLocked) g.playerPis.forEach(function(pi){ lockedPisForDate[pi] = true; });
+    });
+    return buildBollCheckboxSectionHTML(e, t, d, groups[d], groupsForDate, lockedPisForDate);
   }).join('');
 
   var h = '<h3 style="margin-bottom:4px">Välj boll</h3>'+
@@ -5109,38 +5123,61 @@ function buildBollarManagementHTML(e, t, groups, dates) {
     html += '</div>';
 
     var groupsForDate = e.teeGroups.filter(function(g){return g.date===d;});
+    var lockedPisForDate = {}; // pi -> true om spelaren redan skickat in sitt resultat (bollen är klar)
     if(groupsForDate.length) {
       groupsForDate.forEach(function(g){
         var gIdx = e.teeGroups.indexOf(g);
-        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">';
-        html += '<div class="row" style="justify-content:space-between;margin-bottom:6px">';
-        html += isAdmin()
-          ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
-          : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
-        html += '<button class="btn btn-sm btn-primary" onclick="openLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-scoreboard"></i> Livescoring</button>';
-        html += '<button class="btn btn-sm" onclick="openBulkScoreSubmission(\''+e.id+'\','+gIdx+')"><i class="ti ti-users"></i> Registrera för bollen</button>';
-        if(isAdmin()) html += '<button class="btn btn-sm" title="Nollställ livescoring för bollen" onclick="resetLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-refresh-dot"></i></button>';
-        if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
+        // "Klar/låst" = ALLA spelare i bollen har redan ett inskickat officiellt
+        // resultat (e.scoreSubmissions) - de har alltså redan spelat och ska varken
+        // gå att flytta till en ny boll eller att bollen ändras/tas bort av misstag.
+        var isLocked = g.playerPis.length>0 && g.playerPis.every(function(pi){
+          return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi; });
+        });
+        if(isLocked) g.playerPis.forEach(function(pi){ lockedPisForDate[pi] = true; });
+        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px'+(isLocked?';background:var(--surface2)':'')+'">';
+        html += '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">';
+        if(isLocked) {
+          html += '<span style="font-weight:600;color:var(--green-dark)"><i class="ti ti-lock"></i> '+(g.time||'Tid ej satt')+' <span style="font-weight:400;font-size:12px">· Klar, låst</span></span>';
+          if(isAdmin()) {
+            html += '<button class="btn btn-sm" title="Nollställ livescoring för bollen (låser upp den igen)" onclick="resetLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-refresh-dot"></i></button>';
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
+          }
+        } else {
+          html += isAdmin()
+            ? '<input type="time" value="'+(g.time||'')+'" style="width:110px;margin:0" onchange="setTeeGroupTime(\''+e.id+'\','+gIdx+',this.value)">'
+            : '<span style="font-weight:600">'+(g.time||'Tid ej satt')+'</span>';
+          html += '<button class="btn btn-sm btn-primary" onclick="openLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-scoreboard"></i> Livescoring</button>';
+          html += '<button class="btn btn-sm" onclick="openBulkScoreSubmission(\''+e.id+'\','+gIdx+')"><i class="ti ti-users"></i> Registrera för bollen</button>';
+          if(isAdmin()) html += '<button class="btn btn-sm" title="Nollställ livescoring för bollen" onclick="resetLiveScoring(\''+e.id+'\','+gIdx+')"><i class="ti ti-refresh-dot"></i></button>';
+          if(isAdmin()) html += '<button class="btn btn-sm btn-danger" onclick="deleteTeeGroup(\''+e.id+'\','+gIdx+')"><i class="ti ti-trash"></i></button>';
+        }
         html += '</div>';
         html += '<div style="font-size:13px;color:var(--text-2)">'+g.playerPis.map(function(pi){var p=t.players[pi];return p?p.name:'?';}).join(', ')+'</div>';
         html += '</div>';
       });
     }
-    html += buildBollCheckboxSectionHTML(e, t, d, pisForDate, groupsForDate);
+    html += buildBollCheckboxSectionHTML(e, t, d, pisForDate, groupsForDate, lockedPisForDate);
     html += '</div>';
   });
   return html;
 }
 
-// Kryssrutorna för att skapa/slå ihop en boll av valfria anmälda spelare för ett datum.
-function buildBollCheckboxSectionHTML(e, t, d, pisForDate, groupsForDate) {
+// Kryssrutorna för att skapa/slå ihop en boll av valfria anmälda spelare för ett
+// datum. lockedPis (pi -> true) är spelare som redan skickat in sitt resultat -
+// de visas som låsta rader utan kryssruta, eftersom de redan spelat klart och
+// inte ska kunna flyttas till en annan/ny boll.
+function buildBollCheckboxSectionHTML(e, t, d, pisForDate, groupsForDate, lockedPis) {
   if(!pisForDate.length) return '';
+  lockedPis = lockedPis || {};
   var dateSafe = d.replace(/[^0-9]/g,'');
   var html = '<div style="border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:6px">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Skapa/ändra boll – kryssa vilka som ska spela ihop (max 4)</div>';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><i class="ti ti-calendar"></i> '+esc(formatSvDateFull(d))+' – kryssa vilka som ska spela ihop (max 4)</div>';
   html += pisForDate.map(function(pi){
     var p = t.players[pi];
     if(!p) return '';
+    if(lockedPis[pi]) {
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;color:var(--text-3)"><i class="ti ti-lock" style="font-size:11px"></i>'+esc(p.name)+' <span style="font-style:italic">· redan spelat, låst</span></div>';
+    }
     var currentGroup = groupsForDate.find(function(g){ return g.playerPis.indexOf(pi)>=0; });
     var hint = currentGroup
       ? (currentGroup.playerPis.length>1 ? ' <span style="color:var(--text-3)">· i boll med '+currentGroup.playerPis.filter(function(x){return x!==pi;}).map(function(x){var pp=t.players[x];return pp?pp.name:'?';}).join(', ')+'</span>' : ' <span style="color:var(--text-3)">· egen boll</span>')
@@ -11665,6 +11702,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (148)',
+    items: [
+      { type: 'new', text: 'En boll där ALLA spelare redan skickat in sitt officiella resultat räknas nu som "klar" och låses automatiskt: tidsfältet, "Livescoring"- och "Registrera för bollen"-knapparna ersätts av en grön "🔒 Klar, låst"-status (admin behåller Nollställ/Ta bort som en avsiktlig nödutgång, t.ex. vid felinmatning). Samma spelare visas som låsta rader utan kryssruta i "Skapa/ändra boll" och i "Välj boll"-vyn för livescoring - de kan alltså inte längre av misstag flyttas in i en ny eller annan boll efter att ha spelat klart.' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (147)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: "Välj boll"-vyn i livescoringen (öppnas via Live scoring-genvägen) visade spelare som aktivt tackat nej ("Deltar ej") som valbara kryssrutor för att skapa en boll - till skillnad från Anmälningar-vyn, som redan korrekt filtrerade bort dem. Gick alltså att av misstag skapa en boll med någon som inte ens är med i tävlingen. Fixat så samma filtrering gäller överallt.' },
+      { type: 'improved', text: '"Skapa/ändra boll"-rutorna visar nu vilket datum de gäller (t.ex. "Söndag 23 augusti") i rubriken, istället för samma generiska text på alla rutor - tydligare när en deltävling har spelare anmälda på flera olika datum samtidigt.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (146)',
     items: [
