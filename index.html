@@ -1943,19 +1943,29 @@ function openLiveScoringBollPicker(eventId, myGroupIdx) {
   if(!e.teeGroups) e.teeGroups = [];
   pruneUnregisteredFromTeeGroups(e);
 
+  var myPi = getMyPi(t);
   var rows = e.teeGroups.length
     ? e.teeGroups.map(function(g, gIdx){
         var names = g.playerPis.map(function(pi){ var p=t.players[pi]; return p?p.name:'?'; }).join(', ');
-        var isMine = gIdx === myGroupIdx;
+        var isMine = g.playerPis.indexOf(myPi) >= 0;
         var isLocked = g.playerPis.length>0 && g.playerPis.every(function(pi){
           return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi && isSubmissionApproved(s); });
         });
+        // Bara admin, eller en spelare som faktiskt är med i bollen OCH den
+        // inte redan är klar/godkänd, kan välja den. Andra spelare ska varken
+        // kunna öppna någon annans boll eller en boll de själva redan spelat
+        // klart och fått godkänd - annars finns risk att SHCP eller resultat
+        // ändras av misstag (eller avsiktligt) av fel person i efterhand.
+        var canSelect = isAdmin() || (isMine && !isLocked);
+        var actionHtml = canSelect
+          ? '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="closeModal();setTimeout(function(){openLiveScoring(\''+eventId+'\','+gIdx+')},60)">Välj</button>'
+          : '<span style="font-size:11px;color:var(--text-3);flex-shrink:0;font-style:italic">'+(isLocked?'Klar':'Ej din boll')+'</span>';
         return '<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'+
           '<div style="min-width:0">'+
             '<div style="font-weight:600;font-size:14px">'+esc(g.time||'Tid ej satt')+(isMine?' <span style="font-size:11px;color:var(--green-dark)">· din boll</span>':'')+(isLocked?' <span style="font-size:11px;color:var(--green-dark)"><i class="ti ti-lock"></i> klar</span>':'')+'</div>'+
             '<div style="font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(names)+'</div>'+
           '</div>'+
-          '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="closeModal();setTimeout(function(){openLiveScoring(\''+eventId+'\','+gIdx+')},60)">Välj</button>'+
+          actionHtml+
         '</div>';
       }).join('')
     : '<p style="font-size:13px;color:var(--text-3);padding:8px 0">Inga bollar skapade ännu - kryssa i vilka som ska spela ihop nedan.</p>';
@@ -3378,9 +3388,17 @@ function getMyPi(t) {
   return players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
 }
 
+// Returnerar pi:n för alla FAKTISKT anmälda (dvs. inte "Deltar ej") till en
+// deltävling. Delad av flera ställen (markörval, side bets-deltagare m.fl.) -
+// filtreringen ligger här vid källan så den aldrig glöms bort på ett enskilt
+// anropsställe (vilket tidigare hände: en spelare som tackat nej kunde ändå
+// dyka upp som förvald deltagare i "Lägg till side bet").
 function getEventRegPis(e) {
   var regsRaw = e.registrations || [];
-  return (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw.map(function(r){return r.pi;}) : regsRaw;
+  if(regsRaw.length && typeof regsRaw[0] === 'object') {
+    return regsRaw.filter(function(r){ return !r.declined; }).map(function(r){ return r.pi; });
+  }
+  return regsRaw;
 }
 
 // Beräknar hur många handicapslag en spelare får på ett visst hål, baserat på SHCP och hålets hcp-index.
@@ -5169,6 +5187,13 @@ function buildBollarManagementHTML(e, t, groups, dates) {
 function buildBollCheckboxSectionHTML(e, t, d, pisForDate, groupsForDate, lockedPis) {
   if(!pisForDate.length) return '';
   lockedPis = lockedPis || {};
+  // Är ALLA (giltiga) spelare för datumet redan låsta (godkänt och inskickat)?
+  // Filtrerar bort ev. spöke-pi:n (registrering som pekar på en spelare som inte
+  // längre finns) innan kollen - annars kan en sådan tyst blockera döljningen
+  // för evigt eftersom den aldrig kan bli "låst" men inte heller syns som rad.
+  var validPisForDate = pisForDate.filter(function(pi){ return !!t.players[pi]; });
+  var allLocked = validPisForDate.length>0 && validPisForDate.every(function(pi){ return lockedPis[pi]; });
+  if(allLocked) return '';
   var dateSafe = d.replace(/[^0-9]/g,'');
   var html = '<div style="border:1px dashed var(--border);border-radius:8px;padding:8px 10px;margin-top:6px">';
   html += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><i class="ti ti-calendar"></i> '+esc(formatSvDateFull(d))+' – kryssa vilka som ska spela ihop (max 4)</div>';
@@ -7064,7 +7089,14 @@ function resetCurrentLiveScoring() {
 function liveScoreLabel(gross, par) {
   var cat = categorizeHoleScore(gross, par);
   var map = { hio:'HIO', albatross:'ALBATROSS', eagle:'EAGLE', birdie:'BIRDIE', par:'PAR', bogey:'BOGEY' };
-  if(cat === 'doubleplus') return (gross - par === 2) ? 'DUBBELBOGEY' : '';
+  if(cat === 'doubleplus') {
+    var diff = gross - par;
+    if(diff === 2) return 'DUBBELBOGEY';
+    if(diff === 3) return 'TRIPPELBOGEY';
+    if(diff === 4) return 'KVADRUPPELBOGEY';
+    if(diff >= 5) return '+'+diff+' ÖVER PAR';
+    return '';
+  }
   return map[cat] || '';
 }
 
@@ -7075,6 +7107,28 @@ function openLiveScoring(eid, gIdx) {
   if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
   var g = e.teeGroups[gIdx];
   if(!g.playerPis || !g.playerPis.length) { alert('Bollen saknar spelare.'); return; }
+
+  // Behörighetsspärr: bara admin, eller en spelare som faktiskt tillhör den här
+  // bollen. En spelare som INTE är med i bollen ska aldrig kunna öppna den -
+  // annars kan vem som helst av misstag (eller avsiktligt) gå in och ändra
+  // SHCP eller resultat för spelare de inte har med att göra. Är bollen redan
+  // klar (alla resultat godkända) blockeras även bollens EGNA spelare - bara
+  // admin kan öppna en redan godkänd, avslutad rond igen.
+  if(!isAdmin()) {
+    var myPi = getMyPi(t);
+    if(g.playerPis.indexOf(myPi) < 0) {
+      alert('Du kan bara föra livescoring för din egen boll.');
+      return;
+    }
+    var groupIsLocked = g.playerPis.every(function(pi){
+      return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi && isSubmissionApproved(s); });
+    });
+    if(groupIsLocked) {
+      alert('Den här rondan är redan klar och godkänd. Kontakta admin om något behöver ändras.');
+      return;
+    }
+  }
+
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
   if(!course || !course.holePars || !course.holePars.length) {
     alert('Banan "'+(e.course||'Okänd')+'" saknar scorekortsdata (par per hål) i Bandatabasen. Lägg till det under Inställningar innan livescoring kan startas.');
@@ -7299,13 +7353,13 @@ function renderLiveGridHTML() {
     }
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+(submittedPis[p.pi]?' <i class="ti ti-lock" style="font-size:11px;color:var(--text-3)" title="Inskickat"></i>':'')+'</div>'+
+        '<div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(p.name))+(submittedPis[p.pi]?' <i class="ti ti-lock" style="font-size:11px;color:var(--text-3)" title="Inskickat"></i>':'')+'</div>'+
         (lbl?'<div style="font-size:10px;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'')+
       '</div>'+
-      '<div style="width:44px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
-      '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
+      '<div style="width:34px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
+      '<div style="width:32px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
       scoreBtn+
-      '<div style="width:56px;text-align:center;font-size:10px;color:var(--text-3)">'+puttLabel+'</div>'+
+      '<div style="width:44px;text-align:center;font-size:9px;color:var(--text-3)">'+puttLabel+'</div>'+
     '</div>';
   }).join('');
 
@@ -7324,7 +7378,7 @@ function renderLiveGridHTML() {
       '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<div style="flex:1">Spelare</div><div style="width:44px;text-align:center">Extra</div><div style="width:40px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div><div style="width:56px;text-align:center">Puttar</div>'+
+      '<div style="flex:1">Spelare</div><div style="width:34px;text-align:center">Extra</div><div style="width:32px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div><div style="width:44px;text-align:center">Puttar</div>'+
     '</div>'+
     rows+
     '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">'+filledCount+' av '+d.players.length+' klara för hålet. Tryck på en spelares slag-knapp för att mata in - valfri ordning.</p>'+
@@ -11753,6 +11807,37 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (155)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: Den delade funktionen som hämtar "alla anmälda" till en deltävling (getEventRegPis) filtrerade aldrig bort spelare som tackat nej ("Deltar ej") - till skillnad från flera andra ställen som redan filtrerade manuellt. Detta gjorde att en spelare som inte var anmäld ändå kunde dyka upp som förvald deltagare i "Lägg till side bet" (t.ex. Andreas Jonsson Wråkk för Kyssinge), och även kunde väljas som markör i "Mitt resultat". Fixat vid källan så alla ställen som använder funktionen blir korrekta samtidigt.' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (154)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG SÄKERHETSFIX: Vem som helst med åtkomst till en tour kunde tidigare öppna VILKEN boll som helst via "Välj boll" - inte bara sin egen - och därifrån ändra SHCP eller resultat för spelare de inte hade med att göra, oavsett om bollen redan var klar och godkänd. Livescoring-öppningen (openLiveScoring) kräver nu att man antingen är admin, eller faktiskt är en av spelarna i just den bollen OCH att den inte redan är färdigspelad och godkänd - annars nekas åtkomst direkt med ett tydligt meddelande. "Välj"-knappen i bollväljaren visar nu "Ej din boll"/"Klar" istället för en klickbar knapp när den inte är tillgänglig.' },
+      { type: 'fixed', text: '"Skapa/ändra boll"-rutan kunde bli kvar synlig trots att alla spelare för datumet redan var låsta, om en trasig/föråldrad registrering (pekande på en spelare som inte längre finns) tyst blockerade döljningslogiken. Filtrerar nu bort sådana ogiltiga poster innan kollen.' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (153)',
+    items: [
+      { type: 'fixed', text: 'Spelarnamn klipptes av mitt i namnet ("Niclas Lundevall...") i livescoringens hål-vy på smala mobilskärmar - de fasta kolumnerna (Extra/Total/Puttar) tog för mycket plats. Smalnat av dem något för att ge namnet mer utrymme, och lagt till samma "F. Efternamn"-förkortning (t.ex. "N. Lundevall") som redan används i live-tabellen som extra säkerhet mot avklippta namn.' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (152)',
+    items: [
+      { type: 'improved', text: 'Livescoringens hål-etikett (visas under spelarens namn, samt i sifferpickern) särskiljer nu "TRIPPELBOGEY" (3 över par) och "KVADRUPPELBOGEY" (4 över par) - tidigare visades bara "DUBBELBOGEY" för exakt 2 över par, och ingenting alls för sämre resultat. Ännu sämre än så visas nu som "+X ÖVER PAR".' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (151)',
+    items: [
+      { type: 'improved', text: '"Skapa/ändra boll"-rutan döljs nu helt för ett datum där ALLA spelare redan är låsta (godkänt och inskickat) - den var annars kvar och visade en meningslös, tom kryssruta-lista där ingen ändå går att välja, i både Anmälningar och livescoringens "Välj boll"-vy.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (150)',
     items: [
