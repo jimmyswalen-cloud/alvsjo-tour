@@ -8470,9 +8470,16 @@ function buildProfileHTML(pi){
     var countBadge = (bestN>0&&!isFinal) ? (excluded
       ? ' <span style="color:var(--text-3);font-size:10px">✕</span>'
       : ' <span style="color:#0F6E56;font-size:10px">✓</span>') : '';
-    return '<tr style="'+(excluded?'opacity:0.5':'')+'">'+
+    // Scorekortet (hål-för-hål) finns sparat sedan tidigare (r.holes) men hade
+    // aldrig en vy att visas i - klickbar rad öppnar det nu om datan finns.
+    var hasScorecard = !!(x.result.holes && x.result.holes.length);
+    var rowAttrs = hasScorecard
+      ? ' style="cursor:pointer'+(excluded?';opacity:0.5':'')+'" onclick="openPastScorecardModal('+pi+',\''+x.event.id+'\')"'
+      : (excluded ? ' style="opacity:0.5"' : '');
+    var nameCell = esc(x.event.name)+(hasScorecard?' <i class="ti ti-chevron-right" style="font-size:11px;color:var(--text-3)"></i>':'');
+    return '<tr'+rowAttrs+'>'+
       '<td style="padding:9px 16px;color:var(--text-2);white-space:nowrap;font-size:12px">'+x.event.date+'</td>'+
-      '<td style="padding:9px 8px;font-weight:600">'+esc(x.event.name)+'</td>'+
+      '<td style="padding:9px 8px;font-weight:600">'+nameCell+'</td>'+
       '<td style="padding:9px 8px"><span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;'+typeBg+'">'+typeLabel+'</span></td>'+
       '<td style="padding:9px 8px;text-align:right;color:var(--text-2)">'+slagVal+'</td>'+
       '<td style="padding:9px 8px;text-align:right;font-weight:600;color:'+(excluded?'var(--text-3)':'#0F6E56')+'">'+ptsVal+countBadge+'</td>'+
@@ -8518,7 +8525,7 @@ function buildProfileHTML(pi){
       '<div class="card" style="padding:0;overflow:hidden">'+
         '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
           '<div style="font-size:14px;font-weight:600;color:var(--text)">Alla tävlingar</div>'+
-          '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Resultat från alla deltävlingar och finaler</div>'+
+          '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Resultat från alla deltävlingar och finaler · klicka på en rad för att se scorekortet</div>'+
         '</div>'+
         (histLegend?'<div style="padding:10px 16px 0">'+histLegend+'</div>':'')+
         '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
@@ -8531,6 +8538,52 @@ function buildProfileHTML(pi){
         '</tr></thead><tbody>'+histRows+'</tbody></table></div>'+
       '</div>'
     : '<p class="empty">Inga avslutade tävlingar än.</p>');
+}
+
+// Visar hål-för-hål-scorekortet för en AVSLUTAD deltävling från spelarens
+// profil ("Alla tävlingar"-tabellen). Datan (r.holes) har alltid sparats när
+// resultatet skickades in - den saknade bara en vy att visas i. Bygger en
+// "row"-liknande struktur och återanvänder samma niohåls-tabell (med samma
+// färgkodning: röd birdie, gul eagle+, ljusblå bogey, mörkblå dubbelbogey+)
+// som redan används för livescoringens scorekort.
+function openPastScorecardModal(pi, eventId) {
+  var t = getTour();
+  var e = t.events.find(function(x){ return x.id === eventId; });
+  if(!e) return;
+  var r = (e.results||[]).find(function(x){ return x.pi === pi; });
+  if(!r || !r.holes || !r.holes.length) {
+    alert('Inget hål-för-hål-scorekort sparat för den här rundan (troligen inmatat innan den funktionen fanns).');
+    return;
+  }
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+  var holePars = course && course.holePars ? course.holePars : r.holes.map(function(){ return null; });
+  var holeHcpIndex = course && course.holeHcpIndex ? course.holeHcpIndex : [];
+  var totalHoles = holePars.length || r.holes.length;
+  var isStab = e.type === 'stableford';
+  var brutto = r.holes.reduce(function(a,b){ return a + (typeof b==='number' ? b : 0); }, 0);
+  var thru = r.holes.filter(function(h){ return typeof h==='number'; }).length;
+  var p = t.players[pi];
+
+  var rowObj = {
+    holesGross: r.holes, holePars: holePars, holeHcpIndex: holeHcpIndex,
+    shcp: r.shcp || 0, totalHoles: totalHoles
+  };
+  var frontBlock = buildNineHoleScorecardBlock(rowObj, 0, 'Ut');
+  var backBlock = totalHoles > 9 ? buildNineHoleScorecardBlock(rowObj, 9, 'In') : '';
+  var totalPar = holePars.reduce(function(a,b){ return a + (b||0); }, 0);
+
+  var h = '<h3 style="margin-bottom:2px;font-size:16px">'+esc(p ? p.name : '?')+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">'+esc(e.name)+' · '+esc(e.date)+(e.course?' · '+esc(e.course):'')+'</p>'+
+    '<p style="font-size:11px;color:var(--text-3);margin-bottom:10px">Thru '+thru+'/'+totalHoles+' · Par '+totalPar+' · Brutto <b>'+brutto+'</b>'+(isStab?' · Poäng <b>'+r.score+'</b>':' · Netto <b>'+r.score+'</b>')+'</p>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#F7C948;border-radius:2px;margin-right:3px"></span>Eagle+</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#AEE3F5;border-radius:2px;margin-right:3px"></span>Bogey</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span>'+
+    '</div>'+
+    frontBlock + backBlock +
+    '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true);
 }
 
 var SW_STRENGTHS = [
@@ -11612,6 +11665,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (146)',
+    items: [
+      { type: 'fixed', text: 'Rättelse till ett tidigare påstående om att avslutade ronder "sparas i spelarens profil" - datan sparades redan (den räknades in i poäng/placeringar), men det fanns ingen vy för att faktiskt SE scorekortet hål för hål. Fixat nu på riktigt: "Alla tävlingar"-tabellen på spelarprofilen (tourns egen, under Hålstatistik/Puttstatistik) är nu klickbar rad för rad - finns ett sparat hål-för-hål-scorekort öppnas det i samma färgkodade niohåls-vy (röd birdie, gul eagle+, ljusblå bogey, mörkblå dubbelbogey+) som redan används i livescoringen. Äldre resultat inmatade innan hål-data sparades visar ett tydligt meddelande istället för att krascha.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (145)',
     items: [
