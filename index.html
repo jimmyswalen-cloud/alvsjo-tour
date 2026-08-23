@@ -3481,6 +3481,42 @@ function renderMyScoreModalBody() {
   }).join('');
 
   var h = '<h3><i class="ti ti-edit"></i> Mitt resultat – '+esc(e.name)+'</h3>';
+
+  // Rond klar OCH godkänd (av markör eller admin) - ronden är helt färdig, det
+  // finns inget kvar att redigera eller skicka in. Visa då samma färgkodade,
+  // läsvänliga scorekorts-vy som "Ställning & scorekort"/livescoringen använder
+  // istället för redigeringsformuläret med Markör-val och Skicka in-knapp, som
+  // annars felaktigt antyder att något fortfarande återstår att göra.
+  var isApproved = !!(existing && (existing.dispens ? existing.adminApproved : (existing.markerApproved || existing.adminApproved)));
+  if(existing && isApproved && ctx.hasScorecard) {
+    var approvedRow = {
+      name: t.players[ctx.myPi] ? t.players[ctx.myPi].name : '',
+      thru: ctx.totalHoles, totalHoles: ctx.totalHoles,
+      brutto: existing.brutto != null ? existing.brutto : (existing.holes||[]).reduce(function(a,b){ return a+(b||0); }, 0),
+      netto: ctx.isStab ? null : existing.score,
+      poang: ctx.isStab ? existing.score : null,
+      holesGross: existing.holes || ctx.sourceHoles,
+      holePars: ctx.holePars, holeHcpIndex: ctx.holeHcpIndex,
+      shcp: existing.shcp != null ? existing.shcp : ctx.sourceShcp
+    };
+    var frontBlock = buildNineHoleScorecardBlock(approvedRow, 0, 'Ut');
+    var backBlock = ctx.totalHoles > 9 ? buildNineHoleScorecardBlock(approvedRow, 9, 'In') : '';
+    var totalPar = ctx.holePars.reduce(function(a,b){ return a+b; }, 0);
+    var markerName = existing.dispens ? 'Admin' : (t.players[existing.markerPi] ? t.players[existing.markerPi].name : 'markör');
+    h += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:14px;color:var(--green-dark)"><i class="ti ti-circle-check"></i> Rond klar och godkänd av '+esc(markerName)+'</div>';
+    h += '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+approvedRow.thru+'/'+approvedRow.totalHoles+' · Par '+totalPar+' · Brutto <b>'+approvedRow.brutto+'</b> · '+(ctx.isStab?('Poäng <b>'+approvedRow.poang+'</b>'):('Netto <b>'+approvedRow.netto+'</b>'))+'</p>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#F7C948;border-radius:2px;margin-right:3px"></span>Eagle+</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#AEE3F5;border-radius:2px;margin-right:3px"></span>Bogey</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span>'+
+    '</div>'+
+    frontBlock + backBlock +
+    '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+    document.getElementById('my-score-modal-body').innerHTML = h;
+    return;
+  }
+
   if(existing) {
     var statusLabel = existing.dispens
       ? (existing.adminApproved ? '<span style="color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt av admin</span>' : '<span style="color:var(--gold)"><i class="ti ti-clock"></i> Väntar på admin-godkännande</span>')
@@ -11546,6 +11582,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (144)',
+    items: [
+      { type: 'improved', text: '"Mitt resultat" visar nu en tydlig, färgkodad scorekorts-vy (samma stil som "Ställning & scorekort"/livescoringen - birdie/eagle/bogey/dubbelbogey-färgkodning per hål) så fort ronden är godkänd (av markör eller admin), istället för att fortsätta visa redigeringsformuläret med Markör-val och "Skicka in"-knapp som om något fortfarande återstod att göra. Är resultatet inte godkänt än fungerar allt precis som innan.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (143)',
     items: [
