@@ -7208,16 +7208,27 @@ function renderLiveGridHTML() {
     for(var h=1; h<=totalHoles; h++){ if(typeof sc[h] !== 'number') return false; }
     return true;
   });
+  var found = findTourAndEventById(d.eventId);
+  // Vilka spelare har redan ett officiellt inskickat scorekort (godkänt av
+  // markör eller admin, eller väntande admin-godkännande vid dispens)? Deras
+  // slag-knapp låses för alla utom admin - ändra ett resultat i efterhand utan
+  // att det syns/godkänns om igen skulle annars kunna skapa en tyst avvikelse
+  // mellan livescoringen och det redan inskickade, officiella resultatet.
+  var submittedPis = {};
+  if(found && found.event.scoreSubmissions) {
+    found.event.scoreSubmissions.forEach(function(s){ submittedPis[s.pi] = true; });
+  }
+  var isAdminUser = isAdmin();
+
   var completionBanner = '';
   if(allComplete) {
-    var found = findTourAndEventById(d.eventId);
     var alreadySubmitted = found && found.event.scoreSubmissions
       ? d.players.every(function(p){ return found.event.scoreSubmissions.some(function(s){ return s.pi===p.pi; }); })
       : false;
     completionBanner = alreadySubmitted
       ? '<div style="background:#EAF3DE;border:1px solid #B9DD8C;border-radius:10px;padding:12px 14px;margin-bottom:14px;text-align:center">'+
           '<div style="font-weight:700;color:#3B6D11;font-size:15px"><i class="ti ti-circle-check"></i> Rond klar och inskickad!</div>'+
-          '<div style="font-size:12px;color:#3B6D11;margin-top:2px">Alla i bollen har fyllt i '+totalHoles+' hål och skickat in sina officiella scorekort.</div>'+
+          '<div style="font-size:12px;color:#3B6D11;margin-top:2px">Alla i bollen har fyllt i '+totalHoles+' hål och skickat in sina officiella scorekort'+(isAdminUser?' - som admin kan du fortfarande justera resultat vid behov.':'. Kontakta admin om något behöver korrigeras.')+'</div>'+
         '</div>'
       : '<div style="background:#FFF6E5;border:1px solid #F3D19E;border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">'+
           '<div style="font-weight:800;color:#8A5A00;font-size:17px;margin-bottom:2px"><i class="ti ti-flag-2"></i> Rond klar!</div>'+
@@ -7239,14 +7250,18 @@ function renderLiveGridHTML() {
     var extraStrokes = computeHcpStrokesForHole(p.shcp||0, idxHcp, totalHoles);
     var total = 0, played = 0;
     Object.keys(sc).forEach(function(h){ if(typeof sc[h] === 'number') { total += sc[h]; played++; } });
+    var isLocked = submittedPis[p.pi] && !isAdminUser;
+    var scoreBtn = isLocked
+      ? '<div title="Scorekortet är redan inskickat - kontakta admin för ändringar" style="width:56px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;border-radius:8px;border:2px solid var(--border);background:var(--surface2);color:var(--text-3);position:relative"><i class="ti ti-lock" style="font-size:14px;position:absolute;top:2px;right:3px;color:var(--text-3)"></i>'+(hasVal?val:'?')+'</div>'
+      : '<button onclick="openLivePicker('+p.pi+')" style="width:56px;height:44px;margin:0;padding:0;text-align:center;font-size:19px;font-weight:800;border-radius:8px;border:2px solid '+(hasVal?'var(--green-dark)':'var(--border)')+';background:'+(hasVal?'var(--surface2)':'#fff')+';color:var(--text)">'+(hasVal?val:'?')+'</button>';
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
+        '<div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+(submittedPis[p.pi]?' <i class="ti ti-lock" style="font-size:11px;color:var(--text-3)" title="Inskickat"></i>':'')+'</div>'+
         (lbl?'<div style="font-size:10px;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'')+
       '</div>'+
       '<div style="width:44px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
       '<div style="width:40px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
-      '<button onclick="openLivePicker('+p.pi+')" style="width:56px;height:44px;margin:0;padding:0;text-align:center;font-size:19px;font-weight:800;border-radius:8px;border:2px solid '+(hasVal?'var(--green-dark)':'var(--border)')+';background:'+(hasVal?'var(--surface2)':'#fff')+';color:var(--text)">'+(hasVal?val:'?')+'</button>'+
+      scoreBtn+
       '<div style="width:56px;text-align:center;font-size:10px;color:var(--text-3)">'+puttLabel+'</div>'+
     '</div>';
   }).join('');
@@ -7287,7 +7302,22 @@ function liveGridChangeHole(delta) {
 // Öppnar sifferpickern (1–10, tryck för att välja) för valfri spelares resultat
 // på aktuellt hål - istället för att skriva in via telefonens tangentbord.
 // Spelaren väljs fritt (ingen fast ordning) genom att trycka på dennes knapp.
+// Sant om spelaren redan har ett officiellt inskickat scorekort för den här
+// deltävlingen - används både för att låsa knappen visuellt i grid-vyn och
+// som ett skyddsnät i openLivePicker ifall något annat skulle försöka öppna
+// pickern ändå.
+function isLiveScoringPlayerLocked(pi) {
+  var d = _liveScoring.data;
+  if(!d || isAdmin()) return false;
+  var found = findTourAndEventById(d.eventId);
+  return !!(found && found.event.scoreSubmissions && found.event.scoreSubmissions.some(function(s){ return s.pi===pi; }));
+}
+
 function openLivePicker(pi) {
+  if(isLiveScoringPlayerLocked(pi)) {
+    alert('Det här scorekortet är redan inskickat och godkänt. Kontakta admin om något behöver rättas.');
+    return;
+  }
   _liveScoring.pickerPi = pi;
   _liveScoring.mode = 'picker';
   renderLivePickerHTML();
@@ -11582,6 +11612,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (145)',
+    items: [
+      { type: 'new', text: 'Livescoringens slag-knapp låses nu automatiskt för en spelare så fort deras officiella scorekort skickats in (godkänt av markör/admin) - knappen blir gråtonad med ett låsikon, går inte längre att trycka på för vanliga användare. Endast admin kan fortfarande justera resultatet direkt i livescoringen efter inskickning. Skyddsnät tillagt även i själva sifferpickern, ifall den skulle öppnas på annat sätt.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (144)',
     items: [
