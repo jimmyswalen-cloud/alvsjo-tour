@@ -1780,14 +1780,29 @@ function showCropModal(dataUrl, cH, cb) {
   h += '<div id="crop-box" style="position:relative;width:100%;height:'+cH+'px;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
   h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
-  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn" onclick="closeCropModalOnly()">Avbryt</button>';
   h += '<button class="btn btn-primary" id="crop-save-btn"><i class="ti ti-check"></i> Använd utsnitt</button>';
   h += '</div>';
-  showModal(h, true);
+  // Beskärningsrutan får en EGEN, fristående overlay istället för att gå via
+  // den delade showModal()/closeModal() (som alltid stänger EN gemensam modal
+  // åt gången). Öppnas den delade vägen skulle den bakomliggande formulär-
+  // modalen (t.ex. "Vinnarbild & story") stängas av misstag så fort man klev
+  // in i beskärningssteget - och när beskärningen sedan bekräftades fanns
+  // ingen ruta kvar att trycka "Spara" i, så hela uppladdningen gick förlorad
+  // tyst utan felmeddelande. Nu staplas beskärningen OVANPÅ istället, och den
+  // bakomliggande modalen finns kvar orörd när man är klar.
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay'; ov.id = 'crop-modal-overlay';
+  ov.style.zIndex = '210';
+  var box = document.createElement('div');
+  box.className = 'modal modal-wide';
+  box.innerHTML = h;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
   setTimeout(function() {
-    var box = document.getElementById('crop-box');
-    if(!box) return;
-    var cW = box.offsetWidth;
+    var cbox = document.getElementById('crop-box');
+    if(!cbox) return;
+    var cW = cbox.offsetWidth;
     crop.cW=cW; crop.cH=cH; crop.active=true;
     var img = new Image();
     img.onload = function() {
@@ -1799,15 +1814,22 @@ function showCropModal(dataUrl, cH, cb) {
       var el=document.createElement('img');
       el.id='crop-img-el'; el.src=dataUrl;
       el.style.cssText='position:absolute;pointer-events:none;transform-origin:0 0;max-width:none;max-height:none';
-      box.appendChild(el);
+      cbox.appendChild(el);
       cropRender();
-      box.addEventListener('mousedown', cropMD);
-      box.addEventListener('touchstart', cropTS, {passive:false});
-      box.addEventListener('wheel', cropWheel, {passive:false});
+      cbox.addEventListener('mousedown', cropMD);
+      cbox.addEventListener('touchstart', cropTS, {passive:false});
+      cbox.addEventListener('wheel', cropWheel, {passive:false});
       document.getElementById('crop-save-btn').onclick = cropCommit;
     };
     img.src = dataUrl;
   }, 80);
+}
+// Stänger BARA beskärningens egen overlay - rör aldrig den bakomliggande
+// formulär-modalen (till skillnad från closeModal(), som är till för den).
+function closeCropModalOnly() {
+  var ov = document.getElementById('crop-modal-overlay');
+  if(ov) { try { ov.remove(); } catch(err) {} }
+  crop.active = false;
 }
 function cropClamp(){var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;crop.x=Math.min(0,Math.max(crop.cW-iW,crop.x));crop.y=Math.min(0,Math.max(crop.cH-iH,crop.y));}
 function cropRender(){var el=document.getElementById('crop-img-el');if(!el)return;var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;el.style.width=iW+'px';el.style.height=iH+'px';el.style.left=crop.x+'px';el.style.top=crop.y+'px';}
@@ -1836,7 +1858,7 @@ function cropCommit(){
     crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
   );
   var result=c.toDataURL('image/jpeg',0.92);
-  var cb=crop.cb;crop.active=false;closeModal();if(cb)cb(result);
+  var cb=crop.cb;crop.active=false;closeCropModalOnly();if(cb)cb(result);
 }
 
 // ── TOURS LIST ─────────────────────────────────────────────────────────────
@@ -11981,6 +12003,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (161)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX (grundorsak, funnits länge): Att beskära en uppladdad bild (vinnarbild, tour-omslag, deltävlingsbild, tour-story-bild) stängde av misstag HELA den bakomliggande formulär-rutan, eftersom beskärningsrutan och formuläret delade samma "stäng föregående modal"-mekanism. Resultatet: efter att ha bekräftat beskärningen fanns ingen ruta kvar att trycka "Spara" i - bilden gick förlorad helt tyst, utan felmeddelande. Beskärningsrutan öppnas nu som en egen, fristående ruta OVANPÅ formuläret istället för att ersätta det - formuläret finns kvar orört när beskärningen är klar, och "Spara" fungerar som förväntat.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (160)',
     items: [
