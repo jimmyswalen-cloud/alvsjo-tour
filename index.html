@@ -8953,6 +8953,13 @@ function buildProfileHTML(pi){
         '<div style="font-size:14px;font-weight:600;color:var(--text)">Senaste ronder</div>'+
         '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Klicka på en rond för att se scorekortet</div>'+
       '</div>'+
+      '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
+        '<th style="padding:8px 16px">Datum</th>'+
+        '<th style="padding:8px 8px">Tävling</th>'+
+        '<th style="padding:8px 8px">Typ</th>'+
+        '<th style="padding:8px 8px;text-align:right">Resultat</th>'+
+        '<th style="padding:8px 16px;text-align:right">Plac./Status</th>'+
+      '</tr></thead><tbody>'+
       visibleRounds.map(function(r){
         var typeLabel = r.isFinal ? 'Final' : (r.isStab ? 'Stableford' : 'Slag');
         var scoreLabel = r.isStab ? (r.score+' p') : (r.score>0 ? r.score+' slag' : '–');
@@ -8962,19 +8969,18 @@ function buildProfileHTML(pi){
             ? '<span style="font-size:11px;color:#0F6E56;font-weight:600"><i class="ti ti-circle-check"></i> Godkänt</span>'
             : posStr(r.pos);
         var rowAttrs = r.hasScorecard ? ' style="cursor:pointer" onclick="openPastScorecardModal('+pi+',\''+r.eventId+'\')"' : '';
-        return '<div'+rowAttrs+' class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)">'+
-          '<div style="min-width:0">'+
-            '<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.eventName)+(r.hasScorecard?' <i class="ti ti-chevron-right" style="font-size:10px;color:var(--text-3)"></i>':'')+'</div>'+
-            '<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+esc(r.date)+' · '+typeLabel+'</div>'+
-          '</div>'+
-          '<div style="text-align:right;flex-shrink:0;margin-left:10px">'+
-            '<div style="font-weight:700;font-size:13px;color:var(--text)">'+scoreLabel+'</div>'+
-            '<div style="margin-top:4px">'+statusHtml+'</div>'+
-          '</div>'+
-        '</div>';
+        var nameCell = esc(r.eventName)+(r.hasScorecard?' <i class="ti ti-chevron-right" style="font-size:10px;color:var(--text-3)"></i>':'');
+        return '<tr'+rowAttrs+'>'+
+          '<td style="padding:9px 16px;color:var(--text-2);font-size:12px">'+esc(r.date)+'</td>'+
+          '<td style="padding:9px 8px;font-weight:600;white-space:normal">'+nameCell+'</td>'+
+          '<td style="padding:9px 8px;color:var(--text-2);font-size:12px">'+typeLabel+'</td>'+
+          '<td style="padding:9px 8px;text-align:right;font-weight:700">'+scoreLabel+'</td>'+
+          '<td style="padding:9px 16px;text-align:right">'+statusHtml+'</td>'+
+        '</tr>';
       }).join('')+
+      '</tbody></table></div>'+
       (allRounds.length > 5
-        ? '<div style="padding:8px 16px;text-align:center"><button class="btn btn-sm" onclick="toggleProfileRoundsExpanded('+pi+')">'+(showAllRounds?'Visa färre':'Visa alla ('+allRounds.length+')')+'</button></div>'
+        ? '<div style="padding:8px 16px;text-align:center;border-top:1px solid var(--border)"><button class="btn btn-sm" onclick="toggleProfileRoundsExpanded('+pi+')">'+(showAllRounds?'Visa färre':'Visa alla ('+allRounds.length+')')+'</button></div>'
         : '')+
     '</div>';
   }
@@ -12170,6 +12176,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (171)',
+    items: [
+      { type: 'fixed', text: '"Senaste ronder" byggdes om från fristående flex-rader till en riktig tabell (samma beprövade komponent som "Alla tävlingar"-tabellen längre ner redan använder) - löser linjeringsproblemet på ett garanterat sätt oavsett innehållets längd, och ger samtidigt kolumnrubriker (Datum, Tävling, Typ, Resultat, Plac./Status) som efterfrågades.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (170)',
     items: [
