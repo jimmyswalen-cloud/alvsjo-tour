@@ -4485,6 +4485,11 @@ function renderHomeActivityFeed(items) {
         ? (it.poang+' poäng')
         : (it.diffToPar===0 ? 'jämnt med par' : Math.abs(it.diffToPar)+' under par');
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:#EAF3DE;color:#3B6D11;font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px"><i class="ti ti-trophy" style="font-size:11px"></i> stark rond</span> – '+resultLabel;
+    } else if(it.category === 'eventwinner') {
+      lineHtml = '🏆 <b>'+esc(it.playerName)+'</b> vann <b>'+esc(it.eventName)+'</b>!';
+    } else if(it.category === 'tourchampion') {
+      var ptsText = it.pts!=null ? ' med '+it.pts+' p' : '';
+      lineHtml = '👑 <b>'+esc(it.playerName)+'</b> är säsongsmästare i <b>'+esc(it.tourName)+'</b>'+ptsText+'!';
     } else if(it.category === 'sidebetwin') {
       var actionText = it.sideBetType === 'Närmast hål'
         ? 'placerade precis sin boll närmast flaggan på hål '+it.hole
@@ -4500,11 +4505,22 @@ function renderHomeActivityFeed(items) {
       var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
     }
+    // Undertexten visar deltävlingens namn om det finns, annars tourens namn
+    // (t.ex. för säsongsmästare utan final, som inte hör till en specifik deltävling).
+    var subtitleName = it.eventName ? esc(it.eventName) : (it.tourName ? esc(it.tourName) : '');
+    // Extra banderoll med vinnarbild/story, bara för deltävlingsvinnare, för
+    // att ge den lite extra tyngd i flödet jämfört med en vanlig textrad.
+    var extraBanner = '';
+    if(it.category === 'eventwinner') {
+      if(it.winnerImg) extraBanner += '<img src="'+it.winnerImg+'" style="width:140px;border-radius:8px;display:block;margin-top:6px" alt="">';
+      if(it.story) extraBanner += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text-2);margin-top:6px;max-width:320px;white-space:pre-wrap">'+esc(it.story)+'</div>';
+    }
     return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start">'+
       avatar+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;color:var(--text)">'+lineHtml+'</div>'+
-        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+esc(it.eventName)+' · '+formatRelativeTime(it.createdAt)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+subtitleName+(subtitleName?' · ':'')+formatRelativeTime(it.createdAt)+'</div>'+
+        extraBanner+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">'+
         '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:6px;color:'+(iLiked?'#1D9E75':'var(--text-3)')+'" title="Gilla"><i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:18px"></i></button>'+
@@ -6246,6 +6262,57 @@ function closeEvent(i){
     e.results.forEach(function(r,idx){r.points=Math.round((t.pointsScale[idx]||0)*mult*10)/10;});
   }
   e.closed=true; save(); renderEvents(); renderOOM();
+  postEventWinnerToFeed(t, e);
+  checkAndPostTourConclusion(t, e);
+}
+
+// Postar deltävlingens vinnare (namn, bild om satt, story om ifylld) i
+// aktivitetsfeeden så fort deltävlingen stängs - bara FRAMÅT i tiden (körs
+// bara här, i closeEvent, aldrig som en bakåtgående migrering av redan
+// stängda deltävlingar).
+function postEventWinnerToFeed(t, e) {
+  if(!e.results || !e.results.length) return;
+  var winner = t.players[e.results[0].pi];
+  if(!winner) return;
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name, eventId: e.id, eventName: e.name,
+    playerUsername: winner.username, playerName: winner.name,
+    category: 'eventwinner', winnerImg: e.winnerImg || null, story: e.story || null,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte posta deltävlingsvinnare i aktivitetsfeeden', err); });
+}
+
+// Postar säsongsmästaren i feeden om just den här stängningen gjorde att HELA
+// touren räknas som avslutad (se isTourConcluded). Finns en final används
+// FINALENS egna, justerade resultat (rätt sätt att avgöra en mästare när
+// slagförsprång räknats in) - annars OoM-totalen. t._concludedPosted skyddar
+// mot dubbelpostning om något (t.ex. Återöppna+Stäng igen) triggar samma sak flera gånger.
+function checkAndPostTourConclusion(t, justClosedEvent) {
+  if(t._concludedPosted) return;
+  if(!isTourConcluded(t)) return;
+  var hasFinal = t.events.some(function(e){ return e.isFinal; });
+  var champPi, champPts = null;
+  if(hasFinal) {
+    var finalEv = t.events.find(function(e){ return e.isFinal && e.closed; });
+    if(!finalEv || !finalEv.results || !finalEv.results.length) return;
+    champPi = finalEv.results[0].pi;
+  } else {
+    var standings = computeOomStandings(t).filter(function(o){ return o.events > 0; });
+    if(!standings.length) return;
+    champPi = standings[0].pi;
+    champPts = standings[0].pts;
+  }
+  var champ = t.players[champPi];
+  if(!champ) return;
+  t._concludedPosted = true;
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name,
+    eventId: justClosedEvent ? justClosedEvent.id : null, eventName: justClosedEvent ? justClosedEvent.name : null,
+    playerUsername: champ.username, playerName: champ.name,
+    category: 'tourchampion', pts: champPts,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte posta säsongsmästare i aktivitetsfeeden', err); });
+  save();
 }
 
 function reopenEvent(i){
@@ -12062,6 +12129,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (168)',
+    items: [
+      { type: 'new', text: 'Aktivitetsfeeden postar nu automatiskt "🏆 [Namn] vann [deltävling]!" (med vinnarbild och story om ifyllt) så fort en deltävling stängs, och "👑 [Namn] är säsongsmästare i [tour]!" så fort HELA touren blir avslutad (finns en final används dess egna, justerade resultat - annars OoM-totalen). Gäller bara FRAMÅT i tiden från och med nu - redan stängda historiska deltävlingar/tourer postas inte i efterhand.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (167)',
     items: [
