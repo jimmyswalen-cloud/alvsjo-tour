@@ -914,6 +914,35 @@ function compressImage(file, maxW, maxH, quality, cb) {
   reader.readAsDataURL(file);
 }
 
+// ── ALLA BILDER: FIREBASE STORAGE ───────────────────────────────────────────
+// Generell version av samma princip som profilbilder ovan - används för
+// tour-omslag, deltävlingsbilder ("banfoto"), vinnarfoto och tour-story-bild.
+// dataUrl: en redan komprimerad bild ("data:image/jpeg;base64,...") ELLER
+// (om bilden inte ändrats sedan sist) redan en riktig Storage-URL - i så
+// fall görs ingen ny uppladdning alls, url:en returneras oförändrad direkt.
+// path: en STABIL sökväg (t.ex. "tour-covers/{tourId}.jpg") - laddar man upp
+// en ny bild på samma sökväg skrivs den gamla filen automatiskt över.
+// Returnerar ett Promise som alltid resolvar (aldrig avvisar) - vid fel loggas
+// felet och null returneras, så att sparandet av övrig data aldrig stoppas
+// upp bara för att en bilduppladdning skulle misslyckas.
+function uploadImageToStorage(dataUrl, path) {
+  return new Promise(function(resolve){
+    if(!dataUrl) { resolve(null); return; }
+    if(!/^data:/.test(dataUrl)) { resolve(dataUrl); return; } // redan en URL - inget nytt att ladda upp
+    if(!path) { resolve(null); return; }
+    var ref = storage.ref().child(path);
+    ref.putString(dataUrl, 'data_url', { contentType: 'image/jpeg' }).then(function(snapshot){
+      return snapshot.ref.getDownloadURL();
+    }).then(function(url){
+      resolve(url);
+    }).catch(function(err){
+      console.error('Kunde inte ladda upp bilden till Firebase Storage ('+path+')', err);
+      alert('Kunde inte ladda upp bilden just nu (kontrollera internetanslutningen). Övrig data sparas ändå, men just den här bilden uppdateras inte - försök igen senare.');
+      resolve(null);
+    });
+  });
+}
+
 // ── PROFILBILDER: FIREBASE STORAGE ──────────────────────────────────────────
 // Bilderna själva bor i Firebase Storage, inte i Firestore. Firestore
 // (u.img) sparar bara URL:en till bilden. Varje användares profilbild lagras
@@ -928,16 +957,7 @@ function compressImage(file, maxW, maxH, quality, cb) {
 // blir bara oförändrad istället för att hela sparandet stoppas upp).
 function uploadProfileImage(dataUrl, username, cb) {
   if(!dataUrl || !username) { cb(null); return; }
-  var ref = storage.ref().child('profile-images/' + username + '.jpg');
-  ref.putString(dataUrl, 'data_url', { contentType: 'image/jpeg' }).then(function(snapshot){
-    return snapshot.ref.getDownloadURL();
-  }).then(function(url){
-    cb(url);
-  }).catch(function(err){
-    console.error('Kunde inte ladda upp profilbilden till Firebase Storage', err);
-    alert('Kunde inte ladda upp bilden just nu (kontrollera internetanslutningen). Övriga ändringar sparas ändå, men bilden uppdateras inte den här gången - försök igen senare.');
-    cb(null, err);
-  });
+  uploadImageToStorage(dataUrl, 'profile-images/' + username + '.jpg').then(function(url){ cb(url); });
 }
 
 // Allow pasting images from clipboard into any file-trigger button
@@ -1594,13 +1614,16 @@ function saveRenameTour() {
   syncEditTourDraftFields();
   if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
   if(_editTourDraft) t.season = _editTourDraft.season.trim();
-  t.img = _editTourDraft ? _editTourDraft.img : t.img;
+  var newImg = _editTourDraft ? _editTourDraft.img : t.img;
   _editTourDraft = null;
-  save();
-  document.getElementById('active-tour-name').textContent = t.name;
-  closeModal();
-  renderToursList();
-  renderEditTourBtn();
+  uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
+    t.img = url;
+    save();
+    document.getElementById('active-tour-name').textContent = t.name;
+    closeModal();
+    renderToursList();
+    renderEditTourBtn();
+  });
 }
 
 function addEventToTour() {
@@ -1639,7 +1662,7 @@ function saveEditTour() {
   syncEditTourDraftFields();
   if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
   if(_editTourDraft) t.season = _editTourDraft.season.trim();
-  t.img = _editTourDraft ? _editTourDraft.img : t.img;
+  var newImg = _editTourDraft ? _editTourDraft.img : t.img;
   _editTourDraft = null;
 
   // Rebuild events from modal rows
@@ -1674,10 +1697,13 @@ function saveEditTour() {
   if(newEvents.length === 0) { alert('Touren måste ha minst en deltävling.'); return; }
   t.events = newEvents;
   document.getElementById('active-tour-name').textContent = t.name;
-  save();
-  closeModal();
-  renderEvents();
-  renderEditTourBtn();
+  uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
+    t.img = url;
+    save();
+    closeModal();
+    renderEvents();
+    renderEditTourBtn();
+  });
 }
 
 function enterTour(id) {
@@ -3011,30 +3037,41 @@ function wizFinish() {
       return;
     }
   }
-  var events = wiz.events.map(function(ev) {
-    return { id:uid(), name:ev.name, course:ev.course, date:ev.date, type:ev.type,
-      periodStart: ev.periodStart||ev.date, periodEnd: ev.periodEnd||ev.date,
-      isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: ev.img||null, registrations:[], results:[], closed:false };
+  // Id:n genereras HÄR (inte inne i tour-objektet nedan) eftersom de behövs
+  // som stabila Storage-sökvägar redan innan touren/deltävlingarna skapas.
+  var tourId = uid();
+  var eventIds = wiz.events.map(function(){ return uid(); });
+
+  var uploads = [uploadImageToStorage(wiz.img, 'tour-covers/'+tourId+'.jpg')]
+    .concat(wiz.events.map(function(ev, idx){ return uploadImageToStorage(ev.img, 'event-covers/'+eventIds[idx]+'.jpg'); }));
+
+  Promise.all(uploads).then(function(urls){
+    var tourImgUrl = urls[0];
+    var events = wiz.events.map(function(ev, idx) {
+      return { id: eventIds[idx], name:ev.name, course:ev.course, date:ev.date, type:ev.type,
+        periodStart: ev.periodStart||ev.date, periodEnd: ev.periodEnd||ev.date,
+        isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: urls[idx+1]||null, registrations:[], results:[], closed:false };
+    });
+    var tour = {
+      id: tourId, name: wiz.name, season: wiz.season, img: tourImgUrl,
+      locked: true,
+      players: [],
+      events: events,
+      pointsScale: wiz.pointsScale,
+      finalTable: wiz.finalTable || [],
+      fee: wiz.fee || 0,
+      payoutMode: payoutMode,
+      payouts: wiz.payouts || [60,25,15],
+      perEventWinPct: wiz.perEventWinPct || 0,
+      totalWinPct: wiz.totalWinPct || 0,
+      payments: {},
+      calYear: new Date().getFullYear(), calMonth: new Date().getMonth()
+    };
+    S.tours.push(tour);
+    wiz = null;
+    discardDraft();
+    save(); closeModal(); renderToursList();
   });
-  var tour = {
-    id: uid(), name: wiz.name, season: wiz.season, img: wiz.img,
-    locked: true,
-    players: [],
-    events: events,
-    pointsScale: wiz.pointsScale,
-    finalTable: wiz.finalTable || [],
-    fee: wiz.fee || 0,
-    payoutMode: payoutMode,
-    payouts: wiz.payouts || [60,25,15],
-    perEventWinPct: wiz.perEventWinPct || 0,
-    totalWinPct: wiz.totalWinPct || 0,
-    payments: {},
-    calYear: new Date().getFullYear(), calMonth: new Date().getMonth()
-  };
-  S.tours.push(tour);
-  wiz = null;
-  discardDraft();
-  save(); closeModal(); renderToursList();
 }
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -3312,11 +3349,14 @@ function saveTourStory() {
   var t = getTour();
   var storyEl = document.getElementById('ts-story');
   t.story = storyEl ? storyEl.value.trim() : (t.story||'');
-  if(_tourStoryImg) t.storyImg = _tourStoryImg;
-  save();
-  closeModal();
+  var newImg = _tourStoryImg || t.storyImg;
   _tourStoryImg = null;
-  renderEvents();
+  uploadImageToStorage(newImg, 'tour-story/'+t.id+'.jpg').then(function(url){
+    t.storyImg = url;
+    save();
+    closeModal();
+    renderEvents();
+  });
 }
 
 // Snabbstart: sätt en avgift och markera alla nuvarande spelare som betalt i ett steg,
@@ -5835,13 +5875,17 @@ function saveWinnerPhotoStory(i) {
   if(!isAdmin()) return;
   var t = getTour(), e = t.events[i];
   if(!e) return;
-  if(_wImg) e.winnerImg = _wImg;
+  var newImg = _wImg || e.winnerImg;
   var storyEl = document.getElementById('w-story');
-  if(storyEl) e.story = storyEl.value.trim();
+  var story = storyEl ? storyEl.value.trim() : e.story;
   _wImg = null;
-  save();
-  closeModal();
-  renderEvents();
+  uploadImageToStorage(newImg, 'winner-photos/'+e.id+'.jpg').then(function(url){
+    e.winnerImg = url;
+    e.story = story;
+    save();
+    closeModal();
+    renderEvents();
+  });
 }
 
 function saveResults(i) {
@@ -5891,16 +5935,19 @@ function saveResults(i) {
       return isStab?(b.score-a.score||ah-bh):(a.score-b.score||ah-bh);
     });
   }
-  if(_wImg) e.winnerImg=_wImg;
+  var newImg = _wImg || e.winnerImg;
   var storyEl = document.getElementById('w-story');
   if(storyEl) e.story = storyEl.value.trim();
-  e.results=results; save();
-  if(!e.isFinal) {
-    resolveTies(i,0,function(){ save(); closeModal(); renderEvents(); });
-  } else {
-    closeModal(); renderEvents();
-  }
-  _wImg=null;
+  _wImg = null;
+  uploadImageToStorage(newImg, 'winner-photos/'+e.id+'.jpg').then(function(url){
+    e.winnerImg = url;
+    e.results=results; save();
+    if(!e.isFinal) {
+      resolveTies(i,0,function(){ save(); closeModal(); renderEvents(); });
+    } else {
+      closeModal(); renderEvents();
+    }
+  });
 }
 
 function toggleNettoOnly(eventIdx) {
@@ -6170,11 +6217,14 @@ function saveEditEventCourseImg() {
       saveCourseDb();
     }
   }
-  e.img = _editEventDraft.img;
+  var newImg = _editEventDraft.img;
   _editEventDraft = null;
-  save();
-  closeModal();
-  renderEvents();
+  uploadImageToStorage(newImg, 'event-covers/'+e.id+'.jpg').then(function(url){
+    e.img = url;
+    save();
+    closeModal();
+    renderEvents();
+  });
 }
 
 function closeEvent(i){
@@ -12003,6 +12053,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (163)',
+    items: [
+      { type: 'new', text: 'VIKTIGT: Alla resterande bildtyper migrerade till Firebase Storage (samma princip som profilbilder sedan tidigare) - tour-omslag, deltävlingsbilder ("banfoto", både i tur-guiden och Bana/bild-redigeraren), vinnarfoto (båda vägarna dit), och tour-story-bilden. Firestore sparar nu bara en länk till varje bild, inte bilddatan. Detta var akut eftersom databasstorleken närmade sig 1 MB-gränsen (854/1000 KB), där vinnarfoton och banfoton stod för det mesta. Varje bildtyp har en stabil sökväg (t.ex. winner-photos/{deltävlingId}.jpg) - en ny bild ersätter alltid den gamla automatiskt, precis som profilbilder. Redan existerande bilder (base64, sparade innan detta) fortsätter fungera oförändrat tills de laddas upp på nytt.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (162)',
     items: [
