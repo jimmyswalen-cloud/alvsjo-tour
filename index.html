@@ -4802,18 +4802,22 @@ function buildSideBetsSummaryHTML(t, e, ei) {
   h += e.sideBets.map(function(sb){
     var participants = sb.participants || [];
     var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
-    var pot = paidCount * (sb.fee||0);
+    var pot = paidCount * (sb.fee||0) + (sb.carriedOverPot||0);
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
     var canJoin = myPi>=0 && sb.winnerPi==null && participants.indexOf(myPi)===-1;
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
-      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
+      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
       (sb.description?'<div style="font-size:11px;color:var(--text-3)">'+esc(sb.description)+'</div>':'')+
       '</div>'+
       (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
     '</div>';
     if(winner) {
       box += '<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-bottom:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>';
+    } else if(sb.pushOutcome === 'carried') {
+      box += '<div style="font-size:12px;color:#0C447C;font-weight:700;margin-bottom:6px"><i class="ti ti-arrow-forward-up"></i> Ingen vann - potten fördes vidare till "'+esc(sb.carriedToBetName||'?')+'" i '+esc(sb.carriedToEventName||'?')+'</div>';
+    } else if(sb.pushOutcome === 'refunded') {
+      box += '<div style="font-size:12px;color:var(--text-2);font-weight:700;margin-bottom:6px"><i class="ti ti-receipt-refund"></i> Ingen vann - insatsen återbetald till spelarna</div>';
     }
     if(participants.length) {
       box += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:'+(canJoin?'8px':'0')+'">'+
@@ -5573,6 +5577,15 @@ function findRelevantFinal(t) {
 // kan expanderas/kollapsas utan att behöva någon egen datamodell för det.
 var _leaderboardExpanded = false;
 function toggleLeaderboardExpand() { _leaderboardExpanded = !_leaderboardExpanded; renderLeaderboardSection(); }
+
+// Håller reda på om "Visa alla"-knappen tryckts för profilens "Senaste
+// ronder"-lista - samma mönster som leaderboard-widgeten ovan.
+var _profileRoundsExpanded = false;
+function toggleProfileRoundsExpanded(pi) {
+  _profileRoundsExpanded = !_profileRoundsExpanded;
+  var el = document.getElementById('oom-profile');
+  if(el) el.innerHTML = buildProfileHTML(pi);
+}
 
 function renderLeaderboardSection() {
   var t = getTour();
@@ -8645,6 +8658,58 @@ function buildProfileHTML(pi){
     '</tr>';
   }).join('');
 
+  // ── SENASTE RONDER ──────────────────────────────────────────────────────
+  // Kompakt lista längst upp på profilen (före "Denna tour"-blocket) - alla
+  // spelade/inskickade ronder (både stängda och inskickade-men-ej-stängda),
+  // nyast överst. Visar de 5 senaste som standard, med en "Visa fler"-knapp
+  // för att expandera hela historiken - samma mönster som redan används i
+  // finalens leaderboard-widget.
+  var allRounds = results.map(function(x){
+    return { date: x.event.date, eventId: x.event.id, eventName: x.event.name, isFinal: x.event.isFinal,
+      isStab: x.event.type==='stableford', score: x.result.score, pos: x.pos, status: null,
+      hasScorecard: !!(x.result.holes && x.result.holes.length) };
+  }).concat(pendingSubmissions.map(function(x){
+    return { date: x.event.date, eventId: x.event.id, eventName: x.event.name, isFinal: x.event.isFinal,
+      isStab: x.event.type==='stableford', score: x.sub.score, pos: null,
+      status: isSubmissionApproved(x.sub) ? 'approved' : 'pending',
+      hasScorecard: !!(x.sub.holes && x.sub.holes.length) };
+  })).sort(function(a,b){ return new Date(b.date) - new Date(a.date); }); // nyast först
+
+  var recentRoundsHTML = '';
+  if(allRounds.length) {
+    var showAllRounds = _profileRoundsExpanded || allRounds.length <= 5;
+    var visibleRounds = showAllRounds ? allRounds : allRounds.slice(0, 5);
+    recentRoundsHTML = '<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">'+
+      '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">'+
+        '<div style="font-size:14px;font-weight:600;color:var(--text)">Senaste ronder</div>'+
+        '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Klicka på en rond för att se scorekortet</div>'+
+      '</div>'+
+      visibleRounds.map(function(r){
+        var typeLabel = r.isFinal ? 'Final' : (r.isStab ? 'Stableford' : 'Slag');
+        var scoreLabel = r.isStab ? (r.score+' p') : (r.score>0 ? r.score+' slag' : '–');
+        var statusHtml = r.status === 'pending'
+          ? '<span style="font-size:11px;color:var(--gold);font-weight:600"><i class="ti ti-clock"></i> Väntar</span>'
+          : r.status === 'approved'
+            ? '<span style="font-size:11px;color:#0F6E56;font-weight:600"><i class="ti ti-circle-check"></i> Godkänt</span>'
+            : '<span style="font-size:11px;color:var(--text-2);font-weight:600">'+posStr(r.pos)+'</span>';
+        var rowAttrs = r.hasScorecard ? ' style="cursor:pointer" onclick="openPastScorecardModal('+pi+',\''+r.eventId+'\')"' : '';
+        return '<div'+rowAttrs+' class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)">'+
+          '<div style="min-width:0">'+
+            '<div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.eventName)+(r.hasScorecard?' <i class="ti ti-chevron-right" style="font-size:10px;color:var(--text-3)"></i>':'')+'</div>'+
+            '<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+esc(r.date)+' · '+typeLabel+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;margin-left:10px">'+
+            '<div style="font-weight:700;font-size:13px;color:var(--text)">'+scoreLabel+'</div>'+
+            statusHtml+
+          '</div>'+
+        '</div>';
+      }).join('')+
+      (allRounds.length > 5
+        ? '<div style="padding:8px 16px;text-align:center"><button class="btn btn-sm" onclick="toggleProfileRoundsExpanded('+pi+')">'+(showAllRounds?'Visa färre':'Visa alla ('+allRounds.length+')')+'</button></div>'
+        : '')+
+    '</div>';
+  }
+
   return '<div class="back-btn" onclick="goBackFromProfile()"><i class="ti ti-arrow-left"></i> Tillbaka</div>'+
     '<div style="display:flex;align-items:center;gap:16px;padding:0 0 1.25rem">'+
       (playerImg
@@ -8654,6 +8719,7 @@ function buildProfileHTML(pi){
       '<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+fmtHcp(p.hcp)+' &nbsp;·&nbsp; '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
       '<div style="font-size:12px;color:var(--text-3);margin-top:2px">'+ptsLabel+'</div></div>'+
     '</div>'+
+    recentRoundsHTML+
     '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px">Denna tour – '+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
     '<div class="card" style="margin-bottom:12px;padding:0">'+
       '<div style="display:flex;flex-wrap:wrap">'+heroStats+'</div>'+
@@ -11835,6 +11901,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (158)',
+    items: [
+      { type: 'new', text: 'Ny "Senaste ronder"-sektion högst upp på spelarprofilen, precis före "Denna tour"-blocket - visar alla spelade/inskickade ronder (både stängda och väntande på godkännande/stängning), nyast överst. Visar de 5 senaste som standard med en "Visa alla"-knapp för att expandera hela historiken. Varje rad är klickbar för att se scorekortet, precis som "Alla tävlingar"-tabellen längre ner - samma underliggande data, bara en snabbare genväg till de senaste ronderna direkt när man öppnar profilen.' }
+    ]
+  },
+  {
+    date: '23 augusti 2026 (157)',
+    items: [
+      { type: 'fixed', text: 'Side bets-sektionen som visas direkt under deltävlingskortet (en tredje, separat vy från admin-listan och live-sammanfattningen) hade aldrig fått samma uppdateringar som de andra två: visade varken vilket hål ett bet gällde, eller att en insats blivit återbetald/vidareskickad när ingen vann. Fixat - visar nu "· Hål X" bredvid namnet, och "Ingen vann - insatsen återbetald till spelarna" / "...potten fördes vidare till..." istället för att bara vara tyst om utfallet.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (156)',
     items: [
