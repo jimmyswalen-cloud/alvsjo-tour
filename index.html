@@ -12063,6 +12063,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '23 augusti 2026 (167)',
+    items: [
+      { type: 'new', text: 'Profilbilder (Min profil, Ny användare, Redigera användare) har nu samma beskärnings-/zoomsteg som övriga bilder i appen - man kan flytta och zooma innan bilden sparas, istället för att en automatisk mittencentrerad beskärning görs åt en. Kvadratiskt förhållande (1:1), matchar de runda profilbilderna som visas i appen.' }
+    ]
+  },
+  {
     date: '23 augusti 2026 (166)',
     items: [
       { type: 'fixed', text: 'Den SPARADE vinnarbilden var faktiskt redan korrekt 4:3, men förhandsvisningen i "Vinnarbild & story"-dialogen klippte sönder den till en tunn remsa - den delade förhandsvisningsklassen (gjord för breda omslagsbilder) hade en hård maxhöjd på 90px oavsett bildens form, vilket tvingade en stående 4:3-bild att visas hårt beskuren. Vinnarfotots förhandsvisning har nu en egen, porträttvänlig stil (bredd-begränsad istället för höjd-begränsad) så hela bilden syns i rätt proportion.' }
@@ -14128,9 +14134,11 @@ function openMyProfile() {
 
 function onMyProfileImgFile(file) {
   compressImage(file, 480, 480, 0.92, function(d) {
-    _myProfileImg = d;
-    var prev = document.getElementById('mp-img-prev');
-    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+    showCropModal(d, 1, function(cropped) {
+      _myProfileImg = cropped;
+      var prev = document.getElementById('mp-img-prev');
+      if(prev) prev.innerHTML = '<img src="'+cropped+'" class="avatar-preview">';
+    });
   });
 }
 
@@ -14663,9 +14671,11 @@ function refreshTourAccessPicker() {
 
 function onNewUserImgFile(file) {
   compressImage(file, 480, 480, 0.92, function(d) {
-    _newUserImg = d;
-    var prev = document.getElementById('u-img-prev');
-    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+    showCropModal(d, 1, function(cropped) {
+      _newUserImg = cropped;
+      var prev = document.getElementById('u-img-prev');
+      if(prev) prev.innerHTML = '<img src="'+cropped+'" class="avatar-preview">';
+    });
   });
 }
 
@@ -14767,9 +14777,11 @@ function openEditUser(i) {
 
 function onEditUserImgFile(file) {
   compressImage(file, 480, 480, 0.92, function(d) {
-    _editUserImg = d;
-    var prev = document.getElementById('u-img-prev');
-    if(prev) prev.innerHTML = '<img src="'+d+'" class="avatar-preview">';
+    showCropModal(d, 1, function(cropped) {
+      _editUserImg = cropped;
+      var prev = document.getElementById('u-img-prev');
+      if(prev) prev.innerHTML = '<img src="'+cropped+'" class="avatar-preview">';
+    });
   });
 }
 
