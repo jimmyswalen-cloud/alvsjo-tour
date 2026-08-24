@@ -1495,6 +1495,12 @@ function openEditTour() {
           '</select>'+
           (e.isFinal?'<span class="badge badge-gold" style="white-space:nowrap">Final</span>':'')+
         '</div>'+
+        '<div class="row" style="gap:6px;margin-top:4px;align-items:center">'+
+          '<span style="font-size:10px;color:var(--text-3);white-space:nowrap"><i class="ti ti-calendar-time"></i> Tillåten speltidsperiod:</span>'+
+          '<input type="date" id="edit-ev-pstart-'+i+'" value="'+(e.periodStart||e.date)+'" style="margin:0;flex:1;font-size:12px">'+
+          '<span style="font-size:11px;color:var(--text-3)">–</span>'+
+          '<input type="date" id="edit-ev-pend-'+i+'" value="'+(e.periodEnd||e.date)+'" style="margin:0;flex:1;font-size:12px">'+
+        '</div>'+
       '</div>'+
       '<button class="btn btn-sm btn-danger" onclick="removeEventFromTour('+i+')" title="Ta bort"><i class="ti ti-trash"></i></button>'+
     '</div>';
@@ -1678,6 +1684,8 @@ function saveEditTour() {
     var nameInput = document.getElementById('edit-ev-name-'+i);
     var dateInput = document.getElementById('edit-ev-date-'+i);
     var typeInput = document.getElementById('edit-ev-type-'+i);
+    var pStartInput = document.getElementById('edit-ev-pstart-'+i);
+    var pEndInput = document.getElementById('edit-ev-pend-'+i);
     if(!nameInput) break;
     var row = document.getElementById('edit-ev-row-'+i);
     if(row && row.parentNode) { // only if not removed
@@ -1688,8 +1696,12 @@ function saveEditTour() {
         date: dateInput ? dateInput.value : existing.date,
         type: typeInput ? typeInput.value : (existing.type||'stableford'),
         course: existing.course || '',
-        periodStart: existing.periodStart || (dateInput?dateInput.value:''),
-        periodEnd: existing.periodEnd || (dateInput?dateInput.value:''),
+        // Manuellt satta här - periodStartAuto/periodEndAuto sätts till false så
+        // att de aldrig av misstag skrivs över av auto-uträkningen igen (den körs
+        // annars bara i tour-guiden, men bättre att vara explicit och säker).
+        periodStart: pStartInput ? pStartInput.value : (existing.periodStart || (dateInput?dateInput.value:'')),
+        periodEnd: pEndInput ? pEndInput.value : (existing.periodEnd || (dateInput?dateInput.value:'')),
+        periodStartAuto: false, periodEndAuto: false,
         isFinal: !!existing.isFinal,
         isMajor: !!existing.isMajor,
         img: existing.img || null,
@@ -12176,6 +12188,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (172)',
+    items: [
+      { type: 'new', text: 'Speltidsperiod (tillåtet datumintervall) kan nu redigeras direkt för varje deltävling i "Redigera tour" (för en tour som inte startat än) - saknades helt tidigare, det gick bara att sätta den automatiskt vid tourens skapande. Praktiskt för tourer skapade innan auto-uträkningen fanns, eller när ett verkligt stort schemaglapp (t.ex. sommaruppehåll) gjort att den föreslagna perioden blivit orimligt bred eller fel.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (171)',
     items: [
