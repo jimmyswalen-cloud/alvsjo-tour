@@ -5812,7 +5812,7 @@ function openResults(i) {
   h+=rows;
   h+='<hr class="divider">';
   h+='<div class="field"><label><i class="ti ti-star" style="color:#BA7517"></i> Foto på vinnaren (valfritt)</label>';
-  h+='<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" class="img-preview-sm">':'')+'</div>';
+  h+='<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" style="width:180px;max-width:100%;border-radius:var(--radius);margin:0 auto 4px;display:block">':'')+'</div>';
   h+='<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-camera"></i> Välj foto</button>';
   h+=' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
   h+='<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
@@ -5840,7 +5840,7 @@ function onWinnerImgFile(file) {
     showCropModal(d, 1.33, function(cropped) {
       _wImg=cropped;
       var prev=document.getElementById('w-img-prev');
-      if(prev) prev.innerHTML='<img src="'+cropped+'" class="img-preview-sm">';
+      if(prev) prev.innerHTML='<img src="'+cropped+'" style="width:180px;max-width:100%;border-radius:var(--radius);margin:0 auto 4px;display:block">';
     });
   });
 }
@@ -5857,7 +5857,7 @@ function openWinnerPhotoEditor(i) {
   _wImg = null;
   var h = '<h3><i class="ti ti-camera" style="color:#BA7517"></i> Vinnarbild & story – '+esc(e.name)+'</h3>';
   h += '<div class="field"><label><i class="ti ti-star" style="color:#BA7517"></i> Foto på vinnaren (valfritt)</label>';
-  h += '<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" class="img-preview-sm">':'')+'</div>';
+  h += '<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" style="width:180px;max-width:100%;border-radius:var(--radius);margin:0 auto 4px;display:block">':'')+'</div>';
   h += '<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-camera"></i> Välj foto</button>';
   h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
   h += '<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
@@ -12062,6 +12062,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (166)',
+    items: [
+      { type: 'fixed', text: 'Den SPARADE vinnarbilden var faktiskt redan korrekt 4:3, men förhandsvisningen i "Vinnarbild & story"-dialogen klippte sönder den till en tunn remsa - den delade förhandsvisningsklassen (gjord för breda omslagsbilder) hade en hård maxhöjd på 90px oavsett bildens form, vilket tvingade en stående 4:3-bild att visas hårt beskuren. Vinnarfotots förhandsvisning har nu en egen, porträttvänlig stil (bredd-begränsad istället för höjd-begränsad) så hela bilden syns i rätt proportion.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (165)',
     items: [
