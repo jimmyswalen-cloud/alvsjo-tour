@@ -5030,7 +5030,8 @@ function eventCardHTML(i,e) {
     : (isAdmin() ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
-      (isAdmin() ? '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="openWinnerPhotoEditor('+i+')"><i class="ti ti-camera"></i> Vinnarbild & story</button>'+
+      '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
       sideBetsBtn+
       chatBtn
     : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
@@ -5771,6 +5772,54 @@ function onWinnerImgFile(file) {
       if(prev) prev.innerHTML='<img src="'+cropped+'" class="img-preview-sm">';
     });
   });
+}
+
+// Lättviktig genväg för en REDAN STÄNGD deltävling - ändrar bara vinnarbild
+// och story, utan att röra resultat/scores eller kräva att man "Återöppnar"
+// hela tävlingen (vilket annars låser upp allas resultat för redigering bara
+// för att kunna byta en bild). Samma bild-/story-fält som finns inbäddat i
+// openResults(), men helt fristående.
+function openWinnerPhotoEditor(i) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[i];
+  if(!e) return;
+  _wImg = null;
+  var h = '<h3><i class="ti ti-camera" style="color:#BA7517"></i> Vinnarbild & story – '+esc(e.name)+'</h3>';
+  h += '<div class="field"><label><i class="ti ti-star" style="color:#BA7517"></i> Foto på vinnaren (valfritt)</label>';
+  h += '<div id="w-img-prev">'+(e.winnerImg?'<img src="'+e.winnerImg+'" class="img-preview-sm">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="w-img-btn"><i class="ti ti-camera"></i> Välj foto</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="w-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
+  h += '<div class="field"><label><i class="ti ti-book" style="color:#BA7517"></i> Story / sammanfattning (valfritt)</label>';
+  h += '<textarea id="w-story" rows="4" placeholder="Berätta hur tävlingen gick, roliga händelser, dramatik på sista hålet..." style="width:100%;box-sizing:border-box">'+esc(e.story||'')+'</textarea>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin-top:2px">Visas under den avslutade deltävlingen så alla kan läsa den senare.</p>';
+  h += '</div>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">';
+  h += '<button class="btn" onclick="closeModal()">Avbryt</button>';
+  h += '<button class="btn btn-primary" onclick="saveWinnerPhotoStory('+i+')">Spara</button>';
+  h += '</div>';
+  showModal(h);
+  setTimeout(function(){
+    var b=document.getElementById('w-img-btn');
+    if(b) b.onclick=function(){ document.getElementById('w-file-inp').click(); };
+    var inp=document.getElementById('w-file-inp');
+    if(inp) inp.onchange=function(){ if(this.files[0]) onWinnerImgFile(this.files[0]); };
+    enablePasteForInput('w-img-btn', onWinnerImgFile);
+  }, 50);
+}
+
+function saveWinnerPhotoStory(i) {
+  if(!isAdmin()) return;
+  var t = getTour(), e = t.events[i];
+  if(!e) return;
+  if(_wImg) e.winnerImg = _wImg;
+  var storyEl = document.getElementById('w-story');
+  if(storyEl) e.story = storyEl.value.trim();
+  _wImg = null;
+  save();
+  closeModal();
+  renderEvents();
 }
 
 function saveResults(i) {
@@ -11932,6 +11981,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (160)',
+    items: [
+      { type: 'fixed', text: 'Vinnarbild/story-knappen "försvann" för en STÄNGD deltävling - den låg inbäddad i "Resultat"-knappen, som bara visas medan en tävling är öppen. Var deltävlingen redan stängd fanns ingen väg dit alls, förutom att först "Återöppna" hela tävlingen (vilket låser upp allas resultat för redigering bara för att kunna byta en bild). Ny lättviktig knapp "Vinnarbild & story" för stängda deltävlingar - ändrar bara bilden/storyn, rör aldrig resultat eller kräver återöppning.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (159)',
     items: [
