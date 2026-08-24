@@ -5837,7 +5837,7 @@ function openResults(i) {
 
 function onWinnerImgFile(file) {
   compressImage(file, 1000, 800, 0.92, function(d) {
-    showCropModal(d, 0.85, function(cropped) {
+    showCropModal(d, 1.33, function(cropped) {
       _wImg=cropped;
       var prev=document.getElementById('w-img-prev');
       if(prev) prev.innerHTML='<img src="'+cropped+'" class="img-preview-sm">';
@@ -12062,6 +12062,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (165)',
+    items: [
+      { type: 'improved', text: 'Vinnarfotots beskärningsförhållande justerat till klassisk stående 4:3 (höjden ≈ 1,33 × bredden) - ett vanligt porträttformat. Deltävlingsomslagen är oförändrade (bred banderoll, 0,32).' }
+    ]
+  },
   {
     date: '23 augusti 2026 (164)',
     items: [
