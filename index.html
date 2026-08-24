@@ -6715,8 +6715,9 @@ function buildBagDisplayHTML(p, tourUser) {
   var bag = (tourUser&&tourUser.bag) || {};
   var clubs = bag.clubs || [];
   var canEdit = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
-  var hasAnything = clubs.length || bag.ball || bag.glove || bag.putterGrip || bag.notes ||
+  var hasOtherContent = clubs.length || bag.ball || bag.glove || bag.putterGrip || bag.notes ||
     bag.bagBrand || bag.shoes || bag.clothingBrand || bag.gpsDevice || bag.rangefinder || bag.favoriteBrand;
+  var hasAnything = hasOtherContent || bag.img;
   var teamBrand = bag.favoriteBrand || computeDominantBrand(bag);
 
   var h = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
@@ -6729,8 +6730,10 @@ function buildBagDisplayHTML(p, tourUser) {
   h += '</div>';
 
   h += '<div style="padding:14px 16px">';
-  if(!hasAnything) {
+  if(!hasOtherContent && !bag.img) {
     h += '<p style="font-size:13px;color:var(--text-3);margin:0">Ingen utrustning registrerad ännu.</p>';
+  } else if(!hasOtherContent) {
+    // Bara en bag-bild uppladdad, ingen annan utrustning ifylld.
   } else {
     var driver = clubs.find(function(c){ return c.type==='Driver'; });
     var irons = clubs.filter(function(c){ return c.type==='Järn'; });
@@ -6794,6 +6797,7 @@ function buildBagDisplayHTML(p, tourUser) {
     if(extras.length) h += '<div style="font-size:12px;color:var(--text-2)">'+extras.join(' &nbsp;·&nbsp; ')+'</div>';
     if(bag.notes) h += '<div style="font-size:12px;color:var(--text-3);margin-top:8px;font-style:italic">"'+esc(bag.notes)+'"</div>';
   }
+  if(bag.img) h += '<img src="'+bag.img+'" style="width:100%;border-radius:10px;margin-top:'+(hasOtherContent?'14px':'0')+';display:block" alt="Bild på bagen">';
   h += '</div></div>';
   return h;
 }
@@ -6808,7 +6812,8 @@ function openBagEdit(username) {
     clubs: (bag.clubs||[]).map(function(c){ var o={}; for(var k in c) o[k]=c[k]; return o; }),
     ball: bag.ball||'', glove: bag.glove||'', putterGrip: bag.putterGrip||'', notes: bag.notes||'',
     bagBrand: bag.bagBrand||'', shoes: bag.shoes||'', clothingBrand: bag.clothingBrand||'',
-    gpsDevice: bag.gpsDevice||'', rangefinder: bag.rangefinder||'', favoriteBrand: bag.favoriteBrand||''
+    gpsDevice: bag.gpsDevice||'', rangefinder: bag.rangefinder||'', favoriteBrand: bag.favoriteBrand||'',
+    img: bag.img || null
   };
   _bagClubDraft = null;
   renderBagModal();
@@ -6864,11 +6869,36 @@ function renderBagModal() {
   '</div>';
   h += '<div class="field"><label>Avståndsmätare</label><input id="bag-rangefinder" value="'+esc(b.rangefinder)+'" list="dl-rangefinder-brands" autocomplete="off"></div>';
   h += '<div class="field"><label>Övriga kommentarer</label><textarea id="bag-notes" rows="3" style="width:100%;box-sizing:border-box">'+esc(b.notes)+'</textarea></div>';
+  h += '<div class="field"><label><i class="ti ti-camera" style="color:#0F6E56"></i> Bild på bagen (valfritt)</label>';
+  h += '<div id="bag-img-prev">'+(b.img?'<img src="'+b.img+'" style="width:140px;max-width:100%;border-radius:var(--radius);margin:0 auto 4px;display:block">':'')+'</div>';
+  h += '<button type="button" class="btn btn-sm" id="bag-img-btn"><i class="ti ti-camera"></i> '+(b.img?'Byt bild':'Välj foto')+'</button>';
+  h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
+  h += '<input type="file" id="bag-file-inp" accept="image/*" style="display:none">';
+  h += '</div>';
   h += _bagDatalists;
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
     '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '<button class="btn btn-primary" onclick="saveBagEdit()">Spara bagen</button></div>';
   showModal(h, true, true);
+  setTimeout(function(){
+    var btn = document.getElementById('bag-img-btn');
+    if(btn) btn.onclick = function(){ document.getElementById('bag-file-inp').click(); };
+    var inp = document.getElementById('bag-file-inp');
+    if(inp) inp.onchange = function(){ if(this.files[0]) onBagImgFile(this.files[0]); };
+    enablePasteForInput('bag-img-btn', onBagImgFile);
+  }, 50);
+}
+
+// Beskär bagbilden i porträttläge (samma princip som vinnarfoto) innan den
+// sparas till Storage vid "Spara bagen".
+function onBagImgFile(file) {
+  compressImage(file, 1000, 1300, 0.92, function(d) {
+    showCropModal(d, 1.3, function(cropped) {
+      _editingBag.img = cropped;
+      var prev = document.getElementById('bag-img-prev');
+      if(prev) prev.innerHTML = '<img src="'+cropped+'" style="width:140px;max-width:100%;border-radius:var(--radius);margin:0 auto 4px;display:block">';
+    });
+  });
 }
 
 function addBagClub() {
@@ -6959,29 +6989,34 @@ function saveBagEdit() {
   syncBagOtherFields();
   var u = (S.users||[]).find(function(x){ return x.username===_editingBag.username; });
   if(!u) return;
-  u.bag = {
+  var newImg = _editingBag.img;
+  var savedUsername = _editingBag.username;
+  var bagData = {
     clubs:_editingBag.clubs, ball:_editingBag.ball, glove:_editingBag.glove, putterGrip:_editingBag.putterGrip,
     notes:_editingBag.notes, bagBrand:_editingBag.bagBrand, shoes:_editingBag.shoes,
     clothingBrand:_editingBag.clothingBrand, gpsDevice:_editingBag.gpsDevice,
     rangefinder:_editingBag.rangefinder, favoriteBrand:_editingBag.favoriteBrand
   };
-  save();
-  closeModal();
-  var savedUsername = _editingBag.username;
-  _editingBag = null;
-  // Om profilsidan för den här spelaren är öppen, rita om den så bagen syns direkt.
-  var profileEl = document.getElementById('oom-profile');
-  if(profileEl && profileEl.style.display !== 'none' && activeTourId) {
-    var t = getTour();
-    if(t) {
-      var pi = t.players.findIndex(function(p){ return p && p.username===savedUsername; });
-      if(pi>=0) showPlayerProfile(pi);
+  uploadImageToStorage(newImg, 'bag-photos/'+savedUsername+'.jpg').then(function(url){
+    bagData.img = url;
+    u.bag = bagData;
+    save();
+    closeModal();
+    _editingBag = null;
+    // Om profilsidan för den här spelaren är öppen, rita om den så bagen syns direkt.
+    var profileEl = document.getElementById('oom-profile');
+    if(profileEl && profileEl.style.display !== 'none' && activeTourId) {
+      var t = getTour();
+      if(t) {
+        var pi = t.players.findIndex(function(p){ return p && p.username===savedUsername; });
+        if(pi>=0) showPlayerProfile(pi);
+      }
     }
-  }
-  var globalProfileEl = document.getElementById('global-player-profile');
-  if(globalProfileEl && globalProfileEl.style.display !== 'none') {
-    showGlobalPlayerProfile(savedUsername);
-  }
+    var globalProfileEl = document.getElementById('global-player-profile');
+    if(globalProfileEl && globalProfileEl.style.display !== 'none') {
+      showGlobalPlayerProfile(savedUsername);
+    }
+  });
 }
 
 // ── WHAT'S IN THE TOUR BAG? (gemensam utrustningsstatistik för touren) ─────
@@ -8925,7 +8960,7 @@ function buildProfileHTML(pi){
           ? '<span style="font-size:11px;color:var(--gold);font-weight:600"><i class="ti ti-clock"></i> Väntar</span>'
           : r.status === 'approved'
             ? '<span style="font-size:11px;color:#0F6E56;font-weight:600"><i class="ti ti-circle-check"></i> Godkänt</span>'
-            : '<span style="font-size:11px;color:var(--text-2);font-weight:600">'+posStr(r.pos)+'</span>';
+            : posStr(r.pos);
         var rowAttrs = r.hasScorecard ? ' style="cursor:pointer" onclick="openPastScorecardModal('+pi+',\''+r.eventId+'\')"' : '';
         return '<div'+rowAttrs+' class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)">'+
           '<div style="min-width:0">'+
@@ -8934,7 +8969,7 @@ function buildProfileHTML(pi){
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;margin-left:10px">'+
             '<div style="font-weight:700;font-size:13px;color:var(--text)">'+scoreLabel+'</div>'+
-            statusHtml+
+            '<div style="margin-top:4px">'+statusHtml+'</div>'+
           '</div>'+
         '</div>';
       }).join('')+
@@ -12135,6 +12170,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (170)',
+    items: [
+      { type: 'new', text: '"What\'s in the Bag?" kan nu även ha en bild på själva bagen, i porträttläge (med samma beskärnings-/zoomsteg som övriga bilder) - sparas i Firebase Storage. Bilden visas längst ner i avsnittet om den finns, oavsett om annan utrustning också registrerats.' },
+      { type: 'fixed', text: '"Senaste ronder"-listan på profilen hade dålig linjering mellan poängen och placerings-/statusbadgen under den - guld/silver/brons-medaljerna (redan färdiga pill-badges) kläm des ihop mot siffran ovanför utan marginal, och skiljde sig i utseende mot "Väntar"/"Godkänt"-texten. Nu har alla tre varianter samma, konsekventa marginal och linjering.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (169)',
     items: [
