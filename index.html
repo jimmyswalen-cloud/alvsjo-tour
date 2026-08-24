@@ -132,6 +132,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -557,6 +558,10 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
+// Firebase Storage - används för profilbilder (se uploadProfileImage nedan).
+// Bilderna själva lagras HÄR, inte i Firestore - Firestore sparar bara URL:en
+// till bilden (i fältet u.img), inte bilddatan.
+var storage = firebase.storage();
 var DOC_REF = db.collection('golfapp').doc('shared');
 var DRAFTS_REF = db.collection('golfapp').doc('tourDrafts');
 var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
@@ -907,6 +912,32 @@ function compressImage(file, maxW, maxH, quality, cb) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// ── PROFILBILDER: FIREBASE STORAGE ──────────────────────────────────────────
+// Bilderna själva bor i Firebase Storage, inte i Firestore. Firestore
+// (u.img) sparar bara URL:en till bilden. Varje användares profilbild lagras
+// på en STABIL sökväg (profile-images/{username}.jpg) - laddar man upp en ny
+// bild skrivs den gamla filen på samma sökväg automatiskt över, så den gamla
+// bilden ersätts utan att någon manuell borttagning behövs.
+//
+// dataUrl: en redan komprimerad bild (från compressImage ovan) som en
+// "data:image/jpeg;base64,..."-sträng. username: vems profilbild det är.
+// cb(url) anropas med nedladdnings-URL:en när uppladdningen lyckats, eller
+// cb(null, err) om den misslyckas (då sparas övrig profildata ändå - bilden
+// blir bara oförändrad istället för att hela sparandet stoppas upp).
+function uploadProfileImage(dataUrl, username, cb) {
+  if(!dataUrl || !username) { cb(null); return; }
+  var ref = storage.ref().child('profile-images/' + username + '.jpg');
+  ref.putString(dataUrl, 'data_url', { contentType: 'image/jpeg' }).then(function(snapshot){
+    return snapshot.ref.getDownloadURL();
+  }).then(function(url){
+    cb(url);
+  }).catch(function(err){
+    console.error('Kunde inte ladda upp profilbilden till Firebase Storage', err);
+    alert('Kunde inte ladda upp bilden just nu (kontrollera internetanslutningen). Övriga ändringar sparas ändå, men bilden uppdateras inte den här gången - försök igen senare.');
+    cb(null, err);
+  });
 }
 
 // Allow pasting images from clipboard into any file-trigger button
@@ -11902,6 +11933,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '23 augusti 2026 (159)',
+    items: [
+      { type: 'new', text: 'Profilbilder (Min profil, Ny användare, Redigera användare) laddas nu upp till Firebase Storage istället för att sparas som bilddata direkt i Firestore. Firestore sparar bara en länk till bilden. Bilden komprimeras/förminskas fortfarande automatiskt innan uppladdning (max 480×480, samma som förut) och en ny bild ersätter automatiskt den gamla. Kräver att Storage-produkten är aktiverad i Firebase-projektet samt öppna säkerhetsregler (samma modell som redan gäller Firestore) - se separat förklaring från Claude. Övriga bildtyper (tour-/deltävlingsomslag) är oförändrade och sparas fortfarande som innan.' }
+    ]
+  },
+  {
     date: '23 augusti 2026 (158)',
     items: [
       { type: 'new', text: 'Ny "Senaste ronder"-sektion högst upp på spelarprofilen, precis före "Denna tour"-blocket - visar alla spelade/inskickade ronder (både stängda och väntande på godkännande/stängning), nyast överst. Visar de 5 senaste som standard med en "Visa alla"-knapp för att expandera hela historiken. Varje rad är klickbar för att se scorekortet, precis som "Alla tävlingar"-tabellen längre ner - samma underliggande data, bara en snabbare genväg till de senaste ronderna direkt när man öppnar profilen.' }
@@ -13937,14 +13974,26 @@ function submitMyProfile() {
   var genderEl = document.querySelector('input[name="mp-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
   u.hcp = parseFloat(document.getElementById('mp-hcp').value) || 0;
-  if(_myProfileImg) u.img = _myProfileImg;
 
-  currentUser = u;
-  save(); closeModal();
-  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
-  refreshCurrentView();
-  var globalProfileEl = document.getElementById('global-player-profile');
-  if(globalProfileEl && globalProfileEl.style.display !== 'none') showGlobalPlayerProfile(u.username);
+  // Bilden laddas upp till Storage FÖRST (om en ny valts) - u.img sätts sedan
+  // till URL:en som kommer tillbaka, inte till själva bilddatan.
+  function finishSubmitMyProfile() {
+    currentUser = u;
+    save(); closeModal();
+    document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+    refreshCurrentView();
+    var globalProfileEl = document.getElementById('global-player-profile');
+    if(globalProfileEl && globalProfileEl.style.display !== 'none') showGlobalPlayerProfile(u.username);
+  }
+  if(_myProfileImg) {
+    uploadProfileImage(_myProfileImg, u.username, function(url){
+      if(url) u.img = url;
+      _myProfileImg = null;
+      finishSubmitMyProfile();
+    });
+  } else {
+    finishSubmitMyProfile();
+  }
 }
 
 function openChangePassword() {
@@ -14468,12 +14517,26 @@ function saveNewUser() {
   var role = document.querySelector('input[name="u-role"]:checked').value;
   var isPlayer = document.getElementById('u-isplayer').checked;
   var tourAccess = _pendingTourAccess.slice();
-  if(!S.users) S.users = [];
-  S.users.push({
-    username: username, email: email || null, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
-    name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: _newUserImg||null, isPlayer: isPlayer
-  });
-  save(); closeModal(); renderUsersList();
+
+  function finishSaveNewUser(imgUrl) {
+    if(!S.users) S.users = [];
+    S.users.push({
+      username: username, email: email || null, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
+      name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: imgUrl||null, isPlayer: isPlayer
+    });
+    save(); closeModal(); renderUsersList();
+  }
+  // Bilden laddas upp till Storage FÖRST (om en valts) - u.img blir URL:en,
+  // inte själva bilddatan. Användarnamnet finns redan här (validerat ovan),
+  // så det går att använda direkt som sökväg i Storage.
+  if(_newUserImg) {
+    uploadProfileImage(_newUserImg, username, function(url){
+      _newUserImg = null;
+      finishSaveNewUser(url);
+    });
+  } else {
+    finishSaveNewUser(null);
+  }
 }
 
 var _editUserImg = null;
@@ -14594,12 +14657,26 @@ function saveEditUser(i) {
   var genderEl = document.querySelector('input[name="u-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
   u.hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
-  if(_editUserImg) u.img = _editUserImg;
   u.isPlayer = document.getElementById('u-isplayer').checked;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
   u.tourAccess = _pendingTourAccess.slice();
-  if(currentUser.username === u.username) currentUser = u;
-  save(); closeModal(); renderUsersList();
+
+  // Bilden laddas upp till Storage FÖRST (om en ny valts) - u.img sätts sedan
+  // till URL:en. Samma stabila sökväg (username) gör att den gamla bilden i
+  // Storage skrivs över automatiskt av den nya.
+  function finishSaveEditUser() {
+    if(currentUser.username === u.username) currentUser = u;
+    save(); closeModal(); renderUsersList();
+  }
+  if(_editUserImg) {
+    uploadProfileImage(_editUserImg, u.username, function(url){
+      if(url) u.img = url;
+      _editUserImg = null;
+      finishSaveEditUser();
+    });
+  } else {
+    finishSaveEditUser();
+  }
 }
 
 function delUser(i) {
