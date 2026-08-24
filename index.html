@@ -1534,7 +1534,7 @@ function syncEditTourDraftFields() {
 function handleEditTourImg(file) {
   syncEditTourDraftFields();
   compressImage(file, 1100, 950, 0.92, function(d) {
-    showCropModal(d, 160, function(cropped) {
+    showCropModal(d, 0.32, function(cropped) {
       _editTourDraft.img = cropped;
       openEditTour();
     });
@@ -1590,7 +1590,7 @@ function openRenameTour() {
 function handleRenameTourImg(file) {
   syncEditTourDraftFields();
   compressImage(file, 1100, 950, 0.92, function(d) {
-    showCropModal(d, 160, function(cropped) {
+    showCropModal(d, 0.32, function(cropped) {
       _editTourDraft.img = cropped;
       openRenameTour();
     });
@@ -1799,11 +1799,18 @@ function closeModal() {
 // ── CROP ───────────────────────────────────────────────────────────────────
 var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0, drag:false, lx:0, ly:0, cb:null };
 
-function showCropModal(dataUrl, cH, cb) {
+// ratio = önskat förhållande höjd/bredd (t.ex. 0.35 för en bred banderoll,
+// 0.85 för ett mer stående porträtt) - INTE ett fast pixelvärde. Höjden räknas
+// ut i JS utifrån den verkliga, uppmätta bredden på beskärningsrutan, så
+// förhållandet blir identiskt oavsett om man sitter på en smal mobil eller en
+// bred desktop-skärm. (Tidigare skickades en absolut pixelhöjd rakt av, vilket
+// på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
+// krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
+function showCropModal(dataUrl, ratio, cb) {
   crop.cb = cb;
   var h = '<h3 style="margin-bottom:6px">Välj bildutsnitt</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma &nbsp;·&nbsp; Rutan visar exakt hur bilden sparas</p>';
-  h += '<div id="crop-box" style="position:relative;width:100%;height:'+cH+'px;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
+  h += '<div id="crop-box" style="position:relative;width:100%;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
   h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
   h += '<button class="btn" onclick="closeCropModalOnly()">Avbryt</button>';
@@ -1829,6 +1836,8 @@ function showCropModal(dataUrl, cH, cb) {
     var cbox = document.getElementById('crop-box');
     if(!cbox) return;
     var cW = cbox.offsetWidth;
+    var cH = Math.round(cW * ratio);
+    cbox.style.height = cH + 'px';
     crop.cW=cW; crop.cH=cH; crop.active=true;
     var img = new Image();
     img.onload = function() {
@@ -2555,7 +2564,7 @@ function clearWizCover() {
 function handleWizImg(file) {
   wizSaveStep1Fields();
   compressImage(file, 1100, 950, 0.92, function(d) {
-    showCropModal(d, 160, function(cropped) {
+    showCropModal(d, 0.32, function(cropped) {
       wiz.img = cropped;
       wizStep1();
     });
@@ -2818,7 +2827,7 @@ function wizStep2() {
 function handleWizEvImg(file) {
   wizStep2SaveCurrent();
   compressImage(file, 1100, 950, 0.92, function(d) {
-    showCropModal(d, 160, function(cropped) {
+    showCropModal(d, 0.32, function(cropped) {
       var ev = wiz.events[wiz.stepIdx];
       ev.img = cropped;
       if(ev.course) saveCourseImage(ev.course, cropped);
@@ -3336,7 +3345,7 @@ function openTourStory() {
 
 function onTourStoryImgFile(file) {
   compressImage(file, 1200, 800, 0.92, function(d) {
-    showCropModal(d, 220, function(cropped) {
+    showCropModal(d, 0.4, function(cropped) {
       _tourStoryImg = cropped;
       var prev = document.getElementById('ts-img-prev');
       if(prev) prev.innerHTML = '<img src="'+cropped+'" class="img-preview-sm">';
@@ -5828,7 +5837,7 @@ function openResults(i) {
 
 function onWinnerImgFile(file) {
   compressImage(file, 1000, 800, 0.92, function(d) {
-    showCropModal(d, 340, function(cropped) {
+    showCropModal(d, 0.85, function(cropped) {
       _wImg=cropped;
       var prev=document.getElementById('w-img-prev');
       if(prev) prev.innerHTML='<img src="'+cropped+'" class="img-preview-sm">';
@@ -6167,7 +6176,7 @@ function onEeciDateChange() {
 function handleEeciImg(file) {
   syncEeciCourseField();
   compressImage(file, 1100, 950, 0.92, function(d) {
-    showCropModal(d, 160, function(cropped) {
+    showCropModal(d, 0.32, function(cropped) {
       _editEventDraft.img = cropped;
       if(_editEventDraft.course) saveCourseImage(_editEventDraft.course, cropped);
       renderEeciModal();
@@ -12053,6 +12062,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (164)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX (grundorsak): Beskärningsrutan för alla bildtyper (vinnarfoto, tour-/deltävlingsomslag, tour-story) styrdes tidigare av ett FAST pixelvärde för höjden, oberoende av hur bred rutan faktiskt var på skärmen. På en smal mobil blev höjden proportionellt sett för hög i förhållande till bredden, vilket gjorde bilderna oavsiktligt smala och beskurna fel - ju mindre skärm, desto smalare blev resultatet. Beskärningen styrs nu av ett FÖRHÅLLANDE (höjd/bredd) istället, uträknat i realtid utifrån den verkliga uppmätta bredden - ger ett konsekvent, korrekt resultat oavsett skärmstorlek. Vinnarfoto är nu ett mer stående porträttformat (0.85), tour-/deltävlingsomslag en bred banderoll (0.32), tour-story något däremellan (0.4).' }
+    ]
+  },
   {
     date: '23 augusti 2026 (163)',
     items: [
