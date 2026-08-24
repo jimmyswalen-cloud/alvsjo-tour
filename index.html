@@ -660,9 +660,15 @@ var STATIC_PLAYER_PHOTOS = {
   'ebsw': 'player-photos/ebsw.jpg',
   'jole': 'player-photos/jole.jpg'
 };
+// PRIORITETSORDNING: en själv-uppladdad bild (fallbackImg, dvs. u.img från
+// Firebase Storage) ska ALLTID vinna över den gamla statiska listan - annars
+// skulle en ny uppladdning tystnat "försvinna" bakom den hårdkodade bilden
+// för alla ~10 spelare som råkar finnas i listan nedan. Listan fungerar nu
+// bara som en RESERVBILD för den som aldrig laddat upp en egen bild i appen.
 function playerPhoto(username, fallbackImg) {
+  if(fallbackImg) return fallbackImg;
   if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
-  return fallbackImg || null;
+  return null;
 }
 
 var S = { tours: [], ideas: [] };
@@ -12129,6 +12135,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 augusti 2026 (169)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG FIX: En gammal, hårdkodad lista (STATIC_PLAYER_PHOTOS) med bilder manuellt uppladdade till GitHub-repot vann alltid över vad man än laddade upp i appen, för ett tiotal specifika spelare (bl.a. swalle, josu, anjo, nilu, jole m.fl.). Nu vinner alltid den egen-uppladdade bilden (Storage) - listan används bara som reservbild för den som aldrig laddat upp en egen bild i appen.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (168)',
     items: [
