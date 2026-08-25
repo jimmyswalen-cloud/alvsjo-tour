@@ -8574,17 +8574,42 @@ setInterval(function(){
 }, 1000);
 
 
+// Hämtar hål-för-hål-slag (och ev. puttar) för en spelare i en specifik deltävling,
+// oavsett om deltävlingen är stängd eller ej. Prioritetsordning:
+//  1) En markör- eller admin-godkänd "Mitt resultat"/bulk-inskickning (e.scoreSubmissions)
+//     - detta gör att hålstatistiken fylls på DIREKT när markören godkänner,
+//     utan att behöva vänta på att admin stänger hela deltävlingen.
+//  2) Om deltävlingen är stängd och har sparade e.results med hål-data (t.ex. äldre
+//     rondar inmatade innan godkännande-flödet fanns, eller där scoreSubmissions
+//     senare rensats bort) - används det som fallback.
+// Detta undviker dubbelräkning: har vi redan en godkänd scoreSubmission används
+// bara den, oavsett om deltävlingen råkar vara stängd också.
+function getApprovedHolesForPlayerInEvent(e, pi) {
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+  if(sub && sub.holes && isSubmissionApproved(sub)) {
+    return { holes: sub.holes, holePutts: sub.holePutts||null };
+  }
+  if(e.closed && e.results) {
+    var r = e.results.find(function(x){ return x.pi===pi; });
+    if(r && r.holes) return { holes: r.holes, holePutts: r.holePutts||null };
+  }
+  return null;
+}
+
 function computeCourseHoleStats(courseName) {
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(courseName||'').trim().toLowerCase(); });
   var counts = emptyHoleCounts();
   var totalHolesPlayed = 0;
   if(course && course.holePars && course.holePars.length) {
     (S.tours||[]).forEach(function(t){
+      var players = getPlayersForTour(t);
       (t.events||[]).forEach(function(e){
-        if(!e.closed || !e.results || (e.course||'').trim().toLowerCase()!==courseName.trim().toLowerCase()) return;
-        e.results.forEach(function(r){
-          if(!r.holes) return;
-          r.holes.forEach(function(gross, idx){
+        if((e.course||'').trim().toLowerCase()!==courseName.trim().toLowerCase()) return;
+        players.forEach(function(p, pi){
+          if(!p) return;
+          var entry = getApprovedHolesForPlayerInEvent(e, pi);
+          if(!entry) return;
+          entry.holes.forEach(function(gross, idx){
             var cat = categorizeHoleScore(gross, course.holePars[idx]);
             if(cat) { counts[cat]++; totalHolesPlayed++; }
           });
@@ -8656,12 +8681,11 @@ function computePlayerHoleStats(username) {
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
     (t.events||[]).forEach(function(e){
-      if(!e.closed || !e.results) return;
-      var r = e.results.find(function(x){ return x.pi===pi; });
-      if(!r || !r.holes) return;
       var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
       if(!course || !course.holePars) return;
-      r.holes.forEach(function(gross, idx){
+      var entry = getApprovedHolesForPlayerInEvent(e, pi);
+      if(!entry) return;
+      entry.holes.forEach(function(gross, idx){
         var cat = categorizeHoleScore(gross, course.holePars[idx]);
         if(cat) { counts[cat]++; totalHolesPlayed++; }
       });
@@ -8675,14 +8699,13 @@ function computePlayerHoleCategoryLeaders(categoryKey) {
   (S.tours||[]).forEach(function(t){
     var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
-      if(!e.closed || !e.results) return;
       var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
       if(!course || !course.holePars) return;
-      e.results.forEach(function(r){
-        if(!r.holes) return;
-        var p = players[r.pi];
+      players.forEach(function(p, pi){
         if(!p) return;
-        r.holes.forEach(function(gross, idx){
+        var entry = getApprovedHolesForPlayerInEvent(e, pi);
+        if(!entry) return;
+        entry.holes.forEach(function(gross, idx){
           var cat = categorizeHoleScore(gross, course.holePars[idx]);
           if(cat===categoryKey) {
             if(!counts[p.username]) counts[p.username] = { name:p.name, count:0 };
@@ -12188,6 +12211,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 augusti 2026 (173)',
+    items: [
+      { type: 'fixed', text: 'Bugg fixad: Hålstatistik (och banstatistik/topplistor per hålkategori) väntade tidigare på att HELA deltävlingen skulle stängas av admin innan nya hål räknades in. Nu räknas en spelares hål-för-hål-resultat in direkt så fort rundan är godkänd (av markör eller admin) - man behöver inte längre vänta på att deltävlingen stängs för att statistiken ska uppdateras.' }
+    ]
+  },
   {
     date: '23 augusti 2026 (172)',
     items: [
