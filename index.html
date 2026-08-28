@@ -8208,6 +8208,35 @@ function computeLiveStandingsRows(docs, t, ev) {
     var totalHoles = holePars.length || 18;
     var isStab = findEventTypeById(d.eventId) === 'stableford';
     (d.players||[]).forEach(function(p){
+      // Har spelaren redan ett GODKÄNT officiellt scorekort (av markör eller
+      // admin)? Då är rundan fastställd och FRUSEN - visa alltid det frusna
+      // värdet från scoreSubmissions här istället för att räkna om från
+      // liveScoring-dokumentets SHCP (som kan ha ändrats efter godkännandet,
+      // t.ex. om någon rättar sin SHCP i efterhand för en annan spelare i
+      // samma boll). Annars kan livescore och det officiella resultatet visa
+      // olika poäng för en och samma, redan klara rond - se release notes.
+      var approvedSub = (ev && ev.scoreSubmissions) ? ev.scoreSubmissions.find(function(s){ return s.pi===p.pi && isSubmissionApproved(s); }) : null;
+      if(approvedSub) {
+        var subHoles = approvedSub.holes ? approvedSub.holes.slice() : new Array(totalHoles).fill(null);
+        var subBrutto = approvedSub.brutto != null ? approvedSub.brutto : subHoles.reduce(function(a,b){ return a+(b||0); }, 0);
+        var totalPar = holePars.reduce(function(a,b){ return a+(b||0); }, 0);
+        var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -approvedSub.score;
+        var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (approvedSub.score - totalPar);
+        if(isFinal) {
+          subHeadStart = getHeadStart(t, ev, p.pi);
+          subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (approvedSub.score - subHeadStart - totalPar);
+          subSortValue = isStab ? (approvedSub.score + subHeadStart) : -(approvedSub.score - subHeadStart);
+        }
+        rows.push({
+          pi: p.pi, name: p.name,
+          brutto: subBrutto, netto: isStab ? null : approvedSub.score, poang: isStab ? approvedSub.score : null,
+          thru: totalHoles, totalHoles: totalHoles,
+          diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, submitted: true,
+          holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: approvedSub.shcp!=null?approvedSub.shcp:(p.shcp||0)
+        });
+        seenPis[p.pi] = true;
+        return;
+      }
       var sc = (d.scores||{})[p.pi] || {};
       var brutto = 0, netto = 0, poang = 0, thru = 0, parSoFar = 0;
       var holesGross = new Array(totalHoles).fill(null);
@@ -8235,13 +8264,9 @@ function computeLiveStandingsRows(docs, t, ev) {
         diff = isStab ? (poang + headStart - thru*2) : (netto - headStart - parSoFar);
         sortValue = isStab ? (poang + headStart) : -(netto - headStart);
       }
-      // Har spelaren redan ett GODKÄNT officiellt scorekort (Mitt resultat/
-      // Registrera för bollen, godkänt av markör/admin - inte bara inskickat
-      // och väntande)? Visas som "Klar" istället för "T18" i tabellen.
-      var submitted = !!(ev && ev.scoreSubmissions && ev.scoreSubmissions.some(function(s){ return s.pi===p.pi && isSubmissionApproved(s); }));
       rows.push({
         pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, submitted: submitted,
+        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, submitted: false,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
       seenPis[p.pi] = true;
@@ -12255,6 +12280,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (175)',
+    items: [
+      { type: 'fixed', text: 'Bugg fixad: Livescore kunde visa en annan poäng/netto än spelarens officiella, godkända resultat för en redan avslutad rond - eftersom livescore alltid räknade om poängen från liveScoring-dokumentets SHCP, som kunde ha ändrats efter att rundan godkändes. Nu visar livescore alltid det frusna, officiella resultatet så fort en rond är godkänd av markör/admin, så de två vyerna aldrig kan divergera.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (174)',
     items: [
