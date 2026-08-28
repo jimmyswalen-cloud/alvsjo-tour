@@ -6270,11 +6270,55 @@ function saveEditEventCourseImg() {
   });
 }
 
+// Bygger e.results automatiskt utifrån redan GODKÄNDA scoreSubmissions, för
+// fallet att ingen admin hunnit öppna "Resultat" och trycka "Spara resultat"
+// innan ett stängningsförsök görs. Rör ALDRIG ett e.results som redan har
+// något innehåll (då kan en admin ha gjort medvetna manuella justeringar där
+// - de ska aldrig skrivas över automatiskt), så detta triggar bara i det
+// ursprungliga "Inga resultat sparade"-scenariot.
+function buildResultsFromApprovedSubmissions(t, e) {
+  var isStab = e.type === 'stableford';
+  var regs = getEventRegPis(e).filter(function(pi){ return t.players[pi]; });
+  var results = [];
+  regs.forEach(function(pi){
+    var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+    if(!sub || !isSubmissionApproved(sub) || sub.score==null || isNaN(sub.score)) return;
+    var entry = { pi: pi, score: sub.score, brutto: sub.brutto!=null?sub.brutto:null, shcp: sub.shcp!=null?Math.round(sub.shcp):null };
+    if(sub.holes) {
+      entry.holes = sub.holes;
+      if(sub.holePutts) entry.holePutts = sub.holePutts;
+    }
+    if(e.isFinal) {
+      var hs = getHeadStart(t, e, pi);
+      entry.headStart = hs;
+      entry.adjusted = isStab ? (sub.score + hs) : (sub.score - hs);
+    }
+    results.push(entry);
+  });
+  if(e.isFinal) {
+    results.sort(function(a,b){
+      var diff = isStab ? (b.adjusted-a.adjusted) : (a.adjusted-b.adjusted);
+      if(diff !== 0) return diff;
+      return ((t.players[a.pi]&&t.players[a.pi].hcp)||0) - ((t.players[b.pi]&&t.players[b.pi].hcp)||0);
+    });
+  } else {
+    results.sort(function(a,b){
+      var ah=(t.players[a.pi]&&t.players[a.pi].hcp)||0, bh=(t.players[b.pi]&&t.players[b.pi].hcp)||0;
+      return isStab?(b.score-a.score||ah-bh):(a.score-b.score||ah-bh);
+    });
+  }
+  return results;
+}
+
 function closeEvent(i){
   if(!isAdmin()) return;
   var t=getTour(),e=t.events[i];
   if(!confirm('Stäng tävlingen? Resultat låses.'+(e.isFinal?'':' Poäng delas ut.')))return;
-  if(!e.results||!e.results.length){alert('Inga resultat sparade.');return;}
+  if(!e.results||!e.results.length){
+    var autoResults = buildResultsFromApprovedSubmissions(t, e);
+    if(!autoResults.length){ alert('Inga godkända resultat att stänga tävlingen med ännu. Godkänn minst en spelares scorekort (markör eller admin), eller mata in resultat manuellt under "Resultat" innan du stänger.'); return; }
+    e.results = autoResults;
+  }
   if(!e.isFinal) {
     var mult = e.isMajor ? 1.5 : 1;
     e.results.forEach(function(r,idx){r.points=Math.round((t.pointsScale[idx]||0)*mult*10)/10;});
@@ -12211,6 +12255,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (174)',
+    items: [
+      { type: 'fixed', text: 'Bugg fixad: Att stänga en deltävling kunde blockeras med "Inga resultat sparade." trots att spelarnas scorekort redan var godkända av markör/admin - godkännande skrev nämligen bara till scoreSubmissions, medan stängningen krävde att en admin dessutom manuellt öppnat "Resultat" och tryckt "Spara resultat" separat. Nu bygger stängningen automatiskt ihop resultatet från alla redan godkända scorekort om ingen admin hunnit spara manuellt, så en godkänd rond räcker för att kunna stänga tävlingen.' }
+    ]
+  },
   {
     date: '25 augusti 2026 (173)',
     items: [
