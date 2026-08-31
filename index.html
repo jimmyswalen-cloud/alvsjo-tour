@@ -4653,6 +4653,7 @@ function openSideBets(ei) {
   if(!e.sideBets) e.sideBets = [];
   var players = getPlayersForTour(t);
   var regPis = getEventRegPis(e);
+  var regDates = getEventRegisteredDates(e);
   var admin = isAdmin();
 
   var h = '<h3><i class="ti ti-target-arrow"></i> Side bets – '+esc(e.name)+'</h3>';
@@ -4676,7 +4677,7 @@ function openSideBets(ei) {
       var totalPot = (sb.fee>0 ? (participants.length*sb.fee) : 0) + (sb.carriedOverPot||0);
       var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
         '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
-          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
+          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+'</div>'+
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
           (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt'+(sb.carriedOverPot?' · +'+sb.carriedOverPot+' kr vidareskickat = '+totalPot+' kr totalt':'')+'</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
           (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+(totalPot>0?' ('+totalPot+' kr)':'')+'</div>':'')+
@@ -4769,12 +4770,22 @@ function openSideBets(ei) {
     h += '<div class="field" id="sb-hole-field" style="display:none"><label>Hål</label><input type="number" id="sb-hole" min="1" max="18" placeholder="T.ex. 14" style="width:100px"><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Livescoringen frågar automatiskt vem som vann direkt när det hålet är klart.</p></div>';
     h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Hål 14"></div>';
     h += '<div class="field"><label>Avgift per deltagare (kr, 0 = gratis)</label><input type="number" id="sb-fee" min="0" value="0" style="width:120px"></div>';
-    h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt: alla anmälda till deltävlingen)</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
-      (regPis.length ? regPis.map(function(pi){
-        var p = players[pi]; if(!p) return '';
-        return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
-      }).join('') : '<span style="font-size:12px;color:var(--text-3)">Inga anmälda ännu.</span>')+
+    if(regDates.length > 1) {
+      h += '<div class="field"><label>Speldatum</label><select id="sb-date" onchange="onSideBetDateChange('+ei+')">'+
+        regDates.map(function(d){ return '<option value="'+d+'" '+(d===e.date?'selected':'')+'>'+d+(d===e.date?' (ordinarie)':'')+'</option>'; }).join('')+
+      '</select><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Betet gäller bara spelare som spelar det här datumet - andra datum får skapa ett eget bet.</p></div>';
+    } else {
+      h += '<input type="hidden" id="sb-date" value="'+esc(e.date)+'">';
+    }
+    h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt: alla anmälda '+(regDates.length>1?'till det valda datumet':'till deltävlingen')+')</div>';
+    h += '<div id="sb-participants-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
+      (function(){
+        var pisForList = regDates.length > 1 ? getRegPisForDate(e, e.date) : regPis;
+        return pisForList.length ? pisForList.map(function(pi){
+          var p = players[pi]; if(!p) return '';
+          return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
+        }).join('') : '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld ännu.</span>';
+      })()+
     '</div>';
     h += '<button class="btn btn-sm btn-primary" onclick="addSideBet('+ei+')"><i class="ti ti-plus"></i> Lägg till side bet</button>';
   }
@@ -4782,6 +4793,37 @@ function openSideBets(ei) {
   h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
   showModal(h, true, true);
   if(admin) refreshSideBetSuggestions(ei);
+}
+
+// Ett side bet gäller bara spelare som spelar SAMMA speldatum som betet är
+// kopplat till - t.ex. banförhållanden, vind och pinnplacering skiljer sig
+// mellan dagar, så "längsta drive" ska bara jämföras inom samma dags spel.
+// En boll som spelar ett annat datum får skapa ett eget side bet för sin dag.
+function getEventRegisteredDates(e) {
+  var dates = {};
+  (e.registrations||[]).forEach(function(r){ if(!r.declined && r.date) dates[r.date] = true; });
+  return Object.keys(dates).sort();
+}
+function getRegPisForDate(e, date) {
+  return (e.registrations||[]).filter(function(r){ return !r.declined && r.date===date; }).map(function(r){ return r.pi; });
+}
+
+// Bygger om deltagar-kryssrutorna i "Lägg till side bet"-formuläret till att
+// bara visa spelare som är anmälda till det valda datumet (körs på nytt varje
+// gång datum-fältet ändras, se sb-date-select nedan).
+function onSideBetDateChange(ei) {
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var players = getPlayersForTour(t);
+  var dateSel = document.getElementById('sb-date');
+  var date = dateSel ? dateSel.value : e.date;
+  var pis = getRegPisForDate(e, date);
+  var container = document.getElementById('sb-participants-list');
+  if(!container) return;
+  container.innerHTML = pis.length ? pis.map(function(pi){
+    var p = players[pi]; if(!p) return '';
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
+  }).join('') : '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld till det datumet.</span>';
 }
 
 function onSideBetTypeChange() {
@@ -4816,8 +4858,10 @@ function addSideBet(ei) {
     if(!isNaN(holeVal)) hole = holeVal;
   }
   var checked = Array.prototype.map.call(document.querySelectorAll('.sb-participant-chk:checked'), function(el){ return parseInt(el.value); });
+  var dateEl = document.getElementById('sb-date');
+  var date = dateEl ? dateEl.value : e.date;
   if(!e.sideBets) e.sideBets = [];
-  e.sideBets.push({ id: uid(), name: name, betType: betType, description: desc.trim(), fee: fee, hole: hole, participants: checked, payments: {}, winnerPi: null });
+  e.sideBets.push({ id: uid(), name: name, betType: betType, description: desc.trim(), fee: fee, hole: hole, date: date, participants: checked, payments: {}, winnerPi: null });
   save();
   renderEvents();
   renderHomeSideBetWidget();
@@ -5004,7 +5048,7 @@ function buildSideBetsSummaryHTML(t, e, ei) {
     var canJoin = isSideBetJoinable(e, sb, myPi);
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
-      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
+      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+'</div>'+
       (sb.description?'<div style="font-size:11px;color:var(--text-3)">'+esc(sb.description)+'</div>':'')+
       '</div>'+
       (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
@@ -5047,28 +5091,35 @@ function isSideBetDecided(sb) {
   return sb.winnerPi != null || !!sb.pushOutcome;
 }
 
-// Alla villkor som måste stämma för att en spelare själv ska få gå med i ett
-// side bet: anmäld till DELTÄVLINGEN (inte bara touren), deltävlingen inte
-// stängd, betet inte redan avgjort, och inte redan med. Hål-kontrollen (har
-// man redan spelat förbi det aktuella hålet för Längsta drive/Närmast hål)
-// görs separat och asynkront i checkHoleNotPassedForSideBet, eftersom den
-// kräver en Firestore-uppslagning mot livescoring-dokumentet.
+// Samlad förklaring för varför en spelare INTE får gå med i ett side bet -
+// null betyder att allt är OK. Används både för att styra "Gå med"-knappens
+// synlighet och som sista spärr när man faktiskt klickar på den.
+function explainSideBetNotJoinable(e, sb, myPi) {
+  if(myPi < 0) return 'Du är inte registrerad som spelare i den här touren.';
+  if(e.closed) return 'Den här deltävlingen är avslutad - går inte att gå med i side bets längre.';
+  if(isSideBetDecided(sb)) return 'Det här betet är redan avgjort och går inte att gå med i längre.';
+  if((sb.participants||[]).indexOf(myPi) !== -1) return 'Du är redan med i det här betet.';
+  var reg = (e.registrations||[]).find(function(r){ return r.pi===myPi && !r.declined; });
+  if(!reg) return 'Du måste vara anmäld till den här deltävlingen för att gå med i dess side bets.';
+  // Ett side bet gäller bara spelare som spelar samma speldatum som betet är
+  // kopplat till (banförhållanden/vind/pinnplacering skiljer mellan dagar) -
+  // sb.date saknas på äldre bets skapade innan det här fanns, då gäller ingen
+  // datumbegränsning.
+  if(sb.date && reg.date !== sb.date) return 'Det här side betet gäller spelare som spelar '+sb.date+' - du är anmäld till ett annat datum. Be din boll skapa ett eget side bet för er speldag istället.';
+  return null;
+}
+
 function isSideBetJoinable(e, sb, myPi) {
-  if(myPi < 0 || e.closed || isSideBetDecided(sb)) return false;
-  if((sb.participants||[]).indexOf(myPi) !== -1) return false;
-  return getEventRegPis(e).indexOf(myPi) !== -1;
+  return explainSideBetNotJoinable(e, sb, myPi) === null;
 }
 
 // Låter en spelare gå med i ett befintligt side bet på egen hand (t.ex. vid efteranmälan).
 function joinSideBetCore(t, e, sb) {
   var myPi = getMyPi(t);
-  if(myPi < 0) { alert('Du är inte registrerad som spelare i den här touren.'); return false; }
-  if(e.closed) { alert('Den här deltävlingen är avslutad - går inte att gå med i side bets längre.'); return false; }
-  if(getEventRegPis(e).indexOf(myPi) === -1) { alert('Du måste vara anmäld till den här deltävlingen för att gå med i dess side bets.'); return false; }
-  if(!sb.participants) sb.participants = [];
-  if(sb.participants.indexOf(myPi) !== -1) { alert('Du är redan med i det här betet.'); return false; }
-  if(isSideBetDecided(sb)) { alert('Det här betet är redan avgjort och går inte att gå med i längre.'); return false; }
+  var reason = explainSideBetNotJoinable(e, sb, myPi);
+  if(reason) { alert(reason); return false; }
   if(!confirm('Vill du gå med i "'+sb.name+'"'+(sb.fee>0?' för '+sb.fee+' kr':'')+'?')) return false;
+  if(!sb.participants) sb.participants = [];
   sb.participants.push(myPi);
   save();
   return true;
@@ -5108,8 +5159,8 @@ function checkHoleNotPassedForSideBet(t, e, sb, myPi) {
   if(!sb.hole || SIDE_BET_HOLE_TYPES.indexOf(sb.betType) < 0) return Promise.resolve(true);
   var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
   if(sub && sub.holes && typeof sub.holes[sb.hole-1] === 'number') return Promise.resolve(false);
-  var myGroup = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(myPi) >= 0; });
-  if(!myGroup) return Promise.resolve(true); // inte ens tilldelad en boll än
+  var myGroup = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(myPi) >= 0 && (!sb.date || g.date === sb.date); });
+  if(!myGroup) return Promise.resolve(true); // inte ens tilldelad en boll än (för det datumet)
   var groupId = ensureTeeGroupId(myGroup);
   return LIVE_SCORING_COL.doc(liveScoringDocId(e.id, groupId)).get().then(function(doc){
     if(!doc.exists) return true;
@@ -5128,6 +5179,8 @@ function joinSideBet(ei, betId) {
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
   if(!sb) return;
   var myPi = getMyPi(t);
+  var reason = explainSideBetNotJoinable(e, sb, myPi);
+  if(reason) { alert(reason); return; }
   checkHoleNotPassedForSideBet(t, e, sb, myPi).then(function(ok){
     if(!ok) { alert('Du har redan spelat hål '+sb.hole+' - går inte att gå med i "'+sb.name+'" längre.'); return; }
     if(joinSideBetCore(t, e, sb)) renderEvents();
@@ -5144,6 +5197,8 @@ function joinSideBetGlobal(tourId, eventId, betId) {
   if(!sb) return;
   var players = getPlayersForTour(t);
   var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
+  var reason = explainSideBetNotJoinable(e, sb, myPi);
+  if(reason) { alert(reason); return; }
   checkHoleNotPassedForSideBet(t, e, sb, myPi).then(function(ok){
     if(!ok) { alert('Du har redan spelat hål '+sb.hole+' - går inte att gå med i "'+sb.name+'" längre.'); return; }
     if(joinSideBetCore(t, e, sb)) {
@@ -8073,8 +8128,14 @@ function checkSideBetPromptForCurrentHole() {
   if(!ev || !ev.sideBets || !ev.sideBets.length) return;
   var asked = _liveScoring.askedSideBets || (_liveScoring.askedSideBets = {});
   var groupId = _liveScoring.docId;
+  // Vilket datum spelar den här bollen? Ett datumsatt side bet (sb.date) ska
+  // bara frågas till bollar som faktiskt spelar det datumet - en boll som
+  // spelar en annan dag ska aldrig få frågan (de får skapa ett eget bet).
+  var myGroup = ev.teeGroups && _liveScoring.gIdx!=null ? ev.teeGroups[_liveScoring.gIdx] : null;
+  var groupDate = myGroup ? myGroup.date : null;
   var pending = ev.sideBets.filter(function(sb){
     if(sb.hole !== hole || asked[sb.id]) return false;
+    if(sb.date && groupDate && sb.date !== groupDate) return false;
     // Mätbara bets (Längsta drive/Närmast hål): fråga VARJE boll en gång var,
     // så alla bollars resultat kan jämföras mot varandra - till skillnad från
     // andra hål-bets, där det räcker att första bollen som svarar avgör det.
@@ -12603,6 +12664,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (186)',
+    items: [
+      { type: 'new', text: 'Side bets är nu kopplade till ett speldatum. Har deltävlingen flera anmälda speldatum (t.ex. en boll som spelar en annan dag) visas ett datumval när man skapar betet, och deltagarlistan förvals utifrån vilka som är anmälda just det datumet. En spelare kan bara gå med i (eller bli tillfrågad om under livescoring) ett bet som gäller det egna speldatumet - spelar man en annan dag får den bollen skapa ett eget side bet för sin dag istället. Äldre bets utan datum påverkas inte.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (185)',
     items: [
