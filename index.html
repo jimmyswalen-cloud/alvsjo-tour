@@ -6608,7 +6608,7 @@ function prevMonth(){var t=getTour();t.calMonth--;if(t.calMonth<0){t.calMonth=11
 function nextMonth(){var t=getTour();t.calMonth++;if(t.calMonth>11){t.calMonth=0;t.calYear++;}save();renderCalendar();}
 
 // ── ORDER OF MERIT ─────────────────────────────────────────────────────────
-function showOOMMain(){document.getElementById('oom-main').style.display='';document.getElementById('oom-profile').style.display='none';}
+function showOOMMain(){document.getElementById('oom-main').style.display='';document.getElementById('oom-profile').style.display='none';window.scrollTo(0, 0);}
 
 function showPlayerProfile(pi){
   _profileReturnView = _currentAppView;
@@ -12328,6 +12328,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (179)',
+    items: [
+      { type: 'fixed', text: 'Ytterligare ett scroll-läge hittat och fixat: att gå tillbaka från en spelarprofil till OoM-listan (utan att byta flik) behöll scroll-positionen från profilen. Nu scrollar även den vägen upp till toppen, precis som alla andra sidbyten sedan tidigare release.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (178)',
     items: [
