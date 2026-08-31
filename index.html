@@ -1148,6 +1148,7 @@ function showToursList() {
   document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
   renderToursList();
   updateHero(null);
+  window.scrollTo(0, 0);
 }
 
 function showCourseStats() {
@@ -1159,6 +1160,7 @@ function showCourseStats() {
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
   renderCourseStatsView();
+  window.scrollTo(0, 0);
 }
 
 function showTourSearch() {
@@ -1173,6 +1175,7 @@ function showTourSearch() {
   if(inp) inp.value = '';
   renderTourSearchList();
   updateHero(null);
+  window.scrollTo(0, 0);
 }
 
 function showGlobalPlayers() {
@@ -1193,6 +1196,7 @@ function showGlobalSettings() {
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
   renderGlobalSettings();
+  window.scrollTo(0, 0);
 }
 
 function renderHomeUserBar() {
@@ -4444,6 +4448,13 @@ function markMySideBetPaid(tourId, eventId, betId) {
 // begränsat till de tourer den inloggade användaren faktiskt har åtkomst till.
 // ═══════════════════════════════════════════════════════════════════════════
 var _homeFeedUnsub = null;
+// Startsidans flöde visar bara de N senaste händelserna direkt - resten döljs
+// bakom en "+ Visa fler"-knapp så flödet inte tar över hela startsidan. Sparar
+// senaste snapshotten separat så toggleHomeFeedExpanded() kan rita om utan att
+// behöva vänta på ett nytt Firestore-anrop.
+var HOME_FEED_COLLAPSED_COUNT = 3;
+var _homeFeedItems = [];
+var _homeFeedExpanded = false;
 
 // Etiketter/färger för feed-texten, separata från liveScoreLabel (som är gjord
 // för scorekortsknappar med versaler) - här vill vi ha vanlig löptext.
@@ -4456,6 +4467,7 @@ var ACTIVITY_FEED_CATEGORY_META = {
 
 function subscribeHomeActivityFeed() {
   if(_homeFeedUnsub) { _homeFeedUnsub(); _homeFeedUnsub = null; }
+  _homeFeedExpanded = false;
   var el = document.getElementById('home-activity-feed');
   if(!el || !currentUser) { if(el) el.innerHTML = ''; return; }
   var tourIds = (currentUser.tourAccess||[]).slice(0, 10); // Firestore 'in' tillåter max 10
@@ -4488,8 +4500,10 @@ function renderHomeActivityFeed(items) {
   var el = document.getElementById('home-activity-feed');
   if(!el) return;
   if(!items.length) { el.innerHTML = ''; return; }
+  _homeFeedItems = items;
+  var visibleItems = _homeFeedExpanded ? items : items.slice(0, HOME_FEED_COLLAPSED_COUNT);
 
-  var rows = items.map(function(it){
+  var rows = visibleItems.map(function(it){
     var img = playerPhoto(it.playerUsername, null);
     var avatar = img
       ? '<img src="'+img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">'
@@ -4548,10 +4562,26 @@ function renderHomeActivityFeed(items) {
     '</div>';
   }).join('');
 
+  var toggleBtn = '';
+  if(items.length > HOME_FEED_COLLAPSED_COUNT) {
+    toggleBtn = _homeFeedExpanded
+      ? '<button onclick="toggleHomeFeedExpanded()" style="background:none;border:none;cursor:pointer;color:var(--green-dark);font-weight:700;font-size:12px;padding:10px 0 0;width:100%;text-align:center">Visa färre</button>'
+      : '<button onclick="toggleHomeFeedExpanded()" style="background:none;border:none;cursor:pointer;color:var(--green-dark);font-weight:700;font-size:12px;padding:10px 0 0;width:100%;text-align:center"><i class="ti ti-plus" style="font-size:12px"></i> Visa fler ('+(items.length-HOME_FEED_COLLAPSED_COUNT)+')</button>';
+  }
+
   el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
     '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class="ti ti-bolt" style="color:var(--gold)"></i> Senaste händelser</div>'+
     rows+
+    toggleBtn+
   '</div>';
+}
+
+// Växlar mellan begränsad (3 st) och full lista i startsidans aktivitetsflöde.
+// Ritar om från den senast mottagna snapshotten (_homeFeedItems) istället för
+// att göra ett nytt Firestore-anrop.
+function toggleHomeFeedExpanded() {
+  _homeFeedExpanded = !_homeFeedExpanded;
+  renderHomeActivityFeed(_homeFeedItems);
 }
 
 // Visar en enkel lista med vilka som gillat ett feed-inlägg - klickbar via
@@ -5192,13 +5222,17 @@ function openRegister(i) {
         var status = reg ? (reg.declined ? 'declined' : 'registered') : 'unknown';
         var dateVal = reg ? reg.date : e.date;
         var canEdit = isAdmin() || (p.username === currentUser.username);
+        // Anmälningstiden (dagen innan ordinarie datum, 23:59) har gått ut - då
+        // gråas bara "Anmäld"-knappen ut för spelaren själv (Oklart/Deltar ej
+        // går fortfarande att sätta). Admin kan fortsätta anmäla som vanligt.
+        var anmaldClosed = !isAdmin() && status!=='registered' && isRegistrationDeadlinePassed(e);
         var avatar = p.img
           ? '<img src="'+p.img+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover">'
           : '<div class="avatar-ph" style="width:28px;height:28px;font-size:10px">'+ini(p.name)+'</div>';
         var nameLabel = p.name + (!isAdmin()&&p.username===currentUser.username?' <span style="font-size:11px;color:var(--green-dark)">(du)</span>':'');
         var btnStyle = function(active, color){ return 'border:1px solid '+(active?color:'var(--border)')+';background:'+(active?color:'transparent')+';color:'+(active?'#fff':'var(--text-2)')+';padding:4px 10px;border-radius:20px;font-size:12px;cursor:'+(canEdit?'pointer':'default')+';font-weight:'+(active?'600':'400'); };
                 var btns = canEdit
-          ? '<button style="'+btnStyle(status==='registered','#1D9E75')+'" onclick="setRegStatus('+i+','+pi+',0)"><i class="ti ti-check" style="font-size:11px"></i> Anmäld</button>'+
+          ? '<button style="'+btnStyle(status==='registered','#1D9E75')+(anmaldClosed?';opacity:0.45;cursor:not-allowed':'')+'" '+(anmaldClosed?'disabled title="Anmälningstiden har gått ut"':'')+' onclick="setRegStatus('+i+','+pi+',0)"><i class="ti ti-check" style="font-size:11px"></i> Anmäld</button>'+
             '<button style="'+btnStyle(status==='unknown','#888')+'" onclick="setRegStatus('+i+','+pi+',1)">Oklart</button>'+
             '<button style="'+btnStyle(status==='declined','#dc2626')+'" onclick="setRegStatus('+i+','+pi+',2)"><i class="ti ti-x" style="font-size:11px"></i> Deltar ej</button>'
           : '<span style="font-size:12px;padding:4px 10px;border-radius:20px;background:'+(status==='registered'?'#E1F5EE':status==='declined'?'#FCEBEB':'var(--surface2)')+';color:'+(status==='registered'?'#0F6E56':status==='declined'?'#A32D2D':'var(--text-3)')+'">'+
@@ -5587,12 +5621,26 @@ function deleteTeeGroup(eid, gIdx) {
   refreshRegisterModal(ei);
 }
 
+// Anmälningsdeadline: en spelare kan anmäla sig själv fram till kl 23:59
+// dagen INNAN deltävlingens ordinarie datum (e.date) - inte hela den
+// eventuellt utökade speltidsperioden (periodStart/periodEnd). Från och med
+// midnatt på det ordinarie datumet stängs självanmälan. Endast admin kan
+// fortsätta anmäla spelare efter det (se setRegStatus).
+function isRegistrationDeadlinePassed(e) {
+  if(!e || !e.date) return false;
+  return new Date() >= new Date(e.date + 'T00:00:00');
+}
+
 function setRegStatus(ei, pi, statusCode) {
   var status = statusCode === 0 ? 'registered' : statusCode === 1 ? 'unknown' : 'declined';
   var t = getTour(), e = t.events[ei];
   var p = t.players[pi];
   if(!isAdmin() && (!p || p.username !== currentUser.username)) {
     alert('Du kan bara ändra din egen anmälningsstatus.');
+    return;
+  }
+  if(status === 'registered' && !isAdmin() && isRegistrationDeadlinePassed(e)) {
+    alert('Anmälningstiden för den här tävlingen har gått ut.');
     return;
   }
   if(!e.registrations) e.registrations = [];
@@ -12281,6 +12329,24 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '28 augusti 2026 (178)',
+    items: [
+      { type: 'new', text: 'Anmälningsdeadline för deltävlingar: en spelare kan bara anmäla sig själv fram till kl 23:59 dagen innan tävlingens ordinarie datum. "Anmäld"-knappen grånas ut och blockeras därefter för spelaren själv (Oklart/Deltar ej går fortfarande att sätta, om man t.ex. redan var anmäld och behöver avanmäla sig). Admin påverkas inte av deadlinen.' }
+    ]
+  },
+  {
+    date: '28 augusti 2026 (177)',
+    items: [
+      { type: 'added', text: 'Startsidans "Senaste händelser" visar nu bara de 3 senaste posterna direkt, med en "+ Visa fler"-knapp för att se hela flödet (upp till 20 poster) - så flödet inte tar över hela startsidan.' }
+    ]
+  },
+  {
+    date: '28 augusti 2026 (176)',
+    items: [
+      { type: 'fixed', text: 'Bugg fixad: Flera sidor (Tourer-listan, Sök tour, Banstatistik, Global spelarlista/-profil, Globala inställningar, Idétavla, Hjälp) behöll tidigare scroll-positionen från föregående vy istället för att öppna upptill - kunde se ut som att navigeringen inte gjorde något om man t.ex. kom från långt ner i en lista. Alla sidor scrollar nu alltid upp till toppen när man navigerar dit, precis som huvudflikarna (Tävlingar/Spelare/Kalender/OoM/Inst.) redan gjorde.' }
+    ]
+  },
+  {
     date: '28 augusti 2026 (175)',
     items: [
       { type: 'fixed', text: 'Bugg fixad: Livescore kunde visa en annan poäng/netto än spelarens officiella, godkända resultat för en redan avslutad rond - eftersom livescore alltid räknade om poängen från liveScoring-dokumentets SHCP, som kunde ha ändrats efter att rundan godkändes. Nu visar livescore alltid det frusna, officiella resultatet så fort en rond är godkänd av markör/admin, så de två vyerna aldrig kan divergera.' }
@@ -13829,6 +13895,7 @@ function showIdeaWall() {
   updateHero(null);
   renderReleaseNotesInline();
   renderIdeaWall();
+  window.scrollTo(0, 0);
 }
 
 // ── HJÄLP & TIPS ─────────────────────────────────────────────────────────────
@@ -13939,6 +14006,7 @@ function showHelp() {
   });
   updateHero(null);
   renderHelpContent();
+  window.scrollTo(0, 0);
 }
 
 var _releaseNotesInlineExpanded = false;
@@ -14483,6 +14551,7 @@ function showUsersView() {
   if(profileEl) profileEl.style.display = 'none';
   if(listEl) listEl.style.display = '';
   renderUsersList();
+  window.scrollTo(0, 0);
 }
 
 // ── GLOBAL SPELARPROFIL (för Spelare-vyn utanför en specifik tour) ─────────
@@ -14560,6 +14629,7 @@ function showGlobalPlayerProfile(username) {
   var profileEl = document.getElementById('global-player-profile');
   if(listEl) listEl.style.display = 'none';
   if(profileEl) { profileEl.style.display = ''; profileEl.innerHTML = buildGlobalPlayerProfileHTML(username); }
+  window.scrollTo(0, 0);
 }
 
 function goBackFromGlobalProfile() {
@@ -14567,6 +14637,7 @@ function goBackFromGlobalProfile() {
   var profileEl = document.getElementById('global-player-profile');
   if(profileEl) profileEl.style.display = 'none';
   if(listEl) listEl.style.display = '';
+  window.scrollTo(0, 0);
 }
 
 // Redigera styrkor/svagheter från den globala profilen, och rita om profilen när man är klar.
