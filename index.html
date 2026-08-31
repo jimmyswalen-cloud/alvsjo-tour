@@ -1438,7 +1438,7 @@ function renderCourseStatsView() {
           '<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);'+(dbEntry?'cursor:pointer':'')+'"'+(dbEntry?' onclick="openCourseProfile(\''+dbEntry.id+'\')"':'')+'>'+
             (img?'<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:56px;height:36px;border-radius:6px;background:var(--surface2);flex-shrink:0"></div>')+
             '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+esc(c.name)+districtBadge+'</div>'+
-            '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+' runda'+(c.rounds.length!==1?'r':'')+' · '+typeLabel+'</div></div>'+
+            '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+(c.rounds.length!==1?' rundor':' runda')+' · '+typeLabel+'</div></div>'+
           '</div>'+
           '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">'+
             '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+avgLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avg+'</div></div>'+
@@ -8267,20 +8267,38 @@ function computeLiveStandingsRows(docs, t, ev) {
       if(approvedSub) {
         var subHoles = approvedSub.holes ? approvedSub.holes.slice() : new Array(totalHoles).fill(null);
         var subBrutto = approvedSub.brutto != null ? approvedSub.brutto : subHoles.reduce(function(a,b){ return a+(b||0); }, 0);
+        var subShcp = approvedSub.shcp != null ? approvedSub.shcp : (p.shcp||0);
         var totalPar = holePars.reduce(function(a,b){ return a+(b||0); }, 0);
-        var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -approvedSub.score;
-        var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (approvedSub.score - totalPar);
+        // Netto = brutto minus SHCP-slagen - räkna alltid ut det här (oavsett
+        // stableford/slaggolf), aldrig null. Har vi hål-för-hål-data summeras
+        // strokes received hål för hål (samma fördelning som resten av appen
+        // använder); saknas det (äldre inskickning utan holes-array) faller vi
+        // tillbaka på att dra av hela SHCP:et i klump.
+        var subNetto;
+        if(subHoles.some(function(g){ return typeof g === 'number'; })) {
+          var strokesTotal = 0;
+          for(var si=0; si<totalHoles; si++){
+            if(typeof subHoles[si] !== 'number') continue;
+            var sHcpIdx = (holeHcpIndex[si]!=null) ? holeHcpIndex[si] : (si+1);
+            strokesTotal += computeHcpStrokesForHole(subShcp, sHcpIdx, totalHoles);
+          }
+          subNetto = subBrutto - strokesTotal;
+        } else {
+          subNetto = subBrutto - Math.round(subShcp);
+        }
+        var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -subNetto;
+        var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
         if(isFinal) {
           subHeadStart = getHeadStart(t, ev, p.pi);
-          subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (approvedSub.score - subHeadStart - totalPar);
-          subSortValue = isStab ? (approvedSub.score + subHeadStart) : -(approvedSub.score - subHeadStart);
+          subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (subNetto - subHeadStart - totalPar);
+          subSortValue = isStab ? (approvedSub.score + subHeadStart) : -(subNetto - subHeadStart);
         }
         rows.push({
           pi: p.pi, name: p.name,
-          brutto: subBrutto, netto: isStab ? null : approvedSub.score, poang: isStab ? approvedSub.score : null,
+          brutto: subBrutto, netto: subNetto, poang: isStab ? approvedSub.score : null,
           thru: totalHoles, totalHoles: totalHoles,
           diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, submitted: true,
-          holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: approvedSub.shcp!=null?approvedSub.shcp:(p.shcp||0)
+          holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
         });
         seenPis[p.pi] = true;
         return;
@@ -12328,6 +12346,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (181)',
+    items: [
+      { type: 'fixed', text: 'Bugg fixad: Spelarens scorekortsmodal (t.ex. via livescore/"Följ live") kunde visa "Netto null" för en godkänd stableford-rond, eftersom förra fixen (#175) av misstag satte netto till null för stableford-rundor istället för att räkna ut det. Netto räknas nu alltid ut som brutto minus SHCP-slagen (hål för hål, samma fördelning som resten av appen), oavsett tävlingsform.' }
+    ]
+  },
+  {
+    date: '28 augusti 2026 (180)',
+    items: [
+      { type: 'fixed', text: 'Språkfix: Banstatistik-kortet visade "7 rundar" istället för korrekt "7 rundor" (pluralböjningen byggde felaktigt bara på "runda"+"r"). Rättat till rätt svensk plural.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (179)',
     items: [
