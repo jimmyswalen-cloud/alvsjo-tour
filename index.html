@@ -1002,7 +1002,7 @@ function computeMyBettingOverview() {
       (e.sideBets||[]).forEach(function(sb){
         var participants = sb.participants || [];
         var isIn = participants.indexOf(myPi) !== -1;
-        var decided = sb.winnerPi != null;
+        var decided = isSideBetDecided(sb);
         var item = {
           tourId: t.id, tourName: t.name+(t.season?' '+t.season:''),
           eventId: e.id, eventName: e.name,
@@ -1010,7 +1010,7 @@ function computeMyBettingOverview() {
           paid: !!(sb.payments && sb.payments[myPi]), decided: decided
         };
         if(isIn) myActive.push(item);
-        else if(!decided) joinable.push(item);
+        else if(isSideBetJoinable(e, sb, myPi)) joinable.push(item);
       });
     });
   });
@@ -4717,11 +4717,30 @@ function openSideBets(ei) {
           if(SIDE_BET_AUTO_TYPES.indexOf(sb.betType) >= 0) {
             box += '<div id="sb-suggestion-'+sb.id+'" style="font-size:12px;color:var(--text-3);margin-bottom:6px"><i class="ti ti-loader-2"></i> Beräknar förslag från scorekorten...</div>';
           }
-          box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:0">'+
+          var isMeasuredType = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+          if(isMeasuredType && sb.measurements && Object.keys(sb.measurements).length) {
+            var isClosestType = sb.betType === 'Närmast hål';
+            var sortedMeasured = Object.keys(sb.measurements).map(function(k){ return parseInt(k); })
+              .sort(function(a,b){ return isClosestType ? sb.measurements[a]-sb.measurements[b] : sb.measurements[b]-sb.measurements[a]; });
+            box += '<div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Inrapporterade mätningar:</div>';
+            box += sortedMeasured.map(function(pi){
+              var p = players[pi]; if(!p) return '';
+              var cm = sb.measurements[pi];
+              var mStr = isClosestType
+                ? Math.floor(cm/100)+' m '+(cm%100)+' cm'
+                : (cm/100).toFixed(cm%100===0?0:1)+' m';
+              var isLeader = sb.winnerPi === pi;
+              return '<div style="font-size:12px;padding:2px 0;'+(isLeader?'font-weight:700;color:var(--green-dark)':'color:var(--text-2)')+'">'+(isLeader?'<i class="ti ti-trophy" style="color:var(--gold);font-size:11px"></i> ':'')+esc(p.name)+' – '+mStr+'</div>';
+            }).join('');
+          }
+          box += '<select onchange="setSideBetWinner('+ei+',\''+sb.id+'\',this.value)" style="margin:'+(isMeasuredType?'6px 0 0':'0')+'">'+
             '<option value="">Ingen vinnare satt</option>'+
             participants.map(function(pi){
               var p = players[pi]; if(!p) return '';
-              return '<option value="'+pi+'" '+(sb.winnerPi===pi?'selected':'')+'>'+esc(p.name)+'</option>';
+              var measureNote = (isMeasuredType && sb.measurements && sb.measurements[pi]!=null)
+                ? ' ('+(sb.betType==='Närmast hål' ? Math.floor(sb.measurements[pi]/100)+'m'+(sb.measurements[pi]%100)+'cm' : (sb.measurements[pi]/100).toFixed(1)+'m')+')'
+                : '';
+              return '<option value="'+pi+'" '+(sb.winnerPi===pi?'selected':'')+'>'+esc(p.name)+measureNote+'</option>';
             }).join('')+
           '</select>';
           if(sb.winnerPi == null) {
@@ -4982,7 +5001,7 @@ function buildSideBetsSummaryHTML(t, e, ei) {
     var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
     var pot = paidCount * (sb.fee||0) + (sb.carriedOverPot||0);
     var winner = sb.winnerPi!=null ? players[sb.winnerPi] : null;
-    var canJoin = myPi>=0 && sb.winnerPi==null && participants.indexOf(myPi)===-1;
+    var canJoin = isSideBetJoinable(e, sb, myPi);
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
       '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+'</div>'+
@@ -5021,13 +5040,34 @@ function buildSideBetsSummaryHTML(t, e, ei) {
   return h;
 }
 
+// Sant om ett side bet redan är avgjort på något sätt - antingen en vinnare
+// satt, eller ett "ingen vann"-utfall (vidareskickat/återbetalt). Då ska
+// ingen längre kunna gå med, även om t.ex. deltagarlistan råkar vara tom.
+function isSideBetDecided(sb) {
+  return sb.winnerPi != null || !!sb.pushOutcome;
+}
+
+// Alla villkor som måste stämma för att en spelare själv ska få gå med i ett
+// side bet: anmäld till DELTÄVLINGEN (inte bara touren), deltävlingen inte
+// stängd, betet inte redan avgjort, och inte redan med. Hål-kontrollen (har
+// man redan spelat förbi det aktuella hålet för Längsta drive/Närmast hål)
+// görs separat och asynkront i checkHoleNotPassedForSideBet, eftersom den
+// kräver en Firestore-uppslagning mot livescoring-dokumentet.
+function isSideBetJoinable(e, sb, myPi) {
+  if(myPi < 0 || e.closed || isSideBetDecided(sb)) return false;
+  if((sb.participants||[]).indexOf(myPi) !== -1) return false;
+  return getEventRegPis(e).indexOf(myPi) !== -1;
+}
+
 // Låter en spelare gå med i ett befintligt side bet på egen hand (t.ex. vid efteranmälan).
 function joinSideBetCore(t, e, sb) {
   var myPi = getMyPi(t);
   if(myPi < 0) { alert('Du är inte registrerad som spelare i den här touren.'); return false; }
+  if(e.closed) { alert('Den här deltävlingen är avslutad - går inte att gå med i side bets längre.'); return false; }
+  if(getEventRegPis(e).indexOf(myPi) === -1) { alert('Du måste vara anmäld till den här deltävlingen för att gå med i dess side bets.'); return false; }
   if(!sb.participants) sb.participants = [];
   if(sb.participants.indexOf(myPi) !== -1) { alert('Du är redan med i det här betet.'); return false; }
-  if(sb.winnerPi != null) { alert('Det här betet är redan avgjort och går inte att gå med i längre.'); return false; }
+  if(isSideBetDecided(sb)) { alert('Det här betet är redan avgjort och går inte att gå med i längre.'); return false; }
   if(!confirm('Vill du gå med i "'+sb.name+'"'+(sb.fee>0?' för '+sb.fee+' kr':'')+'?')) return false;
   sb.participants.push(myPi);
   save();
@@ -5056,12 +5096,42 @@ function adminAddSideBetParticipant(ei, betId, piStr) {
   openSideBets(ei);
 }
 
+// Kollar om spelaren redan har spelat FÖRBI det aktuella hålet för ett
+// hål-kopplat side bet (Längsta drive/Närmast hål) - då är det ett fysiskt
+// faktum som redan inträffat och man ska inte kunna gå med i efterhand.
+// Kollar dels ett godkänt/inskickat scorekort (e.scoreSubmissions), dels ett
+// pågående livescoring-dokument för spelarens egen boll (om ett sådant finns).
+// resolve(true) = OK att gå med, resolve(false) = redan spelat förbi hålet.
+// Behöver ingen kontroll alls (resolve(true) direkt) om betet saknar hål
+// eller inte är av en hål-kopplad typ.
+function checkHoleNotPassedForSideBet(t, e, sb, myPi) {
+  if(!sb.hole || SIDE_BET_HOLE_TYPES.indexOf(sb.betType) < 0) return Promise.resolve(true);
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
+  if(sub && sub.holes && typeof sub.holes[sb.hole-1] === 'number') return Promise.resolve(false);
+  var myGroup = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(myPi) >= 0; });
+  if(!myGroup) return Promise.resolve(true); // inte ens tilldelad en boll än
+  var groupId = ensureTeeGroupId(myGroup);
+  return LIVE_SCORING_COL.doc(liveScoringDocId(e.id, groupId)).get().then(function(doc){
+    if(!doc.exists) return true;
+    var d = doc.data();
+    var myScores = (d.scores||{})[myPi];
+    return !(myScores && typeof myScores[sb.hole] === 'number');
+  }).catch(function(err){
+    console.error('Kunde inte kontrollera hål-status för side bet-anmälan', err);
+    return true; // vid osäkerhet, blockera inte (fail-open) - admin kan alltid städa upp manuellt
+  });
+}
+
 function joinSideBet(ei, betId) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
   if(!sb) return;
-  if(joinSideBetCore(t, e, sb)) renderEvents();
+  var myPi = getMyPi(t);
+  checkHoleNotPassedForSideBet(t, e, sb, myPi).then(function(ok){
+    if(!ok) { alert('Du har redan spelat hål '+sb.hole+' - går inte att gå med i "'+sb.name+'" längre.'); return; }
+    if(joinSideBetCore(t, e, sb)) renderEvents();
+  });
 }
 
 // Tour-oberoende variant, för användning från "Min betting" på hemskärmen.
@@ -5072,10 +5142,15 @@ function joinSideBetGlobal(tourId, eventId, betId) {
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
   if(!sb) return;
-  if(joinSideBetCore(t, e, sb)) {
-    if(activeTourId === tourId) renderEvents();
-    showMyBetting();
-  }
+  var players = getPlayersForTour(t);
+  var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
+  checkHoleNotPassedForSideBet(t, e, sb, myPi).then(function(ok){
+    if(!ok) { alert('Du har redan spelat hål '+sb.hole+' - går inte att gå med i "'+sb.name+'" längre.'); return; }
+    if(joinSideBetCore(t, e, sb)) {
+      if(activeTourId === tourId) renderEvents();
+      showMyBetting();
+    }
+  });
 }
 
 function eventCardHTML(i,e) {
@@ -7997,11 +8072,20 @@ function checkSideBetPromptForCurrentHole() {
   var ev = findEventById(d.eventId);
   if(!ev || !ev.sideBets || !ev.sideBets.length) return;
   var asked = _liveScoring.askedSideBets || (_liveScoring.askedSideBets = {});
+  var groupId = _liveScoring.docId;
   var pending = ev.sideBets.filter(function(sb){
-    return sb.hole === hole && sb.winnerPi == null && !asked[sb.id];
+    if(sb.hole !== hole || asked[sb.id]) return false;
+    // Mätbara bets (Längsta drive/Närmast hål): fråga VARJE boll en gång var,
+    // så alla bollars resultat kan jämföras mot varandra - till skillnad från
+    // andra hål-bets, där det räcker att första bollen som svarar avgör det.
+    if(SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0) {
+      return !(sb.reportedGroups && sb.reportedGroups[groupId]);
+    }
+    return sb.winnerPi == null;
   });
   if(!pending.length) return;
   _liveScoring.pendingSideBet = pending[0];
+  _liveScoring.sideBetPromptPi = null;
   _liveScoring.mode = 'sidebetPrompt';
   renderSideBetPromptHTML();
 }
@@ -8019,8 +8103,35 @@ function revertAutoSideBetWinnerIfHoleIncomplete(eid, hole) {
   var ev = findEventById(eid);
   if(!ev || !ev.sideBets) return;
   var changed = false;
+  var groupId = _liveScoring.docId;
   ev.sideBets.forEach(function(sb){
-    if(sb.hole === hole && sb.winnerAutoHole === hole && sb.winnerPi != null) {
+    if(sb.hole !== hole) return;
+    var isMeasured = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+    if(isMeasured) {
+      // Mätbara bets: bara den här bollens EGEN rapportering (och ev. mätning)
+      // ångras - andra bollars redan inrapporterade mätningar/ledare rörs inte.
+      if(sb.reportedGroups && sb.reportedGroups[groupId] != null) {
+        var reportedPi = sb.reportedGroups[groupId];
+        delete sb.reportedGroups[groupId];
+        if(sb.measurements && sb.measurements[reportedPi] != null) delete sb.measurements[reportedPi];
+        // Räkna om ledaren utifrån kvarvarande mätningar (kan bli en annan
+        // spelare, eller ingen alls om det var den enda rapporteringen).
+        var remainingPis = Object.keys(sb.measurements||{});
+        if(remainingPis.length) {
+          var isClosest = sb.betType === 'Närmast hål';
+          var newBest = remainingPis.reduce(function(best, cur){
+            if(best == null) return cur;
+            var better = isClosest ? sb.measurements[cur] < sb.measurements[best] : sb.measurements[cur] > sb.measurements[best];
+            return better ? cur : best;
+          }, null);
+          sb.winnerPi = parseInt(newBest);
+        } else if(sb.winnerAutoHole === hole) {
+          sb.winnerPi = null;
+          sb.winnerAutoHole = null;
+        }
+        changed = true;
+      }
+    } else if(sb.winnerAutoHole === hole && sb.winnerPi != null) {
       sb.winnerPi = null;
       sb.winnerAutoHole = null;
       changed = true;
@@ -8033,22 +8144,68 @@ function renderSideBetPromptHTML() {
   var el = document.getElementById('live-scoring-modal-body');
   var d = _liveScoring.data, sb = _liveScoring.pendingSideBet;
   if(!el || !d || !sb) { _liveScoring.mode='grid'; if(el) renderLiveGridHTML(); return; }
+  var isMeasured = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+
+  if(isMeasured && _liveScoring.sideBetPromptPi != null) {
+    renderSideBetDistanceInputHTML();
+    return;
+  }
 
   var options = (sb.participants||[]).map(function(pi){
     var inBoll = d.players.filter(function(x){ return x.pi===pi; })[0];
     var name = inBoll ? inBoll.name : null;
     if(!name) return ''; // fråga bara om de som faktiskt finns i den här bollen
-    return '<button onclick="answerSideBetPrompt('+pi+')" style="width:100%;text-align:left;padding:13px 14px;border-radius:8px;border:2px solid var(--border);background:#fff;margin-bottom:6px;font-size:15px;font-weight:600;color:var(--text)">'+esc(name)+'</button>';
+    var onclickFn = isMeasured ? 'selectSideBetPromptPlayer('+pi+')' : 'answerSideBetPrompt('+pi+')';
+    return '<button onclick="'+onclickFn+'" style="width:100%;text-align:left;padding:13px 14px;border-radius:8px;border:2px solid var(--border);background:#fff;margin-bottom:6px;font-size:15px;font-weight:600;color:var(--text)">'+esc(name)+'</button>';
   }).join('');
 
   el.innerHTML =
     '<div style="text-align:center;margin-bottom:16px">'+
       '<div style="font-size:13px;color:var(--text-3)">Hål '+_liveScoring.activeHole+' klart</div>'+
       '<div style="font-weight:800;font-size:19px;margin-top:2px"><i class="ti ti-target-arrow" style="color:var(--gold)"></i> '+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
-      '<div style="font-size:14px;color:var(--text-2);margin-top:2px">Vem vann?</div>'+
+      '<div style="font-size:14px;color:var(--text-2);margin-top:2px">'+(isMeasured?'Vem i er boll hade bästa bollen?':'Vem vann?')+'</div>'+
     '</div>'+
     (options || '<p style="font-size:13px;color:var(--text-3);text-align:center">Ingen av deltagarna i det här betet finns med i den här bollen.</p>')+
-    '<button onclick="skipSideBetPrompt()" style="width:100%;padding:11px 0;border-radius:8px;background:var(--surface2);color:var(--text-2);border:none;font-size:13px;font-weight:600;margin-top:6px">Hoppa över / vet inte än</button>';
+    '<button onclick="skipSideBetPrompt()" style="width:100%;padding:11px 0;border-radius:8px;background:var(--surface2);color:var(--text-2);border:none;font-size:13px;font-weight:600;margin-top:6px">Hoppa över / ingen i vår boll</button>';
+}
+
+// Steg 2 (bara för Längsta drive/Närmast hål): mata in den faktiska
+// mätningen för den utvalda spelaren, så olika bollars resultat på samma hål
+// går att jämföra ärligt mot varandra (istället för att bara första bollen
+// som svarar automatiskt "vinner"). Mätningen är frivillig - hoppar man över
+// den sätts spelaren ändå som tillfällig ledare om ingen annan har mätt än.
+function renderSideBetDistanceInputHTML() {
+  var el = document.getElementById('live-scoring-modal-body');
+  var d = _liveScoring.data, sb = _liveScoring.pendingSideBet;
+  var pi = _liveScoring.sideBetPromptPi;
+  if(!el || !d || !sb) return;
+  var inBoll = d.players.filter(function(x){ return x.pi===pi; })[0];
+  var name = inBoll ? inBoll.name : '?';
+  var isClosest = sb.betType === 'Närmast hål';
+  el.innerHTML =
+    '<div style="text-align:center;margin-bottom:16px">'+
+      '<div style="font-size:13px;color:var(--text-3)">Hål '+_liveScoring.activeHole+' · '+esc(sb.name)+' '+sideBetEmoji(sb.betType)+'</div>'+
+      '<div style="font-weight:800;font-size:19px;margin-top:2px">'+esc(name)+'</div>'+
+      '<div style="font-size:14px;color:var(--text-2);margin-top:2px">'+(isClosest?'Avstånd till flaggan (valfritt)':'Längd på driven (valfritt)')+'</div>'+
+    '</div>'+
+    (isClosest
+      ? '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px">'+
+          '<input type="number" id="sbdist-m" min="0" placeholder="Meter" style="width:110px;text-align:center;margin:0">'+
+          '<span style="color:var(--text-3)">m</span>'+
+          '<input type="number" id="sbdist-cm" min="0" max="99" placeholder="cm" style="width:90px;text-align:center;margin:0">'+
+          '<span style="color:var(--text-3)">cm</span>'+
+        '</div>'
+      : '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px">'+
+          '<input type="number" id="sbdist-m" min="0" step="0.1" placeholder="Meter" style="width:140px;text-align:center;margin:0">'+
+          '<span style="color:var(--text-3)">m</span>'+
+        '</div>')+
+    '<button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveSideBetPromptDistance(false)">Spara mätning</button>'+
+    '<button onclick="saveSideBetPromptDistance(true)" style="width:100%;padding:11px 0;border-radius:8px;background:var(--surface2);color:var(--text-2);border:none;font-size:13px;font-weight:600">Hoppa över mätning</button>';
+}
+
+function selectSideBetPromptPlayer(pi) {
+  _liveScoring.sideBetPromptPi = pi;
+  renderSideBetPromptHTML();
 }
 
 // Vem som helst i bollen kan svara på detta (inte admin-låst) - det handlar
@@ -8075,17 +8232,82 @@ function answerSideBetPrompt(pi) {
   advanceSideBetPromptQueue();
 }
 
+// Sparar den faktiska mätningen (meter, ev. + cm för Närmast hål) för den
+// spelare som valdes i steg 1, och räknar om vem som just nu leder betet
+// bland ALLA hittills inrapporterade bollars mätningar - längst vinner för
+// Längsta drive, kortast för Närmast hål. Så länge fler bollar återstår att
+// spela hålet kan ledaren alltså ändras igen när nästa boll rapporterar in.
+function saveSideBetPromptDistance(skipMeasurement) {
+  var sb = _liveScoring.pendingSideBet;
+  var d = _liveScoring.data;
+  var pi = _liveScoring.sideBetPromptPi;
+  if(sb && d && pi != null) {
+    var found = findTourAndEventById(d.eventId);
+    var ev = found ? found.event : null;
+    var actualSb = ev && ev.sideBets ? ev.sideBets.find(function(x){ return x.id===sb.id; }) : null;
+    if(actualSb) {
+      var isClosest = actualSb.betType === 'Närmast hål';
+      var distanceCm = null;
+      if(!skipMeasurement) {
+        var mEl = document.getElementById('sbdist-m');
+        var mVal = mEl ? parseFloat(mEl.value) : NaN;
+        if(!isNaN(mVal) && mVal>=0) {
+          if(isClosest) {
+            var cmEl = document.getElementById('sbdist-cm');
+            var cmVal = cmEl ? parseInt(cmEl.value) : NaN;
+            if(isNaN(cmVal)) cmVal = 0;
+            distanceCm = Math.round(mVal*100) + cmVal;
+          } else {
+            distanceCm = Math.round(mVal*100);
+          }
+        }
+      }
+      if(!actualSb.measurements) actualSb.measurements = {};
+      if(distanceCm != null) actualSb.measurements[pi] = distanceCm;
+      if(!actualSb.reportedGroups) actualSb.reportedGroups = {};
+      actualSb.reportedGroups[_liveScoring.docId] = pi;
+      var measuredPis = Object.keys(actualSb.measurements);
+      if(measuredPis.length) {
+        var bestPi = measuredPis.reduce(function(best, cur){
+          if(best == null) return cur;
+          var better = isClosest
+            ? actualSb.measurements[cur] < actualSb.measurements[best]
+            : actualSb.measurements[cur] > actualSb.measurements[best];
+          return better ? cur : best;
+        }, null);
+        actualSb.winnerPi = parseInt(bestPi);
+      } else if(actualSb.winnerPi == null) {
+        // Ingen mätning alls angiven av någon än - samma "först rapporterad
+        // vinner tills vidare"-beteende som innan mätning fanns.
+        actualSb.winnerPi = pi;
+      }
+      actualSb.winnerAutoHole = _liveScoring.activeHole;
+      // Postar bara EN gång i aktivitetsfeeden (första gången betet får en
+      // ledare), inte varje gång en senare boll knuffar bort föregående
+      // ledare - annars skulle feeden spammas med "X vann" flera gånger.
+      var alreadyPosted = !!actualSb.winFeedPosted;
+      actualSb.winFeedPosted = true;
+      save();
+      if(found && !alreadyPosted) postSideBetWinFeedEntry(found.tour, found.event, actualSb);
+    }
+  }
+  _liveScoring.sideBetPromptPi = null;
+  advanceSideBetPromptQueue();
+}
+
 function skipSideBetPrompt() {
   var sb = _liveScoring.pendingSideBet;
   if(sb) {
     var asked = _liveScoring.askedSideBets || (_liveScoring.askedSideBets = {});
     asked[sb.id] = true; // fråga inte igen den här sessionen, men lämna vinnaren osatt
   }
+  _liveScoring.sideBetPromptPi = null;
   advanceSideBetPromptQueue();
 }
 
 function advanceSideBetPromptQueue() {
   _liveScoring.pendingSideBet = null;
+  _liveScoring.sideBetPromptPi = null;
   _liveScoring.mode = 'grid';
   renderLiveGridHTML();
   checkSideBetPromptForCurrentHole(); // finns fler obesvarade bets för hålet, frågas nästa direkt
@@ -12381,6 +12603,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (185)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: "Gå med"-knappen för side bets visades felaktigt även när betet redan var avgjort (t.ex. "Ingen vann - återbetalt"/vidareskickat, inte bara när en vinnare var satt), när deltävlingen redan var stängd, och för spelare som inte ens var anmälda till deltävlingen. Nu krävs samtliga: deltävlingen inte stängd, betet inte avgjort på något sätt, och spelaren anmäld till just den deltävlingen (gäller både kortet under en deltävling och "Bets du kan gå med i" på hemskärmen). Dessutom: för Längsta drive/Närmast hål blockeras nu även den som redan spelat förbi det aktuella hålet (kollas mot godkänt scorekort eller pågående livescoring innan man släpps in).' }
+    ]
+  },
+  {
+    date: '28 augusti 2026 (184)',
+    items: [
+      { type: 'new', text: 'Längsta drive och Närmast hål kan nu mätas på riktigt istället för att bara utse "en vinnare". När hålet är klart för en boll väljer man vem i bollen som hade bästa bollen och kan ange en faktisk mätning (meter för Längsta drive, meter+cm för Närmast hål). Varje boll som spelar hålet tillfrågas nu (tidigare stannade frågan efter första bollen), och den boll vars mätning är bäst (längst respektive kortast) blir automatiskt satt som ledande vinnare - ändras det när en senare boll rapporterar en bättre mätning uppdateras det live. Admin ser alla inrapporterade mätningar sorterade i Side bets-vyn och kan fortfarande sätta vinnaren manuellt om något behöver rättas. Mätningen är frivillig - hoppar man över den fungerar allt precis som innan (första bollen som svarar blir tillfällig ledare).' }
+    ]
+  },
   {
     date: '28 augusti 2026 (183)',
     items: [
