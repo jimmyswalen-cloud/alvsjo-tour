@@ -4687,6 +4687,18 @@ function openSideBets(ei) {
         '</div>';
       if(admin) {
         box += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
+        if(sb.winnerPi == null) {
+          var eligibleToAdd = players.map(function(p,pi){ return p ? pi : null; }).filter(function(pi){ return pi!=null && participants.indexOf(pi)===-1; });
+          box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">Lägg till deltagare</div>';
+          box += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
+            '<select id="sb-add-pi-'+sb.id+'" style="margin:0;font-size:12px;max-width:170px" '+(eligibleToAdd.length?'':'disabled')+'>'+
+              (eligibleToAdd.length
+                ? eligibleToAdd.map(function(pi){ return '<option value="'+pi+'">'+esc(players[pi].name)+'</option>'; }).join('')
+                : '<option value="">Alla spelare redan med</option>')+
+            '</select>'+
+            '<button class="btn btn-sm" '+(eligibleToAdd.length?'':'disabled')+' onclick="adminAddSideBetParticipant('+ei+',\''+sb.id+'\',document.getElementById(\'sb-add-pi-'+sb.id+'\').value)"><i class="ti ti-user-plus"></i> Lägg till</button>'+
+          '</div>';
+        }
         if(sb.fee > 0 && participants.length) {
           box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">Betalning</div>';
           box += participants.map(function(pi){
@@ -5022,6 +5034,28 @@ function joinSideBetCore(t, e, sb) {
   return true;
 }
 
+// Admin-variant av joinSideBetCore: lägger till VILKEN spelare som helst i
+// touren i ett befintligt side bet, oavsett om spelaren är anmäld till just
+// den här deltävlingen eller inte (t.ex. om någon glömt anmäla sig men ändå
+// ska vara med i vadet, eller en spelare som bara vill delta i side betsen).
+function adminAddSideBetParticipant(ei, betId, piStr) {
+  if(!isAdmin()) return;
+  var pi = parseInt(piStr);
+  if(isNaN(pi)) return;
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  if(sb.winnerPi != null) { alert('Det här betet är redan avgjort - går inte att lägga till fler deltagare.'); return; }
+  if(!sb.participants) sb.participants = [];
+  if(sb.participants.indexOf(pi) !== -1) { alert('Spelaren är redan med i det här betet.'); return; }
+  sb.participants.push(pi);
+  save();
+  renderEvents();
+  renderHomeSideBetWidget();
+  openSideBets(ei);
+}
+
 function joinSideBet(ei, betId) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
@@ -5164,7 +5198,8 @@ function eventCardHTML(i,e) {
     ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
     : (isAdmin() ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   var btns=e.closed
-    ? '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Resultattavla</button>'+
+    ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Resultattavla</button>'+
+      '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Placeringar</button>'+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openWinnerPhotoEditor('+i+')"><i class="ti ti-camera"></i> Vinnarbild & story</button>'+
       '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
       sideBetsBtn+
@@ -12346,6 +12381,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '28 augusti 2026 (183)',
+    items: [
+      { type: 'new', text: 'Admin kan nu lägga till valfri spelare i touren som deltagare i ett befintligt side bet (ny knapp "Lägg till deltagare" per bet i Side bets-vyn) - oavsett om spelaren är anmäld till just den deltävlingen eller inte. Tidigare gick det bara att välja deltagare vid själva skapandet av side betet, eller att spelaren gick med sig själv via "Gå med".' }
+    ]
+  },
+  {
+    date: '28 augusti 2026 (182)',
+    items: [
+      { type: 'new', text: 'För en STÄNGD deltävling: ny knapp "Resultattavla" (öppnar samma fullständiga ställning/scorekort per spelare - hål för hål, brutto/netto/poäng - som "Ställning & scorekort" visar för en pågående deltävling, men nu även tillgänglig efter stängning). Den gamla "Resultattavla"-knappen (pallplats topp 3-4 med OoM-poäng) heter nu istället "Placeringar" för att skilja dem åt.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (181)',
     items: [
