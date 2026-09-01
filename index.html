@@ -2027,6 +2027,14 @@ function quickDeclineFromHome(tourId, eventIndex) {
   if(pruneMsg) alert(pruneMsg);
 }
 
+// Snabbgenväg till "Side bets" för deltävlingen direkt från startsidans
+// "Väntar på resultat/Kommande runda"-widget - samma mönster som de andra
+// genvägarna här (enterTour + setTimeout innan vyn som bygger på getTour()).
+function goToMySideBetsFromHome(tourId, eventIndex) {
+  enterTour(tourId);
+  setTimeout(function(){ openSideBets(eventIndex); }, 60);
+}
+
 function goToMyLiveScoring(tourId, eventId, gIdx) {
   enterTour(tourId);
   setTimeout(function(){
@@ -2193,6 +2201,7 @@ function renderHomeNextRoundWidget() {
       '<div class="row" style="justify-content:flex-end;align-items:center;gap:8px;padding:10px 14px 12px">'+
         '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
+        ((e.sideBets && e.sideBets.length) || isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets'+((e.sideBets&&e.sideBets.length)?' ('+e.sideBets.length+')':'')+'</button>' : '')+
         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
@@ -12664,6 +12673,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (187)',
+    items: [
+      { type: 'new', text: 'Ny genväg "Side bets" på startsidans kort för kommande/pågående runda, bredvid Live scoring och Mitt resultat. Knappen visas för spelare när det finns inlagda side bets för deltävlingen (med antal), och alltid för admin (för att kunna lägga till nya). Klick tar dig direkt till Side bets-vyn för just den deltävlingen.' }
+    ]
+  },
   {
     date: '28 augusti 2026 (186)',
     items: [
