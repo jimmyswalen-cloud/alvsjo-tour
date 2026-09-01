@@ -521,14 +521,46 @@ function getEventImage(e) {
   return getCourseImage(e.course) || null;
 }
 
-function saveCourseImage(name, imgData) {
-  if(!COURSE_BANK_REF) return;
+function saveCourseImage(name, imgData, cb) {
+  if(!COURSE_BANK_REF) { if(cb) cb(null); return; }
   var key = courseKey(name);
-  if(!key || !imgData) return;
-  var update = {};
-  update[key] = { displayName: (name||'').trim(), img: imgData };
-  COURSE_BANK_REF.set(update, { merge: true }).catch(function(err) {
-    console.error('Kunde inte spara banbild i bildbanken:', err);
+  if(!key || !imgData) { if(cb) cb(null); return; }
+  // Bilden laddas upp till Firebase Storage (samma mönster som övriga bilder i
+  // appen) istället för att sparas som base64 direkt i Firestore-dokumentet -
+  // annars växer bildbanken snabbt och tar onödig plats i databasen. Redan en
+  // riktig URL (t.ex. en tidigare GitHub-gissning) laddas inte upp igen, se
+  // uploadImageToStorage.
+  uploadImageToStorage(imgData, 'course-images/'+key+'.jpg').then(function(url){
+    if(!url) { if(cb) cb(null); return; }
+    var update = {};
+    update[key] = { displayName: (name||'').trim(), url: url };
+    COURSE_BANK_REF.set(update, { merge: true }).then(function(){
+      if(cb) cb(url);
+    }).catch(function(err) {
+      console.error('Kunde inte spara banbild i bildbanken:', err);
+      if(cb) cb(null);
+    });
+  });
+}
+
+// Sparar en märkeslogga till Firebase Storage + logoBank (motsvarande
+// saveCourseImage ovan, men för "What's in the Bag") - gör det möjligt att
+// ladda upp loggor direkt i appen istället för att behöva lägga filen manuellt
+// i GitHub-repot (den vägen finns kvar som ett alternativ, se getBrandLogo).
+function saveBrandLogo(name, imgData, cb) {
+  if(!LOGO_BANK_REF) { if(cb) cb(null); return; }
+  var key = brandKey(name);
+  if(!key || !imgData) { if(cb) cb(null); return; }
+  uploadImageToStorage(imgData, 'brand-logos/'+key+'.jpg').then(function(url){
+    if(!url) { if(cb) cb(null); return; }
+    var update = {};
+    update[key] = { displayName: (name||'').trim(), url: url };
+    LOGO_BANK_REF.set(update, { merge: true }).then(function(){
+      if(cb) cb(url);
+    }).catch(function(err) {
+      console.error('Kunde inte spara märkeslogga:', err);
+      if(cb) cb(null);
+    });
   });
 }
 
@@ -1474,25 +1506,49 @@ function renderLogoManagerSection(targetId) {
   var el = document.getElementById(targetId || 'logo-manager-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-tags"></i> Märkeslogotyper (What\'s in the Bag)</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Ladda upp loggor till mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> i GitHub-repot med filnamnen nedan, så kopplas de automatiskt in i "What\'s in the Bag" – samma princip som banbilderna. Både <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.jpg</code> och <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.png</code> funkar (appen provar båda automatiskt).</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Tryck <i class="ti ti-upload"></i> för att ladda upp en logga direkt här - den kopplas in automatiskt i "What\'s in the Bag" så fort den laddats upp. Vill du hellre lägga filen manuellt i GitHub-repot går det också, i mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> med filnamnet nedan (både <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.jpg</code> och <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.png</code> funkar).</p>';
   html += '<p id="logo-manager-count" style="font-size:12px;color:var(--text-3);margin-bottom:10px">Kontrollerar vilka loggor som finns uppladdade...</p>';
   html += '<div class="card" id="logo-manager-list" style="padding:0;max-height:420px;overflow-y:auto">';
   ALL_BRANDS.forEach(function(b, idx){
     var suggested = suggestBrandLogoFilename(b);
     var suggestedAlt = suggested.replace(/\.jpg$/i, '.png');
     var slug = brandKey(b).replace(/[^a-z0-9]/g,'-');
-    html += '<div class="row" data-brand="'+esc(b)+'" style="justify-content:space-between;align-items:center;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
-      '<div class="row" style="gap:10px;align-items:center;min-width:0">'+
+    html += '<div class="row" data-brand="'+esc(b)+'" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+      '<div class="row" style="gap:10px;align-items:center;min-width:0;flex:1">'+
         '<div id="logo-thumb-'+slug+'" style="width:36px;height:36px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--text-3);font-size:16px"></i></div>'+
         '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(b)+'</div>'+
         '<div id="logo-status-'+slug+'" style="font-size:11px;color:var(--text-3)">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code> <span style="color:var(--text-3)">eller</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggestedAlt)+'</code></div>'+
         '</div>'+
       '</div>'+
+      '<input type="file" id="logo-file-'+slug+'" accept="image/*" style="display:none" onchange="handleBrandLogoUpload(this.files[0],\''+esc(b).replace(/'/g,"\\'")+'\',\''+slug+'\');this.value=\'\'">'+
+      '<button type="button" class="btn btn-sm" style="flex-shrink:0" title="Ladda upp logga" onclick="document.getElementById(\'logo-file-'+slug+'\').click()"><i class="ti ti-upload"></i></button>'+
     '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
   setTimeout(function(){ detectBrandLogos(); }, 20);
+}
+
+// Körs när admin väljer en bildfil via uppladdningsknappen i Märkeslogotyper-
+// listan för ett visst märke - komprimerar och laddar upp till Firebase
+// Storage (saveBrandLogo), uppdaterar sedan thumbnailen/statusen direkt för
+// just det märket utan att behöva ladda om hela listan.
+function handleBrandLogoUpload(file, brand, slug) {
+  if(!file || !isAdmin()) return;
+  var statusEl = document.getElementById('logo-status-'+slug);
+  if(statusEl) { statusEl.innerHTML = '<i class="ti ti-loader-2"></i> Laddar upp...'; statusEl.style.color = 'var(--text-3)'; }
+  compressImage(file, 400, 200, 0.9, function(dataUrl){
+    saveBrandLogo(brand, dataUrl, function(url){
+      var statusEl2 = document.getElementById('logo-status-'+slug);
+      var thumbEl2 = document.getElementById('logo-thumb-'+slug);
+      if(!url) {
+        if(statusEl2) { statusEl2.innerHTML = '<i class="ti ti-alert-triangle"></i> Uppladdning misslyckades - försök igen.'; statusEl2.style.color = 'var(--danger-text)'; }
+        return;
+      }
+      if(thumbEl2) thumbEl2.innerHTML = '<img src="'+url+'" style="width:36px;height:36px;object-fit:contain;border-radius:6px;background:var(--surface2)">';
+      if(statusEl2) { statusEl2.innerHTML = '<i class="ti ti-check"></i> Logga OK'; statusEl2.style.color = 'var(--green-dark)'; }
+    });
+  });
 }
 
 // Försöker faktiskt ladda varje märkes logga (jpg, sedan png) i bakgrunden för att ge en korrekt status,
@@ -10603,10 +10659,37 @@ function openCourseProfile(courseId) {
   showModal(h, true);
 }
 
+// Körs när admin väljer en bildfil via uppladdningsknappen i Lägg till/Redigera
+// bana-formuläret - komprimerar och laddar upp till Firebase Storage
+// (saveCourseImage), uppdaterar förhandsvisningen i modalen och bild-badgen i
+// bakomliggande listan när det är klart. Bildbanken är knuten till bannamnet
+// (inte bandatabasens id), så namnfältet måste vara ifyllt först.
+function handleCourseDbImageUpload(file, courseName) {
+  if(!file || !isAdmin()) return;
+  courseName = (courseName||'').trim();
+  var prev = document.getElementById('cd-image-preview');
+  if(!courseName) { alert('Ange bannamn innan du laddar upp en bild.'); return; }
+  if(prev) prev.innerHTML = '<p style="font-size:12px;color:var(--text-3);margin:0"><i class="ti ti-loader-2"></i> Laddar upp...</p>';
+  compressImage(file, 1200, 800, 0.85, function(dataUrl){
+    saveCourseImage(courseName, dataUrl, function(url){
+      var prev2 = document.getElementById('cd-image-preview');
+      if(!prev2) return;
+      if(!url) { prev2.innerHTML = '<p style="font-size:12px;color:var(--danger-text);margin:0"><i class="ti ti-alert-triangle"></i> Uppladdning misslyckades - försök igen.</p>'; return; }
+      prev2.innerHTML = '<img src="'+url+'" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px">';
+      renderCourseDbList();
+    });
+  });
+}
+
 function openAddCourse() {
   if(!isAdmin()) return;
   showModal(
     '<h3>Lägg till bana</h3>' +
+    '<div style="margin-bottom:14px">' +
+      '<div id="cd-image-preview" style="margin-bottom:8px"><p style="font-size:12px;color:var(--text-3);margin:0">Ingen bild uppladdad än.</p></div>' +
+      '<input type="file" id="cd-image-file" accept="image/*" style="display:none" onchange="handleCourseDbImageUpload(this.files[0], document.getElementById(\'cd-name\').value);this.value=\'\'">' +
+      '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'cd-image-file\').click()"><i class="ti ti-photo"></i> Ladda upp bild</button>' +
+    '</div>' +
     '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
     '<div class="field"><label>Klubb <span style="font-size:11px;color:var(--text-3)">(om annat än bannamnet)</span></label><input id="cd-klubb" type="text" placeholder="t.ex. Riksten Golfklubb"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -10860,6 +10943,11 @@ function openEditCourse(id) {
   if(!c) return;
   showModal(
     '<h3>Redigera bana</h3>' +
+    '<div style="margin-bottom:14px">' +
+      '<div id="cd-image-preview" style="margin-bottom:8px">'+(getCourseImage(c.name) ? '<img src="'+getCourseImage(c.name)+'" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px">' : '<p style="font-size:12px;color:var(--text-3);margin:0">Ingen bild uppladdad än.</p>')+'</div>' +
+      '<input type="file" id="cd-image-file" accept="image/*" style="display:none" onchange="handleCourseDbImageUpload(this.files[0], document.getElementById(\'cd-name\').value);this.value=\'\'">' +
+      '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'cd-image-file\').click()"><i class="ti ti-photo"></i> '+(getCourseImage(c.name)?'Byt bild':'Ladda upp bild')+'</button>' +
+    '</div>' +
     '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" value="'+esc(c.name)+'"></div>' +
     '<div class="field"><label>Klubb</label><input id="cd-klubb" type="text" value="'+esc(c.klubb||'')+'"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
@@ -12874,7 +12962,7 @@ function renderCourseDbSection(targetId) {
   var withCoords = courseDb.filter(function(c){ return c.lat!=null && c.lng!=null; }).length;
   var pendingCount = countPendingCourses();
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bild kopplas automatiskt om du laddar upp rätt fil till GitHub-repot.</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Ladda upp en bild direkt via redigera-knappen på en bana, eller lägg en fil manuellt i GitHub-repot med filnamnet som visas där.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
     '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Visa karta ('+withCoords+'/'+courseDb.length+' med koordinater)</button>'+
     '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
@@ -12969,7 +13057,7 @@ function renderCourseDbList() {
         '<div style="width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:16px"></i></div>' +
         '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
         '<div style="font-size:12px;color:var(--danger-text)">Ingen bild &nbsp;·&nbsp; Par '+c.par+(c.district?' &nbsp;·&nbsp; '+esc(c.district):'')+'</div>' +
-        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Tryck <i class="ti ti-edit" style="font-size:10px"></i> för att ladda upp en bild, eller lägg manuellt: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
         (c.lat==null?'<div style="font-size:11px;color:var(--text-3);margin-top:2px"><i class="ti ti-map-pin-off" style="font-size:11px"></i> Ingen koordinat satt</div>':'') +
         '<div style="font-size:11px;margin-top:2px">'+(hasScorecard?'<span style="color:var(--green-dark)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Scorekort OK</span>':'<span style="color:var(--text-3)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Inget scorekort</span>')+'</div>' +
         '</div>' +
@@ -12988,7 +13076,7 @@ function renderCourseBankSection(targetId) {
   if(!isAdmin()) { el.innerHTML = ''; return; }
   var entries = Object.keys(courseBank).map(function(key){ return { key:key, displayName: courseBank[key].displayName || key, img: courseBank[key].img }; });
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-photo"></i> Bildbank för banor</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banbilder sparas automatiskt här första gången de laddas upp i en tour, så samma bana inte behöver laddas upp igen nästa gång. Vill du flytta en bild till GitHub (för att avlasta databasen) – ladda ner den här, ladda upp filen till ditt repo, och uppdatera bilden i en kommande tour med samma filnamn.</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banbilder som laddas upp (via Bandata eller när en tour skapas) sparas här automatiskt, i molnlagringen - inte i själva databasen. Samma bana behöver därför bara laddas upp en gång.</p>';
   if(!entries.length) {
     html += '<p class="empty">Inga banor sparade ännu.</p>';
   } else {
@@ -13051,6 +13139,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (200)',
+    items: [
+      { type: 'new', text: 'Bilder till banor och märkeslogotyper kan nu laddas upp direkt i appen, inte bara manuellt till GitHub-repot. Bandata: "Ladda upp bild"/"Byt bild" i Lägg till/Redigera bana-formuläret. Märkeslogotyper: en uppladdningsknapp per märke i listan. Båda laddar upp till Firebase Storage (samma molnlagring som redan används för profilbilder, banomslag, vinnarfoton m.m.) och kopplas in automatiskt - GitHub-vägen finns fortfarande kvar som ett alternativ för den som vill.' },
+      { type: 'improved', text: 'Bildbanken för banor sparar nu bilder i Firebase Storage istället för som base64 direkt i Firestore-dokumentet (gäller både den nya uppladdningsknappen och den befintliga auto-sparningen när en tävlingsbild laddas upp) - avlastar databasen automatiskt, ingen manuell nedladdning/GitHub-flytt behövs längre för nya bilder.' }
+    ]
+  },
   {
     date: '1 september 2026 (199)',
     items: [
