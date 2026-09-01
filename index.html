@@ -815,13 +815,70 @@ function openComments(eid) {
   h += '<div class="field">';
   h += '<textarea id="comment-text" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit;resize:vertical" placeholder="Skriv en kommentar..."></textarea>';
   h += '</div>';
+  h += '<div id="comment-img-prev" style="display:none;margin-bottom:8px"></div>';
+  h += '<div class="row" style="justify-content:flex-start;margin-bottom:6px">';
+  h += '<input type="file" id="comment-img-file" accept="image/*" style="display:none" onchange="handleCommentImageSelected(this.files[0]);this.value=\'\'">';
+  h += '<button type="button" class="btn btn-sm" id="comment-img-btn" onclick="document.getElementById(\'comment-img-file\').click()"><i class="ti ti-photo"></i> Bild</button>';
+  h += '</div>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
-  h += '<button class="btn btn-primary btn-sm" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
+  h += '<button class="btn btn-primary btn-sm" id="comment-send-btn" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
   h += '<button class="btn" onclick="closeModal()">Stäng</button>';
   h += '</div>';
   showModal(h, true);
   _openCommentsEventId = eid;
+  _commentImg = null;
   renderCommentsList(eid);
+}
+
+// Körs när en spelare väljer en bildfil via "Bild"-knappen i chatten. Bilden
+// komprimeras (samma teknik som övriga bilduppladdningar i appen) och hålls i
+// minnet (_commentImg) tills "Skicka" trycks - laddas då upp till Firebase
+// Storage på en unik sökväg per meddelande (se submitComment).
+function handleCommentImageSelected(file) {
+  if(!file) return;
+  compressImage(file, 1000, 1000, 0.85, function(dataUrl) {
+    _commentImg = dataUrl;
+    renderCommentImagePreview();
+  });
+}
+
+function removeCommentImage() {
+  _commentImg = null;
+  renderCommentImagePreview();
+}
+
+// Visar/döljer bildförhandsvisningen + bildtextfältet (max 35 tecken) i
+// chattens skrivfält. När en bild är vald döljs den vanliga fritextrutan -
+// bildtexten ersätter den istället, så det alltid är tydligt vilket av de
+// två man skriver (fri text ELLER en kort bildtext till en bifogad bild).
+function renderCommentImagePreview() {
+  var prev = document.getElementById('comment-img-prev');
+  var textarea = document.getElementById('comment-text');
+  var imgBtn = document.getElementById('comment-img-btn');
+  if(!prev) return;
+  if(_commentImg) {
+    if(textarea) textarea.style.display = 'none';
+    if(imgBtn) imgBtn.style.display = 'none';
+    prev.style.display = '';
+    prev.innerHTML =
+      '<div style="position:relative;display:inline-block;margin-bottom:8px">'+
+        '<img src="'+_commentImg+'" style="max-width:140px;max-height:140px;border-radius:8px;display:block;object-fit:cover;border:1px solid var(--border)">'+
+        '<button type="button" onclick="removeCommentImage()" title="Ta bort bild" style="position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#1a1a1a;color:#fff;border:2px solid #fff;font-size:14px;line-height:1;cursor:pointer;padding:0">×</button>'+
+      '</div>'+
+      '<input type="text" id="comment-img-caption" maxlength="35" placeholder="T.ex. Spelare 1, 2 och 3 slår ut nu" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:16px;font-family:inherit" oninput="updateCommentCaptionCounter()">'+
+      '<div id="comment-img-caption-counter" style="font-size:11px;color:var(--text-3);text-align:right;margin-top:2px">0/35</div>';
+  } else {
+    if(textarea) textarea.style.display = '';
+    if(imgBtn) imgBtn.style.display = '';
+    prev.style.display = 'none';
+    prev.innerHTML = '';
+  }
+}
+
+function updateCommentCaptionCounter() {
+  var inp = document.getElementById('comment-img-caption');
+  var counter = document.getElementById('comment-img-caption-counter');
+  if(inp && counter) counter.textContent = inp.value.length + '/35';
 }
 
 
@@ -843,6 +900,10 @@ function renderCommentsList(eid) {
           (canDelete ? '<i class="ti ti-trash" style="color:var(--danger-text);cursor:pointer;font-size:14px;padding:8px;margin:-8px" onclick="deleteComment(\''+eid+'\',\''+idx+'\')"></i>' : '')+
         '</span>'+
       '</div>'+
+      // Liten klickbar thumbnail (max 90px) så en bifogad bild inte gör
+      // meddelandebubblan (eller chattens skrollhöjd) onödigt stor - klick
+      // öppnar bilden i fullskärm via openImageLightbox.
+      (c.img ? '<img src="'+esc(c.img)+'" onclick="openImageLightbox(\''+esc(c.img)+'\')" style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:pointer;display:block;margin-bottom:'+(c.text?'6px':'0')+'">' : '')+
       (c.text ? '<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word">'+esc(c.text)+'</div>' : '')+
 
     '</div>';
@@ -850,26 +911,49 @@ function renderCommentsList(eid) {
   el.scrollTop = el.scrollHeight;
 }
 
+// Öppnar en bild i fullskärm (hela skärmen), t.ex. en chattbild - stängs med
+// ett klick var som helst. Egen enkel overlay (inte showModal/#modal-mc) så
+// den kan öppnas ovanpå chattens egen modal utan att stänga den.
+function openImageLightbox(url) {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:700;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+  ov.innerHTML = '<img src="'+esc(url)+'" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px">';
+  ov.addEventListener('click', function(){ ov.remove(); });
+  document.body.appendChild(ov);
+}
+
 function submitComment(eid) {
   var e = findEventById(eid);
   if(!e) return;
   var textEl = document.getElementById('comment-text');
-  var text = textEl ? textEl.value.trim() : '';
-  if(!text) { alert('Skriv något innan du skickar.'); return; }
+  var captionEl = document.getElementById('comment-img-caption');
+  var hasImage = !!_commentImg;
+  var text = hasImage ? (captionEl ? captionEl.value.trim().slice(0,35) : '') : (textEl ? textEl.value.trim() : '');
+  if(!hasImage && !text) { alert('Skriv något innan du skickar.'); return; }
   if(!e.comments) e.comments = [];
-  e.comments.push({
-    username: currentUser.username,
-    name: currentUser.name || currentUser.username,
-    text: text,
-    img: null,
-    timestamp: Date.now()
+  var commentId = uid();
+  var imgToUpload = _commentImg;
+  var sendBtn = document.getElementById('comment-send-btn');
+  if(sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<i class="ti ti-loader-2"></i> Skickar...'; }
+  // Unik sökväg per meddelande (till skillnad från t.ex. profilbilder/vinnarfoto
+  // som ligger på en stabil sökväg och skrivs över) - en chatt kan ju innehålla
+  // många olika bilder samtidigt.
+  uploadImageToStorage(imgToUpload, 'chat-images/'+eid+'/'+commentId+'.jpg').then(function(url){
+    e.comments.push({
+      id: commentId,
+      username: currentUser.username,
+      name: currentUser.name || currentUser.username,
+      text: text,
+      img: url,
+      timestamp: Date.now()
+    });
+    _commentImg = null;
+    save();
+    if(textEl) textEl.value = '';
+    renderCommentImagePreview();
+    renderCommentsList(eid);
+    if(sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="ti ti-send"></i> Skicka'; }
   });
-  _commentImg = null;
-  save();
-  if(textEl) textEl.value = '';
-  var prev = document.getElementById('comment-img-prev');
-  if(prev) prev.innerHTML = '';
-  renderCommentsList(eid);
 }
 
 function deleteComment(eid, idx) {
@@ -2201,7 +2285,7 @@ function renderHomeNextRoundWidget() {
       '<div class="row" style="justify-content:flex-end;align-items:center;gap:8px;padding:10px 14px 12px">'+
         '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
-        ((e.sideBets && e.sideBets.length) || isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets'+((e.sideBets&&e.sideBets.length)?' ('+e.sideBets.length+')':'')+'</button>' : '')+
+        '<button class="btn btn-sm" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets'+((e.sideBets&&e.sideBets.length)?' ('+e.sideBets.length+')':'')+'</button>'+
         '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
@@ -4267,6 +4351,17 @@ var SIDE_BET_AUTO_TYPES = ['Minst antal puttar', 'Färst antal slag på ett hål
 // Dessa typer avgörs fysiskt på ett specifikt hål ute på banan - kopplas till ett
 // hålnummer så livescoringen kan fråga om vinnaren automatiskt när hålet är klart.
 var SIDE_BET_HOLE_TYPES = ['Längsta drive', 'Närmast hål'];
+// Vem som får FÖRVALTA (radera, lägga till deltagare, sätta vinnare manuellt,
+// betalning, skicka vidare/återbetala) ett visst side bet: admin, ELLER den
+// spelare som själv skapade betet (spelare kan numera skapa side bets helt
+// utan admin - se "Lägg till side bet" i openSideBets). Äldre bets skapade av
+// admin innan detta fanns saknar createdBy, vilket är helt OK - de förvaltas
+// då bara av admin precis som innan.
+function canManageSideBet(t, sb) {
+  if(isAdmin()) return true;
+  var myPi = getMyPi(t);
+  return myPi >= 0 && sb.createdBy != null && sb.createdBy === myPi;
+}
 // Egen liten emoji per typ, visas direkt efter namnet - grön/flagga för
 // "Närmast hål" (klassiskt golf-hål-motiv), bomb för "Längsta drive" (kraft/smäll).
 function sideBetEmoji(betType) {
@@ -4318,11 +4413,10 @@ function findNextSideBetForCarryover(t, currentEventId, betType) {
 }
 
 function carrySideBetForward(ei, betId) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   var target = findNextSideBetForCarryover(t, e.id, sb.betType);
   if(!target) {
     alert('Hittade inget kommande obesvarat side bet av samma typ ("'+sb.betType+'") att skicka vidare potten till. Använd "Återbetala till spelare" istället.');
@@ -4341,11 +4435,10 @@ function carrySideBetForward(ei, betId) {
 }
 
 function refundSideBet(ei, betId) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   if(!confirm('Markera "'+sb.name+'" som återbetald? Det här bara markerar betet som avslutat utan vinnare i appen - insatserna behöver fortfarande betalas tillbaka manuellt (Swish/kontant) till deltagarna.')) return;
   sb.pushOutcome = 'refunded';
   save();
@@ -4356,11 +4449,10 @@ function refundSideBet(ei, betId) {
 // misstag. Vid en vidareskickning dras potten också bort från mottagarbetet
 // igen (om det fortfarande finns kvar).
 function undoSideBetPushOutcome(ei, betId) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   if(sb.pushOutcome === 'carried' && sb.carriedToEventId && sb.carriedToBetId) {
     var targetEv = t.events.find(function(x){ return x.id===sb.carriedToEventId; });
     var targetBet = targetEv ? (targetEv.sideBets||[]).find(function(x){ return x.id===sb.carriedToBetId; }) : null;
@@ -4664,6 +4756,10 @@ function openSideBets(ei) {
   var regPis = getEventRegPis(e);
   var regDates = getEventRegisteredDates(e);
   var admin = isAdmin();
+  var myPi = getMyPi(t);
+  // Vem som helst som är anmäld spelare i touren får skapa nya side bets numera
+  // (inte bara admin) - se scope-valet i formuläret längre ner.
+  var canCreate = admin || myPi >= 0;
 
   var h = '<h3><i class="ti ti-target-arrow"></i> Side bets – '+esc(e.name)+'</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:14px">T.ex. längsta drive, närmast hål, minst antal puttar.</p>';
@@ -4684,18 +4780,21 @@ function openSideBets(ei) {
       var participants = sb.participants || [];
       var paidCount = participants.filter(function(pi){ return sb.payments && sb.payments[pi]; }).length;
       var totalPot = (sb.fee>0 ? (participants.length*sb.fee) : 0) + (sb.carriedOverPot||0);
+      var canManage = canManageSideBet(t, sb);
+      var creator = sb.createdBy!=null ? players[sb.createdBy] : null;
       var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
         '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
-          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+'</div>'+
+          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+(sb.scope==='specific'?' <span style="font-size:11px;font-weight:600;color:var(--text-3)"><i class="ti ti-users-group"></i> Utvald boll</span>':'')+'</div>'+
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
+          (creator?'<div style="font-size:11px;color:var(--text-3);margin-top:2px">Skapad av '+esc(creator.name)+'</div>':'')+
           (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt'+(sb.carriedOverPot?' · +'+sb.carriedOverPot+' kr vidareskickat = '+totalPot+' kr totalt':'')+'</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
           (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+(totalPot>0?' ('+totalPot+' kr)':'')+'</div>':'')+
           (sb.pushOutcome==='carried'?'<div style="font-size:12px;color:#0C447C;font-weight:600;margin-top:6px"><i class="ti ti-arrow-forward-up"></i> Potten ('+((sb.fee>0?participants.length*sb.fee:0))+' kr) fördes vidare till "'+esc(sb.carriedToBetName||'?')+'" i '+esc(sb.carriedToEventName||'?')+'</div>':'')+
           (sb.pushOutcome==='refunded'?'<div style="font-size:12px;color:var(--text-2);font-weight:600;margin-top:6px"><i class="ti ti-receipt-refund"></i> Återbetalt till deltagarna</div>':'')+
           '</div>'+
-          (admin?'<button class="btn btn-sm btn-danger" onclick="deleteSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-trash"></i></button>':'')+
+          (canManage?'<button class="btn btn-sm btn-danger" onclick="deleteSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-trash"></i></button>':'')+
         '</div>';
-      if(admin) {
+      if(canManage) {
         box += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
         if(sb.winnerPi == null) {
           var eligibleToAdd = players.map(function(p,pi){ return p ? pi : null; }).filter(function(pi){ return pi!=null && participants.indexOf(pi)===-1; });
@@ -4768,7 +4867,7 @@ function openSideBets(ei) {
     if(sbMigrated) save();
   }
 
-  if(admin) {
+  if(canCreate) {
     h += '<hr class="divider">';
     h += '<h4 style="margin-bottom:8px">Lägg till side bet</h4>';
     h += '<div class="field"><label>Typ</label><select id="sb-type" onchange="onSideBetTypeChange()">'+
@@ -4786,14 +4885,24 @@ function openSideBets(ei) {
     } else {
       h += '<input type="hidden" id="sb-date" value="'+esc(e.date)+'">';
     }
-    h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt: alla anmälda '+(regDates.length>1?'till det valda datumet':'till deltävlingen')+')</div>';
+    // Scope: öppet för alla som spelar samma dag, eller stängt för bara en
+    // specifik boll/utvalda spelare. Spelare (utan adminroll) behöver detta
+    // för att kunna skapa "interna" bets inom sin egen boll utan att alla
+    // andra i deltävlingen automatiskt dras in eller kan gå med i efterhand
+    // (se scope-spärren i explainSideBetNotJoinable). Admin kan förstås
+    // också använda "specifik boll" om man vill.
+    h += '<div class="field"><label>Vem gäller betet?</label>'+
+      '<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">'+
+        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="radio" name="sb-scope" value="open" checked onchange="onSideBetScopeChange('+ei+')" style="width:auto;margin:0"> Öppet för alla som spelar samma dag</label>'+
+        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="radio" name="sb-scope" value="specific" onchange="onSideBetScopeChange('+ei+')" style="width:auto;margin:0"> Bara en specifik boll/utvalda spelare</label>'+
+      '</div>'+
+      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Vid "specifik boll" kan bara du eller admin lägga till fler deltagare i efterhand - andra kan inte gå med själva.</p>'+
+    '</div>';
+    h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt utifrån valet ovan - bocka i/ur fritt)</div>';
     h += '<div id="sb-participants-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
       (function(){
         var pisForList = regDates.length > 1 ? getRegPisForDate(e, e.date) : regPis;
-        return pisForList.length ? pisForList.map(function(pi){
-          var p = players[pi]; if(!p) return '';
-          return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
-        }).join('') : '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld ännu.</span>';
+        return sideBetParticipantCheckboxesHTML(players, pisForList, 'open', null);
       })()+
     '</div>';
     h += '<button class="btn btn-sm btn-primary" onclick="addSideBet('+ei+')"><i class="ti ti-plus"></i> Lägg till side bet</button>';
@@ -4801,7 +4910,7 @@ function openSideBets(ei) {
 
   h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
   showModal(h, true, true);
-  if(admin) refreshSideBetSuggestions(ei);
+  refreshSideBetSuggestions(ei);
 }
 
 // Ett side bet gäller bara spelare som spelar SAMMA speldatum som betet är
@@ -4817,6 +4926,32 @@ function getRegPisForDate(e, date) {
   return (e.registrations||[]).filter(function(r){ return !r.declined && r.date===date; }).map(function(r){ return r.pi; });
 }
 
+// Hittar spelarens egen bolls playerPis för ett visst datum i en deltävling -
+// används för att förvälja rätt spelare när en spelare (inte admin) skapar ett
+// side bet begränsat till "en specifik boll" istället för öppet för alla som
+// spelar samma dag. Returnerar null om spelaren inte är tilldelad någon boll
+// för det datumet än (t.ex. bollarna inte satta ännu) - då får man kryssa i
+// deltagarna helt manuellt istället.
+function getMyTeeGroupPisForDate(e, date, myPi) {
+  if(myPi == null || myPi < 0) return null;
+  var g = (e.teeGroups||[]).find(function(gr){ return (gr.playerPis||[]).indexOf(myPi) >= 0 && gr.date === date; });
+  return g ? g.playerPis.slice() : null;
+}
+
+// Bygger deltagar-kryssrutorna för "Lägg till side bet"-formuläret. Vid scope
+// "open" är alla anmälda (till det valda datumet) förvalda, precis som innan.
+// Vid scope "specific" är bara spelarna i skaparens egen boll förvalda (om en
+// boll redan är bildad för det datumet) - listan visar ändå ALLA anmälda så
+// man fritt kan bocka i/ur enskilda spelare oavsett scope.
+function sideBetParticipantCheckboxesHTML(players, pisForList, scope, myBollPis) {
+  if(!pisForList.length) return '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld ännu.</span>';
+  return pisForList.map(function(pi){
+    var p = players[pi]; if(!p) return '';
+    var checked = scope==='specific' ? !!(myBollPis && myBollPis.indexOf(pi)>=0) : true;
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" '+(checked?'checked':'')+' style="width:auto;margin:0">'+esc(p.name)+'</label>';
+  }).join('');
+}
+
 // Bygger om deltagar-kryssrutorna i "Lägg till side bet"-formuläret till att
 // bara visa spelare som är anmälda till det valda datumet (körs på nytt varje
 // gång datum-fältet ändras, se sb-date-select nedan).
@@ -4824,15 +4959,36 @@ function onSideBetDateChange(ei) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var players = getPlayersForTour(t);
+  var myPi = getMyPi(t);
   var dateSel = document.getElementById('sb-date');
   var date = dateSel ? dateSel.value : e.date;
   var pis = getRegPisForDate(e, date);
+  var scopeEl = document.querySelector('input[name="sb-scope"]:checked');
+  var scope = scopeEl ? scopeEl.value : 'open';
+  var myBollPis = getMyTeeGroupPisForDate(e, date, myPi);
   var container = document.getElementById('sb-participants-list');
   if(!container) return;
-  container.innerHTML = pis.length ? pis.map(function(pi){
-    var p = players[pi]; if(!p) return '';
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" checked style="width:auto;margin:0">'+esc(p.name)+'</label>';
-  }).join('') : '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld till det datumet.</span>';
+  container.innerHTML = sideBetParticipantCheckboxesHTML(players, pis, scope, myBollPis);
+}
+
+// Körs när radioknappen "Öppet för alla"/"Specifik boll" ändras - räknar om
+// vilka deltagare som ska vara förbockade utifrån det valda datumet (samma
+// deltagarlista som innan, bara annan förvalskryssning).
+function onSideBetScopeChange(ei) {
+  var t = getTour(), e = t.events[ei];
+  if(!e) return;
+  var players = getPlayersForTour(t);
+  var myPi = getMyPi(t);
+  var regDates = getEventRegisteredDates(e);
+  var dateSel = document.getElementById('sb-date');
+  var date = dateSel ? dateSel.value : e.date;
+  var pisForList = regDates.length > 1 ? getRegPisForDate(e, date) : getEventRegPis(e);
+  var scopeEl = document.querySelector('input[name="sb-scope"]:checked');
+  var scope = scopeEl ? scopeEl.value : 'open';
+  var myBollPis = getMyTeeGroupPisForDate(e, date, myPi);
+  var container = document.getElementById('sb-participants-list');
+  if(!container) return;
+  container.innerHTML = sideBetParticipantCheckboxesHTML(players, pisForList, scope, myBollPis);
 }
 
 function onSideBetTypeChange() {
@@ -4844,9 +5000,12 @@ function onSideBetTypeChange() {
 }
 
 function addSideBet(ei) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
+  var myPi = getMyPi(t);
+  // Vem som helst som är en registrerad spelare i touren får skapa side bets nu
+  // (inte bara admin) - admin kan förstås fortfarande alltid göra det.
+  if(!isAdmin() && myPi < 0) return;
   var typeEl = document.getElementById('sb-type');
   var chosenType = typeEl ? typeEl.value : '';
   var name, betType;
@@ -4869,8 +5028,10 @@ function addSideBet(ei) {
   var checked = Array.prototype.map.call(document.querySelectorAll('.sb-participant-chk:checked'), function(el){ return parseInt(el.value); });
   var dateEl = document.getElementById('sb-date');
   var date = dateEl ? dateEl.value : e.date;
+  var scopeEl = document.querySelector('input[name="sb-scope"]:checked');
+  var scope = scopeEl ? scopeEl.value : 'open';
   if(!e.sideBets) e.sideBets = [];
-  e.sideBets.push({ id: uid(), name: name, betType: betType, description: desc.trim(), fee: fee, hole: hole, date: date, participants: checked, payments: {}, winnerPi: null });
+  e.sideBets.push({ id: uid(), name: name, betType: betType, description: desc.trim(), fee: fee, hole: hole, date: date, participants: checked, payments: {}, winnerPi: null, createdBy: (myPi>=0 ? myPi : null), scope: scope });
   save();
   renderEvents();
   renderHomeSideBetWidget();
@@ -4878,10 +5039,11 @@ function addSideBet(ei) {
 }
 
 function deleteSideBet(ei, betId) {
-  if(!isAdmin()) return;
-  if(!confirm('Ta bort det här side betet?')) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
+  var sbToDelete = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sbToDelete || !canManageSideBet(t, sbToDelete)) return;
+  if(!confirm('Ta bort det här side betet?')) return;
   e.sideBets = (e.sideBets||[]).filter(function(sb){ return sb.id!==betId; });
   save();
   renderEvents();
@@ -4890,11 +5052,10 @@ function deleteSideBet(ei, betId) {
 }
 
 function toggleSideBetPayment(ei, betId, pi) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   if(!sb.payments) sb.payments = {};
   sb.payments[pi] = !sb.payments[pi];
   save();
@@ -4903,11 +5064,10 @@ function toggleSideBetPayment(ei, betId, pi) {
 }
 
 function setSideBetWinner(ei, betId, val) {
-  if(!isAdmin()) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   sb.winnerPi = (val===''||val==null) ? null : parseInt(val);
   sb.winnerAutoHole = null; // manuell ändring - ska inte kunna ångras automatiskt längre
   sb.pushOutcome = null; // defensivt - UI:t döljer annars select när pushOutcome är satt
@@ -5115,6 +5275,12 @@ function explainSideBetNotJoinable(e, sb, myPi) {
   // sb.date saknas på äldre bets skapade innan det här fanns, då gäller ingen
   // datumbegränsning.
   if(sb.date && reg.date !== sb.date) return 'Det här side betet gäller spelare som spelar '+sb.date+' - du är anmäld till ett annat datum. Be din boll skapa ett eget side bet för er speldag istället.';
+  // "specific"-scopade bets (skapade av en spelare för bara sin egen boll/utvalda
+  // spelare, se scope-valet i "Lägg till side bet") är stängda för självanmälan -
+  // skaparen (eller admin) får lägga till fler via "Lägg till deltagare" om det
+  // behövs. "open"-scopade bets (och äldre bets utan scope-fält) är precis som
+  // innan öppna för vem som helst anmäld samma dag.
+  if(sb.scope === 'specific') return 'Det här betet gäller bara en specifik boll/utvalda spelare - be den som skapade betet lägga till dig om du ska vara med.';
   return null;
 }
 
@@ -5139,13 +5305,12 @@ function joinSideBetCore(t, e, sb) {
 // den här deltävlingen eller inte (t.ex. om någon glömt anmäla sig men ändå
 // ska vara med i vadet, eller en spelare som bara vill delta i side betsen).
 function adminAddSideBetParticipant(ei, betId, piStr) {
-  if(!isAdmin()) return;
   var pi = parseInt(piStr);
   if(isNaN(pi)) return;
   var t = getTour(), e = t.events[ei];
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
-  if(!sb) return;
+  if(!sb || !canManageSideBet(t, sb)) return;
   if(sb.winnerPi != null) { alert('Det här betet är redan avgjort - går inte att lägga till fler deltagare.'); return; }
   if(!sb.participants) sb.participants = [];
   if(sb.participants.indexOf(pi) !== -1) { alert('Spelaren är redan med i det här betet.'); return; }
@@ -5335,7 +5500,7 @@ function eventCardHTML(i,e) {
   var chatBtn = '<button class="btn btn-sm" style="background:#0F3D5C;border-color:#0F3D5C;color:#fff" onclick="openComments(\''+e.id+'\')"><i class="ti ti-message-circle"></i> Chat'+((e.comments&&e.comments.length)?' ('+e.comments.length+')':'')+'</button>';
   var sideBetsBtn = (e.sideBets && e.sideBets.length)
     ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
-    : (isAdmin() ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
+    : ((isAdmin()||myPi>=0) ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Resultattavla</button>'+
       '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Placeringar</button>'+
@@ -12673,6 +12838,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (189)',
+    items: [
+      { type: 'new', text: 'Spelare kan nu bifoga en bild i deltävlingens chat, tack vare bilduppladdningen till Firebase Storage. Tryck "Bild", välj en bild och skriv en kort bildtext (max 35 tecken) - t.ex. "Här slår spelare 1, 2 och 3 ut idag". Bilden visas som en liten klickbar thumbnail i chatten (för att inte göra meddelandet eller chattfönstret för stort) och öppnas i fullskärm när man trycker på den.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (188)',
+    items: [
+      { type: 'new', text: 'Spelare kan nu skapa side bets helt själva, utan att admin behöver medverka. I "Lägg till side bet" väljer man numera om betet ska vara "Öppet för alla som spelar samma dag" (som innan) eller "Bara en specifik boll/utvalda spelare" - i det senare fallet förvals spelarens egen boll (om den redan är bildad för det datumet) och andra spelare kan inte gå med själva efteråt (bara skaparen eller admin kan lägga till fler). Den som skapar ett bet blir automatiskt dess förvaltare - kan radera det, lägga till deltagare, markera betalning och sätta vinnare manuellt, precis som admin kunnat innan. Äldre bets och bets som admin skapar påverkas inte.' }
+    ]
+  },
   {
     date: '1 september 2026 (187)',
     items: [
