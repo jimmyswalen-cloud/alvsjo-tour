@@ -9223,6 +9223,24 @@ function getApprovedHolesForPlayerInEvent(e, pi) {
   return null;
 }
 
+// Samma princip som getApprovedHolesForPlayerInEvent ovan, men returnerar
+// totalresultatet (redan uträknat: stableford-poäng eller nettoslag beroende
+// på tävlingstyp) istället för hål-för-hål. Används av banstatistiken
+// (computeCourseHistory) så att en spelares godkända rond räknas in direkt -
+// precis som hålstatistiken redan gör - istället för att vänta på att admin
+// stänger HELA deltävlingen.
+function getApprovedScoreForPlayerInEvent(e, pi) {
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+  if(sub && isSubmissionApproved(sub) && sub.score != null) {
+    return { score: sub.score };
+  }
+  if(e.closed && e.results) {
+    var r = e.results.find(function(x){ return x.pi===pi; });
+    if(r && r.score != null) return { score: r.score };
+  }
+  return null;
+}
+
 function computeCourseHoleStats(courseName) {
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(courseName||'').trim().toLowerCase(); });
   var counts = emptyHoleCounts();
@@ -10259,17 +10277,31 @@ function suggestCourseFilename(name) {
 }
 
 // ── BANPROFILER (GIS Version 5) ─────────────────────────────────────────────
+// Räknar in en spelares rond för banstatistiken så FORT rundan är godkänd
+// (av markör eller admin) - precis som hålstatistiken redan gör sedan
+// tidigare (se getApprovedHolesForPlayerInEvent) - istället för att vänta på
+// att admin stänger HELA deltävlingen. En deltävling som fortfarande pågår
+// men redan har minst en godkänd rond dyker nu upp i tourhistoriken också,
+// men utan vinnare (vinnaren vet man ju inte förrän deltävlingen är stängd).
 function computeCourseHistory(courseName) {
   var key = courseName.toLowerCase();
   var rounds = []; // {score, isStab}
   var playedEvents = []; // {tourName, eventName, date, winner, isFinal}
   (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       if((e.course||'').toLowerCase() !== key) return;
-      if(e.closed && e.results && e.results.length) {
-        var isStab = e.type==='stableford';
-        e.results.forEach(function(r){ if(r.score>0) rounds.push({ score:r.score, isStab:isStab }); });
-        var winnerP = t.players && t.players[e.results[0].pi];
+      var isStab = e.type==='stableford';
+      var anyApprovedRound = false;
+      players.forEach(function(p, pi){
+        if(!p) return;
+        var entry = getApprovedScoreForPlayerInEvent(e, pi);
+        if(!entry || entry.score == null || entry.score <= 0) return;
+        rounds.push({ score: entry.score, isStab: isStab });
+        anyApprovedRound = true;
+      });
+      if(anyApprovedRound) {
+        var winnerP = (e.closed && e.results && e.results.length) ? players[e.results[0].pi] : null;
         playedEvents.push({ tourName:t.name+(t.season?' '+t.season:''), eventName:e.name, date:e.date, winner: winnerP?winnerP.name:null, isFinal: e.isFinal });
       }
     });
@@ -12838,6 +12870,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (191)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: Banstatistiken (Rundor spelade/Snitt/Bästa runda och tourhistoriken på en banas profil) väntade felaktigt på att HELA deltävlingen skulle stängas av admin innan en spelares rond räknades in - precis samma typ av bugg som redan fixades för hålstatistiken (release 172-området). En godkänd rond (av markör eller admin) räknas nu in direkt, oavsett om deltävlingen är stängd än. En pågående deltävling med minst en godkänd rond dyker nu även upp i tourhistoriken - men utan vinnare, eftersom det inte är klart förrän deltävlingen stängs.' }
+    ]
+  },
   {
     date: '1 september 2026 (190)',
     items: [
