@@ -9034,11 +9034,15 @@ function computeLiveStandingsRows(docs, t, ev) {
           subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (subNetto - subHeadStart - totalPar);
           subSortValue = isStab ? (approvedSub.score + subHeadStart) : -(subNetto - subHeadStart);
         }
+        // paceValue: samma diff, men alltid på "högre = bättre"-skala oavsett
+        // tävlingsform - används som sorteringsnyckel istället för totalsumman,
+        // se paceValue-kommentaren vid rows.sort() nedan.
+        var subPaceValue = isStab ? subDiff : -subDiff;
         rows.push({
           pi: p.pi, name: p.name,
           brutto: subBrutto, netto: subNetto, poang: isStab ? approvedSub.score : null,
           thru: totalHoles, totalHoles: totalHoles,
-          diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, submitted: true,
+          diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
           holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
         });
         seenPis[p.pi] = true;
@@ -9071,9 +9075,17 @@ function computeLiveStandingsRows(docs, t, ev) {
         diff = isStab ? (poang + headStart - thru*2) : (netto - headStart - parSoFar);
         sortValue = isStab ? (poang + headStart) : -(netto - headStart);
       }
+      // paceValue: diff (poäng över/under förväntat pace, resp. netto mot par
+      // hittills) på "högre = bättre"-skala. Används som sorteringsnyckel så
+      // att den som ligger bäst till mot par/handicap rankas högst - OAVSETT
+      // hur många hål hen hunnit spela - istället för att den som bara spelat
+      // fler hål automatiskt hamnar högre upp bara för att totalsumman är
+      // större. sortValue (totalsumman) sparas kvar för ev. annat bruk men
+      // styr inte längre ställningens ordning.
+      var paceValue = isStab ? diff : -diff;
       rows.push({
         pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, submitted: false,
+        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, paceValue: paceValue, submitted: false,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
       seenPis[p.pi] = true;
@@ -9094,19 +9106,24 @@ function computeLiveStandingsRows(docs, t, ev) {
       rows.push({
         pi: pi, name: p.name, brutto: 0, netto: 0, poang: 0, thru: 0, totalHoles: 18,
         diff: 0, isStab: ev.type==='stableford', headStart: isFinal ? getHeadStart(t, ev, pi) : null,
-        sortValue: -Infinity, submitted: false, notStarted: true,
+        sortValue: -Infinity, paceValue: -Infinity, submitted: false, notStarted: true,
         holesGross: [], holePars: [], holeHcpIndex: [], shcp: p.shcp||0
       });
       seenPis[pi] = true;
     });
   }
-  // Bäst placerad överst - flest stableford-poäng (eller lägst netto) vinner, justerat
-  // för finalens slagförsprång om tillämpligt. Mer spelat rankas före ospelat vid lika.
+  // Bäst placerad överst - PACE-sortering: den som ligger bäst till mot
+  // par/handicap för de hål hen faktiskt spelat vinner (paceValue), inte den
+  // med störst ackumulerad totalsumma. Så kan t.ex. någon som är +2 slag bättre
+  // än sitt handicap genom 7 hål ligga före någon som är sämre än sitt handicap
+  // men hunnit spela klart alla 18 - precis som på en riktig touringledartavla.
+  // Ospelat (thru===0) hamnar alltid sist, oavsett paceValue.
   rows.sort(function(a,b){
     if(a.thru===0 && b.thru===0) return 0;
     if(a.thru===0) return 1;
     if(b.thru===0) return -1;
-    return b.sortValue - a.sortValue;
+    if(b.paceValue !== a.paceValue) return b.paceValue - a.paceValue;
+    return b.thru - a.thru; // lika pace: den som hunnit längst rankas som säkrare överst
   });
   return rows;
 }
@@ -13152,6 +13169,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (203)',
+    items: [
+      { type: 'improved', text: 'Ställningen i Live scoring/Live-tabellen sorteras nu på PACE (hur bra man ligger till mot par/handicap för de hål man faktiskt hunnit spela) istället för på ackumulerad totalsumma. Tidigare hamnade den som spelat färre hål alltid längre ner bara för att totalen (Stableford-poäng resp. netto) naturligt blir lägre ju färre hål som är ifyllda - även om personen faktiskt låg klart bäst till relativt sitt handicap. Nu räcker det att jämföra "+/-"-kolumnen (samma tal som redan visades där): den som är t.ex. +2 genom 7 hål kan ligga före någon som är sämre än sitt handicap men hunnit spela alla 18 - precis som på en riktig touringledartavla. Vid exakt lika pace rankas den som hunnit längst (flest spelade hål) överst. Gäller både under pågående rond och när en deltävling stängs/blir final.' }
+    ]
+  },
   {
     date: '1 september 2026 (202)',
     items: [
