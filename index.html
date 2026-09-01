@@ -295,6 +295,20 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     </div>
     <div id="global-settings-content"></div>
   </div>
+  <div id="course-data-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="showGlobalSettings()"><i class="ti ti-arrow-left"></i> Inställningar</button>
+      <h2 style="margin:0;flex:1;text-align:center">Bandata</h2>
+    </div>
+    <div id="course-data-content"></div>
+  </div>
+  <div id="brand-logos-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="showGlobalSettings()"><i class="ti ti-arrow-left"></i> Inställningar</button>
+      <h2 style="margin:0;flex:1;text-align:center">Märkeslogotyper</h2>
+    </div>
+    <div id="brand-logos-content"></div>
+  </div>
   <div id="idea-wall-screen" style="display:none">
     <div class="tours-header">
       <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
@@ -451,7 +465,8 @@ var BRAND_LOGO_SIZE_ADJUST = {
   'titleist': 1.4,
   'taylormade': 1.3,
   'callaway': 1.15,
-  'takomo': 0.5
+  'takomo': 0.5,
+  'ping': 0.65
 };
 
 function adjustedLogoSize(brand, size) {
@@ -1193,7 +1208,7 @@ function showHomeScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
@@ -1236,7 +1251,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -1250,7 +1265,7 @@ function showCourseStats() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
@@ -1262,7 +1277,7 @@ function showTourSearch() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tour-search-screen' ? '' : 'none';
   });
@@ -1274,7 +1289,7 @@ function showTourSearch() {
 }
 
 function showGlobalPlayers() {
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
   });
@@ -1286,11 +1301,51 @@ function showGlobalSettings() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
   renderGlobalSettings();
+  window.scrollTo(0, 0);
+}
+
+// Egen undersida (nås via Inställningar) för all bandata samlat - både
+// Bandatabasen (redigera banor, kartor, geokodning m.m.) och Bildbanken
+// (automatiskt sparade banbilder) - istället för att ligga utrullat direkt på
+// Inställningar-sidan, som gjorde den onödigt lång att scrolla igenom.
+function showCourseDataPage() {
+  if(!isAdmin()) { viewMyProfile(); return; }
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'course-data-screen' ? '' : 'none';
+  });
+  renderCourseDataPage();
+  window.scrollTo(0, 0);
+}
+
+function renderCourseDataPage() {
+  var el = document.getElementById('course-data-content');
+  if(!el) return;
+  el.innerHTML = '<div id="course-db-section-page"></div><div id="course-bank-section-page"></div>';
+  renderCourseDbSection('course-db-section-page');
+  renderCourseBankSection('course-bank-section-page');
+}
+
+// Egen undersida (nås via Inställningar) för märkeslogotyper ("What's in the
+// Bag") - samma anledning som Bandata-sidan ovan.
+function showBrandLogosPage() {
+  if(!isAdmin()) { viewMyProfile(); return; }
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'brand-logos-screen' ? '' : 'none';
+  });
+  renderLogoManagerSection('brand-logos-content');
   window.scrollTo(0, 0);
 }
 
@@ -1355,43 +1410,20 @@ function renderGlobalSettings() {
       '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
     '</div>';
     html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-photo"></i> Bildbank för banor</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Automatiskt sparade banbilder - ladda ner för att flytta över till GitHub-repot.</p>'+
-      '<button class="btn btn-sm" onclick="openCourseBankModal()"><i class="ti ti-photo"></i> Öppna bildbank</button>'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf"></i> Bandata</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Bandatabas (redigera banor, kartor, geokodning) och Bildbank för banor, samlat.</p>'+
+      '<button class="btn btn-sm" onclick="showCourseDataPage()"><i class="ti ti-arrow-right"></i> Öppna bandata</button>'+
     '</div>';
     html += '<div class="card" style="margin-bottom:12px">'+
       '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-tags"></i> Märkeslogotyper</div>'+
       '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Status för logotyper till "What\'s in the Bag".</p>'+
-      '<button class="btn btn-sm" onclick="openLogoManagerModal()"><i class="ti ti-tags"></i> Öppna logotyper</button>'+
+      '<button class="btn btn-sm" onclick="showBrandLogosPage()"><i class="ti ti-arrow-right"></i> Öppna märkeslogotyper</button>'+
     '</div>';
   }
-  html += '<div id="course-db-section"></div><div id="login-log-section"></div><div id="db-diagnostics"></div>';
+  html += '<div id="login-log-section"></div><div id="db-diagnostics"></div>';
   el.innerHTML = html;
-  renderCourseDbSection();
   renderLoginLogSection();
   renderDbDiagnostics();
-}
-
-// Bildbank och märkeslogotyper flyttades ut ur den vanliga Inställningar-vyn
-// till varsin modal (istället för att alltid ligga utrullade på sidan) - de
-// gjorde annars sidan onödigt lång att scrolla igenom. Själva innehållet
-// (renderCourseBankSection/renderLogoManagerSection) är oförändrat, de
-// skriver bara till en container som nu råkar ligga i en modal istället för
-// direkt i Inställningar-vyn.
-function openCourseBankModal() {
-  if(!isAdmin()) return;
-  var h = '<div id="course-bank-section-modal"></div>';
-  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, true, true);
-  renderCourseBankSection('course-bank-section-modal');
-}
-
-function openLogoManagerModal() {
-  if(!isAdmin()) return;
-  var h = '<div id="logo-manager-section"></div>';
-  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, true, true);
-  renderLogoManagerSection();
 }
 
 // Engångsreparation (men säker att köra flera gånger - rör aldrig scorekort
@@ -1438,8 +1470,8 @@ function repairMissingHolePuttsFromLiveScoring() {
   });
 }
 
-function renderLogoManagerSection() {
-  var el = document.getElementById('logo-manager-section');
+function renderLogoManagerSection(targetId) {
+  var el = document.getElementById(targetId || 'logo-manager-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-tags"></i> Märkeslogotyper (What\'s in the Bag)</div>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Ladda upp loggor till mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> i GitHub-repot med filnamnen nedan, så kopplas de automatiskt in i "What\'s in the Bag" – samma princip som banbilderna. Både <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.jpg</code> och <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.png</code> funkar (appen provar båda automatiskt).</p>';
@@ -12836,8 +12868,8 @@ async function geocodeMissingCourses() {
 var _courseDbSearch = '';
 var _courseDbFilter = 'all'; // all | no-image | no-coords | no-scorecard | complete
 
-function renderCourseDbSection() {
-  var el = document.getElementById('course-db-section');
+function renderCourseDbSection(targetId) {
+  var el = document.getElementById(targetId || 'course-db-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
   var withCoords = courseDb.filter(function(c){ return c.lat!=null && c.lng!=null; }).length;
   var pendingCount = countPendingCourses();
@@ -13019,6 +13051,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (199)',
+    items: [
+      { type: 'fixed', text: 'PING-loggan (en bred rektangulär "pill"-logga) skalades ner för mycket lite jämfört med andra märken när den visades i höjd-baserad storlek (spelarens profilsida, Hantera användare-listan, Top 3-widgeten m.m.) - vid vissa höjder kom den nära bredd-taket och klämdes ihop i trängre rader. Ny post i BRAND_LOGO_SIZE_ADJUST (0.65x, samma mekanism som redan finns för Titleist/TaylorMade/Callaway/Takomo) gör den proportionerligt mindre överallt den visas i den här stilen. Lade även till skydd (flex-shrink:0) i Hantera användare-listan så loggan inte klämmer ihop sig av intilliggande knappar.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (198)',
+    items: [
+      { type: 'improved', text: 'Bandata (Bandatabas + Bildbank för banor) och Märkeslogotyper är nu egna undersidor nåbara via Inställningar, istället för att ligga utrullade direkt på Inställningar-sidan eller i en modal - Inställningar-sidan blir därmed betydligt kortare att scrolla. Två nya kort ("Bandata"/"Märkeslogotyper") länkar dit, med en Tillbaka-knapp som går till Inställningar igen.' }
+    ]
+  },
   {
     date: '1 september 2026 (197)',
     items: [
@@ -14695,7 +14739,7 @@ function showIdeaWall() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
   });
@@ -14807,7 +14851,7 @@ function showHelp() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'help-screen' ? '' : 'none';
   });
@@ -15541,8 +15585,8 @@ function renderUsersList() {
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px" onclick="event.stopPropagation()">'+
-          (pLogo ? '<div style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center">'+pLogo+'</div>' : '')+
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">'+
+          (pLogo ? '<div style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center;flex-shrink:0">'+pLogo+'</div>' : '')+
           (admin ? '<div class="row" style="gap:6px">'+
             (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
