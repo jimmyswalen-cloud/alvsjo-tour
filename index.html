@@ -2282,11 +2282,11 @@ function renderHomeNextRoundWidget() {
           '</div>'+
         '</div>'+
       '</div>'+
-      '<div class="row" style="justify-content:flex-end;align-items:center;gap:8px;padding:10px 14px 12px">'+
+      '<div class="row" style="justify-content:flex-end;align-items:center;gap:6px;padding:10px 14px 12px;flex-wrap:wrap">'+
         '<span id="home-live-table-btn"></span>'+
-        (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
-        '<button class="btn btn-sm" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets'+((e.sideBets&&e.sideBets.length)?' ('+e.sideBets.length+')':'')+'</button>'+
-        '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
+        (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff;padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
+        '<button class="btn btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets</button>'+
+        '<button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
@@ -12838,6 +12838,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (190)',
+    items: [
+      { type: 'fixed', text: 'Knapparna i startsidans "Väntar på resultat/Kommande runda"-kort (Live scoring, Side bets, Mitt resultat) blev för breda när Side bets-genvägen lades till - krympta nu (mindre padding/textstorlek, radbryter vid behov) så de får plats snyggt som innan. Side bets-knappen visar inte längre antal bets inom parentes på just den här ytan (finns kvar i själva Side bets-vyn och på tävlingskortet).' }
+    ]
+  },
   {
     date: '1 september 2026 (189)',
     items: [
