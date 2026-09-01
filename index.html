@@ -9123,7 +9123,13 @@ function computeLiveStandingsRows(docs, t, ev) {
     if(a.thru===0) return 1;
     if(b.thru===0) return -1;
     if(b.paceValue !== a.paceValue) return b.paceValue - a.paceValue;
-    return b.thru - a.thru; // lika pace: den som hunnit längst rankas som säkrare överst
+    if(a.thru !== b.thru) return b.thru - a.thru; // lika pace: den som hunnit längst rankas som säkrare överst
+    // Fullständigt lika (även i antal spelade hål): lägst SHCP vinner - samma
+    // tiebreak-regel som används på riktigt när en deltävling stängs, se
+    // buildResultsFromApprovedSubmissions() (ah-bh). Utan den här raden vann
+    // den som råkade ligga tidigast i spelarlistan/registreringsordningen,
+    // vilket inte är en golfregel utan bara en slump i datastrukturen.
+    return (a.shcp||0) - (b.shcp||0);
   });
   return rows;
 }
@@ -13257,6 +13263,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (205)',
+    items: [
+      { type: 'fixed', text: 'Live-ställningen (samma sortering används i Live scoring och Live-tabellen) saknade en tredje tiebreak-nivå: om två spelare låg exakt lika i pace OCH hade spelat lika många hål (t.ex. båda -2 genom alla 18) fanns ingen regel kvar, så ordningen avgjordes av en slump i datastrukturen istället för en golfregel. Nu vinner lägst SHCP vid ett sådant fullständigt dödläge - exakt samma tiebreak som redan används på riktigt när en deltävling stängs officiellt.' }
+    ]
+  },
   {
     date: '1 september 2026 (204)',
     items: [
