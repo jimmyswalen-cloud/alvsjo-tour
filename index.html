@@ -1442,6 +1442,11 @@ function renderGlobalSettings() {
       '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
     '</div>';
     html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-medal" style="color:#0F6E56"></i> Kontrollera OoM-poäng</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda (icke-final) deltävlingar i alla tourer och jämför varje spelares SPARADE OoM-poäng mot vad poängskalan (+ ev. majors-multiplikator) borde ge för spelarens nuvarande placering i resultatlistan. Kan hända att de kommer i otakt om en deltävling återöppnades för att rätta ett resultat och sedan sparades om via "Resultat", utan att "Stäng" klickades igen efteråt (det sista steget räknar om poängen - att bara spara resultat gör det inte). Rör ALDRIG placeringsordningen, bara det sparade poängvärdet.</p>'+
+      '<button class="btn btn-sm" onclick="auditAndRepairOomPoints()"><i class="ti ti-wand"></i> Kontrollera</button>'+
+    '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
       '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf"></i> Bandata</div>'+
       '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Bandatabas (redigera banor, kartor, geokodning) och Bildbank för banor, samlat.</p>'+
       '<button class="btn btn-sm" onclick="showCourseDataPage()"><i class="ti ti-arrow-right"></i> Öppna bandata</button>'+
@@ -1500,6 +1505,58 @@ function repairMissingHolePuttsFromLiveScoring() {
     alert('Klart! Kollade '+checked+' scorekort utan puttar, kompletterade '+fixed+' med puttar hämtade från livescoringen.'+
       (checked>fixed ? ' '+(checked-fixed)+' hade ingen sparad puttdata kvar i livescoringen (troligen aldrig ifyllda).' : ''));
   });
+}
+
+// Hittar deltävlingar där det SPARADE OoM-poängvärdet (r.points) inte längre
+// stämmer med vad poängskalan (t.pointsScale[idx] × ev. majors-multiplikator)
+// borde ge för spelarens NUVARANDE placering i e.results. Detta kan hända om
+// en redan stängd deltävling återöppnas (reopenEvent nollställer r.points),
+// resultatet sedan sparas om via "Resultat"-formuläret (saveResults sätter
+// bara e.results - räknar ALDRIG om poängen), men admin sedan glömmer att
+// klicka "Stäng" en gång till (det är först closeEvent() som räknar om
+// poängen från den aktuella ordningen). Resultatet blir en placering med rätt
+// "plac." men fel/saknat poängvärde - exakt det scenariot en spelare kan
+// upptäcka genom att jämföra sin profil mot vad poängskalan säger.
+function auditAndRepairOomPoints() {
+  if(!isAdmin()) return;
+  if(!confirm('Gå igenom alla stängda deltävlingar i alla tourer och jämföra sparade OoM-poäng mot vad poängskalan ger för varje spelares nuvarande placering? Ändrar ALDRIG placeringsordningen - bara ett poängvärde som inte stämmer med den ordningen.')) return;
+  var mismatches = [];
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || e.isFinal || !e.results || !e.results.length) return;
+      var mult = e.isMajor ? 1.5 : 1;
+      e.results.forEach(function(r, idx){
+        var correct = Math.round(((t.pointsScale && t.pointsScale[idx])||0) * mult * 10) / 10;
+        var stored = r.points || 0;
+        if(stored !== correct) {
+          var p = t.players[r.pi];
+          mismatches.push({ e:e, r:r, tourName:t.name, eventName:e.name, playerName: p?p.name:('Spelare #'+r.pi), place: idx+1, stored:stored, correct:correct });
+        }
+      });
+    });
+  });
+  if(!mismatches.length) { alert('Kollade alla stängda deltävlingar - alla sparade OoM-poäng stämmer redan mot poängskalan och nuvarande placering.'); return; }
+  var listHtml = mismatches.map(function(m){
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<b>'+esc(m.playerName)+'</b> - '+esc(m.eventName)+' ('+esc(m.tourName)+'), plats '+m.place+
+      ': sparat <span style="color:var(--text-3)">'+m.stored+'p</span> &rarr; rätt <span style="color:#0F6E56;font-weight:700">'+m.correct+'p</span></div>';
+  }).join('');
+  _oomPointsMismatches = mismatches;
+  showModal('<h3 style="margin-bottom:8px">Hittade '+mismatches.length+' felaktiga OoM-poäng</h3>'+
+    '<div style="max-height:320px;overflow-y:auto;margin-bottom:14px">'+listHtml+'</div>'+
+    '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="_oomPointsMismatches=null;closeModal()">Avbryt</button><button class="btn btn-primary" onclick="applyOomPointsRepair()">Rätta alla ('+mismatches.length+')</button></div>', true, true);
+}
+
+var _oomPointsMismatches = null;
+function applyOomPointsRepair() {
+  if(!isAdmin() || !_oomPointsMismatches) return;
+  var n = _oomPointsMismatches.length;
+  _oomPointsMismatches.forEach(function(m){ m.r.points = m.correct; });
+  _oomPointsMismatches = null;
+  save();
+  closeModal();
+  renderOOM(); renderEvents();
+  alert('Klart! Rättade '+n+' poster.');
 }
 
 function renderLogoManagerSection(targetId) {
@@ -13305,6 +13362,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (207)',
+    items: [
+      { type: 'new', text: 'Hittade orsaken till att Niclas Lundevalls 2:a-plats på Royal Kyssinge Classic visade 0p istället för de 21p placeringen faktiskt ska ge: poängen räknas bara om av "Stäng"-knappen (closeEvent) - att återöppna en stängd deltävling och spara om resultatet via "Resultat"-formuläret räknar ALDRIG om poängen (det formuläret bygger bara resultatlistan/placeringarna). Har "Stäng" av misstag inte klickats igen efter en sådan rättning blir placeringen rätt men poängen fel/0, vilket i sin tur gör att OoM-totalen blir för låg. Ny admin-knapp "Kontrollera OoM-poäng" under Inställningar → Globala inställningar går igenom ALLA stängda deltävlingar i alla tourer, jämför sparade poäng mot vad poängskalan faktiskt ger för varje spelares nuvarande placering, listar alla avvikelser den hittar och rättar dem med ett klick - utan att röra placeringsordningen.' }
+    ]
+  },
   {
     date: '1 september 2026 (206)',
     items: [
