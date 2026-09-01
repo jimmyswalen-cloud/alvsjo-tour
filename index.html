@@ -1349,6 +1349,11 @@ function renderGlobalSettings() {
   if(isAdmin()) {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf" style="color:#0F6E56"></i> Reparera saknade puttar</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">"Registrera för bollen" (gruppinmatning från livescoring) tappade tidigare bort inmatade puttar - de sparades aldrig i scorekortet trots att de matats in under rundan. Bugg fixad framåt i tiden (release 196), men redan inskickade scorekort som drabbades behöver kompletteras en gång. Knappen letar igenom alla godkända scorekort som helt saknar puttar, och fyller i dem igen från den sparade livescoring-datan (om den fortfarande finns kvar) - rör aldrig scorekort som redan har puttar.</p>'+
+      '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
+    '</div>';
   }
   html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div><div id="login-log-section"></div><div id="db-diagnostics"></div>';
   el.innerHTML = html;
@@ -1357,6 +1362,50 @@ function renderGlobalSettings() {
   renderLogoManagerSection();
   renderLoginLogSection();
   renderDbDiagnostics();
+}
+
+// Engångsreparation (men säker att köra flera gånger - rör aldrig scorekort
+// som redan har puttar) för buggen där "Registrera för bollen" tappade bort
+// puttar inmatade i livescoringen (se submitBulkScore). Letar upp den sparade
+// livescoring-datan för varje drabbat scorekort (samma dokument som livescoringen
+// skrev till) och kompletterar puttarna om de fortfarande finns kvar där.
+function repairMissingHolePuttsFromLiveScoring() {
+  if(!isAdmin()) return;
+  if(!confirm('Leta igenom alla deltävlingar efter godkända scorekort som saknar puttar, och försöka fylla i dem från sparad livescoring-data? Skriver bara till scorekort som helt saknar puttar sedan tidigare - skriver aldrig över redan sparade puttar.')) return;
+  var tasks = []; // {e, sub, groupId}
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      (e.scoreSubmissions||[]).forEach(function(sub){
+        if(sub.holePutts || !sub.holes) return; // har redan puttar, eller inget hål-för-hål-scorekort att komplettera
+        var group = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(sub.pi) >= 0 && (!sub.date || g.date===sub.date); });
+        if(!group) return;
+        tasks.push({ e: e, sub: sub, groupId: ensureTeeGroupId(group) });
+      });
+    });
+  });
+  if(!tasks.length) { alert('Hittade inga scorekort som saknar puttar och kan kompletteras.'); return; }
+  var fixed = 0, checked = 0;
+  Promise.all(tasks.map(function(task){
+    return LIVE_SCORING_COL.doc(liveScoringDocId(task.e.id, task.groupId)).get().then(function(doc){
+      checked++;
+      if(!doc.exists) return;
+      var d = doc.data();
+      var livePutts = d.putts ? d.putts[task.sub.pi] : null;
+      if(!livePutts) return;
+      var totalHoles = task.sub.holes.length;
+      var holePutts = new Array(totalHoles).fill(null);
+      var any = false;
+      for(var i=0; i<totalHoles; i++){
+        var pv = livePutts[i+1];
+        if(typeof pv === 'number') { holePutts[i]=pv; any=true; }
+      }
+      if(any) { task.sub.holePutts = holePutts; fixed++; }
+    }).catch(function(err){ console.error('Kunde inte hämta livescoring-data vid puttreparation', err); });
+  })).then(function(){
+    if(fixed>0) save();
+    alert('Klart! Kollade '+checked+' scorekort utan puttar, kompletterade '+fixed+' med puttar hämtade från livescoringen.'+
+      (checked>fixed ? ' '+(checked-fixed)+' hade ingen sparad puttdata kvar i livescoringen (troligen aldrig ifyllda).' : ''));
+  });
 }
 
 function renderLogoManagerSection() {
@@ -1421,17 +1470,21 @@ function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
 
-  // Build courseMap from all closed non-final events
+  // Build courseMap - räknar in en spelares godkända rond (markör eller admin)
+  // direkt, precis som övrig bana-/hål-/puttstatistik, istället för att vänta
+  // på att HELA deltävlingen ska stängas av admin.
   var courseMap = {};
   (S.tours||[]).forEach(function(t){
-    (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && !e.isFinal; }).forEach(function(e){
+    var players = getPlayersForTour(t);
+    (t.events||[]).filter(function(e){ return !e.isFinal; }).forEach(function(e){
       var key = (e.course||'Okänd bana').trim();
       var isStab = e.type === 'stableford';
-      if(!courseMap[key]) courseMap[key] = { name:key, rounds:[], players:{} };
-      e.results.forEach(function(r){
-        var p = t.players && t.players[r.pi];
+      players.forEach(function(p, pi){
         if(!p) return;
-        var golfResult = r.score || 0;
+        var entry = getApprovedScoreForPlayerInEvent(e, pi);
+        if(!entry || entry.score == null) return;
+        var golfResult = entry.score || 0;
+        if(!courseMap[key]) courseMap[key] = { name:key, rounds:[], players:{} };
         courseMap[key].rounds.push({ golfResult:golfResult, isStab:isStab });
         if(!courseMap[key].players[p.name]) courseMap[key].players[p.name] = { name:p.name, username:p.username, rounds:[] };
         courseMap[key].players[p.name].rounds.push({ golfResult:golfResult, isStab:isStab });
@@ -1523,7 +1576,7 @@ function renderCourseStatsView() {
           var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
           var pImg = playerPhoto(p.username, pUser&&pUser.img);
           var pIni = ini(p.name);
-          return '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center">'+
+          return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username)+'\')" style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center;cursor:pointer">'+
             '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
             '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvg+'</span>'+
             '<span style="text-align:right;color:var(--green-dark)">'+pBest+'</span>'+
@@ -4113,7 +4166,7 @@ function renderBulkScoreForm(eid, gIdx, course, liveData) {
     return { pi: pi, name: p?p.name:'?', shcp: shcp, liveHoles: liveHoles, existingHoles: existingHoles };
   });
 
-  _bulkScoreCtx = { eid: eid, gIdx: gIdx, isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex||[], totalHoles: totalHoles, playerPis: g.playerPis };
+  _bulkScoreCtx = { eid: eid, gIdx: gIdx, isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex||[], totalHoles: totalHoles, playerPis: g.playerPis, liveScorePuttsByPi: (liveData && liveData.putts) || {} };
 
   var shcpRow = '<tr><th style="padding:6px;text-align:left;position:sticky;left:0;background:var(--surface)">SHCP</th>'+players.map(function(pl){
     return '<th style="padding:4px"><input type="number" step="1" class="bulk-shcp-inp" data-pi="'+pl.pi+'" value="'+pl.shcp+'" style="width:52px;margin:0;padding:5px;text-align:center;font-size:12px" oninput="recalcBulkScore()"></th>';
@@ -4204,6 +4257,21 @@ function submitBulkScore() {
 
     var isSelf = (pi === myPi);
     var entry = { pi: pi, score: score, brutto: brutto, shcp: shcp, holes: holes, submittedAt: new Date().toISOString() };
+    // Puttar registrerade via livescoringen (frivilligt, per hål) följde tidigare
+    // INTE med här - "Registrera för bollen" byggde bara ett scorekort utifrån
+    // slagen och tappade tyst bort puttdatan, så den aldrig dök upp i
+    // puttstatistiken trots att den fanns inmatad. Hämtar nu med samma
+    // livescoring-putts som redan används i "Mitt resultat" (buildMyScoreContext).
+    var livePutts = ctx.liveScorePuttsByPi ? ctx.liveScorePuttsByPi[pi] : null;
+    if(livePutts) {
+      var holePutts = new Array(ctx.totalHoles).fill(null);
+      var anyPutt = false;
+      for(var hp=0; hp<ctx.totalHoles; hp++){
+        var pv = livePutts[hp+1];
+        if(typeof pv === 'number') { holePutts[hp] = pv; anyPutt = true; }
+      }
+      if(anyPutt) entry.holePutts = holePutts;
+    }
     if(isMember && !isSelf) {
       entry.markerPi = myPi; entry.dispens = false; entry.markerApproved = true; entry.adminApproved = false;
     } else {
@@ -12922,6 +12990,20 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '1 september 2026 (196)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX (grundorsaken till "saknade puttar"): "Registrera för bollen" (gruppinmatningen som fylls i direkt efter livescoringens "Rond klar!"-flöde) tappade tyst bort alla puttar som matats in under rundan - scorekortet byggdes bara utifrån slagen, inga puttar följde med i sparningen. Detta gällde OAVSETT om deltävlingen var stängd eller ej, och är den riktiga anledningen till att puttstatistiken saknat ronder. Fixat framåt i tiden: puttarna hämtas nu med från samma livescoring-data som redan används i "Mitt resultat".' },
+      { type: 'new', text: 'Ny admin-reparation under Inställningar: "Reparera saknade puttar" letar igenom alla godkända scorekort som helt saknar puttar och försöker komplettera dem från den sparade livescoring-datan (om den fortfarande finns kvar) - för att rätta till scorekort som redan drabbades av buggen ovan innan den fixades. Rör aldrig scorekort som redan har puttar, säker att köra flera gånger.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (195)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: Banstatistik-listans banakort (t.ex. "Kyssinge GK · X rundor") väntade felaktigt på att HELA deltävlingen skulle stängas av admin innan en spelares rond räknades in - samma bugg som redan fixades för banans egen profilsida, hål- och puttstatistiken. En godkänd rond (av markör eller admin) räknas nu in direkt.' },
+      { type: 'new', text: 'Spelarraderna i Banstatistikens banakort är nu klickbara och tar dig direkt till spelarens globala profilsida (statistik, bag, golfkarta), precis som i övriga spelarlistor i appen.' }
+    ]
+  },
+  {
     date: '1 september 2026 (194)',
     items: [
       { type: 'fixed', text: 'VIKTIG BUGGFIX: Puttstatistiken (både på spelarprofilen och den globala topplistan "Bäst puttare" i Heatmaps/Banstatistik) väntade felaktigt på att HELA deltävlingen skulle stängas av admin innan en spelares rond räknades in - samma bugg som redan fixades för hål- och banstatistiken. En godkänd rond (av markör eller admin) räknas nu in direkt, oavsett om deltävlingen är stängd än.' }
@@ -15119,6 +15201,14 @@ var _myProfileImg = null;
 function viewMyProfile() {
   showUsersView();
   showGlobalPlayerProfile(currentUser.username);
+}
+
+// Genväg till en spelares globala profil från Banstatistik (spelarraderna på
+// varje banas kort) - samma mönster som viewMyProfile ovan: växla först till
+// användar-skärmen (som profilen bor i), visa sedan den specifika profilen.
+function goToGlobalPlayerFromCourseStats(username) {
+  showUsersView();
+  showGlobalPlayerProfile(username);
 }
 
 function openMyProfile() {
