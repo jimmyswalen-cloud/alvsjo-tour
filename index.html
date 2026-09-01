@@ -2070,6 +2070,19 @@ function showModal(html, wide, preventOutsideClose) {
   ov.addEventListener('click', function(e){ if(e.target===ov && !preventOutsideClose) closeModal(); });
   document.body.appendChild(ov);
 }
+// Byter ut INNEHÅLLET i en redan öppen modal utan att stänga/öppna den på nytt
+// - dvs. utan att closeModal() (och därmed _afterModalClose, t.ex. att en
+// livescoring-lyssnare avprenumereras) triggas. Används för att navigera
+// MELLAN vyer inuti samma modal-session (t.ex. live-tabell <-> ett scorekort)
+// utan att förlora eller behöva återskapa det som höll modalen "vid liv" -
+// se _liveStandingsBackTo. Faller tillbaka på en vanlig showModal() om ingen
+// modal råkar vara öppen (bör inte hända i praktiken).
+function updateModalContent(html) {
+  var mc = document.getElementById('modal-mc');
+  var box = mc && mc.querySelector('.modal');
+  if(!box) { showModal(html); return; }
+  box.innerHTML = html;
+}
 var _afterModalClose = null; // engångs-callback som körs nästa gång closeModal() anropas
 function closeModal() {
   var mc=document.getElementById('modal-mc');
@@ -8955,7 +8968,19 @@ function openLiveFollow(eid, tourId) {
   if(!e) return;
   var players = getPlayersForTour(t);
   _liveFollow = { eid: eid, unsub: null, docs: [] };
-  _afterModalClose = function(){ if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; } };
+  // Uppdaterar bara modalens INNEHÅLL (updateModalContent) istället för att
+  // anropa showModal() på nytt - showModal() kör alltid closeModal() först,
+  // vilket annars skulle trigga _afterModalClose (avprenumerera live-lyssnaren)
+  // varje gång man går tillbaka, precis det som gjorde att en riktig
+  // "tillbaka"-knapp inte gick att bygga tidigare.
+  _liveStandingsBackTo = function(){
+    updateModalContent('<div id="live-follow-modal-body"></div>');
+    renderLiveFollowHTML(e, players, t);
+  };
+  _afterModalClose = function(){
+    if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; }
+    _liveStandingsBackTo = null;
+  };
 
   showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
 
@@ -9171,6 +9196,13 @@ function liveScoreCellStyle(gross, par) {
 // ett spelarnamn (bara ett litet index i onclick-attributet) kan slå upp hela
 // spelarens hål-för-hål-data utan att behöva serialisera allt i HTML-strängen.
 var _liveStandingsRowsCache = [];
+// Sätts av openLiveFollow() till en funktion som ritar om samma live-tabell
+// igen - så att "Tillbaka"-knappen i openPlayerLiveScorecard() kan ta dig
+// tillbaka till tabellen istället för att bara kunna stänga hela modalen.
+// Nollställs dels när modalen stängs helt (se openLiveFollow), dels i
+// renderTourLiveStandingsHTML() eftersom den tabellen inte ligger i en modal
+// alls - där ska ett klick på en spelare bara kunna stängas, inte "gå tillbaka".
+var _liveStandingsBackTo = null;
 
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
@@ -9242,10 +9274,16 @@ function buildNineHoleScorecardBlock(r, startIdx, sumLabel) {
 function openPlayerLiveScorecard(idx) {
   var r = _liveStandingsRowsCache[idx];
   if(!r) return;
+  var backBtn = _liveStandingsBackTo ? '<button class="btn btn-sm" onclick="_liveStandingsBackTo()"><i class="ti ti-arrow-left"></i> Tillbaka</button>' : '';
+  // Kommer vi hit från live-tabellen (_liveStandingsBackTo satt) byter vi bara
+  // ut modalens innehåll (se updateModalContent) så tabellens Firestore-
+  // lyssnare lever kvar och "Tillbaka" fungerar. Kommer vi hit från något
+  // annat läge (ingen modal öppen sedan innan) öppnar vi en ny modal som förut.
+  var render = _liveStandingsBackTo ? updateModalContent : function(h){ showModal(h, false, true); };
   if(r.notStarted) {
-    showModal('<h3 style="margin-bottom:6px;font-size:16px">'+esc(r.name)+'</h3>'+
+    render('<h3 style="margin-bottom:6px;font-size:16px">'+esc(r.name)+'</h3>'+
       '<p style="font-size:13px;color:var(--text-3)">Har inte startat sin rond än - kanske spelas den en annan dag.</p>'+
-      '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>');
+      '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>');
     return;
   }
   var frontBlock = buildNineHoleScorecardBlock(r, 0, 'Ut');
@@ -9261,8 +9299,8 @@ function openPlayerLiveScorecard(idx) {
       '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span>'+
     '</div>'+
     frontBlock + backBlock +
-    '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, false, true);
+    '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>';
+  render(h);
 }
 
 function renderLiveFollowHTML(e, players, t) {
@@ -9462,6 +9500,10 @@ function subscribeTourLiveStandings(t) {
 function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
   var el = document.getElementById('tour-live-standings');
   if(!el) return;
+  // Den här tabellen ligger inte i en modal (den sitter direkt i Tävlingar-fliken),
+  // så ett klick på en spelare här ska bara kunna stänga scorekortet, inte "gå
+  // tillbaka" till en modal som aldrig öppnades - se _liveStandingsBackTo ovan.
+  _liveStandingsBackTo = null;
   var players = t ? (t.players || getPlayersForTour(t)) : [];
 
   var liveEventIds = Object.keys(docsByEvent);
@@ -13263,6 +13305,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (206)',
+    items: [
+      { type: 'fixed', text: 'Ny "Tillbaka"-knapp när man klickar upp en spelares scorekort från Live-tabellen ("Ställning & scorekort") - tidigare gick det bara att stänga hela fönstret, det fanns ingen väg tillbaka till tabellen. Grundorsaken satt djupare än den saknade knappen: showModal() körde alltid closeModal() först (även när man bara skulle byta vy INOM samma modal), vilket avprenumererade livescoring-lyssnaren varje gång man öppnade ett scorekort - så även om man stängde och öppnade tabellen igen hade den redan tappat sin live-uppkoppling. Löst med en ny updateModalContent()-funktion som byter modalens innehåll utan att stänga/öppna den, så både "Tillbaka" fungerar och tabellen faktiskt förblir live hela tiden, oavsett hur många scorekort man kikar på under tiden.' }
+    ]
+  },
   {
     date: '1 september 2026 (205)',
     items: [
