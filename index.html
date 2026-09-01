@@ -4958,7 +4958,15 @@ function formatRelativeTime(ms) {
   if(min < 60) return min+' min sedan';
   var hrs = Math.floor(min / 60);
   if(hrs < 24) return hrs+' tim sedan';
-  var days = Math.floor(hrs / 24);
+  // Jämför kalenderdatum (midnatt-till-midnatt), inte råa 24-timmarsblock -
+  // annars räknas t.ex. en händelse för 38 timmar sedan (två kalenderdygn
+  // bakåt) felaktigt som "Igår" istället för "2 dagar sedan".
+  var now = new Date();
+  var eventDate = new Date(ms);
+  var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var startOfEventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+  var days = Math.round((startOfToday - startOfEventDay) / 86400000);
+  if(days <= 0) return hrs+' tim sedan'; // säkerhetsnät, ska inte kunna inträffa här
   if(days === 1) return 'Igår';
   if(days < 7) return days+' dagar sedan';
   return new Date(ms).toLocaleDateString('sv-SE');
@@ -13139,6 +13147,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (201)',
+    items: [
+      { type: 'fixed', text: 'Fixat bugg där aktivitetsflödet kunde visa "Igår" på inlägg som egentligen var två dagar gamla (t.ex. ett inlägg från kvällen i förrgår kunde visas som "Igår" ännu på förmiddagen idag). Orsaken var att antal dagar räknades som hela 24-timmarsblock sedan inlägget skapades istället för att jämföra kalenderdatum. Nu jämförs kalenderdygn (midnatt-till-midnatt) så "Igår", "2 dagar sedan" osv. stämmer oavsett vilken tid på dygnet inlägget skapades.' }
+    ]
+  },
   {
     date: '1 september 2026 (200)',
     items: [
