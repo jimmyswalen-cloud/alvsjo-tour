@@ -2019,7 +2019,7 @@ function showView(v) {
   if(v==='players')    renderPlayers();
   if(v==='tournament') renderEvents();
   if(v==='calendar')   renderCalendar();
-  if(v==='oom')        { showOOMMain(); renderOOM(); }
+  if(v==='oom')        { showOOMMain(); subscribeTourLiveStandings(getTour()); renderOOM(); }
   if(v==='settings')   renderSettings();
   window.scrollTo(0, 0);
 }
@@ -9382,6 +9382,39 @@ function buildSideBetsLiveSummaryHTML(e, players) {
 // separat, tydligt namngiven tabell per deltävling, aldrig en ihopslagen lista.
 var _tourLiveStandings = { tourId: null, unsub: null };
 
+// Preliminära OoM-poäng för PÅGÅENDE (ej stängda) deltävlingar, uträknat live
+// utifrån samma pace-ställning som Live-tabellen visar. Uppdateras i samma
+// Firestore-lyssnare som redan matar Live-tabellen (subscribeTourLiveStandings)
+// - se computeLiveOomPreview(). byPi: pi -> extra poäng just nu. byEvent:
+// eventId -> {eventName, rows} för ev. detaljvy. Skrivs ALDRIG till
+// t.events/e.results - bara en "om det slutade just nu"-prognos.
+var _liveOomPreview = { byPi: {}, byEvent: {} };
+
+// Räknar ut vilka OoM-poäng varje spelare SKULLE fått om de pågående
+// deltävlingarna stängdes just nu, baserat på nuvarande pace-placering
+// (computeLiveStandingsRows - samma sortering som Live-tabellen). Använder
+// EXAKT samma poängformel som closeEvent() gör på riktigt (poängskala ×
+// ev. majors-multiplikator), så prognosen stämmer med vad som faktiskt delas
+// ut den dagen admin stänger deltävlingen. Finaler ger inga OoM-poäng och
+// hoppas alltid över, precis som i closeEvent().
+function computeLiveOomPreview(docsByEvent, candidateEvents, t) {
+  var byPi = {}, byEvent = {};
+  candidateEvents.forEach(function(e){
+    if(e.closed || e.isFinal) return;
+    var docs = docsByEvent[e.id] || [];
+    var rows = computeLiveStandingsRows(docs, t, e).filter(function(r){ return r.thru > 0 && !r.notStarted; });
+    if(!rows.length) return;
+    var mult = e.isMajor ? 1.5 : 1;
+    var eventRows = rows.map(function(r, idx){
+      var pts = Math.round(((t.pointsScale && t.pointsScale[idx]) || 0) * mult * 10) / 10;
+      byPi[r.pi] = (byPi[r.pi]||0) + pts;
+      return { pi: r.pi, points: pts, thru: r.thru, totalHoles: r.totalHoles };
+    });
+    byEvent[e.id] = { eventName: e.name, rows: eventRows };
+  });
+  return { byPi: byPi, byEvent: byEvent };
+}
+
 function subscribeTourLiveStandings(t) {
   var todayStr = new Date().toISOString().slice(0,10);
   // "Live" = deltävlingen har minst en boll vars datum faktiskt kommit (annars
@@ -9412,6 +9445,11 @@ function subscribeTourLiveStandings(t) {
       docsByEvent[d.eventId].push(d);
     });
     renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t);
+    // Räkna om och rendera OoM-förhandsvisningen i samma veva - oom-vyn kan
+    // ligga öppen (eller öppnas strax efter) medan livescoringen fylls i, och
+    // ska då hänga med i realtid precis som Live-tabellen gör.
+    _liveOomPreview = computeLiveOomPreview(docsByEvent, candidateEvents, t);
+    if(getTour() && getTour().id === t.id) renderOOM();
   }, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
 
@@ -10346,6 +10384,48 @@ function computeOomStandings(t) {
   return totals;
 }
 
+// Som computeOomStandings(), men lägger in _liveOomPreview som en TILLFÄLLIG
+// extra "rond" per spelare innan bästa-X-uträkningen görs om - annars hade en
+// spelare som redan struckit sin sämsta rond kunnat få en missvisande hög
+// "om det slutade nu"-totalsumma. Ändrar aldrig den riktiga OoM-datan; bara
+// en förhandsvisning som räknas om varje gång livescoringen uppdateras.
+function computeOomStandingsWithLivePreview(t, liveByPi) {
+  if(!liveByPi || !Object.keys(liveByPi).length) {
+    return computeOomStandings(t).map(function(d){ d.livePts = 0; return d; });
+  }
+  var bestN = t.bestRounds || 0;
+  var closedRegular = t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;});
+  var playerRounds = {};
+  closedRegular.forEach(function(e){
+    e.results.forEach(function(r){
+      if(!playerRounds[r.pi]) playerRounds[r.pi] = [];
+      playerRounds[r.pi].push({ pts: r.points||0, eventId: e.id, live: false });
+    });
+  });
+  getPlayersForTour(t).forEach(function(p, pi){ if(p && !playerRounds[pi]) playerRounds[pi] = []; });
+  Object.keys(liveByPi).forEach(function(piStr){
+    var pi = parseInt(piStr, 10);
+    if(!playerRounds[pi]) playerRounds[pi] = [];
+    playerRounds[pi].push({ pts: liveByPi[piStr], eventId: '_live', live: true });
+  });
+  var totals = Object.keys(playerRounds).map(function(piStr){
+    var pi = parseInt(piStr, 10);
+    var rounds = playerRounds[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
+    var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
+    var wins = closedRegular.filter(function(e){ return e.results&&e.results[0]&&e.results[0].pi==pi; }).length;
+    var livePtsCounted = counted.filter(function(r){ return r.live; }).reduce(function(s,r){ return s+r.pts; }, 0);
+    return {
+      pi: pi,
+      pts: counted.reduce(function(s,r){ return s+r.pts; }, 0),
+      events: rounds.filter(function(r){ return !r.live; }).length,
+      counted: counted.length, wins: wins, livePts: livePtsCounted,
+      countedIds: counted.reduce(function(o,r){ if(!r.live) o[r.eventId]=true; return o; }, {})
+    };
+  });
+  totals.sort(function(a,b){ return b.pts-a.pts; });
+  return totals;
+}
+
 // ── VINSTPENGAR (stödjer både prispott-läge och vinst-per-deltävling-läge) ──
 function computeTourWinnings(t) {
   var players = getPlayersForTour(t);
@@ -10419,10 +10499,17 @@ function renderOOM(){
   }
   var t=getTour(),el=document.getElementById('oom-list');
   var bestN = t.bestRounds || 0;
-  var sorted = computeOomStandings(t);
+  var sorted = computeOomStandingsWithLivePreview(t, _liveOomPreview.byPi);
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
   var winningsData = (t.fee>0 && isTourConcluded(t)) ? computeTourWinnings(t) : null;
+  var liveEventNames = Object.keys(_liveOomPreview.byEvent||{}).map(function(eid){ return _liveOomPreview.byEvent[eid].eventName; });
+  var liveBannerHtml = liveEventNames.length
+    ? '<div style="background:#EAF3FB;border:1px solid #B9D9F0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#123A4D;display:flex;align-items:center;gap:6px">'+
+        '<i class="ti ti-broadcast"></i> <span><strong>Preliminär ställning</strong> - '+esc(liveEventNames.join(', '))+' pågår just nu. Poängen nedan uppdateras live men blir inte officiella förrän deltävlingen stängs.</span>'+
+      '</div>'
+    : '';
   el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
+    liveBannerHtml+
     sorted.map(function(d,idx){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
@@ -10439,6 +10526,7 @@ function renderOOM(){
         '</div>'+
         '<div style="text-align:right;flex-shrink:0">'+
           '<div style="font-weight:700;font-size:15px;color:var(--green-dark);white-space:nowrap">'+d.pts+' pts</div>'+
+          (d.livePts>0?'<div style="font-size:10px;color:#123A4D;font-weight:700;white-space:nowrap"><i class="ti ti-broadcast"></i> varav '+d.livePts+' p prel.</div>':'')+
           (won>0?'<div style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap"><i class="ti ti-cash" style="font-size:10px"></i> '+won+' kr</div>':'')+
         '</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3);flex-shrink:0"></i></div>';
@@ -13169,6 +13257,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (204)',
+    items: [
+      { type: 'new', text: 'Order of Merit visar nu en PRELIMINÄR, live-uppdaterad ställning medan en deltävling fortfarande pågår - inte bara efter att den stängts. Så fort livescoring är igång räknas varje spelares nuvarande pace-placering (samma sortering som Live-tabellen) om till OoM-poäng med exakt samma poängskala/majors-multiplikator som används på riktigt när deltävlingen stängs, och läggs ovanpå den redan låsta totalen. En blå banderoll överst i OoM-listan visar vilken/vilka deltävlingar som bidrar just nu, och varje berörd spelares rad får en liten "varav X p prel."-etikett så det aldrig går att förväxla med det officiella slutresultatet. Räknar även korrekt med "bästa X deltävlingar räknas"-regeln (den pågående rundan behandlas som en tillfällig extra rond i den uträkningen). Poängen skrivs ALDRIG till det riktiga resultatet - det är bara en "om det slutade just nu"-prognos som uppdateras live och försvinner/ersätts så fort admin stänger deltävlingen på riktigt.' }
+    ]
+  },
   {
     date: '1 september 2026 (203)',
     items: [
