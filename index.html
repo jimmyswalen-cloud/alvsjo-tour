@@ -2301,17 +2301,17 @@ function goToMySideBetsFromHome(tourId, eventIndex) {
   setTimeout(function(){ openSideBets(eventIndex); }, 60);
 }
 
+// Hoppar rakt in i spelarens EGEN boll - gIdx kommer redan från hemskärmens
+// findMyNextRoundInfo (som vet exakt vilken boll spelaren tillhör), så
+// "Välj boll"-mellansteget skulle bara vara en extra klick-omväg i det vanliga
+// fallet där man bara vill fortsätta mata in sitt eget resultat. Tidigare
+// visades bollväljaren automatiskt så fort deltävlingen hade fler än en boll
+// (vanligast fallet!) - man fick alltså nästan alltid ett extra "Välj"-klick
+// innan man kom till rätt hål. Vill man mata in för en ANNAN boll finns
+// "Byt boll" kvar inne i livescoring-vyn (öppnar samma bollväljare som förut).
 function goToMyLiveScoring(tourId, eventId, gIdx) {
   enterTour(tourId);
-  setTimeout(function(){
-    var t = getTour();
-    var e = (t.events||[]).find(function(x){ return x.id === eventId; });
-    if(e && e.teeGroups && e.teeGroups.length > 1) {
-      openLiveScoringBollPicker(eventId, gIdx);
-    } else {
-      openLiveScoring(eventId, gIdx);
-    }
-  }, 60);
+  setTimeout(function(){ openLiveScoring(eventId, gIdx); }, 60);
 }
 
 // Låter spelaren själv välja vilken boll hen vill föra livescore för i en
@@ -8360,10 +8360,15 @@ function renderLiveGridHTML() {
     '</div>';
   }).join('');
 
+  // "Byt boll" visas bara om deltävlingen faktiskt har fler än en boll att
+  // välja mellan - annars är genvägen meningslös brus i vyn.
+  var canSwitchBoll = found && found.event.teeGroups && found.event.teeGroups.length > 1;
+
   el.innerHTML =
     completionBanner+
-    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;flex-wrap:wrap">'+
       '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
+      (canSwitchBoll ? '<button class="btn btn-sm" onclick="closeModal();setTimeout(function(){openLiveScoringBollPicker(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')},60)"><i class="ti ti-users"></i> Byt boll</button>' : '')+
       '<button class="btn btn-sm" title="Se hela live-tabellen" onclick="openLiveFollow(\''+d.eventId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;gap:6px">'+
@@ -13147,6 +13152,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (202)',
+    items: [
+      { type: 'improved', text: '"Live scoring"-genvägen på startsidans "Väntar på resultat"-kort hoppar nu rakt in i din egen boll och rätt hål (samma "fortsätt där du var"-logik som redan fanns i själva livescoringen). Tidigare visades nästan alltid en "Välj boll"-lista som ett extra steg emellan så fort deltävlingen hade fler än en boll - trots att appen redan visste vilken boll som var din. Vill man mata in för en ANNAN boll (t.ex. som markör eller admin) finns en ny "Byt boll"-knapp uppe i livescoring-vyn, bredvid "Ändra SHCP" - den visas bara när deltävlingen faktiskt har fler än en boll att välja mellan.' }
+    ]
+  },
   {
     date: '1 september 2026 (201)',
     items: [
