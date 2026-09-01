@@ -9432,9 +9432,10 @@ function buildHoleStatsHTML(stats, title) {
 }
 
 // Puttstatistik - bygger på "holePutts" som sparas dels via livescoring (frivilligt
-// per hål), dels via "Mitt resultat"/"Registrera för bollen", och som bevaras till
-// e.results när tävlingen stängs (se closeEvent). Frivilligt fält, så bara ronder
-// där puttar faktiskt fyllts i räknas med.
+// per hål), dels via "Mitt resultat"/"Registrera för bollen". Frivilligt fält, så
+// bara ronder där puttar faktiskt fyllts i räknas med. Räknar in en godkänd rond
+// direkt (markör eller admin) - precis som hål-/banstatistiken - istället för att
+// vänta på att HELA deltävlingen stängs av admin.
 function computePlayerPuttingStats(username) {
   var totalPutts = 0, totalHolesWithPutts = 0, roundsWithPutts = 0;
   var bestRoundAvg = null;
@@ -9443,11 +9444,10 @@ function computePlayerPuttingStats(username) {
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
     (t.events||[]).forEach(function(e){
-      if(!e.closed || !e.results) return;
-      var r = e.results.find(function(x){ return x.pi===pi; });
-      if(!r || !r.holePutts) return;
+      var entry = getApprovedHolesForPlayerInEvent(e, pi);
+      if(!entry || !entry.holePutts) return;
       var roundPutts = 0, roundHoles = 0;
-      r.holePutts.forEach(function(pt){
+      entry.holePutts.forEach(function(pt){
         if(typeof pt === 'number') { totalPutts += pt; totalHolesWithPutts++; roundPutts += pt; roundHoles++; }
       });
       if(roundHoles) {
@@ -12527,19 +12527,20 @@ function computeGolfHeatmaps() {
 
 // Global topplista över lägst snitt puttar/hål, över samtliga spelare och tourer.
 // Kräver minst 9 registrerade hål med puttdata för att vara med (undviker att en
-// enda bra putt-runda på 1-2 hål ger en missvisande "bäst puttare"-titel).
+// enda bra putt-runda på 1-2 hål ger en missvisande "bäst puttare"-titel). Räknar
+// in en godkänd rond direkt (markör eller admin) - precis som hålstatistiken -
+// istället för att vänta på att HELA deltävlingen stängs av admin.
 function computePuttingLeaders() {
   var byUser = {}; // username -> { name, totalPutts, totalHoles }
   (S.tours||[]).forEach(function(t){
     var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
-      if(!e.closed || !e.results) return;
-      e.results.forEach(function(r){
-        if(!r.holePutts) return;
-        var p = players[r.pi];
+      players.forEach(function(p, pi){
         if(!p) return;
+        var entry = getApprovedHolesForPlayerInEvent(e, pi);
+        if(!entry || !entry.holePutts) return;
         if(!byUser[p.username]) byUser[p.username] = { name: p.name, totalPutts: 0, totalHoles: 0 };
-        r.holePutts.forEach(function(pt){
+        entry.holePutts.forEach(function(pt){
           if(typeof pt === 'number') { byUser[p.username].totalPutts += pt; byUser[p.username].totalHoles++; }
         });
       });
@@ -12920,6 +12921,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (194)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: Puttstatistiken (både på spelarprofilen och den globala topplistan "Bäst puttare" i Heatmaps/Banstatistik) väntade felaktigt på att HELA deltävlingen skulle stängas av admin innan en spelares rond räknades in - samma bugg som redan fixades för hål- och banstatistiken. En godkänd rond (av markör eller admin) räknas nu in direkt, oavsett om deltävlingen är stängd än.' }
+    ]
+  },
   {
     date: '1 september 2026 (193)',
     items: [
