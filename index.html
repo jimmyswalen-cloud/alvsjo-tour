@@ -1354,14 +1354,44 @@ function renderGlobalSettings() {
       '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">"Registrera för bollen" (gruppinmatning från livescoring) tappade tidigare bort inmatade puttar - de sparades aldrig i scorekortet trots att de matats in under rundan. Bugg fixad framåt i tiden (release 196), men redan inskickade scorekort som drabbades behöver kompletteras en gång. Knappen letar igenom alla godkända scorekort som helt saknar puttar, och fyller i dem igen från den sparade livescoring-datan (om den fortfarande finns kvar) - rör aldrig scorekort som redan har puttar.</p>'+
       '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
     '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-photo"></i> Bildbank för banor</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Automatiskt sparade banbilder - ladda ner för att flytta över till GitHub-repot.</p>'+
+      '<button class="btn btn-sm" onclick="openCourseBankModal()"><i class="ti ti-photo"></i> Öppna bildbank</button>'+
+    '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-tags"></i> Märkeslogotyper</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Status för logotyper till "What\'s in the Bag".</p>'+
+      '<button class="btn btn-sm" onclick="openLogoManagerModal()"><i class="ti ti-tags"></i> Öppna logotyper</button>'+
+    '</div>';
   }
-  html += '<div id="course-bank-section"></div><div id="course-db-section"></div><div id="logo-manager-section"></div><div id="login-log-section"></div><div id="db-diagnostics"></div>';
+  html += '<div id="course-db-section"></div><div id="login-log-section"></div><div id="db-diagnostics"></div>';
   el.innerHTML = html;
-  renderCourseBankSection();
   renderCourseDbSection();
-  renderLogoManagerSection();
   renderLoginLogSection();
   renderDbDiagnostics();
+}
+
+// Bildbank och märkeslogotyper flyttades ut ur den vanliga Inställningar-vyn
+// till varsin modal (istället för att alltid ligga utrullade på sidan) - de
+// gjorde annars sidan onödigt lång att scrolla igenom. Själva innehållet
+// (renderCourseBankSection/renderLogoManagerSection) är oförändrat, de
+// skriver bara till en container som nu råkar ligga i en modal istället för
+// direkt i Inställningar-vyn.
+function openCourseBankModal() {
+  if(!isAdmin()) return;
+  var h = '<div id="course-bank-section-modal"></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true, true);
+  renderCourseBankSection('course-bank-section-modal');
+}
+
+function openLogoManagerModal() {
+  if(!isAdmin()) return;
+  var h = '<div id="logo-manager-section"></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true, true);
+  renderLogoManagerSection();
 }
 
 // Engångsreparation (men säker att köra flera gånger - rör aldrig scorekort
@@ -12920,8 +12950,8 @@ function renderCourseDbList() {
   el.innerHTML = html;
 }
 
-function renderCourseBankSection() {
-  var el = document.getElementById('course-bank-section');
+function renderCourseBankSection(targetId) {
+  var el = document.getElementById(targetId || 'course-bank-section');
   if(!el) return;
   if(!isAdmin()) { el.innerHTML = ''; return; }
   var entries = Object.keys(courseBank).map(function(key){ return { key:key, displayName: courseBank[key].displayName || key, img: courseBank[key].img }; });
@@ -12989,6 +13019,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (197)',
+    items: [
+      { type: 'improved', text: '"Bildbank för banor" och "Märkeslogotyper" ligger inte längre alltid utrullade på Inställningar-sidan (gav mycket scroll) - varsin egen knapp öppnar dem i en modal istället. Bandatabasen och övriga admin-sektioner ligger kvar som förut.' }
+    ]
+  },
   {
     date: '1 september 2026 (196)',
     items: [
