@@ -820,6 +820,10 @@ function openComments(eid) {
   h += '<input type="file" id="comment-img-file" accept="image/*" style="display:none" onchange="handleCommentImageSelected(this.files[0]);this.value=\'\'">';
   h += '<button type="button" class="btn btn-sm" id="comment-img-btn" onclick="document.getElementById(\'comment-img-file\').click()"><i class="ti ti-photo"></i> Bild</button>';
   h += '</div>';
+  h += '<label style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--text-2);font-weight:400;margin-bottom:8px;cursor:pointer">'+
+    '<input type="checkbox" id="comment-share-feed" style="width:auto;margin:2px 0 0">'+
+    '<span>Dela även på startsidans flöde (synligt för alla i touren - admin kan alltid radera det igen)</span>'+
+  '</label>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
   h += '<button class="btn btn-primary btn-sm" id="comment-send-btn" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
   h += '<button class="btn" onclick="closeModal()">Stäng</button>';
@@ -923,10 +927,14 @@ function openImageLightbox(url) {
 }
 
 function submitComment(eid) {
-  var e = findEventById(eid);
+  var found = findTourAndEventById(eid);
+  var t = found ? found.tour : null;
+  var e = found ? found.event : null;
   if(!e) return;
   var textEl = document.getElementById('comment-text');
   var captionEl = document.getElementById('comment-img-caption');
+  var shareFeedEl = document.getElementById('comment-share-feed');
+  var shareToFeed = !!(shareFeedEl && shareFeedEl.checked);
   var hasImage = !!_commentImg;
   var text = hasImage ? (captionEl ? captionEl.value.trim().slice(0,35) : '') : (textEl ? textEl.value.trim() : '');
   if(!hasImage && !text) { alert('Skriv något innan du skickar.'); return; }
@@ -939,17 +947,20 @@ function submitComment(eid) {
   // som ligger på en stabil sökväg och skrivs över) - en chatt kan ju innehålla
   // många olika bilder samtidigt.
   uploadImageToStorage(imgToUpload, 'chat-images/'+eid+'/'+commentId+'.jpg').then(function(url){
-    e.comments.push({
+    var newComment = {
       id: commentId,
       username: currentUser.username,
       name: currentUser.name || currentUser.username,
       text: text,
       img: url,
       timestamp: Date.now()
-    });
+    };
+    e.comments.push(newComment);
     _commentImg = null;
     save();
+    if(shareToFeed && t) postChatToFeedEntry(t, e, newComment);
     if(textEl) textEl.value = '';
+    if(shareFeedEl) shareFeedEl.checked = false;
     renderCommentImagePreview();
     renderCommentsList(eid);
     if(sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="ti ti-send"></i> Skicka'; }
@@ -4390,6 +4401,21 @@ function postSideBetWinFeedEntry(t, e, sb) {
   }).catch(function(err){ console.error('Kunde inte posta side bet-vinst i aktivitetsfeeden', err); });
 }
 
+// Delar ett chattinlägg (med eller utan bild) till startsidans aktivitetsflöde
+// - valfritt, spelaren kryssar själv i "Dela även på startsidans flöde" i
+// chattens skrivfält (se submitComment). Alla spelare får göra detta från
+// start, inte bara admin; blir det "kladdigt" kan admin alltid radera
+// inlägget igen via samma radera-knapp som övriga feed-inlägg.
+function postChatToFeedEntry(t, e, comment) {
+  if(!t || !e || !comment) return;
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name, eventId: e.id, eventName: e.name,
+    playerUsername: comment.username, playerName: comment.name,
+    category: 'chatpost', img: comment.img || null, caption: comment.text || '',
+    createdAt: Date.now(), likes: {}
+  }).catch(function(err){ console.error('Kunde inte dela chattinlägget i aktivitetsfeeden', err); });
+}
+
 // ── SKICKA VIDARE / ÅTERBETALA (om ingen vann) ──────────────────────────────
 // Om ingen träffade t.ex. "Närmast hål" ska potten antingen rulla vidare till
 // samma typ av bet i NÄSTA kommande deltävling i touren (klassisk "carryover"),
@@ -4634,6 +4660,8 @@ function renderHomeActivityFeed(items) {
         ? esc(it.playerName)+' plockar hem hela potten på '+it.pot+' kr'
         : esc(it.playerName)+' vinner äran';
       lineHtml = sideBetEmoji(it.sideBetType)+'<b>'+esc(it.playerName)+'</b> '+actionText+courseText+', '+winText;
+    } else if(it.category === 'chatpost') {
+      lineHtml = '<b>'+esc(it.playerName)+'</b>'+(it.caption ? ': '+esc(it.caption) : ' delade en bild i chatten');
     } else {
       var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
@@ -4647,6 +4675,8 @@ function renderHomeActivityFeed(items) {
     if(it.category === 'eventwinner') {
       if(it.winnerImg) extraBanner += '<img src="'+it.winnerImg+'" style="width:140px;border-radius:8px;display:block;margin-top:6px" alt="">';
       if(it.story) extraBanner += '<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text-2);margin-top:6px;max-width:320px;white-space:pre-wrap">'+esc(it.story)+'</div>';
+    } else if(it.category === 'chatpost' && it.img) {
+      extraBanner += '<img src="'+esc(it.img)+'" onclick="openImageLightbox(\''+esc(it.img)+'\')" style="width:150px;max-height:150px;object-fit:cover;border-radius:8px;display:block;margin-top:6px;cursor:pointer" alt="">';
     }
     return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start">'+
       avatar+
@@ -4899,11 +4929,8 @@ function openSideBets(ei) {
       '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Vid "specifik boll" kan bara du eller admin lägga till fler deltagare i efterhand - andra kan inte gå med själva.</p>'+
     '</div>';
     h += '<div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Deltagare (förvalt utifrån valet ovan - bocka i/ur fritt)</div>';
-    h += '<div id="sb-participants-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
-      (function(){
-        var pisForList = regDates.length > 1 ? getRegPisForDate(e, e.date) : regPis;
-        return sideBetParticipantCheckboxesHTML(players, pisForList, 'open', null);
-      })()+
+    h += '<div id="sb-participants-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:8px">'+
+      sideBetParticipantCheckboxesHTML(t, e, e.date, 'open', null)+
     '</div>';
     h += '<button class="btn btn-sm btn-primary" onclick="addSideBet('+ei+')"><i class="ti ti-plus"></i> Lägg till side bet</button>';
   }
@@ -4938,18 +4965,46 @@ function getMyTeeGroupPisForDate(e, date, myPi) {
   return g ? g.playerPis.slice() : null;
 }
 
-// Bygger deltagar-kryssrutorna för "Lägg till side bet"-formuläret. Vid scope
-// "open" är alla anmälda (till det valda datumet) förvalda, precis som innan.
-// Vid scope "specific" är bara spelarna i skaparens egen boll förvalda (om en
-// boll redan är bildad för det datumet) - listan visar ändå ALLA anmälda så
-// man fritt kan bocka i/ur enskilda spelare oavsett scope.
-function sideBetParticipantCheckboxesHTML(players, pisForList, scope, myBollPis) {
-  if(!pisForList.length) return '<span style="font-size:12px;color:var(--text-3)">Ingen anmäld ännu.</span>';
-  return pisForList.map(function(pi){
-    var p = players[pi]; if(!p) return '';
-    var checked = scope==='specific' ? !!(myBollPis && myBollPis.indexOf(pi)>=0) : true;
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" '+(checked?'checked':'')+' style="width:auto;margin:0">'+esc(p.name)+'</label>';
-  }).join('');
+// En spelare räknas som "färdigspelad" för deltävlingen så fort de skickat in
+// sitt scorekort (oavsett om det redan är godkänt av markör/admin eller inte)
+// - då är rundan klar och spelaren kan inte längre vara med i ett NYTT side
+// bet som skapas efter att de slutat spela (de kommer ju inte spela mer på
+// den här deltävlingen).
+function hasPlayerFinishedRoundInEvent(e, pi) {
+  return (e.scoreSubmissions||[]).some(function(s){ return s.pi===pi; });
+}
+
+// Bygger deltagar-kryssrutorna för "Lägg till side bet"-formuläret. Visar NU
+// samtliga spelare i touren (inte bara de anmälda) med en tydlig "Anmäld"/"Ej
+// anmäld"-tagg för det valda datumet - precis som i övriga anmälningsvyer -
+// så man ser vilka som faktiskt är med. Ej anmälda spelare går fortfarande
+// att bocka i manuellt (t.ex. någon som glömt anmäla sig), men är avbockade
+// som standard. Spelare som redan är färdigspelade för deltävlingen visas
+// gråade med en "Färdigspelad"-tagg och går inte att bocka i alls - de kommer
+// inte spela mer på den här deltävlingen och kan därför inte vara med i ett
+// nytt bet. Vid scope "open" är alla anmälda (och inte färdigspelade) för
+// datumet förvalda; vid scope "specific" är bara skaparens egen boll förvald.
+function sideBetParticipantCheckboxesHTML(t, e, date, scope, myBollPis) {
+  var players = getPlayersForTour(t);
+  var regDates = getEventRegisteredDates(e);
+  var regPisForDate = regDates.length > 1 ? getRegPisForDate(e, date) : getEventRegPis(e);
+  var rows = [];
+  players.forEach(function(p, pi){
+    if(!p) return;
+    var finished = hasPlayerFinishedRoundInEvent(e, pi);
+    var registered = regPisForDate.indexOf(pi) >= 0;
+    if(finished) {
+      rows.push('<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;color:var(--text-3)"><input type="checkbox" disabled style="width:auto;margin:0">'+esc(p.name)+
+        ' <span style="font-size:10px;font-weight:600;background:var(--surface2);color:var(--text-3);padding:1px 6px;border-radius:10px">Färdigspelad</span></label>');
+      return;
+    }
+    var checked = scope==='specific' ? !!(myBollPis && myBollPis.indexOf(pi)>=0) : registered;
+    var tag = registered
+      ? '<span style="font-size:10px;font-weight:600;background:#E1F5EE;color:#0F6E56;padding:1px 6px;border-radius:10px">Anmäld</span>'
+      : '<span style="font-size:10px;font-weight:600;background:var(--surface2);color:var(--text-3);padding:1px 6px;border-radius:10px">Ej anmäld</span>';
+    rows.push('<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" class="sb-participant-chk" value="'+pi+'" '+(checked?'checked':'')+' style="width:auto;margin:0">'+esc(p.name)+' '+tag+'</label>');
+  });
+  return rows.length ? rows.join('') : '<span style="font-size:12px;color:var(--text-3)">Inga spelare i touren ännu.</span>';
 }
 
 // Bygger om deltagar-kryssrutorna i "Lägg till side bet"-formuläret till att
@@ -4958,17 +5013,15 @@ function sideBetParticipantCheckboxesHTML(players, pisForList, scope, myBollPis)
 function onSideBetDateChange(ei) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
-  var players = getPlayersForTour(t);
   var myPi = getMyPi(t);
   var dateSel = document.getElementById('sb-date');
   var date = dateSel ? dateSel.value : e.date;
-  var pis = getRegPisForDate(e, date);
   var scopeEl = document.querySelector('input[name="sb-scope"]:checked');
   var scope = scopeEl ? scopeEl.value : 'open';
   var myBollPis = getMyTeeGroupPisForDate(e, date, myPi);
   var container = document.getElementById('sb-participants-list');
   if(!container) return;
-  container.innerHTML = sideBetParticipantCheckboxesHTML(players, pis, scope, myBollPis);
+  container.innerHTML = sideBetParticipantCheckboxesHTML(t, e, date, scope, myBollPis);
 }
 
 // Körs när radioknappen "Öppet för alla"/"Specifik boll" ändras - räknar om
@@ -4977,18 +5030,15 @@ function onSideBetDateChange(ei) {
 function onSideBetScopeChange(ei) {
   var t = getTour(), e = t.events[ei];
   if(!e) return;
-  var players = getPlayersForTour(t);
   var myPi = getMyPi(t);
-  var regDates = getEventRegisteredDates(e);
   var dateSel = document.getElementById('sb-date');
   var date = dateSel ? dateSel.value : e.date;
-  var pisForList = regDates.length > 1 ? getRegPisForDate(e, date) : getEventRegPis(e);
   var scopeEl = document.querySelector('input[name="sb-scope"]:checked');
   var scope = scopeEl ? scopeEl.value : 'open';
   var myBollPis = getMyTeeGroupPisForDate(e, date, myPi);
   var container = document.getElementById('sb-participants-list');
   if(!container) return;
-  container.innerHTML = sideBetParticipantCheckboxesHTML(players, pisForList, scope, myBollPis);
+  container.innerHTML = sideBetParticipantCheckboxesHTML(t, e, date, scope, myBollPis);
 }
 
 function onSideBetTypeChange() {
@@ -12870,6 +12920,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (193)',
+    items: [
+      { type: 'new', text: 'Ny kryssruta i chatten: "Dela även på startsidans flöde" - valfritt för varje inlägg (med eller utan bild). Delas det, dyker inlägget upp i aktivitetsflödet på startsidan för alla i touren, med gilla-knapp precis som övriga händelser (birdies, side bet-vinster m.m.), och en klickbar bild om en sådan bifogats. Alla spelare har den här rättigheten från start - admin kan som alltid radera ett inlägg från flödet om det behövs.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (192)',
+    items: [
+      { type: 'improved', text: 'Deltagarlistan i "Lägg till side bet" visar nu ALLA spelare i touren igen (inte bara de anmälda) med en tydlig "Anmäld"/"Ej anmäld"-tagg för det valda datumet, precis som i övriga anmälningsvyer - ej anmälda går fortfarande att bocka i manuellt om någon glömt anmäla sig. Spelare som redan skickat in sitt scorekort för deltävlingen (oavsett om det är godkänt än) visas som "Färdigspelad" och går inte längre att bocka i alls - de kommer ju inte spela mer på den här deltävlingen och kan därför inte vara med i ett nytt bet.' }
+    ]
+  },
   {
     date: '1 september 2026 (191)',
     items: [
