@@ -2356,9 +2356,40 @@ function goToMyNextRound(tourId, eventIndex) {
   setTimeout(function(){ openMyScoreSubmission(eventIndex); }, 60);
 }
 
+// Tar dig till toursidan (Tävlingar-fliken) där deltävlingen syns i listan,
+// och scrollar/markerar den kortvarigt - istället för att gå rakt in i "Mitt
+// resultat" som tidigare hände när man klickade på själva "Kommande runda"/
+// "Väntar på resultat"-kortet på startsidan (knapparna längst ner i kortet gör
+// fortfarande sina egna, mer specifika saker - Live scoring, Side bets, Mitt
+// resultat - den här är bara för klick på SJÄLVA kortytan).
+function goToEventOnTourPage(tourId, eid) {
+  enterTour(tourId);
+  setTimeout(function(){
+    var card = document.getElementById('event-card-'+eid);
+    if(!card) return;
+    card.scrollIntoView({ behavior:'smooth', block:'center' });
+    var prevTransition = card.style.transition;
+    card.style.transition = 'box-shadow .3s ease';
+    card.style.boxShadow = '0 0 0 2px var(--green-dark)';
+    setTimeout(function(){ card.style.boxShadow = ''; card.style.transition = prevTransition; }, 1600);
+  }, 120);
+}
+
 function goToMyRegistration(tourId, eventIndex) {
   enterTour(tourId);
   setTimeout(function(){ openRegister(eventIndex); }, 60);
+}
+
+// Admin-genväg: låt scoringtabellen (som normalt bara syns "live" när minst en
+// boll faktiskt har ett datum som kommit) visas manuellt i förväg - t.ex. för
+// finalen innan dess bollar/datum gjort den "live" av sig själv. Sparas på
+// deltävlingen (e.forceLiveTable) så det gäller för alla som tittar, inte bara
+// admin själv, och kan slås av igen när det inte längre behövs.
+function toggleForceLiveTable(i) {
+  var t = getTour(), e = t.events[i];
+  e.forceLiveTable = !e.forceLiveTable;
+  save();
+  renderEvents();
 }
 
 // Snabbmarkerar "Deltar ej" direkt från startsidans påminnelse-widget, utan att
@@ -2539,7 +2570,7 @@ function renderHomeNextRoundWidget() {
 
   var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
   el.innerHTML =
-    '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
+    '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToEventOnTourPage(\''+t.id+'\',\''+e.id+'\')">'+
       '<div style="display:flex;align-items:stretch">'+
         (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0">' : '<div style="width:88px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="font-size:28px;color:var(--text-3)"></i></div>')+
         '<div style="padding:12px 14px;flex:1;min-width:0">'+
@@ -5850,10 +5881,11 @@ function eventCardHTML(i,e) {
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Bana/bild</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
+      (e.teeGroups && e.teeGroups.length ? '<button class="btn btn-sm'+(e.forceLiveTable?' btn-primary':'')+'" onclick="toggleForceLiveTable('+i+')" title="Visa scoringtabellen överst på toursidan även innan någon boll räknas som \'live\' (t.ex. före rondens datum)"><i class="ti ti-'+(e.forceLiveTable?'eye-off':'eye')+'"></i> '+(e.forceLiveTable?'Dölj':'Visa')+' scoringtabell nu</button>' : '')+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
       sideBetsBtn+
       chatBtn;
-  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
+  return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
@@ -9547,6 +9579,7 @@ function subscribeTourLiveStandings(t) {
   // om de spelar en annan dag av samma deltävling) ska ändå synas i tabellen.
   var candidateEvents = (t.events||[]).filter(function(e){
     if(e.closed || !e.teeGroups || !e.teeGroups.length) return false;
+    if(e.forceLiveTable) return true; // admin har manuellt tvingat fram tabellen, se toggleForceLiveTable()
     return e.teeGroups.some(function(g){ return g.date && g.date <= todayStr; });
   });
   if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
@@ -13384,6 +13417,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (213)',
+    items: [
+      { type: 'new', text: 'Ny admin-knapp "Visa scoringtabell nu" på en icke-stängd deltävling (kräver att bollar finns) - tvingar fram tabellen (samma som redan visas automatiskt på toursidan när en runda blir "live") manuellt, även innan deltävlingens datum faktiskt kommit. Praktiskt för t.ex. en final som ligger några dagar fram i tiden men där man ändå vill visa/förhandsgranska tabellen redan nu. Sparas på deltävlingen så det gäller för alla som tittar på toursidan, inte bara admin - och går att slå av igen med samma knapp ("Dölj scoringtabell nu").' }
+    ]
+  },
+  {
+    date: '1 september 2026 (212)',
+    items: [
+      { type: 'improved', text: 'Att klicka på själva "Kommande runda"/"Väntar på resultat"-kortet på startsidan tog dig tidigare rakt in i "Mitt resultat" - samma sak som "Mitt resultat"-knappen i kortet redan gör. Nu tar ett klick på kortytan dig istället till toursidans deltävlingslista, scrollar fram till och kortvarigt ramar in just den deltävlingen där den syns bland de andra. Knapparna i kortet (Live scoring, Side bets, Mitt resultat) är opåverkade och gör fortfarande sina egna specifika saker.' }
+    ]
+  },
   {
     date: '1 september 2026 (211)',
     items: [
