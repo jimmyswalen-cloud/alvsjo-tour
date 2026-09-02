@@ -2605,10 +2605,13 @@ function renderHomeNextRoundWidget() {
 // runda"-kortet - INTE spelarens allmänna HCP (det är två olika saker: SHCP är
 // heltalet antal slag man faktiskt får för just den här banan/rondan, sparat
 // per boll i livescoring-dokumentet, medan HCP är spelarens generella handicap
-// som kan ha decimaler). Så länge SHCP inte bekräftats än för rondan visas en
-// tydlig uppmaning att fylla i den; är den redan bekräftad visas heltalet med
-// en pennikon för att korrigera. Båda lägena leder till samma ställe: SHCP-
-// bekräftelsesteget i livescoringen för spelarens egen boll.
+// som kan ha decimaler). Visar en tydlig uppmaning att fylla i SHCP tills
+// spelaren SJÄLV sparat ett värde (p.shcpManuallySet, satt av
+// saveMyShcpQuick/nollställt av resetMyShcpQuick) - ELLER hela bollens SHCP
+// bekräftats i livescoringen (d.shcpConfirmed). Annars hade den kvarstått på
+// "Fyll i SHCP" trots att spelaren redan sparat sitt eget värde via den
+// personliga snabbrutan, eftersom den bollgemensamma bekräftelsen bara sätts
+// när NÅGON trycker "Starta livescoring" för hela bollen.
 function checkHomeShcpBadge(tourId, eid, gIdx) {
   var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
   if(!t) return;
@@ -2623,8 +2626,8 @@ function checkHomeShcpBadge(tourId, eid, gIdx) {
     var confirmed = false, myShcp = null;
     if(doc.exists) {
       var d = doc.data();
-      confirmed = !!d.shcpConfirmed;
       var p = (d.players||[]).find(function(x){ return x.pi===myPi; });
+      confirmed = !!d.shcpConfirmed || !!(p && p.shcpManuallySet);
       if(p && p.shcp!=null) myShcp = p.shcp;
     }
     el.innerHTML = confirmed
@@ -2648,10 +2651,11 @@ function openMyShcpQuickEdit(tourId, eid, gIdx) {
   var groupId = ensureTeeGroupId(g);
   var myPi = getMyPi(t);
   LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
-    var myShcp = 0;
+    var myShcp = 0, manuallySet = false;
     if(doc.exists) {
       var p = ((doc.data().players)||[]).find(function(x){ return x.pi===myPi; });
       if(p && p.shcp!=null) myShcp = p.shcp;
+      manuallySet = !!(p && p.shcpManuallySet);
     } else if(t.players[myPi] && t.players[myPi].hcp!=null) {
       myShcp = Math.round(t.players[myPi].hcp);
     }
@@ -2659,7 +2663,11 @@ function openMyShcpQuickEdit(tourId, eid, gIdx) {
       '<h3 style="margin-bottom:4px">Ditt spelhandicap (SHCP)</h3>'+
       '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Antal slag du får för din runda'+(e.course?' på '+esc(e.course):'')+'. Bara ditt eget värde - påverkar inte övriga i bollen.</p>'+
       '<div class="field"><label>SHCP</label><input id="my-shcp-quick" type="number" step="1" value="'+myShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>'+
-      '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-device-floppy"></i> Spara</button>',
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-device-floppy"></i> Spara</button>'+
+      '<div class="row" style="justify-content:space-between;margin-top:8px;gap:8px">'+
+        (manuallySet ? '<button class="btn btn-sm" style="color:#dc2626" onclick="resetMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')" title="För teständamål - nollställer bara ditt eget värde"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
+        '<button class="btn btn-sm" onclick="closeModal()">Avbryt</button>'+
+      '</div>',
       true, false
     );
     setTimeout(function(){ var inp=document.getElementById('my-shcp-quick'); if(inp) inp.focus(); }, 30);
@@ -2682,8 +2690,8 @@ function saveMyShcpQuick(tourId, eid, gIdx) {
     if(doc.exists) {
       var players = doc.data().players || [];
       var idx = players.findIndex(function(x){ return x.pi===myPi; });
-      if(idx>=0) players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: val };
-      else players.push({ pi: myPi, name: (t.players[myPi]&&t.players[myPi].name)||'', shcp: val });
+      if(idx>=0) players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: val, shcpManuallySet: true };
+      else players.push({ pi: myPi, name: (t.players[myPi]&&t.players[myPi].name)||'', shcp: val, shcpManuallySet: true });
       return ref.update({ players: players, updatedAt: Date.now() });
     }
     // Dokumentet finns inte än (ingen har öppnat livescoringen för bollen) -
@@ -2693,7 +2701,9 @@ function saveMyShcpQuick(tourId, eid, gIdx) {
     var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
     var players2 = g.playerPis.map(function(pi){
       var p = t.players[pi];
-      return { pi: pi, name: p?p.name:'?', shcp: pi===myPi ? val : ((p&&p.hcp!=null)?Math.round(p.hcp):0) };
+      return pi===myPi
+        ? { pi: pi, name: p?p.name:'?', shcp: val, shcpManuallySet: true }
+        : { pi: pi, name: p?p.name:'?', shcp: (p&&p.hcp!=null)?Math.round(p.hcp):0 };
     });
     var scores = {}, putts = {};
     players2.forEach(function(p){ scores[p.pi]={}; putts[p.pi]={}; });
@@ -2706,6 +2716,33 @@ function saveMyShcpQuick(tourId, eid, gIdx) {
     closeModal();
     renderHomeNextRoundWidget();
   }).catch(function(err){ console.error('Kunde inte spara SHCP', err); alert('Kunde inte spara SHCP just nu. Kontrollera internetanslutningen.'); });
+}
+
+// För TESTÄNDAMÅL: nollställer bara DEN EGNA spelarens SHCP-inmatning (rör
+// aldrig övriga i bollen eller bollens gemensamma shcpConfirmed) - sätter
+// tillbaka till standardvärdet (rundad HCP) och tar bort shcpManuallySet, så
+// "Kommande runda"-kortet visar "Fyll i SHCP" igen som om man aldrig sparat.
+function resetMyShcpQuick(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  var ref = LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId));
+  ref.get().then(function(doc){
+    if(!doc.exists) return;
+    var players = doc.data().players || [];
+    var idx = players.findIndex(function(x){ return x.pi===myPi; });
+    if(idx<0) return;
+    var defaultShcp = (t.players[myPi] && t.players[myPi].hcp!=null) ? Math.round(t.players[myPi].hcp) : 0;
+    players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: defaultShcp };
+    return ref.update({ players: players, updatedAt: Date.now() });
+  }).then(function(){
+    closeModal();
+    renderHomeNextRoundWidget();
+  }).catch(function(err){ console.error('Kunde inte nollställa SHCP', err); alert('Kunde inte nollställa SHCP just nu.'); });
 }
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
 // om livescoringen faktiskt har startats (dvs. minst en spelare i minst en boll
@@ -13568,6 +13605,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (226)',
+    items: [
+      { type: 'fixed', text: 'Siffran i "Kommande runda"-kortets SHCP-badge visades inte förrän HELA bollen bekräftat sitt SHCP (via "Starta livescoring") - trots att spelaren redan sparat sitt EGET värde via den personliga snabbrutan (release 225), stod badgen kvar på "Fyll i SHCP". Ny markering (shcpManuallySet) sätts när man sparar sitt eget värde, så badgen visar siffran direkt - oberoende av om resten av bollen bekräftat sitt än.' },
+      { type: 'new', text: 'Personliga SHCP-rutan har nu en "Avbryt"-knapp (stänger utan att spara) och en "Nollställ"-knapp (visas bara efter att man sparat ett eget värde) - för teständamål, nollställer bara det EGNA värdet tillbaka till standard (rundad HCP) och tar bort bekräftelse-markeringen, utan att röra övriga spelare i bollen.' }
+    ]
+  },
   {
     date: '1 september 2026 (225)',
     items: [
