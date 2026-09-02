@@ -11660,6 +11660,17 @@ function importBulkCourseData() {
 // Redan importerade banor kan lämnas kvar i listan utan problem (hoppas över).
 var BULK_PENDING_COURSES = [
   {
+    name: "Nynäshamns Golfklubb - Sjö-Berg",
+    klubb: "Nynäshamns Golfklubb",
+    par: 72, holes: 18,
+    lat: 59.009383, lng: 17.883252,
+    district: "Stockholm", land: "Sverige",
+    website: "http://www.nynashamnsgk.se",
+    holePars:     [5,4,4,4,3,4,4,3,5,5,4,4,3,4,3,4,4,5],
+    holeHcpIndex: [12,2,14,18,8,4,6,10,16,13,7,3,17,11,15,5,1,9],
+    holeLengths:  [469,335,288,305,121,322,297,148,467,460,330,267,123,345,134,319,349,489]
+  },
+  {
     name: "Bro Hof Slott GC - Stadium Course",
     klubb: "Bro Hof Slott Golf Club",
     par: 72, holes: 18,
@@ -13605,6 +13616,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 september 2026 (227)',
+    items: [
+      { type: 'new', text: 'Lagt till "Nynäshamns Golfklubb - Sjö-Berg" (18 hål, par 72) i kön för väntande banor (BULK_PENDING_COURSES), med fullständigt hål-för-hål scorekort (par, hcp-index och längder på gul tee) hämtat och verifierat mot både Caddee och 18Birdies. Banan syns i importknappen i admin-vyn tills den importeras till courseDb.' }
+    ]
+  },
   {
     date: '1 september 2026 (226)',
     items: [
