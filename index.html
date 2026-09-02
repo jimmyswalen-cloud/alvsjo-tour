@@ -6433,6 +6433,13 @@ function getHeadStart(t, e, pi) {
   var finals = t.events.filter(function(x){return x.isFinal;});
   var thisFinalIdx = finals.indexOf(e);
   if(thisFinalIdx === 0) {
+    // Har spelaren inte spelat en enda stängd deltävling under säsongen (hoppar
+    // bara in direkt i finalen) ska hen inte kunna få någon fördel via en
+    // OoM-ranking hen aldrig var med och byggde upp - starta scratch (0), sist
+    // i fältet, precis som vem som helst utan poäng skulle hamna sist ändå.
+    var closedRegular = t.events.filter(function(x){ return x.closed && x.results && !x.isFinal; });
+    var playedAnyRegular = closedRegular.some(function(x){ return x.results.some(function(r){ return r.pi===pi; }); });
+    if(!playedAnyRegular) return 0;
     // First final: head start from current OoM standing using finalTable.
     // Uses computeOomStandings() (samma funktion som den officiella OoM-tabellen)
     // så att finalens startläge alltid matchar den riktiga ställningen, inklusive
@@ -9255,7 +9262,10 @@ function computeLiveStandingsRows(docs, t, ev) {
   // men hunnit spela klart alla 18 - precis som på en riktig touringledartavla.
   // Ospelat (thru===0) hamnar alltid sist, oavsett paceValue.
   rows.sort(function(a,b){
-    if(a.thru===0 && b.thru===0) return 0;
+    // Ingen av dem har startat än: sortera på slagförsprång (störst fördel
+    // överst) i en final, så fältet visas i en meningsfull ordning redan innan
+    // första slaget är slaget - istället för en godtycklig registreringsordning.
+    if(a.thru===0 && b.thru===0) return (b.headStart||0) - (a.headStart||0);
     if(a.thru===0) return 1;
     if(b.thru===0) return -1;
     if(b.paceValue !== a.paceValue) return b.paceValue - a.paceValue;
@@ -9322,9 +9332,10 @@ function buildLiveStandingsRowsHTML(rows) {
     var hsBadge = (r.headStart != null && r.headStart !== 0)
       ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
       : '';
-    // Ej startat: gråtonat namn, streck överallt, "Ej startat" istället för "T0".
+    // Ej startat: gråtonat namn, streck överallt, "-" istället för "T0"/"Ej
+    // startat" (kortare text ger mer plats åt namnet i den smala kolumnen).
     // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
-    var holeLabel = r.notStarted ? 'Ej startat' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
+    var holeLabel = r.notStarted ? '–' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
@@ -9332,7 +9343,7 @@ function buildLiveStandingsRowsHTML(rows) {
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
-        '<span style="width:52px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px">'+holeLabel+'</span>'+
+        '<span style="width:30px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px" title="'+(r.notStarted?'Ej startat':'')+'">'+holeLabel+'</span>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -9421,7 +9432,7 @@ function renderLiveFollowHTML(e, players, t) {
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -9644,7 +9655,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       body+
       buildSideBetsLiveSummaryHTML(ev, players)+
@@ -13417,6 +13428,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (214)',
+    items: [
+      { type: 'fixed', text: 'Finalens live-tabell, fyra fixar samtidigt: (1) En spelare som bara hoppar in i finalen utan att ha spelat en enda deltävling under säsongen fick av misstag ett litet slagförsprång (via en OoM-ranking hen aldrig var med och byggde upp) - startar nu korrekt scratch (0), utan fördel, sist i fältet. (2) Spelare som ännu inte startat sorterades i en godtycklig ordning istället för efter slagförsprång - visas nu störst fördel först (t.ex. -10, -8, -6...), precis som de kommer placeras i det slutgiltiga resultatet om ingen slår ett enda slag. (3) "Ej startat" i Hål-kolumnen ersatt med "-" (fortfarande med "Ej startat" som tooltip). (4) Hål-kolumnen krympt (behövde aldrig plats för det långa "Ej startat") så namnkolumnen får mer utrymme - långa namn som "Andreas Jonsson Wrååk" klipps av mer sällan.' }
+    ]
+  },
   {
     date: '1 september 2026 (213)',
     items: [
