@@ -1555,7 +1555,12 @@ function applyOomPointsRepair() {
   _oomPointsMismatches = null;
   save();
   closeModal();
-  renderOOM(); renderEvents();
+  // Verktyget körs från Globala inställningar - UTANFÖR en specifik tour - så
+  // getTour() kan vara odefinierad här (ingen aktiv tour). renderOOM()/
+  // renderEvents() förutsätter en aktiv tour (kraschade tidigare i
+  // findRelevantFinal() som läser t.events rakt av) - uppdatera dem bara om
+  // man faktiskt råkar stå inne i en tour just nu.
+  if(getTour()) { renderOOM(); renderEvents(); }
   alert('Klart! Rättade '+n+' poster.');
 }
 
@@ -1639,6 +1644,15 @@ function detectBrandLogos() {
     img1.src = primary;
   });
   updateCounter();
+}
+
+// Håller reda på hur många spelare som visas per bana i Banstatistik-vyn
+// (klicka "+X fler spelare" för att visa upp till 10 till i taget) - annars
+// visades bara topp 5 med en statisk, oklickbar "+N fler spelare"-text.
+var _courseStatsExpanded = {};
+function expandCourseStatsPlayers(courseName) {
+  _courseStatsExpanded[courseName] = (_courseStatsExpanded[courseName] || 5) + 10;
+  renderCourseStatsView();
 }
 
 function renderCourseStatsView() {
@@ -1741,7 +1755,8 @@ function renderCourseStatsView() {
           var st = b.rounds.some(function(r){ return r.isStab; });
           return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
         });
-        var playerRows = players.slice(0,5).map(function(p){
+        var visibleCount = _courseStatsExpanded[c.name] || 5;
+        var playerRows = players.slice(0,visibleCount).map(function(p){
           var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
           var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
           var pUseS = pS.length >= pL.length && pS.length > 0;
@@ -1772,7 +1787,7 @@ function renderCourseStatsView() {
               '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
             '</div>'+playerRows+
           '</div>'+
-          (players.length>5?'<div style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-3);text-align:center">+' +(players.length-5)+' fler spelare</div>':'')+
+          (players.length>visibleCount?'<div onclick="expandCourseStatsPlayers(\''+esc(c.name)+'\')" style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-2);text-align:center;cursor:pointer;font-weight:500">+' +Math.min(10,players.length-visibleCount)+' fler spelare</div>':'')+
         '</div>';
       }).join('');
 
@@ -5748,12 +5763,15 @@ function eventCardHTML(i,e) {
         var g = e.teeGroups.find(function(gr){ return gr.date===x.reg.date && gr.playerPis.indexOf(x.pi)>=0; });
         if(g && g.time) timeStr = g.time;
       }
+      // Datum+veckodag krympt till EN rad (istället för två separata div-rader)
+      // så kolumnen inte tar mer bredd/höjd än den behöver - annars trängde den
+      // undan Namn-kolumnen och långa namn radbröts fult.
       return '<tr onclick="showPlayerProfile('+x.pi+')" style="cursor:pointer'+(x.status==='declined'?';opacity:0.55':'')+'">'+
-        '<td>'+dot+esc(x.p.name)+'</td>'+
-        '<td>'+(x.status==='registered'
-          ? ('<div>'+x.reg.date+'</div><div style="color:var(--text-3);font-size:11px">'+weekdaySv(x.reg.date)+'</div>'+(altDate?'<div style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</div>':''))
+        '<td style="white-space:nowrap">'+dot+esc(x.p.name)+'</td>'+
+        '<td style="white-space:nowrap;font-size:12px">'+(x.status==='registered'
+          ? (x.reg.date+' <span style="color:var(--text-3)">('+weekdaySv(x.reg.date).slice(0,3)+')</span>'+(altDate?' <span style="color:var(--gold);font-weight:600">ej ord.</span>':''))
           : '<span style="color:var(--text-3)">–</span>')+'</td>'+
-        '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
+        '<td style="white-space:nowrap;font-size:12px">'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
     }).join('');
     regsTable = '<div style="overflow-x:auto;margin-bottom:12px">'+
@@ -5762,7 +5780,7 @@ function eventCardHTML(i,e) {
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D9A62E;margin-right:4px"></span>Osäker</span>'+
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Deltar ej</span>'+
       '</div>'+
-      '<table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<table class="hist-table" style="table-layout:auto;width:100%"><thead><tr><th>Namn</th><th style="white-space:nowrap;width:1%">Datum</th><th style="white-space:nowrap;width:1%">Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   } else {
     regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
   }
@@ -13362,6 +13380,24 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (210)',
+    items: [
+      { type: 'improved', text: 'Anmälningslistans tabell (Namn/Datum/Tid) klämde ihop Namn-kolumnen så långa namn radbröts fult. Datum+veckodag krympt till en rad ("2026-09-05 (lör)" istället för två separata rader), och Datum/Tid-kolumnerna får nu bara den bredd de faktiskt behöver - resten av utrymmet går till Namn-kolumnen så hela namn får plats på en rad.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (209)',
+    items: [
+      { type: 'improved', text: 'Banstatistikens spelarlista ("Snitt/Bäst" per bana) hade en statisk, oklickbar "+N fler spelare"-text som bara visade de 5 bästa. Nu är den klickbar och laddar 10 till åt gången (klicka igen för ytterligare 10, osv. tills alla visas) istället för att man var låst till toppen 5.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (208)',
+    items: [
+      { type: 'fixed', text: '"Kontrollera OoM-poäng"-verktyget kraschade med "Cannot read properties of undefined (reading \'events\')" när "Rätta alla" klickades från Globala inställningar (utanför en specifik tour) - renderOOM()/renderEvents() som kördes efteråt förutsatte en aktiv tour (getTour()), vilket bara stämmer när man står inne i en tour. Poängen hann redan sparas korrekt innan kraschen (save() körs före skärmuppdateringen) - själva rättningen fungerade alltså, det var bara uppdateringen av vyn efteråt som small. Uppdaterar nu bara OoM/Tävlingar-vyerna om man faktiskt befinner sig inne i en tour när man kör verktyget.' }
+    ]
+  },
   {
     date: '1 september 2026 (207)',
     items: [
