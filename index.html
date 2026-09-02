@@ -2581,7 +2581,7 @@ function renderHomeNextRoundWidget() {
           '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
           '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-top:6px">'+
             '<span style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.course ? '<i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course) : '')+'</span>'+
-            (currentUser ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0" onclick="event.stopPropagation();quickEditHcpFromHome()"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(currentUser.hcp!=null?currentUser.hcp:'–')+' <i class="ti ti-edit" style="cursor:pointer;font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>' : '')+
+            '<span id="home-shcp-badge" style="flex-shrink:0"></span>'+
           '</div>'+
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
             '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
@@ -2598,6 +2598,54 @@ function renderHomeNextRoundWidget() {
     '</div>'+
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
   checkHomeLiveTableButton(e.id, t.id);
+  if(info.groupIndex != null) checkHomeShcpBadge(t.id, e.id, info.groupIndex);
+}
+
+// Visar spelarens SPELHANDICAP FÖR DEN HÄR SPECIFIKA RONDEN (SHCP) i "Kommande
+// runda"-kortet - INTE spelarens allmänna HCP (det är två olika saker: SHCP är
+// heltalet antal slag man faktiskt får för just den här banan/rondan, sparat
+// per boll i livescoring-dokumentet, medan HCP är spelarens generella handicap
+// som kan ha decimaler). Så länge SHCP inte bekräftats än för rondan visas en
+// tydlig uppmaning att fylla i den; är den redan bekräftad visas heltalet med
+// en pennikon för att korrigera. Båda lägena leder till samma ställe: SHCP-
+// bekräftelsesteget i livescoringen för spelarens egen boll.
+function checkHomeShcpBadge(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
+    var el = document.getElementById('home-shcp-badge');
+    if(!el) return;
+    var confirmed = false, myShcp = null;
+    if(doc.exists) {
+      var d = doc.data();
+      confirmed = !!d.shcpConfirmed;
+      var p = (d.players||[]).find(function(x){ return x.pi===myPi; });
+      if(p && p.shcp!=null) myShcp = p.shcp;
+    }
+    el.innerHTML = confirmed
+      ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();goToMyShcpFromHome(\''+tourId+'\',\''+eid+'\','+gIdx+')"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-edit" style="font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>'
+      : '<span style="font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();goToMyShcpFromHome(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-alert-circle"></i> Fyll i SHCP</span>';
+  }).catch(function(err){ console.error('Kunde inte hämta SHCP-status', err); });
+}
+
+// Tar dig raka vägen till SHCP-bekräftelsesteget för din egen boll - oavsett
+// om SHCP redan bekräftats en gång tidigare (öppnas då i redigeringsläge) eller
+// inte (öppnas då i det vanliga "innan livescoring startar"-läget). Sätter
+// _liveScoring.mode = 'shcp' direkt (synkront, innan datan hunnit laddas) -
+// subscribeLiveScoring() väljer bara 'grid'/'shcp' automatiskt själv om mode
+// fortfarande är null när datan kommer, så det här vinner alltid över den
+// automatiska gissningen.
+function goToMyShcpFromHome(tourId, eid, gIdx) {
+  enterTour(tourId);
+  setTimeout(function(){
+    openLiveScoring(eid, gIdx);
+    if(_liveScoring && _liveScoring.eid === eid) _liveScoring.mode = 'shcp';
+  }, 60);
 }
 
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
@@ -13461,6 +13509,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (224)',
+    items: [
+      { type: 'fixed', text: 'RÄTTELSE till release 223: SHCP-badgen i "Kommande runda"-kortet visade och redigerade av misstag spelarens allmänna HCP (kan ha decimaler, gäller överallt) istället för SPELHANDICAPPET (SHCP) för just den här kommande rondan (alltid ett heltal, sparat per boll i livescoringen - det faktiska antal slag man får på den aktuella banan). Badgen hämtar nu SHCP från livescoring-dokumentet för spelarens egen boll: visar en tydlig gul uppmaning "Fyll i SHCP" om den ännu inte bekräftats för rondan, annars det bekräftade heltalet med en pennikon. Båda lägena leder till SHCP-bekräftelsesteget i livescoringen (samma steg som redan finns där, bara en genväg dit).' }
+    ]
+  },
   {
     date: '1 september 2026 (223)',
     items: [
