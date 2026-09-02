@@ -1431,6 +1431,7 @@ function saveHcpUpdateFromHome() {
   save();
   closeModal();
   renderHomeUserBar();
+  renderHomeNextRoundWidget(); // SHCP-badgen i "Kommande runda"-kortet ska hänga med direkt
 }
 
 function renderGlobalSettings() {
@@ -2578,8 +2579,11 @@ function renderHomeNextRoundWidget() {
           '<div style="font-size:11px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">'+eyebrow+'</div>'+
           '<div style="font-weight:700;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'+
           '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+          '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-top:6px">'+
+            '<span style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.course ? '<i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course) : '')+'</span>'+
+            (currentUser ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0" onclick="event.stopPropagation();quickEditHcpFromHome()"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(currentUser.hcp!=null?currentUser.hcp:'–')+' <i class="ti ti-edit" style="cursor:pointer;font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>' : '')+
+          '</div>'+
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
-            (e.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course)+'</span>' : '')+
             '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
             (info.time ? '<span><i class="ti ti-clock" style="font-size:11px"></i> '+esc(info.time)+'</span>' : '')+
           '</div>'+
@@ -9281,16 +9285,18 @@ function computeLiveStandingsRows(docs, t, ev) {
   return rows;
 }
 
-// Formaterar diff-värdet som "+2"/"E"/"-3", med grön/röd/neutral färg.
+// Formaterar diff-värdet som "+2"/"E"/"-3".
+// Stableford (+/-): grön = fler poäng än förväntat pace, röd = färre.
+// Slaggolf (Par): röd = under par, svart = jämnt med par, blå = över par -
+// egen färgskala per önskemål, skiljer sig medvetet från Stableford-logiken.
 function formatLiveDiff(diff, thru, isStab) {
   if(!thru) return { text: '–', color: 'var(--text-3)' };
+  if(!isStab) {
+    if(diff === 0) return { text: 'E', color: '#111827' };
+    return { text: (diff>0?'+':'')+diff, color: diff<0 ? '#B42318' : '#1D4ED8' };
+  }
   if(diff === 0) return { text: 'E', color: 'var(--text-2)' };
-  // Stableford: fler poäng än förväntat pace (positivt diff) är bra - grönt.
-  // Slaggolf: UNDER par (negativt diff) är bra - grönt. Bakvänt tidigare för
-  // slaggolf (visade grönt över par, rött under par) eftersom samma
-  // positiv/negativ-logik användes för båda spelformerna.
-  var good = isStab ? diff>0 : diff<0;
-  return { text: (diff>0?'+':'')+diff, color: good ? 'var(--green-dark)' : '#B42318' };
+  return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : '#B42318' };
 }
 
 // Kortar "Förnamn Efternamn(en)" till "F. Efternamn(en)" - tar bara bort första
@@ -9335,18 +9341,20 @@ function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     var diffFmt = formatLiveDiff(r.diff, r.thru, r.isStab);
-    // Ej startat i en final: visa slagförsprånget som ett "startvärde" i
-    // huvudkolumnen (t.ex. "-10") istället för ett tomt streck - matchar
-    // sorteringen (störst fördel överst) och gör det tydligt var i fältet man
-    // faktiskt börjar innan första slaget är slaget.
-    if(r.notStarted && r.headStart != null) {
+    // Slagförsprånget ska visas som startvärde (t.ex. "-10") så fort spelaren
+    // inte slagit ett enda slag än - INTE bara för den separata "notStarted"-
+    // fallback-raden (spelare utan boll alls), utan även för en vanlig
+    // boll-medlem som bara råkar stå på thru=0 innan första slaget. Annars
+    // visade huvudkolumnen "-" ända fram tills första hålet var ifyllt, trots
+    // att startläget redan är känt och kan visas direkt.
+    if(r.thru === 0 && r.headStart != null) {
       diffFmt = r.headStart > 0 ? { text: '-'+r.headStart, color: 'var(--gold)' } : { text: 'E', color: 'var(--gold)' };
     }
     // Badgen bredvid namnet ("(-10)") behövs bara för spelare som redan börjat
     // spela (påminnelse om förspránget bredvid deras löpande resultat) - för
-    // den som inte startat än visas samma värde redan i huvudkolumnen ovan, en
-    // badge till hade bara varit dubblerad information.
-    var hsBadge = (!r.notStarted && r.headStart != null && r.headStart !== 0)
+    // den som inte startat än (thru===0) visas samma värde redan i
+    // huvudkolumnen ovan, en badge till hade bara varit dubblerad information.
+    var hsBadge = (r.thru > 0 && r.headStart != null && r.headStart !== 0)
       ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
       : '';
     // Ej startat: gråtonat namn, streck överallt, "-" istället för "T0"/"Ej
@@ -9420,7 +9428,10 @@ function openPlayerLiveScorecard(idx) {
   // annat läge (ingen modal öppen sedan innan) öppnar vi en ny modal som förut.
   var render = _liveStandingsBackTo ? updateModalContent : function(h){ showModal(h, false, true); };
   if(r.notStarted) {
-    render('<h3 style="margin-bottom:6px;font-size:16px">'+esc(r.name)+'</h3>'+
+    render('<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:6px">'+
+        '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
+        '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
+      '</div>'+
       '<p style="font-size:13px;color:var(--text-3)">Har inte startat sin rond än - kanske spelas den en annan dag.</p>'+
       '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>');
     return;
@@ -9429,7 +9440,10 @@ function openPlayerLiveScorecard(idx) {
   var backBlock = r.totalHoles > 9 ? buildNineHoleScorecardBlock(r, 9, 'In') : '';
   var totalPar = r.holePars.reduce(function(a,b){ return a+b; }, 0);
 
-  var h = '<h3 style="margin-bottom:2px;font-size:16px">'+esc(r.name)+'</h3>'+
+  var h = '<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:2px">'+
+      '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
+      '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
+    '</div>'+
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
       '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
@@ -13447,6 +13461,30 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (223)',
+    items: [
+      { type: 'new', text: 'Startsidans "Kommande runda"/"Väntar på resultat"-kort visar nu spelarens SHCP (lite större/fetstil för att synas tydligt) med en pennikon för att korrigera den direkt, utan att behöva navigera in i touren. Återanvänder samma redigeringsruta som redan fanns i startsidans användarrad, så värdet är alltid samma - ändrar man det på ena stället uppdateras det andra direkt också.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (222)',
+    items: [
+      { type: 'fixed', text: 'Startvärdet (-10, -8 osv., release 217) visades bara i Par/+/- -kolumnen för spelare i den separata "utan boll alls"-fallback-raden - en vanlig spelare som redan satt i en boll men bara inte slagit sitt första slag än (det absolut vanligaste läget) fick fortfarande bara ett tomt streck. Gäller nu alla spelare med thru=0, oavsett om de har en boll eller inte - startvärdet syns direkt så fort finalen öppnas, innan någon ens har spelat ett hål.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (221)',
+    items: [
+      { type: 'improved', text: 'Spelarens scorekort i Live-tabellen visar nu SHCP uppe i högra hörnet, på samma rad som namnet - både för spelare som redan spelar och för de som ännu inte startat.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (220)',
+    items: [
+      { type: 'improved', text: 'Par-kolumnen (slaggolf) har nu en egen färgskala per önskemål, skild från Stableford-kolumnens grön/röd: under par rött, jämnt med par svart, över par blått. Ja, förifyllnaden av slagförsprånget som startvärde (-10, -8 osv.) i samma kolumn löstes redan i release 217.' }
+    ]
+  },
   {
     date: '1 september 2026 (219)',
     items: [
