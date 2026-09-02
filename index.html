@@ -2356,8 +2356,10 @@ function goToMyNextRound(tourId, eventIndex) {
   setTimeout(function(){ openMyScoreSubmission(eventIndex); }, 60);
 }
 
-// Tar dig till toursidan (Tävlingar-fliken) där deltävlingen syns i listan,
-// och scrollar/markerar den kortvarigt - istället för att gå rakt in i "Mitt
+// Tar dig till toursidan (Tävlingar-fliken) där deltävlingen syns i listan -
+// stannar högst upp på sidan (enterTour scrollar redan dit) istället för att
+// scrolla ner till kortet mitt i listan, men ramar in kortet kortvarigt så det
+// syns när man väl scrollar ner - istället för att gå rakt in i "Mitt
 // resultat" som tidigare hände när man klickade på själva "Kommande runda"/
 // "Väntar på resultat"-kortet på startsidan (knapparna längst ner i kortet gör
 // fortfarande sina egna, mer specifika saker - Live scoring, Side bets, Mitt
@@ -2367,7 +2369,6 @@ function goToEventOnTourPage(tourId, eid) {
   setTimeout(function(){
     var card = document.getElementById('event-card-'+eid);
     if(!card) return;
-    card.scrollIntoView({ behavior:'smooth', block:'center' });
     var prevTransition = card.style.transition;
     card.style.transition = 'box-shadow .3s ease';
     card.style.boxShadow = '0 0 0 2px var(--green-dark)';
@@ -8368,7 +8369,7 @@ function renderLiveShcpHTML() {
     '<div class="row" style="justify-content:space-between;gap:8px;margin-top:16px">'+
       (isAdmin() ? '<button class="btn" style="color:#dc2626" onclick="resetCurrentLiveScoring()"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
       '<div class="row" style="gap:8px">'+
-        (d.shcpConfirmed ? '<button class="btn" onclick="cancelShcpEdit()">Avbryt</button>' : '')+
+        '<button class="btn" onclick="'+(d.shcpConfirmed ? 'cancelShcpEdit()' : 'closeModal()')+'">Avbryt</button>'+
         '<button class="btn btn-primary" onclick="confirmLiveShcp()"><i class="ti ti-check"></i> '+(d.shcpConfirmed?'Spara':'Starta livescoring')+'</button>'+
       '</div>'+
     '</div>';
@@ -13446,6 +13447,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (219)',
+    items: [
+      { type: 'fixed', text: 'SHCP-bekräftelsen (steget innan livescoringen startar första gången) saknade en "Avbryt"-knapp - fanns bara "Starta livescoring", ingen väg tillbaka utan att stänga hela fönstret ändå (samma sak, men otydligt utan en synlig knapp för det). Avbryt-knappen visas nu alltid; stänger hela flödet vid första bekräftelsen, eller går tillbaka till livescoringen vid en senare "Ändra SHCP" (som innan).' }
+    ]
+  },
+  {
+    date: '1 september 2026 (218)',
+    items: [
+      { type: 'fixed', text: 'Justering till release 212 ("Kommande runda"-kortet länkar till toursidan): scrollade tidigare ner till deltävlingskortet mitt i listan, vilket motverkade att man faktiskt landar överst på sidan. Scrollar inte längre ner - man hamnar högst upp (som enterTour redan gör), och deltävlingskortet ramas fortfarande in kortvarigt så det är lätt att hitta när man scrollar ner själv.' }
+    ]
+  },
   {
     date: '1 september 2026 (217)',
     items: [
