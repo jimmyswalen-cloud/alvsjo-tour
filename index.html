@@ -9281,10 +9281,15 @@ function computeLiveStandingsRows(docs, t, ev) {
 }
 
 // Formaterar diff-värdet som "+2"/"E"/"-3", med grön/röd/neutral färg.
-function formatLiveDiff(diff, thru) {
+function formatLiveDiff(diff, thru, isStab) {
   if(!thru) return { text: '–', color: 'var(--text-3)' };
   if(diff === 0) return { text: 'E', color: 'var(--text-2)' };
-  return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : '#B42318' };
+  // Stableford: fler poäng än förväntat pace (positivt diff) är bra - grönt.
+  // Slaggolf: UNDER par (negativt diff) är bra - grönt. Bakvänt tidigare för
+  // slaggolf (visade grönt över par, rött under par) eftersom samma
+  // positiv/negativ-logik användes för båda spelformerna.
+  var good = isStab ? diff>0 : diff<0;
+  return { text: (diff>0?'+':'')+diff, color: good ? 'var(--green-dark)' : '#B42318' };
 }
 
 // Kortar "Förnamn Efternamn(en)" till "F. Efternamn(en)" - tar bara bort första
@@ -9328,8 +9333,19 @@ var _liveStandingsBackTo = null;
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
-    var diffFmt = formatLiveDiff(r.diff, r.thru);
-    var hsBadge = (r.headStart != null && r.headStart !== 0)
+    var diffFmt = formatLiveDiff(r.diff, r.thru, r.isStab);
+    // Ej startat i en final: visa slagförsprånget som ett "startvärde" i
+    // huvudkolumnen (t.ex. "-10") istället för ett tomt streck - matchar
+    // sorteringen (störst fördel överst) och gör det tydligt var i fältet man
+    // faktiskt börjar innan första slaget är slaget.
+    if(r.notStarted && r.headStart != null) {
+      diffFmt = r.headStart > 0 ? { text: '-'+r.headStart, color: 'var(--gold)' } : { text: 'E', color: 'var(--gold)' };
+    }
+    // Badgen bredvid namnet ("(-10)") behövs bara för spelare som redan börjat
+    // spela (påminnelse om förspránget bredvid deras löpande resultat) - för
+    // den som inte startat än visas samma värde redan i huvudkolumnen ovan, en
+    // badge till hade bara varit dubblerad information.
+    var hsBadge = (!r.notStarted && r.headStart != null && r.headStart !== 0)
       ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
       : '';
     // Ej startat: gråtonat namn, streck överallt, "-" istället för "T0"/"Ej
@@ -9342,7 +9358,7 @@ function buildLiveStandingsRowsHTML(rows) {
         '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
-        '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
+        (r.isStab?'<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>':'')+
         '<span style="width:30px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px" title="'+(r.notStarted?'Ej startat':'')+'">'+holeLabel+'</span>'+
       '</div>'+
     '</div>';
@@ -9429,10 +9445,11 @@ function renderLiveFollowHTML(e, players, t) {
   var el = document.getElementById('live-follow-modal-body');
   if(!el) return;
 
+  var isStab = e.type === 'stableford';
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -9645,6 +9662,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
     var ev = candidateEvents.find(function(e){ return e.id === eid; });
     var rows = computeLiveStandingsRows(docsByEvent[eid], t, ev);
     if(!rows.length) return '';
+    var isStab = ev && ev.type === 'stableford';
     var body = buildLiveStandingsRowsHTML(rows);
     var periodLabel = formatEventPeriodLabel(ev);
     var subLine = (ev ? esc(ev.name) : '')+(periodLabel?' · '+esc(periodLabel):'')+(ev && ev.course?' · '+esc(ev.course):'');
@@ -9655,7 +9673,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       body+
       buildSideBetsLiveSummaryHTML(ev, players)+
@@ -13428,6 +13446,24 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (217)',
+    items: [
+      { type: 'improved', text: 'Live-tabellen visar nu spelarens slagförsprång som ett "startvärde" (t.ex. "-10") i huvudkolumnen (+/-/Par) redan innan hen startat sin final-rond, istället för ett tomt streck - matchar sorteringen (störst fördel överst) och gör startläget tydligt direkt. Badgen bredvid namnet visas nu bara för spelare som redan börjat (samma info hade annars stått på två ställen samtidigt för den som inte startat). Passade även på att fixa en bakvänd färgbugg i samma kolumn: för slaggolf visades tidigare grönt vid ÖVER par och rött vid UNDER par (omvänt av vad som är bra) - berodde på att samma positiv/negativ-färglogik användes för både Stableford och slaggolf. Rättat så under par är grönt och över par är rött för slaggolf, medan Stableford-logiken (mer poäng = grönt) är oförändrad.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (216)',
+    items: [
+      { type: 'improved', text: 'Live-tabellens kolumn för hur man ligger till hette alltid "+/-", vilket är tydligt för Stableford (poäng mot förväntat pace) men otydligt för slaggolf, där samma kolumn faktiskt redan visar netto till par (under/över/på par för hålen man spelat) - bara namnet avslöjade det inte. Kolumnen heter nu "Par" för slaggolf-deltävlingar (fortfarande "+/-" för Stableford) - ingen ny kolumn behövdes, informationen fanns redan, den var bara namngiven fel för spelformen.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (215)',
+    items: [
+      { type: 'improved', text: 'Live-tabellens "Pts"-kolumn (Stableford-poäng) döljs nu helt för slaggolf-deltävlingar, både i modalen ("Ställning & scorekort"/"Resultattavla") och i toursidans inline-widget - den var aldrig relevant där (alltid tomt streck) eftersom poäng bara räknas ut för Stableford. Gäller Live-tabellen; övriga vyer opåverkade.' }
+    ]
+  },
   {
     date: '1 september 2026 (214)',
     items: [
