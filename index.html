@@ -2628,26 +2628,85 @@ function checkHomeShcpBadge(tourId, eid, gIdx) {
       if(p && p.shcp!=null) myShcp = p.shcp;
     }
     el.innerHTML = confirmed
-      ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();goToMyShcpFromHome(\''+tourId+'\',\''+eid+'\','+gIdx+')"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-edit" style="font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>'
-      : '<span style="font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();goToMyShcpFromHome(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-alert-circle"></i> Fyll i SHCP</span>';
+      ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-edit" style="font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>'
+      : '<span style="font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-alert-circle"></i> Fyll i SHCP</span>';
   }).catch(function(err){ console.error('Kunde inte hämta SHCP-status', err); });
 }
 
-// Tar dig raka vägen till SHCP-bekräftelsesteget för din egen boll - oavsett
-// om SHCP redan bekräftats en gång tidigare (öppnas då i redigeringsläge) eller
-// inte (öppnas då i det vanliga "innan livescoring startar"-läget). Sätter
-// _liveScoring.mode = 'shcp' direkt (synkront, innan datan hunnit laddas) -
-// subscribeLiveScoring() väljer bara 'grid'/'shcp' automatiskt själv om mode
-// fortfarande är null när datan kommer, så det här vinner alltid över den
-// automatiska gissningen.
-function goToMyShcpFromHome(tourId, eid, gIdx) {
-  enterTour(tourId);
-  setTimeout(function(){
-    openLiveScoring(eid, gIdx);
-    if(_liveScoring && _liveScoring.eid === eid) _liveScoring.mode = 'shcp';
-  }, 60);
+// Liten personlig SHCP-ruta - bara DEN EGNA spelarens rad, till skillnad från
+// den fullständiga "Spelhandicap (SHCP)"-skärmen i livescoringen som visar och
+// låter en redigera HELA bollens SHCP (den nås fortfarande som vanligt via
+// "Live scoring"-knappen/att starta livescoringen). Den här genvägen är till
+// för att snabbt kunna mata in sitt EGET SHCP innan rondan, utan att behöva gå
+// via hela bollens vy - och utan att röra övriga spelares värden.
+function openMyShcpQuickEdit(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
+    var myShcp = 0;
+    if(doc.exists) {
+      var p = ((doc.data().players)||[]).find(function(x){ return x.pi===myPi; });
+      if(p && p.shcp!=null) myShcp = p.shcp;
+    } else if(t.players[myPi] && t.players[myPi].hcp!=null) {
+      myShcp = Math.round(t.players[myPi].hcp);
+    }
+    showModal(
+      '<h3 style="margin-bottom:4px">Ditt spelhandicap (SHCP)</h3>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Antal slag du får för din runda'+(e.course?' på '+esc(e.course):'')+'. Bara ditt eget värde - påverkar inte övriga i bollen.</p>'+
+      '<div class="field"><label>SHCP</label><input id="my-shcp-quick" type="number" step="1" value="'+myShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>'+
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-device-floppy"></i> Spara</button>',
+      true, false
+    );
+    setTimeout(function(){ var inp=document.getElementById('my-shcp-quick'); if(inp) inp.focus(); }, 30);
+  }).catch(function(err){ console.error('Kunde inte hämta SHCP', err); alert('Kunde inte hämta SHCP just nu. Kontrollera internetanslutningen.'); });
 }
 
+function saveMyShcpQuick(tourId, eid, gIdx) {
+  var inp = document.getElementById('my-shcp-quick');
+  var val = parseInt(inp.value, 10);
+  if(isNaN(val)) { alert('Ange ett giltigt SHCP-värde.'); return; }
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  var ref = LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId));
+  ref.get().then(function(doc){
+    if(doc.exists) {
+      var players = doc.data().players || [];
+      var idx = players.findIndex(function(x){ return x.pi===myPi; });
+      if(idx>=0) players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: val };
+      else players.push({ pi: myPi, name: (t.players[myPi]&&t.players[myPi].name)||'', shcp: val });
+      return ref.update({ players: players, updatedAt: Date.now() });
+    }
+    // Dokumentet finns inte än (ingen har öppnat livescoringen för bollen) -
+    // skapa det med samma standardvärden som openLiveScoring gör, fast med
+    // DEN HÄR spelarens SHCP redan ifyllt. Övriga spelare får sitt eget
+    // default (rundade HCP) tills de själv fyller i eller startar livescoring.
+    var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+    var players2 = g.playerPis.map(function(pi){
+      var p = t.players[pi];
+      return { pi: pi, name: p?p.name:'?', shcp: pi===myPi ? val : ((p&&p.hcp!=null)?Math.round(p.hcp):0) };
+    });
+    var scores = {}, putts = {};
+    players2.forEach(function(p){ scores[p.pi]={}; putts[p.pi]={}; });
+    return ref.set({
+      eventId: eid, groupId: groupId, courseName: e.course||'',
+      holePars: course?course.holePars:[], holeHcpIndex: course?(course.holeHcpIndex||[]):[],
+      players: players2, scores: scores, putts: putts, shcpConfirmed: false, updatedAt: Date.now()
+    });
+  }).then(function(){
+    closeModal();
+    renderHomeNextRoundWidget();
+  }).catch(function(err){ console.error('Kunde inte spara SHCP', err); alert('Kunde inte spara SHCP just nu. Kontrollera internetanslutningen.'); });
+}
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
 // om livescoringen faktiskt har startats (dvs. minst en spelare i minst en boll
 // har fått ett resultat inmatat för deltävlingen) - inte bara att en boll finns.
@@ -13509,6 +13568,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (225)',
+    items: [
+      { type: 'fixed', text: 'RÄTTELSE till release 224: pennan i "Kommande runda"-kortets SHCP-badge öppnade hela bollens SHCP-skärm (alla spelares SHCP, samma vy som "starta livescoring" använder) - ska bara låta DEN EGNA spelaren mata in sitt eget SHCP. Ny, liten personlig ruta (bara ett fält: eget SHCP + Spara) som bara skriver till den egna spelarens rad i bollens livescoring-dokument, rör aldrig övriga spelares värden. Hela bollens SHCP-skärm nås fortfarande som vanligt via "Live scoring"-knappen/att starta livescoringen.' }
+    ]
+  },
   {
     date: '1 september 2026 (224)',
     items: [
