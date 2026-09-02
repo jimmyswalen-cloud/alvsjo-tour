@@ -7027,7 +7027,11 @@ function renderEeciModal() {
   if(!_editEventDraft) return;
   var t = getTour(), e = t.events[_editEventDraft.i];
   if(!e) return;
-  var locked = eeciIsLocked(e);
+  // hardLocked = deltävlingen HAR anmälningar (kan inte ändras av kod).
+  // locked = fälten visas faktiskt som låsta just nu - sant om hardLocked OCH
+  // admin inte manuellt kringgått låsningen via "Lås upp ändå" (forceUnlock).
+  var hardLocked = eeciIsLocked(e);
+  var locked = hardLocked && !_editEventDraft.forceUnlock;
 
   var courseField = '';
   if(locked) {
@@ -7056,7 +7060,12 @@ function renderEeciModal() {
 
   var h = '<h3><i class="ti ti-map-pin"></i> Redigera bana/bild'+(e.isFinal?' – Final':'')+'</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
-  if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan anmälningar, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
+  if(locked) {
+    h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan anmälningar, så bana och datum är låsta. Banfoto går fortfarande bra att byta. '+
+      '<a href="#" onclick="confirmForceUnlockEeci();return false;" style="color:inherit;text-decoration:underline;font-weight:600;white-space:nowrap">Lås upp ändå</a></p>';
+  } else if(hardLocked) {
+    h += '<p style="font-size:12px;color:#dc2626;background:#fee2e2;padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Låsningen är manuellt kringgången eftersom deltävlingen redan har anmälningar. Bytet påverkar INTE anmälningarna eller anmälda spelare automatiskt - informera dem själv om att bana/datum ändrats.</p>';
+  }
   h += courseField;
   h += dateField;
   h += '<div class="field"><label>Banfoto</label>';
@@ -7090,6 +7099,17 @@ function syncEeciCourseField() {
   } else if(inp) {
     _editEventDraft.course = inp.value.trim();
   }
+}
+
+// Admin-override för bana/datum-låsningen på en deltävling som redan har
+// anmälningar. Kräver en explicit bekräftelse eftersom bytet INTE rör vid
+// e.registrations - anmälda spelare informeras inte automatiskt av appen.
+function confirmForceUnlockEeci() {
+  if(!_editEventDraft) return;
+  var ok = confirm('Deltävlingen har redan anmälningar. Om du byter bana eller datum nu:\n\n- Anmälningarna påverkas INTE automatiskt - de anmälda spelarna ligger kvar som anmälda.\n- Appen skickar INGEN notis - du måste själv informera spelarna om bytet.\n\nVill du låsa upp fälten och ändra ändå?');
+  if(!ok) return;
+  _editEventDraft.forceUnlock = true;
+  renderEeciModal();
 }
 
 function onEeciCourseSelChange() {
@@ -7158,7 +7178,8 @@ function saveEditEventCourseImg() {
   var t = getTour(), e = t.events[_editEventDraft.i];
   if(!e) { _editEventDraft = null; closeModal(); return; }
   if(e.closed) { alert('Tävlingen stängdes precis och kan inte längre redigeras.'); _editEventDraft = null; closeModal(); return; }
-  var locked = eeciIsLocked(e);
+  var hardLocked = eeciIsLocked(e);
+  var locked = hardLocked && !_editEventDraft.forceUnlock;
   if(!locked) {
     if(!_editEventDraft.course) { alert('Ange en bana.'); return; }
     if(!_editEventDraft.date) { alert('Ange ett datum.'); return; }
@@ -13616,6 +13637,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 september 2026 (228)',
+    items: [
+      { type: 'new', text: '"Redigera bana/bild" för en deltävling med redan befintliga anmälningar visar nu en länk "Lås upp ändå" bredvid låsvarningen. Efter en tydlig bekräftelse (som förklarar att anmälningarna INTE påverkas automatiskt och att spelarna inte notifieras av appen) går bana och datum att ändra ändå, med en röd varningsruta kvar i modalen som påminnelse. Låsningen som sådan är oförändrad - detta är ett medvetet admin-undantag för enstaka fall, inte en permanent uppluckring.' }
+    ]
+  },
   {
     date: '2 september 2026 (227)',
     items: [
