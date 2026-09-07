@@ -9392,7 +9392,8 @@ function computeLiveStandingsRows(docs, t, ev) {
           subNetto = subBrutto - Math.round(subShcp);
         }
         var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -subNetto;
-        var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
+        var subRawDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
+        var subDiff = subRawDiff;
         if(isFinal) {
           subHeadStart = getHeadStart(t, ev, p.pi);
           subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (subNetto - subHeadStart - totalPar);
@@ -9406,7 +9407,7 @@ function computeLiveStandingsRows(docs, t, ev) {
           pi: p.pi, name: p.name,
           brutto: subBrutto, netto: subNetto, poang: isStab ? approvedSub.score : null,
           thru: totalHoles, totalHoles: totalHoles,
-          diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
+          diff: subDiff, rawDiff: subRawDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
           holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
         });
         seenPis[p.pi] = true;
@@ -9430,7 +9431,8 @@ function computeLiveStandingsRows(docs, t, ev) {
       }
       // "Diff": vid stableford - hur många poäng över/under vad hcp:et "ska" ge
       // (2 poäng/hål är nettopar), vid slaggolf - netto mot banans par så här långt.
-      var diff = isStab ? (poang - thru*2) : (netto - parSoFar);
+      var rawDiff = isStab ? (poang - thru*2) : (netto - parSoFar);
+      var diff = rawDiff;
       var headStart = null, sortValue = isStab ? poang : -netto;
       if(isFinal) {
         headStart = getHeadStart(t, ev, p.pi);
@@ -9449,7 +9451,7 @@ function computeLiveStandingsRows(docs, t, ev) {
       var paceValue = isStab ? diff : -diff;
       rows.push({
         pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, paceValue: paceValue, submitted: false,
+        diff: diff, rawDiff: rawDiff, isStab: isStab, headStart: headStart, sortValue: sortValue, paceValue: paceValue, submitted: false,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
       seenPis[p.pi] = true;
@@ -9577,9 +9579,17 @@ function buildLiveStandingsRowsHTML(rows) {
     // startat" (kortare text ger mer plats åt namnet i den smala kolumnen).
     // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
     var holeLabel = r.notStarted ? '–' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
+    // Rått till-par (utan slagförsprång) visas som EGEN kolumn i finaler, till
+    // vänster om den justerade Par/+/--kolumnen - så man ser både "hur gick
+    // rundan rent sportsligt" och "var man hamnar i finalen inkl. förspránget"
+    // sida vid sida, istället för att bara den justerade siffran syns.
+    var rawDiffFmt = r.headStart != null
+      ? (r.thru === 0 ? { text:'–', color:'var(--text-3)' } : formatLiveDiff(r.rawDiff, r.thru, r.isStab))
+      : null;
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
+        (rawDiffFmt ? '<span style="width:26px;text-align:center;font-weight:700;color:'+rawDiffFmt.color+'" title="Rått resultat mot par/hcp, UTAN slagförsprång">'+rawDiffFmt.text+'</span>' : '')+
         '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
@@ -9680,7 +9690,7 @@ function renderLiveFollowHTML(e, players, t) {
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
+        (e.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -9904,7 +9914,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
+        (ev && ev.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       body+
       buildSideBetsLiveSummaryHTML(ev, players)+
@@ -10946,7 +10956,7 @@ function refreshFinalSlutresultatWidgets() {
       var isStab = e.type === 'stableford';
       el.innerHTML =
         '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-          '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
+          (e.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
         '</div>'+
         buildLiveStandingsRowsHTML(rows);
     }).catch(function(err){
@@ -13760,6 +13770,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (231)',
+    items: [
+      { type: 'new', text: 'Live-tabellen visar nu BÅDA kolumnerna i finaler: en ny "Rått"-kolumn (resultat mot par/hcp UTAN slagförsprång - hur rundan faktiskt gick rent sportsligt) till vänster om den befintliga justerade Par/+/--kolumnen (som inkluderar slagförsprånget och avgör faktiska finalplaceringen). Syns bara i finaler - vanliga deltävlingar har ingen justering att skilja från, så där är det bara en kolumn precis som förut.' }
+    ]
+  },
   {
     date: '1 september 2026 (230)',
     items: [
