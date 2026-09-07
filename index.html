@@ -1452,6 +1452,11 @@ function renderGlobalSettings() {
       '<button class="btn btn-sm" onclick="auditAndRepairOomPoints()"><i class="ti ti-wand"></i> Kontrollera</button>'+
     '</div>';
     html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-clipboard-x" style="color:#0F6E56"></i> Hitta saknade resultat</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och letar efter spelare som spelat klart alla hål enligt livescoringen, men som saknas helt i det officiella sparade resultatet - för att admin stängde deltävlingen innan spelarens scorekort hann godkännas. Listar varje sådant fynd med en genväg direkt till deltävlingen (Anmälningar/Resultat), så det går snabbt att återöppna, godkänna/mata in resultatet manuellt, och stänga igen. Gör ALDRIG någon ändring själv - bara hittar och listar.</p>'+
+      '<button class="btn btn-sm" onclick="auditMissingFinalResults()"><i class="ti ti-search"></i> Kontrollera</button>'+
+    '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
       '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf"></i> Bandata</div>'+
       '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Bandatabas (redigera banor, kartor, geokodning) och Bildbank för banor, samlat.</p>'+
       '<button class="btn btn-sm" onclick="showCourseDataPage()"><i class="ti ti-arrow-right"></i> Öppna bandata</button>'+
@@ -1567,6 +1572,69 @@ function applyOomPointsRepair() {
   // man faktiskt råkar stå inne i en tour just nu.
   if(getTour()) { renderOOM(); renderEvents(); }
   alert('Klart! Rättade '+n+' poster.');
+}
+
+// Letar igenom ALLA stängda deltävlingar (även finaler) i alla tourer efter
+// spelare som spelat klart alla hål enligt livescoringen (thru === totalHoles)
+// men som INTE finns med i det officiella sparade resultatet (e.results) -
+// dvs. samma scenario som Season Finale-fallet: admin stängde deltävlingen
+// innan spelarens scorekort hann bli godkänt/inmatat, och spelaren blev då
+// helt uteslut ur resultatet, OoM-poängen och statistiken. Ändrar ALDRIG
+// något själv - bara hittar och listar, med en genväg till deltävlingen så
+// admin snabbt kan återöppna, godkänna/mata in resultatet och stänga igen.
+function auditMissingFinalResults() {
+  if(!isAdmin()) return;
+  if(!confirm('Gå igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och leta efter spelare som spelat klart enligt livescoringen men saknas i det sparade resultatet? Kan ta en liten stund om det är många deltävlingar.')) return;
+
+  var closedEvents = [];
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      if(e.closed && e.results) closedEvents.push({ t: t, e: e });
+    });
+  });
+  if(!closedEvents.length) { alert('Inga stängda deltävlingar hittades.'); return; }
+
+  var findings = [], errorCount = 0, pending = closedEvents.length;
+  closedEvents.forEach(function(item){
+    LIVE_SCORING_COL.where('eventId','==', item.e.id).get().then(function(snap){
+      snap.docs.forEach(function(doc){
+        var d = doc.data();
+        var totalHoles = (d.holePars||[]).length;
+        if(!totalHoles) return;
+        (d.players||[]).forEach(function(p){
+          var scores = (d.scores && d.scores[p.pi]) || {};
+          var thru = Object.keys(scores).filter(function(h){ return typeof scores[h] === 'number'; }).length;
+          if(thru < totalHoles) return;
+          var inResults = (item.e.results||[]).some(function(r){ return r.pi === p.pi; });
+          if(!inResults) {
+            findings.push({ tourId: item.t.id, tourName: item.t.name, eid: item.e.id, ei: item.t.events.indexOf(item.e), eventName: item.e.name, playerName: p.name, totalHoles: totalHoles });
+          }
+        });
+      });
+    }).catch(function(err){ errorCount++; console.error('Kunde inte kontrollera livescoring för '+item.e.name, err); })
+    .then(function(){
+      pending--;
+      if(pending === 0) showMissingResultsFindings(findings, errorCount);
+    });
+  });
+}
+
+function showMissingResultsFindings(findings, errorCount) {
+  var errNote = errorCount ? ' ('+errorCount+' deltävlingar kunde inte kontrolleras just nu - anslutningsfel, prova igen senare.)' : '';
+  if(!findings.length) {
+    alert('Kollade alla stängda deltävlingar - hittade inga spelare som spelat klart men saknas i det sparade resultatet.'+errNote);
+    return;
+  }
+  var listHtml = findings.map(function(f){
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<b>'+esc(f.playerName)+'</b> - '+esc(f.eventName)+' ('+esc(f.tourName)+') · spelade klart alla '+f.totalHoles+' hål men saknas i det sparade resultatet'+
+      '<div style="margin-top:4px"><button class="btn btn-sm" onclick="closeModal();goToEventOnTourPage(\''+f.tourId+'\',\''+f.eid+'\')"><i class="ti ti-arrow-right"></i> Gå till deltävlingen</button></div>'+
+    '</div>';
+  }).join('');
+  showModal('<h3 style="margin-bottom:8px">Hittade '+findings.length+' spelare som saknas i sparat resultat'+(errorCount?' <span style="font-size:11px;font-weight:400;color:var(--text-3)">('+errorCount+' deltävlingar gick inte att kontrollera)</span>':'')+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">De har spelat klart sin rond enligt livescoringen, men blev aldrig godkända/inmatade innan deltävlingen stängdes. Åtgärda genom att återöppna deltävlingen, godkänna eller mata in spelarens resultat manuellt via "Resultat", och stänga igen (glöm inte klicka "Stäng" - "Kontrollera OoM-poäng" ovan fångar upp om poängen skulle bli fel efteråt).</p>'+
+    '<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+listHtml+'</div>'+
+    '<div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Stäng</button></div>', true, true);
 }
 
 function renderLogoManagerSection(targetId) {
@@ -2836,6 +2904,7 @@ function renderToursList() {
     html += '<div style="display:flex;align-items:center;gap:12px;margin:'+((groups.ongoing.length||groups.upcoming.length)?'24px':'0')+' 0 14px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE TOURER</span><div style="flex:1;height:2px;background:var(--border)"></div></div>' + groups.finished.map(tourCardHTML).join('');
   }
   el.innerHTML = html;
+  refreshFinalSlutresultatWidgets();
 }
 
 // Klassar en tour som 'ongoing' (pågående), 'upcoming' (kommande) eller 'finished' (avslutad).
@@ -3878,6 +3947,7 @@ function renderEvents() {
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.slice().reverse().map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   el.innerHTML = liveStandingsHtml + top3Html + storyBanner + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
+  refreshFinalSlutresultatWidgets();
 }
 
 var _tourStoryImg = null;
@@ -10822,27 +10892,10 @@ function buildTop3HTML(t, compact) {
   // säsongens ackumulerade OoM-poäng - OoM-listan svarar "vem ledde säsongen
   // fram till finalen", men det FAKTISKA slutresultatet avgörs av hur finalen
   // själv gick (justerat resultat, dvs. score +/- slagförsprång).
-  if(isConcluded && lastFinal && lastFinal.closed && lastFinal.results && lastFinal.results.length) {
-    var players = t.players || getPlayersForTour(t);
-    var isStabFinal = lastFinal.type === 'stableford';
-    var rows = lastFinal.results.map(function(r, idx){
-      var p = players[r.pi]; if(!p) return '';
-      var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
-      var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
-      var medal = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':'';
-      var rawLabel = isStabFinal ? r.score+' p' : r.score+' netto';
-      var mainVal = r.adjusted!=null ? 'just. '+r.adjusted : rawLabel;
-      return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+r.pi+')"')+'>'+
-        '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medal||(idx+1))+'</span>'+
-        (pImg?'<img src="'+pImg+'" style="width:'+(compact?22:28)+'px;height:'+(compact?22:28)+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+(compact?22:28)+'px;height:'+(compact?22:28)+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
-        '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
-        '<span style="font-size:'+(compact?'11px':'12px')+';color:var(--text-3);margin-right:4px;white-space:nowrap">'+(r.adjusted!=null?'('+rawLabel+')':'')+'</span>'+
-        '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right;white-space:nowrap">'+mainVal+'</span>'+
-      '</div>';
-    }).join('');
+  if(isConcluded && lastFinal && lastFinal.closed) {
     return '<div class="card" style="margin-bottom:'+(compact?'12px':'16px')+';padding:'+(compact?'10px 12px':'14px 16px')+'">'+
       '<div style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> Slutresultat</div>'+
-      rows+
+      '<div class="final-slutresultat-body" data-tour-id="'+t.id+'" data-eid="'+lastFinal.id+'"><p style="font-size:12px;color:var(--text-3);padding:6px 0">Laddar…</p></div>'+
     '</div>';
   }
 
@@ -10868,6 +10921,37 @@ function buildTop3HTML(t, compact) {
     '<div style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> '+title+'</div>'+
     rows+
   '</div>';
+}
+
+// Fyller i "Slutresultat"-widgetens platshållare (byggd av buildTop3HTML) med
+// finalrondens EGEN livetabell (alla som deltog i bollarna, inte bara de vars
+// resultat blev formellt godkända) - samma data/rendering (header +
+// buildLiveStandingsRowsHTML) som Live-tabellen använder överallt annars, så
+// det är en och samma sanning oavsett var i appen man tittar. Uppdaterar ALLA
+// .final-slutresultat-body som råkar finnas i DOM:et just nu (kan vara flera
+// samtidigt - t.ex. både tourlistans kort och Tävlingar-fliken).
+function refreshFinalSlutresultatWidgets() {
+  var els = document.querySelectorAll('.final-slutresultat-body');
+  els.forEach(function(el){
+    var tourId = el.getAttribute('data-tour-id'), eid = el.getAttribute('data-eid');
+    var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+    var e = t && (t.events||[]).find(function(x){ return x.id===eid; });
+    if(!t || !e) { el.innerHTML = '<p style="font-size:12px;color:var(--text-3)">Kunde inte ladda slutresultatet.</p>'; return; }
+    LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
+      var docs = snap.docs.map(function(d){ return d.data(); });
+      var rows = computeLiveStandingsRows(docs, t, e);
+      if(!rows.length) { el.innerHTML = '<p style="font-size:12px;color:var(--text-3)">Ingen livescoring hittades för finalen.</p>'; return; }
+      var isStab = e.type === 'stableford';
+      el.innerHTML =
+        '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+          '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(isStab?'<span style="width:22px;text-align:center">Pts</span>':'')+'<span style="width:30px;text-align:right">Hål</span>'+
+        '</div>'+
+        buildLiveStandingsRowsHTML(rows);
+    }).catch(function(err){
+      console.error('Kunde inte hämta slutresultat', err);
+      el.innerHTML = '<p style="font-size:12px;color:var(--text-3)">Kunde inte ladda slutresultatet just nu.</p>';
+    });
+  });
 }
 
 function renderOOM(){
@@ -13637,6 +13721,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (229)',
+    items: [
+      { type: 'new', text: 'Ny admin-knapp "Hitta saknade resultat" under Inställningar → Globala inställningar (bredvid "Kontrollera OoM-poäng"). Går igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och hittar spelare som spelat klart alla hål enligt livescoringen men som helt saknas i det officiella sparade resultatet - t.ex. för att admin stängde deltävlingen innan scorekortet hann godkännas (precis det som hände fyra spelare i Season Finale). Listar varje fynd med en genväg direkt till deltävlingen. Rör aldrig något själv - bara hittar och listar, eftersom att lägga in en spelare i efterhand kräver att hela placeringsordningen (och därmed OoM-poängen för alla, inte bara den nya spelaren) räknas om, vilket är säkrast att göra via appens vanliga återöppna/godkänn/stäng-flöde.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (228)',
+    items: [
+      { type: 'fixed', text: 'RÄTTELSE till release 227: "Slutresultat" visade bara de 4 spelare vars resultat blivit formellt godkända in i e.results - inte alla som faktiskt deltog i finalen. Hämtar nu istället finalens LIVESCORING-data direkt (samma källa/rendering som Live-tabellen använder överallt annars) och visar alla spelare som haft en boll i finalen, laddas asynkront efter att sidan öppnats (kort "Laddar…"-text syns först).' }
+    ]
+  },
   {
     date: '1 september 2026 (227)',
     items: [
