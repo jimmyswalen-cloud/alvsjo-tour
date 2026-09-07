@@ -3948,6 +3948,7 @@ function renderEvents() {
   el.innerHTML = liveStandingsHtml + top3Html + storyBanner + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
   refreshFinalSlutresultatWidgets();
+  refreshMissingResultsWarnings();
 }
 
 var _tourStoryImg = null;
@@ -5994,7 +5995,8 @@ function eventCardHTML(i,e) {
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
     }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>'+
+      '<div class="missing-results-warning" data-tour-id="'+t.id+'" data-eid="'+e.id+'"></div>';
   } else if(t.players.length) {
     var rowsData = t.players.map(function(p, pi){
       if(!p) return null;
@@ -10954,6 +10956,43 @@ function refreshFinalSlutresultatWidgets() {
   });
 }
 
+// Varnar direkt på en stängd deltävlings EGET kort om det finns spelare som
+// spelat klart alla hål enligt livescoringen men som saknas i det sparade
+// resultatet (e.results) - samma kontroll som "Hitta saknade resultat" i
+// Globala inställningar, men riktad mot just DEN deltävling man redan tittar
+// på, så man slipper gå via ett separat verktyg för att upptäcka det. Rör
+// aldrig något - bara admin ser varningen (icke-admin ser aldrig
+// platshållaren fyllas i, ofarligt om den råkar köras ändå).
+function refreshMissingResultsWarnings() {
+  if(!isAdmin()) return;
+  var els = document.querySelectorAll('.missing-results-warning');
+  els.forEach(function(el){
+    var tourId = el.getAttribute('data-tour-id'), eid = el.getAttribute('data-eid');
+    var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+    var e = t && (t.events||[]).find(function(x){ return x.id===eid; });
+    if(!t || !e || !e.results) return;
+    LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
+      var missing = [];
+      snap.docs.forEach(function(doc){
+        var d = doc.data();
+        var totalHoles = (d.holePars||[]).length;
+        if(!totalHoles) return;
+        (d.players||[]).forEach(function(p){
+          var scores = (d.scores && d.scores[p.pi]) || {};
+          var thru = Object.keys(scores).filter(function(h){ return typeof scores[h] === 'number'; }).length;
+          if(thru < totalHoles) return;
+          if(!e.results.some(function(r){ return r.pi === p.pi; })) missing.push(p.name);
+        });
+      });
+      if(!missing.length) return;
+      el.innerHTML = '<div style="background:#FEF3E9;border:1px solid #F0C48A;border-radius:10px;padding:10px 12px;margin-top:4px;font-size:12px;color:#7A4A0A">'+
+        '<i class="ti ti-alert-triangle"></i> <b>'+missing.length+' spelare saknas i resultatet ovan</b> - spelade klart enligt livescoringen men blev aldrig godkända/inmatade innan deltävlingen stängdes: '+esc(missing.join(', '))+
+        '. Återöppna deltävlingen, godkänn/mata in dem via "Resultat", och stäng igen.'+
+      '</div>';
+    }).catch(function(err){ console.error('Kunde inte kontrollera saknade resultat', err); });
+  });
+}
+
 function renderOOM(){
   renderLeaderboardSection();
   var listBtn = document.getElementById('oom-view-list-btn');
@@ -13721,6 +13760,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (230)',
+    items: [
+      { type: 'improved', text: 'Viktigt att förstå: deltävlingens EGET resultatkort (SPELARE/RESULTAT-tabellen man ser när man tittar på en stängd deltävling, t.ex. Season Finale) visar det OFFICIELLA sparade resultatet (e.results) - det är en annan datakälla än "Slutresultat"-widgeten på toursidan (som sedan release 228 hämtar livescoring-data direkt). Season Finale hade fortfarande bara 4 av 8 spelare där eftersom grundproblemet (4 spelare aldrig godkända innan stängning) inte är åtgärdat än - det kräver att man återöppnar, godkänner/matar in dem, och stänger igen (se release 229).' },
+      { type: 'new', text: 'För att slippa upptäcka den typen av problem via ett separat verktyg: en stängd deltävlings egna resultatkort varnar nu direkt (orange ruta under resultattabellen, admin-only) om det finns spelare som spelat klart enligt livescoringen men saknas i det sparade resultatet - med namnen listade och en påminnelse om att återöppna/godkänna/stänga.' }
+    ]
+  },
   {
     date: '1 september 2026 (229)',
     items: [
