@@ -9403,9 +9403,29 @@ function computeLiveStandingsRows(docs, t, ev) {
         // tävlingsform - används som sorteringsnyckel istället för totalsumman,
         // se paceValue-kommentaren vid rows.sort() nedan.
         var subPaceValue = isStab ? subDiff : -subDiff;
+        // Poäng (Stableford-motsvarande) räknas alltid ut hål-för-hål från
+        // holes-datan, OAVSETT spelform - även i en slaggolf-deltävling är
+        // det informativt att se hur många Stableford-poäng rundan gett,
+        // exakt samma siffra som redan visas i scorekortets håltabell. Bara
+        // vid Stableford används däremot approvedSub.score direkt (det
+        // FRUSNA, officiella värdet - se kommentaren ovan) istället för att
+        // räkna om det, så att inget kan hamna i otakt med det redan godkända
+        // resultatet.
+        var subPoang = null;
+        if(isStab) {
+          subPoang = approvedSub.score;
+        } else if(subHoles.some(function(g){ return typeof g === 'number'; })) {
+          subPoang = 0;
+          for(var pgi=0; pgi<totalHoles; pgi++){
+            if(typeof subHoles[pgi] !== 'number') continue;
+            var pgHcpIdx = (holeHcpIndex[pgi]!=null) ? holeHcpIndex[pgi] : (pgi+1);
+            var pgStrokesRecv = computeHcpStrokesForHole(subShcp, pgHcpIdx, totalHoles);
+            subPoang += computeHoleStablefordPoints(subHoles[pgi], holePars[pgi], pgStrokesRecv);
+          }
+        }
         rows.push({
           pi: p.pi, name: p.name,
-          brutto: subBrutto, netto: subNetto, poang: isStab ? approvedSub.score : null,
+          brutto: subBrutto, netto: subNetto, poang: subPoang,
           thru: totalHoles, totalHoles: totalHoles,
           diff: subDiff, rawDiff: subRawDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
           holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
@@ -9670,7 +9690,7 @@ function openPlayerLiveScorecard(idx) {
       '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
       '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
     '</div>'+
-    '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
+    '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b>'+(r.poang!=null?(' · Poäng <b>'+(r.thru?r.poang:'–')+'</b>'):'')+'</p>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
       '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
       '<span><span style="display:inline-block;width:8px;height:8px;background:#F7C948;border-radius:2px;margin-right:3px"></span>Eagle+</span>'+
@@ -13770,6 +13790,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (234)',
+    items: [
+      { type: 'fixed', text: 'Poäng (Stableford-motsvarande) visas nu även på scorekortet för slaggolf-deltävlingar - räknas nu ut hål-för-hål från den sparade håldatan (exakt samma uträkning som redan syns i scorekortets håltabell) istället för att bara vara null/dolt för redan godkända ("Klar") scorekort. Vid Stableford används fortfarande alltid det frusna, officiella poängvärdet direkt (opåverkat). Gäller bara scorekortsvyn - Pts-kolumnen i själva Live-tabellen är fortsatt dold för slaggolf (release 215), det var ett medvetet val.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (233)',
+    items: [
+      { type: 'fixed', text: 'Spelarens scorekort i Live-tabellen visade "Poäng null" i sammanfattningsraden för slaggolf-deltävlingar (r.poang är null där, den räknas bara ut för Stableford) - "Poäng"-delen visas nu bara för Stableford, precis som Pts-kolumnen i tabellen redan gör.' }
+    ]
+  },
   {
     date: '1 september 2026 (232)',
     items: [
