@@ -8158,7 +8158,7 @@ function openLiveScoring(eid, gIdx) {
   // activeHole:null - sätts till rätt hål (första ej helt ifyllda) när datan laddats,
   // se computeLiveResumeHole i subscribeLiveScoring. Annars hamnade man alltid på
   // hål 1 varje gång man öppnade livescoringen, oavsett hur långt man kommit.
-  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null, eid: eid, gIdx: gIdx };
+  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null, eid: eid, gIdx: gIdx, roundCompleteDismissed: false };
   _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
 
   showModal('<div id="live-scoring-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar livescoring…</p></div>', true, true);
@@ -8230,6 +8230,7 @@ function renderLiveScoringView() {
   else if(_liveScoring.mode === 'picker') renderLivePickerHTML();
   else if(_liveScoring.mode === 'puttPicker') renderLivePuttPickerHTML();
   else if(_liveScoring.mode === 'sidebetPrompt') renderSideBetPromptHTML();
+  else if(_liveScoring.mode === 'roundComplete') renderRoundCompleteHTML();
   else renderLiveGridHTML();
 }
 
@@ -8335,6 +8336,18 @@ function renderLiveGridHTML() {
     var alreadySubmitted = found && found.event.scoreSubmissions
       ? d.players.every(function(p){ return found.event.scoreSubmissions.some(function(s){ return s.pi===p.pi; }); })
       : false;
+    // Första gången alla hål är klara för hela bollen, och innan man skickat
+    // in: hoppa automatiskt till den dedikerade "Rond klar"-skärmen istället
+    // för att bara visa en banner här som är lätt att missa (vilket hände
+    // förut - spelare blev kvar i hål-vyn och glömde skicka in rondan).
+    // roundCompleteDismissed sätts när man själv väljer "Tillbaka till
+    // scorekortet" därifrån, så man inte kastas dit igen mot sin vilja bara
+    // för att en annan spelares livescoring-uppdatering triggar en omritning.
+    if(!alreadySubmitted && !_liveScoring.roundCompleteDismissed) {
+      _liveScoring.mode = 'roundComplete';
+      renderRoundCompleteHTML();
+      return;
+    }
     completionBanner = alreadySubmitted
       ? '<div style="background:#EAF3DE;border:1px solid #B9DD8C;border-radius:10px;padding:12px 14px;margin-bottom:14px;text-align:center">'+
           '<div style="font-weight:700;color:#3B6D11;font-size:15px"><i class="ti ti-circle-check"></i> Rond klar och inskickad!</div>'+
@@ -8403,6 +8416,65 @@ function renderLiveGridHTML() {
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
       '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '</div>';
+}
+
+// Tydlig, egen avslutningsskärm som visas automatiskt så fort ALLA spelare i
+// bollen fyllt i alla hål och rondan inte redan skickats in - istället för
+// bara en liten banner högst upp i hål-vyn (som spelare tidigare missade och
+// därför aldrig skickade in sin rond). Visar en snabb sammanfattning per
+// spelare för en sista koll, och två stora, tydliga knappar: lämna in rondan,
+// eller gå tillbaka till scorekortet för att rätta ett felaktigt slag.
+function renderRoundCompleteHTML() {
+  var d = _liveScoring.data;
+  var el = document.getElementById('live-scoring-modal-body');
+  if(!d || !el) return;
+  var found = findTourAndEventById(d.eventId);
+  var isStab = found && found.event && found.event.type === 'stableford';
+  var totalHoles = (d.holePars||[]).length || 18;
+
+  var rows = d.players.map(function(p){
+    var sc = d.scores[p.pi] || {};
+    var total = 0;
+    for(var h=1; h<=totalHoles; h++){
+      var gross = sc[h];
+      if(typeof gross !== 'number') continue;
+      var hcpIdx = (d.holeHcpIndex && d.holeHcpIndex[h-1] != null) ? d.holeHcpIndex[h-1] : h;
+      var strokesRecv = computeHcpStrokesForHole(p.shcp||0, hcpIdx, totalHoles);
+      total += isStab ? computeHoleStablefordPoints(gross, d.holePars[h-1], strokesRecv) : (gross - strokesRecv);
+    }
+    var totalLabel = isStab ? (total+' poäng') : (total===0 ? 'jämnt med par' : (total>0 ? '+'+total : String(total)));
+    return '<div class="row" style="justify-content:space-between;font-size:14px;padding:4px 0">'+
+      '<span>'+esc(p.name)+'</span><span style="font-weight:700">'+totalLabel+'</span>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:6px 2px 2px;text-align:center">'+
+      '<div style="width:64px;height:64px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center">'+
+        '<i class="ti ti-flag-2" style="font-size:32px;color:var(--green-dark)"></i>'+
+      '</div>'+
+      '<div>'+
+        '<h3 style="margin:0 0 4px">Rond klar!</h3>'+
+        '<p style="margin:0;color:var(--text-2);font-size:13px">Alla '+totalHoles+' hål är ifyllda för hela bollen</p>'+
+      '</div>'+
+      '<div style="width:100%;background:var(--surface2);border-radius:10px;padding:8px 14px;text-align:left">'+rows+'</div>'+
+      '<div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:2px">'+
+        '<button class="btn btn-primary" style="width:100%;padding:15px;font-size:16px;font-weight:700" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Lämna in rond</button>'+
+        '<button class="btn" style="width:100%;padding:13px;font-size:14px" onclick="backToScoringFromRoundComplete()"><i class="ti ti-arrow-left"></i> Tillbaka till scorekortet</button>'+
+      '</div>'+
+      '<p style="margin:2px 0 0;font-size:11px;color:var(--text-3)">Kontrollera slagen per hål innan du skickar in.</p>'+
+    '</div>';
+}
+
+// Tar tillbaka till hål-vyn för att rätta ett felaktigt slag. Sätter
+// roundCompleteDismissed så att man inte kastas tillbaka till "Rond
+// klar"-skärmen igen av misstag (t.ex. om en annan spelares livescoring-
+// uppdatering triggar en omritning) förrän man själv väljer att lämna in
+// igen via knappen i hål-vyns banner.
+function backToScoringFromRoundComplete() {
+  _liveScoring.roundCompleteDismissed = true;
+  _liveScoring.mode = 'grid';
+  renderLiveGridHTML();
 }
 
 function liveGridChangeHole(delta) {
@@ -13168,6 +13240,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (203)',
+    items: [
+      { type: 'new', text: 'Tydligare avslutning av rond: så fort alla spelare i bollen fyllt i alla hål visas nu automatiskt en egen "Rond klar!"-skärm, istället för bara en liten banner högst upp i hål-vyn som var lätt att missa (vilket hänt att spelare gjorde, och därför aldrig skickade in sin rond). Skärmen visar en snabb sammanfattning av allas resultat för en sista koll, och två stora tydliga knappar: "Lämna in rond" (går vidare till markörval & inskickning som innan) eller "Tillbaka till scorekortet" för att rätta ett felaktigt slag. Går man tillbaka för att rätta visas skärmen inte automatiskt igen - då finns istället en tydlig knapp kvar i hål-vyn för att lämna in när man är redo.' }
+    ]
+  },
   {
     date: '1 september 2026 (202)',
     items: [
