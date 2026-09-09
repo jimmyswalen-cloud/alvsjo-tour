@@ -3604,15 +3604,18 @@ function renderEvents() {
 
   var open=[], closed=[];
   t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else open.push({e:e,i:i});});
-  // Nyast överst i båda grupperna - samma princip som resten av appen
-  // (t.ex. avslutade tourer och "Senaste ronder"). Datumet som avgör är
-  // periodStart om satt, annars ordinarie datum.
-  function byDateDesc(a,b){
+  // Kommande/öppna deltävlingar: stigande datum, närmast förestående överst
+  // (vad som händer HÄRNÄST är intressantast där). Avslutade deltävlingar:
+  // fallande datum, senast avslutad överst (samma princip som avslutade
+  // tourer och "Senaste ronder"). Datumet som avgör är periodStart om satt,
+  // annars ordinarie datum.
+  function byDateAsc(a,b){
     var da = a.e.periodStart || a.e.date || '';
     var db = b.e.periodStart || b.e.date || '';
-    return db.localeCompare(da);
+    return da.localeCompare(db);
   }
-  open.sort(byDateDesc);
+  function byDateDesc(a,b){ return byDateAsc(b,a); }
+  open.sort(byDateAsc);
   closed.sort(byDateDesc);
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
@@ -13352,6 +13355,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (210)',
+    items: [
+      { type: 'fixed', text: 'Korrigerade sorteringen av deltävlingar i Tävlingar-fliken: öppna/kommande deltävlingar visas nu i STIGANDE datumordning (närmast förestående överst) - inte fallande som i förra fixen. Avslutade deltävlingar visas fortsatt i fallande ordning (senast avslutad överst).' }
+    ]
+  },
   {
     date: '1 september 2026 (209)',
     items: [
