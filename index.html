@@ -3604,6 +3604,16 @@ function renderEvents() {
 
   var open=[], closed=[];
   t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else open.push({e:e,i:i});});
+  // Nyast överst i båda grupperna - samma princip som resten av appen
+  // (t.ex. avslutade tourer och "Senaste ronder"). Datumet som avgör är
+  // periodStart om satt, annars ordinarie datum.
+  function byDateDesc(a,b){
+    var da = a.e.periodStart || a.e.date || '';
+    var db = b.e.periodStart || b.e.date || '';
+    return db.localeCompare(da);
+  }
+  open.sort(byDateDesc);
+  closed.sort(byDateDesc);
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
@@ -6460,10 +6470,16 @@ function openResults(i) {
   var regs = regPis.filter(function(pi){ return t.players[pi] && !e.registrations.find(function(r){return r.pi==pi&&r.declined;}); });
   if(!regs.length){alert('Inga anmälda spelare.');return;}
   var isStab=e.type==='stableford';
+  // Finns hål-för-hål-resultat (från livescoring/"Registrera för bollen") kan
+  // Stableford-poängen alltid räknas ut automatiskt från SHCP, hål-index och
+  // bruttoslag per hål - istället för att admin manuellt ska räkna ut och
+  // skriva in totalsumman. Samma bana-uppslag som livescoringen använder.
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
   var rows=regs.map(function(pi){
     var ex=e.results?e.results.find(function(r){return r.pi===pi;}):null;
     var sub=(e.scoreSubmissions||[]).find(function(s){return s.pi===pi;});
     var approved = isSubmissionApproved(sub);
+    var holesForCalc = (ex&&ex.holes) ? ex.holes : (sub&&sub.holes ? sub.holes : null);
     // Förifyll från godkänt inskickat resultat om admin inte redan sparat något eget.
     var prefillScore = ex ? ex.score : (approved && sub ? sub.score : '');
     var prefillBrutto = ex&&ex.brutto!=null ? ex.brutto : (approved && sub && sub.brutto!=null ? sub.brutto : '');
@@ -6471,6 +6487,20 @@ function openResults(i) {
     var p=t.players[pi];
     var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
     var shcpVal = Math.round((prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0));
+    var autoCalc = false;
+    if(isStab && holesForCalc && course && course.holePars && course.holePars.length) {
+      var totalHoles = course.holePars.length;
+      var total = 0, anyHole = false;
+      for(var hIdx=0; hIdx<totalHoles; hIdx++){
+        var gross = holesForCalc[hIdx];
+        if(typeof gross !== 'number') continue;
+        anyHole = true;
+        var hcpIdx = (course.holeHcpIndex && course.holeHcpIndex[hIdx]!=null) ? course.holeHcpIndex[hIdx] : (hIdx+1);
+        var strokesRecv = computeHcpStrokesForHole(shcpVal, hcpIdx, totalHoles);
+        total += computeHoleStablefordPoints(gross, course.holePars[hIdx], strokesRecv);
+      }
+      if(anyHole) { prefillScore = total; autoCalc = true; }
+    }
     var statusBadge = !sub ? '<span style="font-size:10px;color:var(--text-3)">Ej inskickat</span>'
       : approved ? '<span style="font-size:10px;color:var(--green-dark)"><i class="ti ti-circle-check"></i> Godkänt</span>'
       : '<span style="font-size:10px;color:var(--gold)"><i class="ti ti-clock"></i> Väntar</span><button type="button" class="btn btn-sm" style="padding:1px 6px;margin-left:4px" onclick="approveScoreSubmission('+i+','+pi+',true);openResults('+i+')" title="Godkänn"><i class="ti ti-check" style="font-size:11px"></i></button>';
@@ -6481,9 +6511,9 @@ function openResults(i) {
         '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+prefillBrutto+'" oninput="recalcNet('+pi+')">'+
         '<input type="number" step="1" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
         :'')+
-      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+prefillScore+'" '+(!isStab?'readonly':'')+'>'+
+      '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+prefillScore+'" '+((!isStab||autoCalc)?'readonly':'')+' title="'+(autoCalc?'Beräknat automatiskt från hål-för-hål-resultatet (SHCP + hål-index + bruttoslag)':'')+'">'+
     '</div>'+
-    '<div style="margin:0 0 8px 38px">'+statusBadge+'</div>';
+    '<div style="margin:0 0 8px 38px">'+statusBadge+(autoCalc?' <span style="font-size:10px;color:var(--text-3)"><i class="ti ti-calculator"></i> Poäng beräknat automatiskt</span>':'')+'</div>';
   }).join('');
   var h='<h3>'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+'Resultatinmatning – '+e.name+'</h3>';
   h+='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px"><i class="ti ti-info-circle"></i> Godkända resultat som spelarna skickat in är redan ifyllda. Du kan alltid skriva över manuellt.</p>';
@@ -10472,7 +10502,13 @@ function buildTop3HTML(t, compact) {
     var finalEv = findRelevantFinal(t);
     if(!finalEv || !finalEv.closed || !finalEv.results || !finalEv.results.length) return '';
     var finalIsStab = finalEv.type === 'stableford';
-    top = finalEv.results.slice(0,3).map(function(r){ return { pi: r.pi, scoreLabel: 'just. '+r.adjusted+(finalIsStab?' p':'') }; });
+    var finalRows = finalEv.results.map(function(r){ return { pi: r.pi, scoreLabel: 'just. '+r.adjusted+(finalIsStab?' p':'') }; });
+    // I det kompakta tourkortet (flera tourer listade efter varandra) visas
+    // bara pallen - men i den fullbredda vyn (Tävlingar-fliken) visas HELA
+    // finalens slutställning, inte bara topp 3, eftersom det är den som
+    // avgör hela säsongens riktiga slutplacering för alla spelare - inte
+    // bara pallplatserna. Tidigare visades bara tre spelare oavsett.
+    top = compact ? finalRows.slice(0,3) : finalRows;
     title = 'Slutresultat';
     medals = ['🥇','🥈','🥉'];
   } else {
@@ -13259,6 +13295,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (206)',
+    items: [
+      { type: 'fixed', text: '"Slutresultat"-widgeten för tourer med final visade bara topp 3, oavsett var den visades. I den fullbredda vyn (Tävlingar-fliken) visas nu HELA finalens slutställning - alla spelare, inte bara pallen - eftersom det är den listan som avgör hela säsongens riktiga slutplacering. På det kompakta tourkortet (flera tourer listade efter varandra) visas fortfarande bara topp 3, av utrymmesskäl.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (205)',
+    items: [
+      { type: 'fixed', text: 'Deltävlingar sorteras nu nyast överst i Tävlingar-fliken, både bland öppna och avslutade deltävlingar - istället för i den ordning de en gång skapades. Ändrar bara visningsordningen, inget annat.' },
+      { type: 'fixed', text: 'Resultattavlan (Resultatinmatning) räknar nu ut Stableford-poängen automatiskt när hål-för-hål-resultat finns (från livescoring/"Registrera för bollen") - istället för att admin behöver räkna ut och skriva in totalen manuellt. Fältet visas då som beräknat och låst, med SHCP, hål-index och bruttoslagen som underlag, precis som nettoscoren redan räknades ut automatiskt för slagtävlingar. Saknas hål-för-hål-data (t.ex. äldre resultat inmatade helt för hand) fungerar det som innan - manuell inmatning.' }
+    ]
+  },
   {
     date: '1 september 2026 (204)',
     items: [
