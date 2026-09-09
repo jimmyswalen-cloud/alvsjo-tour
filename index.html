@@ -10500,31 +10500,82 @@ function computeTourWinnings(t) {
 }
 
 // Compact "Top 3 i ledning" / "Vinnare" widget for tour cards and the tour's Tävlingar-view.
+// Bygger samma rad-format som computeLiveStandingsRows (för buildLiveStandingsRowsHTML),
+// men utifrån en STÄNGD finals sparade resultat istället för live-scoring-dokument.
+// Låter oss återanvända exakt samma resultattavla (+/-, brutto, netto, poäng, hål)
+// för den slutgiltiga "Slutresultat"-vyn som redan används i "Följ live".
+function buildFinalResultRows(t, finalEv) {
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (finalEv.course||'').trim().toLowerCase(); });
+  var holePars = (course && course.holePars) ? course.holePars : [];
+  var holeHcpIndex = (course && course.holeHcpIndex) ? course.holeHcpIndex : [];
+  var totalHoles = holePars.length || 18;
+  var totalPar = holePars.reduce(function(a,b){ return a+(b||0); }, 0);
+  var isStab = finalEv.type === 'stableford';
+  return finalEv.results.map(function(r){
+    var p = t.players[r.pi];
+    var holesGross = r.holes ? r.holes.slice() : new Array(totalHoles).fill(null);
+    var shcp = r.shcp != null ? r.shcp : ((p&&p.hcp!=null)?p.hcp:0);
+    var brutto = r.brutto != null ? r.brutto : holesGross.reduce(function(a,b){ return a+(b||0); }, 0);
+    var netto, poang;
+    if(holesGross.some(function(g){ return typeof g === 'number'; })) {
+      var strokesTotal = 0; poang = 0;
+      for(var hi=0; hi<totalHoles; hi++){
+        if(typeof holesGross[hi] !== 'number') continue;
+        var hcpIdx = (holeHcpIndex[hi]!=null) ? holeHcpIndex[hi] : (hi+1);
+        var strokesRecv = computeHcpStrokesForHole(shcp, hcpIdx, totalHoles);
+        strokesTotal += strokesRecv;
+        poang += computeHoleStablefordPoints(holesGross[hi], holePars[hi], strokesRecv);
+      }
+      netto = brutto - strokesTotal;
+    } else {
+      netto = brutto - Math.round(shcp);
+      poang = isStab ? r.score : null;
+    }
+    var headStart = r.headStart != null ? r.headStart : 0;
+    var diff = isStab ? (r.adjusted - totalHoles*2) : (netto - headStart - totalPar);
+    return {
+      pi: r.pi, name: p ? p.name : '?', brutto: brutto, netto: netto, poang: poang,
+      thru: totalHoles, totalHoles: totalHoles, diff: diff, isStab: isStab,
+      headStart: headStart, sortValue: 0, submitted: true,
+      holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: shcp
+    };
+  });
+}
+
 function buildTop3HTML(t, compact) {
   var players = t.players || getPlayersForTour(t);
   var events = t.events || [];
   var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
   var hasFinal = events.some(function(e){ return e.isFinal; });
 
-  var top, title, medals;
-  if(isClosed && hasFinal) {
-    // Har touren en final avgörs den RIKTIGA slutplaceringen av finalens egna,
-    // slagförsprång-justerade resultat - inte av OoM-totalen, som bara räknar
-    // deltävlingarna och alltid exkluderar finalen helt. Samma princip som
-    // redan används för att posta säsongsmästaren i aktivitetsfeeden
-    // (se checkAndPostTourConclusion). Widgeten visade tidigare fel podium
-    // för tourer med final, eftersom den alltid använde OoM-standings oavsett
-    // - dvs. ställningen INNAN finalen spelades, felaktigt märkt "Slutresultat".
+  if(isClosed && hasFinal && !compact) {
+    // Fullbredd (Tävlingar-fliken): visa HELA finalens riktiga resultattavla i
+    // exakt samma format som live-tabellen (+/-, brutto, netto, poäng, hål) -
+    // inte en förkortad "just. X"-rad. Det här ÄR säsongens riktiga
+    // slutställning, så den förtjänar samma fullständiga vy som under spelets
+    // gång, inklusive möjligheten att trycka på en spelare för att se hela
+    // hål-för-hål-scorekortet.
     var finalEv = findRelevantFinal(t);
     if(!finalEv || !finalEv.closed || !finalEv.results || !finalEv.results.length) return '';
-    var finalIsStab = finalEv.type === 'stableford';
-    var finalRows = finalEv.results.map(function(r){ return { pi: r.pi, scoreLabel: 'just. '+r.adjusted+(finalIsStab?' p':'') }; });
-    // I det kompakta tourkortet (flera tourer listade efter varandra) visas
-    // bara pallen - men i den fullbredda vyn (Tävlingar-fliken) visas HELA
-    // finalens slutställning, inte bara topp 3, eftersom det är den som
-    // avgör hela säsongens riktiga slutplacering för alla spelare - inte
-    // bara pallplatserna. Tidigare visades bara tre spelare oavsett.
-    top = compact ? finalRows.slice(0,3) : finalRows;
+    var finalRows = buildFinalResultRows(t, finalEv);
+    var headerRow = '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
+        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+      '</div>';
+    return '<div class="card" style="margin-bottom:16px;padding:14px 16px">'+
+      '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> Slutresultat</div>'+
+      headerRow + buildLiveStandingsRowsHTML(finalRows) +
+    '</div>';
+  }
+
+  var top, title, medals;
+  if(isClosed && hasFinal) {
+    // Kompakt tourkort (flera tourer listade efter varandra): plats saknas
+    // för hela fältet, så bara pallen visas här - men baserat på finalens
+    // egna, slagförsprång-justerade resultat, inte OoM-totalen (se ovan).
+    var finalEvCompact = findRelevantFinal(t);
+    if(!finalEvCompact || !finalEvCompact.closed || !finalEvCompact.results || !finalEvCompact.results.length) return '';
+    var finalIsStab = finalEvCompact.type === 'stableford';
+    top = finalEvCompact.results.slice(0,3).map(function(r){ return { pi: r.pi, scoreLabel: 'just. '+r.adjusted+(finalIsStab?' p':'') }; });
     title = 'Slutresultat';
     medals = ['🥇','🥈','🥉'];
   } else {
@@ -13311,6 +13362,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (208)',
+    items: [
+      { type: 'new', text: '"Slutresultat" i den fullbredda vyn (Tävlingar-fliken) visar nu HELA finalens resultattavla i exakt samma format som live-tabellen ("Följ live"): +/-, brutto, netto, poäng och hål - inte bara en förkortad "just. X"-rad. Går även att trycka på en spelare för att se hela hål-för-hål-scorekortet, precis som i live-vyn. Det kompakta tourkortet (flera tourer listade efter varandra) visar fortfarande bara pallens "just. X", av utrymmesskäl.' }
+    ]
+  },
   {
     date: '1 september 2026 (207)',
     items: [
