@@ -10455,14 +10455,33 @@ function computeTourWinnings(t) {
 
 // Compact "Top 3 i ledning" / "Vinnare" widget for tour cards and the tour's Tävlingar-view.
 function buildTop3HTML(t, compact) {
-  var standings = computeOomStandings(t).filter(function(s){ return s.events > 0; });
-  if(!standings.length) return '';
   var players = t.players || getPlayersForTour(t);
   var events = t.events || [];
   var isClosed = events.length > 0 && events.every(function(e){ return e.closed; });
-  var top = standings.slice(0,3);
-  var medals = isClosed ? ['🥇','🥈','🥉'] : [];
-  var title = isClosed ? 'Slutresultat' : 'Top 3 i ledning (OoM)';
+  var hasFinal = events.some(function(e){ return e.isFinal; });
+
+  var top, title, medals;
+  if(isClosed && hasFinal) {
+    // Har touren en final avgörs den RIKTIGA slutplaceringen av finalens egna,
+    // slagförsprång-justerade resultat - inte av OoM-totalen, som bara räknar
+    // deltävlingarna och alltid exkluderar finalen helt. Samma princip som
+    // redan används för att posta säsongsmästaren i aktivitetsfeeden
+    // (se checkAndPostTourConclusion). Widgeten visade tidigare fel podium
+    // för tourer med final, eftersom den alltid använde OoM-standings oavsett
+    // - dvs. ställningen INNAN finalen spelades, felaktigt märkt "Slutresultat".
+    var finalEv = findRelevantFinal(t);
+    if(!finalEv || !finalEv.closed || !finalEv.results || !finalEv.results.length) return '';
+    var finalIsStab = finalEv.type === 'stableford';
+    top = finalEv.results.slice(0,3).map(function(r){ return { pi: r.pi, scoreLabel: 'just. '+r.adjusted+(finalIsStab?' p':'') }; });
+    title = 'Slutresultat';
+    medals = ['🥇','🥈','🥉'];
+  } else {
+    var standings = computeOomStandings(t).filter(function(s){ return s.events > 0; });
+    if(!standings.length) return '';
+    top = standings.slice(0,3).map(function(s){ return { pi: s.pi, scoreLabel: s.pts+' p' }; });
+    title = isClosed ? 'Slutresultat' : 'Top 3 i ledning (OoM)';
+    medals = isClosed ? ['🥇','🥈','🥉'] : [];
+  }
   var avatarSize = compact ? 22 : 28;
   var rows = top.map(function(s, idx){
     var p = players[s.pi]; if(!p) return '';
@@ -10472,7 +10491,7 @@ function buildTop3HTML(t, compact) {
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
       '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
-      '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.pts+' p</span>'+
+      '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.scoreLabel+'</span>'+
     '</div>';
   }).join('');
   return '<div class="card" style="margin-bottom:'+(compact?'12px':'16px')+';padding:'+(compact?'10px 12px':'14px 16px')+'">'+
@@ -13240,6 +13259,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (204)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: "Slutresultat"-widgeten (på tourkort och i Tävlingar-fliken) visade fel podium för tourer med en final. Den använde alltid OoM-standings, som ALLTID exkluderar finalen - dvs. ställningen precis INNAN finalen spelades, felaktigt märkt "Slutresultat" så fort touren var helt avslutad. Har touren en final används nu istället finalens egna, slagförsprång-justerade resultat för podiet, precis som redan görs korrekt när säsongsmästaren postas i aktivitetsfeeden. Tourer UTAN final påverkas inte alls - de visar OoM-totalen precis som innan.' }
+    ]
+  },
   {
     date: '1 september 2026 (203)',
     items: [
