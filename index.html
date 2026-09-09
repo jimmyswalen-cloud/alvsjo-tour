@@ -9129,21 +9129,33 @@ function computeLiveStandingsRows(docs, t, ev) {
         var subShcp = approvedSub.shcp != null ? approvedSub.shcp : (p.shcp||0);
         var totalPar = holePars.reduce(function(a,b){ return a+(b||0); }, 0);
         // Netto = brutto minus SHCP-slagen - räkna alltid ut det här (oavsett
-        // stableford/slaggolf), aldrig null. Har vi hål-för-hål-data summeras
-        // strokes received hål för hål (samma fördelning som resten av appen
-        // använder); saknas det (äldre inskickning utan holes-array) faller vi
-        // tillbaka på att dra av hela SHCP:et i klump.
-        var subNetto;
+        // stableford/slaggolf), aldrig null. Poängen (stableford-motsvarande)
+        // ska likaså ALLTID räknas ut här - kolumnen är en extra jämförelse-
+        // punkt för alla rundor oavsett tävlingsform (se rubriken "brutto /
+        // netto / stableford-poäng"). Visade tidigare "null" för icke-
+        // stableford-rundor så fort resultatet godkänts, trots att exakt
+        // samma hål-för-hål-data (SHCP, hål-index, bruttoslag) redan fanns
+        // tillgänglig - ren matematik, samma formel som nettot fast med
+        // computeHoleStablefordPoints istället för en enkel subtraktion.
+        // Har vi hål-för-hål-data summeras strokes received och poäng hål för
+        // hål (samma fördelning som resten av appen använder); saknas det
+        // (äldre inskickning utan holes-array) faller nettot tillbaka på att
+        // dra av hela SHCP:et i klump, och poängen kan då inte räknas fram i
+        // efterhand - använder det redan sparade värdet om det finns.
+        var subNetto, subPoang;
         if(subHoles.some(function(g){ return typeof g === 'number'; })) {
-          var strokesTotal = 0;
+          var strokesTotal = 0; subPoang = 0;
           for(var si=0; si<totalHoles; si++){
             if(typeof subHoles[si] !== 'number') continue;
             var sHcpIdx = (holeHcpIndex[si]!=null) ? holeHcpIndex[si] : (si+1);
-            strokesTotal += computeHcpStrokesForHole(subShcp, sHcpIdx, totalHoles);
+            var sStrokesRecv = computeHcpStrokesForHole(subShcp, sHcpIdx, totalHoles);
+            strokesTotal += sStrokesRecv;
+            subPoang += computeHoleStablefordPoints(subHoles[si], holePars[si], sStrokesRecv);
           }
           subNetto = subBrutto - strokesTotal;
         } else {
           subNetto = subBrutto - Math.round(subShcp);
+          subPoang = isStab ? approvedSub.score : null;
         }
         var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -subNetto;
         var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
@@ -9154,7 +9166,7 @@ function computeLiveStandingsRows(docs, t, ev) {
         }
         rows.push({
           pi: p.pi, name: p.name,
-          brutto: subBrutto, netto: subNetto, poang: isStab ? approvedSub.score : null,
+          brutto: subBrutto, netto: subNetto, poang: subPoang,
           thru: totalHoles, totalHoles: totalHoles,
           diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, submitted: true,
           holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
@@ -9271,8 +9283,12 @@ function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     var diffFmt = formatLiveDiff(r.diff, r.thru);
+    // Visas alltid som "-N" oavsett om headStart råkar vara sparat som ett
+    // positivt eller negativt tal (t.ex. om finalTable-rutan för en viss
+    // placering av misstag fylldes i med minustecken) - annars kunde det bli
+    // dubbla minustecken, "(--1)", istället för "(-1)".
     var hsBadge = (r.headStart != null && r.headStart !== 0)
-      ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+r.headStart+')</span>'
+      ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+Math.abs(r.headStart)+')</span>'
       : '';
     // Ej startat: gråtonat namn, streck överallt, "Ej startat" istället för "T0".
     // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
@@ -13295,6 +13311,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (207)',
+    items: [
+      { type: 'fixed', text: 'VIKTIG BUGGFIX: Live-tabellens PTS-kolumn visade "null" för alla spelare i icke-stableford-tävlingar (t.ex. finalen) så fort resultatet blivit godkänt. Poängen (stableford-motsvarande) beräknades bara i klump för hela tävlingen, inte hål-för-hål - nu räknas den alltid ut från SHCP, hål-index och bruttoslagen per hål, precis som nettot redan gjorde, oavsett tävlingsform.' },
+      { type: 'fixed', text: 'Slagförsprångs-badgen i live-tabellen kunde visa dubbla minustecken, "(--1)", om förspránget råkade vara sparat som ett negativt tal. Visas nu alltid korrekt som "(-1)" oavsett tecken på det sparade värdet.' }
+    ]
+  },
   {
     date: '1 september 2026 (206)',
     items: [
