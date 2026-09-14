@@ -867,9 +867,13 @@ function openComments(eid) {
   h += '<input type="file" id="comment-img-file" accept="image/*" style="display:none" onchange="handleCommentImageSelected(this.files[0]);this.value=\'\'">';
   h += '<button type="button" class="btn btn-sm" id="comment-img-btn" onclick="document.getElementById(\'comment-img-file\').click()"><i class="ti ti-photo"></i> Bild</button>';
   h += '</div>';
-  h += '<label style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--text-2);font-weight:400;margin-bottom:8px;cursor:pointer">'+
-    '<input type="checkbox" id="comment-share-feed" style="width:auto;margin:2px 0 0">'+
-    '<span>Dela även på startsidans flöde (synligt för alla i touren - admin kan alltid radera det igen)</span>'+
+  // Tydligare "dela på flödet"-kryssruta: egen ljus ruta med ikon och en
+  // fetstil huvudrad, istället för en enda liten grå textrad som lätt missades
+  // bredvid alla andra knappar.
+  h += '<label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--text);margin-bottom:10px;cursor:pointer;background:#FFF8E6;border:1px solid var(--gold);border-radius:10px;padding:10px 12px">'+
+    '<input type="checkbox" id="comment-share-feed" style="width:auto;margin:2px 0 0;flex-shrink:0;transform:scale(1.2)">'+
+    '<span><span style="display:flex;align-items:center;gap:5px;font-weight:700;color:var(--text)"><i class="ti ti-speakerphone" style="color:var(--gold)"></i> Dela på startsidans flöde</span>'+
+      '<span style="display:block;font-weight:400;color:var(--text-2);font-size:11px;margin-top:2px">Synligt för alla i touren - admin kan alltid radera det igen</span></span>'+
   '</label>';
   h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px">';
   h += '<button class="btn btn-primary btn-sm" id="comment-send-btn" onclick="submitComment(\''+eid+'\')"><i class="ti ti-send"></i> Skicka</button>';
@@ -1437,6 +1441,16 @@ function renderGlobalSettings() {
     html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
     html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
     html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-medal" style="color:#0F6E56"></i> Kontrollera OoM-poäng</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda (icke-final) deltävlingar i alla tourer och jämför varje spelares SPARADE OoM-poäng mot vad poängskalan (+ ev. majors-multiplikator) borde ge för spelarens nuvarande placering i resultatlistan. Kan hända att de kommer i otakt om en deltävling återöppnades för att rätta ett resultat och sedan sparades om via "Resultat", utan att "Stäng" klickades igen efteråt (det sista steget räknar om poängen - att bara spara resultat gör det inte). Rör ALDRIG placeringsordningen, bara det sparade poängvärdet.</p>'+
+      '<button class="btn btn-sm" onclick="auditAndRepairOomPoints()"><i class="ti ti-wand"></i> Kontrollera</button>'+
+    '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-clipboard-x" style="color:#0F6E56"></i> Hitta saknade resultat</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och letar efter spelare som spelat klart alla hål enligt livescoringen, men som saknas helt i det officiella sparade resultatet - för att admin stängde deltävlingen innan spelarens scorekort hann godkännas. Listar varje sådant fynd med en genväg direkt till deltävlingen. Gör ALDRIG någon ändring själv - bara hittar och listar.</p>'+
+      '<button class="btn btn-sm" onclick="auditMissingFinalResults()"><i class="ti ti-search"></i> Kontrollera</button>'+
+    '</div>';
+    html += '<div class="card" style="margin-bottom:12px">'+
       '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf" style="color:#0F6E56"></i> Reparera saknade puttar</div>'+
       '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">"Registrera för bollen" (gruppinmatning från livescoring) tappade tidigare bort inmatade puttar - de sparades aldrig i scorekortet trots att de matats in under rundan. Bugg fixad framåt i tiden (release 196), men redan inskickade scorekort som drabbades behöver kompletteras en gång. Knappen letar igenom alla godkända scorekort som helt saknar puttar, och fyller i dem igen från den sparade livescoring-datan (om den fortfarande finns kvar) - rör aldrig scorekort som redan har puttar.</p>'+
       '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
@@ -1463,6 +1477,152 @@ function renderGlobalSettings() {
 // puttar inmatade i livescoringen (se submitBulkScore). Letar upp den sparade
 // livescoring-datan för varje drabbat scorekort (samma dokument som livescoringen
 // skrev till) och kompletterar puttarna om de fortfarande finns kvar där.
+// Hittar deltävlingar där det SPARADE OoM-poängvärdet (r.points) inte längre
+// stämmer med vad poängskalan (t.pointsScale[idx] × ev. majors-multiplikator)
+// borde ge för spelarens NUVARANDE placering i e.results. Kan hända om en
+// redan stängd deltävling återöppnas (reopenEvent nollställer r.points),
+// resultatet sedan sparas om via "Resultat"-formuläret (räknar ALDRIG om
+// poängen), men admin sedan glömmer att klicka "Stäng" en gång till.
+function auditAndRepairOomPoints() {
+  if(!isAdmin()) return;
+  if(!confirm('Gå igenom alla stängda deltävlingar i alla tourer och jämföra sparade OoM-poäng mot vad poängskalan ger för varje spelares nuvarande placering? Ändrar ALDRIG placeringsordningen - bara ett poängvärde som inte stämmer med den ordningen.')) return;
+  var mismatches = [];
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      if(!e.closed || e.isFinal || !e.results || !e.results.length) return;
+      var mult = e.isMajor ? 1.5 : 1;
+      e.results.forEach(function(r, idx){
+        var correct = Math.round(((t.pointsScale && t.pointsScale[idx])||0) * mult * 10) / 10;
+        var stored = r.points || 0;
+        if(stored !== correct) {
+          var p = t.players[r.pi];
+          mismatches.push({ e:e, r:r, tourName:t.name, eventName:e.name, playerName: p?p.name:('Spelare #'+r.pi), place: idx+1, stored:stored, correct:correct });
+        }
+      });
+    });
+  });
+  if(!mismatches.length) { alert('Kollade alla stängda deltävlingar - alla sparade OoM-poäng stämmer redan mot poängskalan och nuvarande placering.'); return; }
+  var listHtml = mismatches.map(function(m){
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<b>'+esc(m.playerName)+'</b> - '+esc(m.eventName)+' ('+esc(m.tourName)+'), plats '+m.place+
+      ': sparat <span style="color:var(--text-3)">'+m.stored+'p</span> &rarr; rätt <span style="color:#0F6E56;font-weight:700">'+m.correct+'p</span></div>';
+  }).join('');
+  _oomPointsMismatches = mismatches;
+  showModal('<h3 style="margin-bottom:8px">Hittade '+mismatches.length+' felaktiga OoM-poäng</h3>'+
+    '<div style="max-height:320px;overflow-y:auto;margin-bottom:14px">'+listHtml+'</div>'+
+    '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="_oomPointsMismatches=null;closeModal()">Avbryt</button><button class="btn btn-primary" onclick="applyOomPointsRepair()">Rätta alla ('+mismatches.length+')</button></div>', true, true);
+}
+
+var _oomPointsMismatches = null;
+function applyOomPointsRepair() {
+  if(!isAdmin() || !_oomPointsMismatches) return;
+  var n = _oomPointsMismatches.length;
+  _oomPointsMismatches.forEach(function(m){ m.r.points = m.correct; });
+  _oomPointsMismatches = null;
+  save();
+  closeModal();
+  // Verktyget körs från Globala inställningar - UTANFÖR en specifik tour - så
+  // getTour() kan vara odefinierad här. Uppdatera OoM/Tävlingar-vyerna bara
+  // om man faktiskt råkar stå inne i en tour just nu.
+  if(getTour()) { renderOOM(); renderEvents(); }
+  alert('Klart! Rättade '+n+' poster.');
+}
+
+// Letar igenom ALLA stängda deltävlingar (även finaler) i alla tourer efter
+// spelare som spelat klart alla hål enligt livescoringen (thru === totalHoles)
+// men som INTE finns med i det officiella sparade resultatet (e.results).
+// Ändrar ALDRIG något själv - bara hittar och listar, med en genväg till
+// deltävlingen så admin snabbt kan återöppna, godkänna/mata in resultatet och
+// stänga igen.
+function auditMissingFinalResults() {
+  if(!isAdmin()) return;
+  if(!confirm('Gå igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och leta efter spelare som spelat klart enligt livescoringen men saknas i det sparade resultatet? Kan ta en liten stund om det är många deltävlingar.')) return;
+
+  var closedEvents = [];
+  (S.tours||[]).forEach(function(t){
+    (t.events||[]).forEach(function(e){
+      if(e.closed && e.results) closedEvents.push({ t: t, e: e });
+    });
+  });
+  if(!closedEvents.length) { alert('Inga stängda deltävlingar hittades.'); return; }
+
+  var findings = [], errorCount = 0, pending = closedEvents.length;
+  closedEvents.forEach(function(item){
+    LIVE_SCORING_COL.where('eventId','==', item.e.id).get().then(function(snap){
+      snap.docs.forEach(function(doc){
+        var d = doc.data();
+        var totalHoles = (d.holePars||[]).length;
+        if(!totalHoles) return;
+        (d.players||[]).forEach(function(p){
+          var scores = (d.scores && d.scores[p.pi]) || {};
+          var thru = Object.keys(scores).filter(function(h){ return typeof scores[h] === 'number'; }).length;
+          if(thru < totalHoles) return;
+          var inResults = (item.e.results||[]).some(function(r){ return r.pi === p.pi; });
+          if(!inResults) {
+            findings.push({ tourId: item.t.id, tourName: item.t.name, eid: item.e.id, eventName: item.e.name, playerName: p.name, totalHoles: totalHoles });
+          }
+        });
+      });
+    }).catch(function(err){ errorCount++; console.error('Kunde inte kontrollera livescoring för '+item.e.name, err); })
+    .then(function(){
+      pending--;
+      if(pending === 0) showMissingResultsFindings(findings, errorCount);
+    });
+  });
+}
+
+function showMissingResultsFindings(findings, errorCount) {
+  var errNote = errorCount ? ' ('+errorCount+' deltävlingar kunde inte kontrolleras just nu - anslutningsfel, prova igen senare.)' : '';
+  if(!findings.length) {
+    alert('Kollade alla stängda deltävlingar - hittade inga spelare som spelat klart men saknas i det sparade resultatet.'+errNote);
+    return;
+  }
+  var listHtml = findings.map(function(f){
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<b>'+esc(f.playerName)+'</b> - '+esc(f.eventName)+' ('+esc(f.tourName)+') · spelade klart alla '+f.totalHoles+' hål men saknas i det sparade resultatet'+
+      '<div style="margin-top:4px"><button class="btn btn-sm" onclick="closeModal();goToEventOnTourPage(\''+f.tourId+'\',\''+f.eid+'\')"><i class="ti ti-arrow-right"></i> Gå till deltävlingen</button></div>'+
+    '</div>';
+  }).join('');
+  showModal('<h3 style="margin-bottom:8px">Hittade '+findings.length+' spelare som saknas i sparat resultat'+(errorCount?' <span style="font-size:11px;font-weight:400;color:var(--text-3)">('+errorCount+' deltävlingar gick inte att kontrollera)</span>':'')+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">De har spelat klart sin rond enligt livescoringen, men blev aldrig godkända/inmatade innan deltävlingen stängdes. Åtgärda genom att återöppna deltävlingen, godkänna eller mata in spelarens resultat manuellt via "Resultat", och stänga igen.</p>'+
+    '<div style="max-height:340px;overflow-y:auto;margin-bottom:14px">'+listHtml+'</div>'+
+    '<div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Stäng</button></div>', true, true);
+}
+
+// Varnar direkt på en stängd deltävlings EGET kort om det finns spelare som
+// spelat klart alla hål enligt livescoringen men som saknas i det sparade
+// resultatet - samma kontroll som "Hitta saknade resultat" ovan, men riktad
+// mot just DEN deltävling man redan tittar på.
+function refreshMissingResultsWarnings() {
+  if(!isAdmin()) return;
+  var els = document.querySelectorAll('.missing-results-warning');
+  els.forEach(function(el){
+    var tourId = el.getAttribute('data-tour-id'), eid = el.getAttribute('data-eid');
+    var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+    var e = t && (t.events||[]).find(function(x){ return x.id===eid; });
+    if(!t || !e || !e.results) return;
+    LIVE_SCORING_COL.where('eventId','==', eid).get().then(function(snap){
+      var missing = [];
+      snap.docs.forEach(function(doc){
+        var d = doc.data();
+        var totalHoles = (d.holePars||[]).length;
+        if(!totalHoles) return;
+        (d.players||[]).forEach(function(p){
+          var scores = (d.scores && d.scores[p.pi]) || {};
+          var thru = Object.keys(scores).filter(function(h){ return typeof scores[h] === 'number'; }).length;
+          if(thru < totalHoles) return;
+          if(!e.results.some(function(r){ return r.pi === p.pi; })) missing.push(p.name);
+        });
+      });
+      if(!missing.length) return;
+      el.innerHTML = '<div style="background:#FEF3E9;border:1px solid #F0C48A;border-radius:10px;padding:10px 12px;margin-top:4px;font-size:12px;color:#7A4A0A">'+
+        '<i class="ti ti-alert-triangle"></i> <b>'+missing.length+' spelare saknas i resultatet ovan</b> - spelade klart enligt livescoringen men blev aldrig godkända/inmatade innan deltävlingen stängdes: '+esc(missing.join(', '))+
+        '. Återöppna deltävlingen, godkänn/mata in dem via "Resultat", och stäng igen.'+
+      '</div>';
+    }).catch(function(err){ console.error('Kunde inte kontrollera saknade resultat', err); });
+  });
+}
+
 function repairMissingHolePuttsFromLiveScoring() {
   if(!isAdmin()) return;
   if(!confirm('Leta igenom alla deltävlingar efter godkända scorekort som saknar puttar, och försöka fylla i dem från sparad livescoring-data? Skriver bara till scorekort som helt saknar puttar sedan tidigare - skriver aldrig över redan sparade puttar.')) return;
@@ -1584,6 +1744,15 @@ function detectBrandLogos() {
   updateCounter();
 }
 
+// Håller reda på hur många spelare som visas per bana i Banstatistik-vyn
+// (klicka "+X fler spelare" för att visa upp till 10 till i taget) - annars
+// visades bara topp 5 med en statisk, oklickbar "+N fler spelare"-text.
+var _courseStatsExpanded = {};
+function expandCourseStatsPlayers(courseName) {
+  _courseStatsExpanded[courseName] = (_courseStatsExpanded[courseName] || 5) + 10;
+  renderCourseStatsView();
+}
+
 function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
@@ -1684,7 +1853,8 @@ function renderCourseStatsView() {
           var st = b.rounds.some(function(r){ return r.isStab; });
           return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
         });
-        var playerRows = players.slice(0,5).map(function(p){
+        var visibleCount = _courseStatsExpanded[c.name] || 5;
+        var playerRows = players.slice(0,visibleCount).map(function(p){
           var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
           var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
           var pUseS = pS.length >= pL.length && pS.length > 0;
@@ -1715,7 +1885,7 @@ function renderCourseStatsView() {
               '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
             '</div>'+playerRows+
           '</div>'+
-          (players.length>5?'<div style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-3);text-align:center">+' +(players.length-5)+' fler spelare</div>':'')+
+          (players.length>visibleCount?'<div onclick="expandCourseStatsPlayers(\''+esc(c.name)+'\')" style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-2);text-align:center;cursor:pointer;font-weight:500">+' +Math.min(10,players.length-visibleCount)+' fler spelare</div>':'')+
         '</div>';
       }).join('');
 
@@ -2019,7 +2189,7 @@ function showView(v) {
   if(v==='players')    renderPlayers();
   if(v==='tournament') renderEvents();
   if(v==='calendar')   renderCalendar();
-  if(v==='oom')        { showOOMMain(); renderOOM(); }
+  if(v==='oom')        { showOOMMain(); subscribeTourLiveStandings(getTour()); renderOOM(); }
   if(v==='settings')   renderSettings();
   window.scrollTo(0, 0);
 }
@@ -2069,6 +2239,19 @@ function showModal(html, wide, preventOutsideClose) {
   ov.appendChild(box);
   ov.addEventListener('click', function(e){ if(e.target===ov && !preventOutsideClose) closeModal(); });
   document.body.appendChild(ov);
+}
+// Byter ut INNEHÅLLET i en redan öppen modal utan att stänga/öppna den på nytt
+// - dvs. utan att closeModal() (och därmed _afterModalClose, t.ex. att en
+// livescoring-lyssnare avprenumereras) triggas. Används för att navigera
+// MELLAN vyer inuti samma modal-session (t.ex. live-tabell <-> ett scorekort)
+// utan att förlora eller behöva återskapa det som höll modalen "vid liv" -
+// se _liveStandingsBackTo. Faller tillbaka på en vanlig showModal() om ingen
+// modal råkar vara öppen (bör inte hända i praktiken).
+function updateModalContent(html) {
+  var mc = document.getElementById('modal-mc');
+  var box = mc && mc.querySelector('.modal');
+  if(!box) { showModal(html); return; }
+  box.innerHTML = html;
 }
 var _afterModalClose = null; // engångs-callback som körs nästa gång closeModal() anropas
 function closeModal() {
@@ -2267,9 +2450,41 @@ function goToMyNextRound(tourId, eventIndex) {
   setTimeout(function(){ openMyScoreSubmission(eventIndex); }, 60);
 }
 
+// Tar dig till toursidan (Tävlingar-fliken) där deltävlingen syns i listan -
+// stannar högst upp på sidan (enterTour scrollar redan dit) men ramar in
+// deltävlingskortet kortvarigt så det syns när man väl scrollar ner - istället
+// för att gå rakt in i "Mitt resultat" som annars hände när man klickade på
+// själva "Kommande runda"/"Väntar på resultat"-kortet på startsidan (knapparna
+// längst ner i kortet gör fortfarande sina egna, mer specifika saker - Live
+// scoring, Side bets, Mitt resultat - den här är bara för klick på SJÄLVA
+// kortytan/bilden).
+function goToEventOnTourPage(tourId, eid) {
+  enterTour(tourId);
+  setTimeout(function(){
+    var card = document.getElementById('event-card-'+eid);
+    if(!card) return;
+    var prevTransition = card.style.transition;
+    card.style.transition = 'box-shadow .3s ease';
+    card.style.boxShadow = '0 0 0 2px var(--green-dark)';
+    setTimeout(function(){ card.style.boxShadow = ''; card.style.transition = prevTransition; }, 1600);
+  }, 120);
+}
+
 function goToMyRegistration(tourId, eventIndex) {
   enterTour(tourId);
   setTimeout(function(){ openRegister(eventIndex); }, 60);
+}
+
+// Admin-genväg: låt scoringtabellen (som normalt bara syns "live" när minst en
+// boll faktiskt har ett datum som kommit) visas manuellt i förväg - t.ex. för
+// finalen innan dess bollar/datum gjort den "live" av sig själv. Sparas på
+// deltävlingen (e.forceLiveTable) så det gäller för alla som tittar, inte bara
+// admin själv, och kan slås av igen när det inte längre behövs.
+function toggleForceLiveTable(i) {
+  var t = getTour(), e = t.events[i];
+  e.forceLiveTable = !e.forceLiveTable;
+  save();
+  renderEvents();
 }
 
 // Snabbmarkerar "Deltar ej" direkt från startsidans påminnelse-widget, utan att
@@ -2301,17 +2516,17 @@ function goToMySideBetsFromHome(tourId, eventIndex) {
   setTimeout(function(){ openSideBets(eventIndex); }, 60);
 }
 
+// Hoppar rakt in i spelarens EGEN boll - gIdx kommer redan från hemskärmens
+// findMyNextRoundInfo (som vet exakt vilken boll spelaren tillhör), så
+// "Välj boll"-mellansteget skulle bara vara en extra klick-omväg i det vanliga
+// fallet där man bara vill fortsätta mata in sitt eget resultat. Tidigare
+// visades bollväljaren automatiskt så fort deltävlingen hade fler än en boll
+// (vanligast fallet!) - man fick alltså nästan alltid ett extra "Välj"-klick
+// innan man kom till rätt hål. Vill man mata in för en ANNAN boll finns
+// "Byt boll" kvar inne i livescoring-vyn (öppnar samma bollväljare som förut).
 function goToMyLiveScoring(tourId, eventId, gIdx) {
   enterTour(tourId);
-  setTimeout(function(){
-    var t = getTour();
-    var e = (t.events||[]).find(function(x){ return x.id === eventId; });
-    if(e && e.teeGroups && e.teeGroups.length > 1) {
-      openLiveScoringBollPicker(eventId, gIdx);
-    } else {
-      openLiveScoring(eventId, gIdx);
-    }
-  }, 60);
+  setTimeout(function(){ openLiveScoring(eventId, gIdx); }, 60);
 }
 
 // Låter spelaren själv välja vilken boll hen vill föra livescore för i en
@@ -2450,15 +2665,18 @@ function renderHomeNextRoundWidget() {
 
   var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
   el.innerHTML =
-    '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToMyNextRound(\''+t.id+'\','+info.eventIndex+')">'+
+    '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToEventOnTourPage(\''+t.id+'\',\''+e.id+'\')">'+
       '<div style="display:flex;align-items:stretch">'+
         (img ? '<img src="'+img+'" style="width:88px;height:auto;object-fit:cover;flex-shrink:0">' : '<div style="width:88px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="font-size:28px;color:var(--text-3)"></i></div>')+
         '<div style="padding:12px 14px;flex:1;min-width:0">'+
           '<div style="font-size:11px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">'+eyebrow+'</div>'+
           '<div style="font-weight:700;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</div>'+
           '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(t.name+(t.season?' '+t.season:''))+'</div>'+
+          '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-top:6px">'+
+            '<span style="font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.course ? '<i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course) : '')+'</span>'+
+            '<span id="home-shcp-badge" style="flex-shrink:0"></span>'+
+          '</div>'+
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-2)">'+
-            (e.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> '+esc(e.course)+'</span>' : '')+
             '<span><i class="ti ti-calendar" style="font-size:11px"></i> '+dateLabel+'</span>'+
             (info.time ? '<span><i class="ti ti-clock" style="font-size:11px"></i> '+esc(info.time)+'</span>' : '')+
           '</div>'+
@@ -2473,6 +2691,142 @@ function renderHomeNextRoundWidget() {
     '</div>'+
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
   checkHomeLiveTableButton(e.id, t.id);
+  if(info.groupIndex != null) checkHomeShcpBadge(t.id, e.id, info.groupIndex);
+}
+
+// Visar spelarens SPELHANDICAP FÖR DEN HÄR SPECIFIKA RONDEN (SHCP) i "Kommande
+// runda"-kortet - INTE spelarens allmänna HCP (det är två olika saker: SHCP är
+// heltalet antal slag man faktiskt får för just den här banan/rondan, sparat
+// per boll i livescoring-dokumentet, medan HCP är spelarens generella handicap
+// som kan ha decimaler). Visar en tydlig uppmaning att fylla i SHCP tills
+// spelaren SJÄLV sparat ett värde (p.shcpManuallySet, satt av
+// saveMyShcpQuick/nollställt av resetMyShcpQuick) - ELLER hela bollens SHCP
+// bekräftats i livescoringen (d.shcpConfirmed).
+function checkHomeShcpBadge(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
+    var el = document.getElementById('home-shcp-badge');
+    if(!el) return;
+    var confirmed = false, myShcp = null;
+    if(doc.exists) {
+      var d = doc.data();
+      var p = (d.players||[]).find(function(x){ return x.pi===myPi; });
+      confirmed = !!d.shcpConfirmed || !!(p && p.shcpManuallySet);
+      if(p && p.shcp!=null) myShcp = p.shcp;
+    }
+    el.innerHTML = confirmed
+      ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-edit" style="font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>'
+      : '<span style="font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-alert-circle"></i> Fyll i SHCP</span>';
+  }).catch(function(err){ console.error('Kunde inte hämta SHCP-status', err); });
+}
+
+// Liten personlig SHCP-ruta - bara DEN EGNA spelarens rad, till skillnad från
+// den fullständiga "Spelhandicap (SHCP)"-skärmen i livescoringen som visar och
+// låter en redigera HELA bollens SHCP (den nås fortfarande som vanligt via
+// "Live scoring"-knappen/att starta livescoringen). Den här genvägen är till
+// för att snabbt kunna mata in sitt EGET SHCP innan rondan, utan att behöva gå
+// via hela bollens vy - och utan att röra övriga spelares värden.
+function openMyShcpQuickEdit(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId)).get().then(function(doc){
+    var myShcp = 0, manuallySet = false;
+    if(doc.exists) {
+      var p = ((doc.data().players)||[]).find(function(x){ return x.pi===myPi; });
+      if(p && p.shcp!=null) myShcp = p.shcp;
+      manuallySet = !!(p && p.shcpManuallySet);
+    } else if(t.players[myPi] && t.players[myPi].hcp!=null) {
+      myShcp = Math.round(t.players[myPi].hcp);
+    }
+    showModal(
+      '<h3 style="margin-bottom:4px">Ditt spelhandicap (SHCP)</h3>'+
+      '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Antal slag du får för din runda'+(e.course?' på '+esc(e.course):'')+'. Bara ditt eget värde - påverkar inte övriga i bollen.</p>'+
+      '<div class="field"><label>SHCP</label><input id="my-shcp-quick" type="number" step="1" value="'+myShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>'+
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-device-floppy"></i> Spara</button>'+
+      '<div class="row" style="justify-content:space-between;margin-top:8px;gap:8px">'+
+        (manuallySet ? '<button class="btn btn-sm" style="color:#dc2626" onclick="resetMyShcpQuick(\''+tourId+'\',\''+eid+'\','+gIdx+')" title="För teständamål - nollställer bara ditt eget värde"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
+        '<button class="btn btn-sm" onclick="closeModal()">Avbryt</button>'+
+      '</div>',
+      true, false
+    );
+    setTimeout(function(){ var inp=document.getElementById('my-shcp-quick'); if(inp) inp.focus(); }, 30);
+  }).catch(function(err){ console.error('Kunde inte hämta SHCP', err); alert('Kunde inte hämta SHCP just nu. Kontrollera internetanslutningen.'); });
+}
+
+function saveMyShcpQuick(tourId, eid, gIdx) {
+  var inp = document.getElementById('my-shcp-quick');
+  var val = parseInt(inp.value, 10);
+  if(isNaN(val)) { alert('Ange ett giltigt SHCP-värde.'); return; }
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  var ref = LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId));
+  ref.get().then(function(doc){
+    if(doc.exists) {
+      var players = doc.data().players || [];
+      var idx = players.findIndex(function(x){ return x.pi===myPi; });
+      if(idx>=0) players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: val, shcpManuallySet: true };
+      else players.push({ pi: myPi, name: (t.players[myPi]&&t.players[myPi].name)||'', shcp: val, shcpManuallySet: true });
+      return ref.update({ players: players, updatedAt: Date.now() });
+    }
+    var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+    var players2 = g.playerPis.map(function(pi){
+      var p = t.players[pi];
+      return pi===myPi
+        ? { pi: pi, name: p?p.name:'?', shcp: val, shcpManuallySet: true }
+        : { pi: pi, name: p?p.name:'?', shcp: (p&&p.hcp!=null)?Math.round(p.hcp):0 };
+    });
+    var scores = {}, putts = {};
+    players2.forEach(function(p){ scores[p.pi]={}; putts[p.pi]={}; });
+    return ref.set({
+      eventId: eid, groupId: groupId, courseName: e.course||'',
+      holePars: course?course.holePars:[], holeHcpIndex: course?(course.holeHcpIndex||[]):[],
+      players: players2, scores: scores, putts: putts, shcpConfirmed: false, updatedAt: Date.now()
+    });
+  }).then(function(){
+    closeModal();
+    renderHomeNextRoundWidget();
+  }).catch(function(err){ console.error('Kunde inte spara SHCP', err); alert('Kunde inte spara SHCP just nu. Kontrollera internetanslutningen.'); });
+}
+
+// För TESTÄNDAMÅL: nollställer bara DEN EGNA spelarens SHCP-inmatning (rör
+// aldrig övriga i bollen eller bollens gemensamma shcpConfirmed).
+function resetMyShcpQuick(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var g = e.teeGroups[gIdx];
+  var groupId = ensureTeeGroupId(g);
+  var myPi = getMyPi(t);
+  var ref = LIVE_SCORING_COL.doc(liveScoringDocId(eid, groupId));
+  ref.get().then(function(doc){
+    if(!doc.exists) return;
+    var players = doc.data().players || [];
+    var idx = players.findIndex(function(x){ return x.pi===myPi; });
+    if(idx<0) return;
+    var defaultShcp = (t.players[myPi] && t.players[myPi].hcp!=null) ? Math.round(t.players[myPi].hcp) : 0;
+    players[idx] = { pi:players[idx].pi, name:players[idx].name, shcp: defaultShcp };
+    return ref.update({ players: players, updatedAt: Date.now() });
+  }).then(function(){
+    closeModal();
+    renderHomeNextRoundWidget();
+  }).catch(function(err){ console.error('Kunde inte nollställa SHCP', err); alert('Kunde inte nollställa SHCP just nu.'); });
 }
 
 // Visar en "Live-tabell"-genväg i "Kommande runda"-rutan på startsidan, men BARA
@@ -3622,6 +3976,7 @@ function renderEvents() {
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   el.innerHTML = liveStandingsHtml + top3Html + storyBanner + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
+  refreshMissingResultsWarnings();
 }
 
 var _tourStoryImg = null;
@@ -5689,7 +6044,8 @@ function eventCardHTML(i,e) {
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
     }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>'+
+      '<div class="missing-results-warning" data-tour-id="'+t.id+'" data-eid="'+e.id+'"></div>';
   } else if(t.players.length) {
     var rowsData = t.players.map(function(p, pi){
       if(!p) return null;
@@ -5792,10 +6148,11 @@ function eventCardHTML(i,e) {
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Bana/bild</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
+      (e.teeGroups && e.teeGroups.length ? '<button class="btn btn-sm'+(e.forceLiveTable?' btn-primary':'')+'" onclick="toggleForceLiveTable('+i+')" title="Visa scoringtabellen överst på toursidan även innan någon boll räknas som \'live\' (t.ex. före rondens datum)"><i class="ti ti-'+(e.forceLiveTable?'eye-off':'eye')+'"></i> '+(e.forceLiveTable?'Dölj':'Visa')+' scoringtabell nu</button>' : '')+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
       sideBetsBtn+
       chatBtn;
-  return '<div class="card" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
+  return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
     '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
@@ -8292,7 +8649,7 @@ function renderLiveShcpHTML() {
     '<div class="row" style="justify-content:space-between;gap:8px;margin-top:16px">'+
       (isAdmin() ? '<button class="btn" style="color:#dc2626" onclick="resetCurrentLiveScoring()"><i class="ti ti-refresh-dot"></i> Nollställ</button>' : '<span></span>')+
       '<div class="row" style="gap:8px">'+
-        (d.shcpConfirmed ? '<button class="btn" onclick="cancelShcpEdit()">Avbryt</button>' : '')+
+        '<button class="btn" onclick="'+(d.shcpConfirmed ? 'cancelShcpEdit()' : 'closeModal()')+'">Avbryt</button>'+
         '<button class="btn btn-primary" onclick="confirmLiveShcp()"><i class="ti ti-check"></i> '+(d.shcpConfirmed?'Spara':'Starta livescoring')+'</button>'+
       '</div>'+
     '</div>';
@@ -8427,10 +8784,15 @@ function renderLiveGridHTML() {
     '</div>';
   }).join('');
 
+  // "Byt boll" visas bara om deltävlingen faktiskt har fler än en boll att
+  // välja mellan - annars är genvägen meningslös brus i vyn.
+  var canSwitchBoll = found && found.event.teeGroups && found.event.teeGroups.length > 1;
+
   el.innerHTML =
     completionBanner+
-    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">'+
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;flex-wrap:wrap">'+
       '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
+      (canSwitchBoll ? '<button class="btn btn-sm" onclick="closeModal();setTimeout(function(){openLiveScoringBollPicker(\''+d.eventId+'\','+_liveScoring.gIdx+')},60)"><i class="ti ti-users"></i> Byt boll</button>' : '')+
       '<button class="btn btn-sm" title="Se hela live-tabellen" onclick="openLiveFollow(\''+d.eventId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px;gap:6px">'+
@@ -9076,7 +9438,18 @@ function openLiveFollow(eid, tourId) {
   if(!e) return;
   var players = getPlayersForTour(t);
   _liveFollow = { eid: eid, unsub: null, docs: [] };
-  _afterModalClose = function(){ if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; } };
+  // Uppdaterar bara modalens INNEHÅLL (updateModalContent) istället för att
+  // anropa showModal() på nytt - showModal() kör alltid closeModal() först,
+  // vilket annars skulle trigga _afterModalClose (avprenumerera live-lyssnaren)
+  // varje gång man går tillbaka från ett scorekort till tabellen.
+  _liveStandingsBackTo = function(){
+    updateModalContent('<div id="live-follow-modal-body"></div>');
+    renderLiveFollowHTML(e, players, t);
+  };
+  _afterModalClose = function(){
+    if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; }
+    _liveStandingsBackTo = null;
+  };
 
   showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
 
@@ -9161,17 +9534,22 @@ function computeLiveStandingsRows(docs, t, ev) {
           subPoang = isStab ? approvedSub.score : null;
         }
         var subHeadStart = null, subSortValue = isStab ? approvedSub.score : -subNetto;
-        var subDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
+        var subRawDiff = isStab ? (approvedSub.score - totalHoles*2) : (subNetto - totalPar);
+        var subDiff = subRawDiff;
         if(isFinal) {
           subHeadStart = getHeadStart(t, ev, p.pi);
           subDiff = isStab ? (approvedSub.score + subHeadStart - totalHoles*2) : (subNetto - subHeadStart - totalPar);
           subSortValue = isStab ? (approvedSub.score + subHeadStart) : -(subNetto - subHeadStart);
         }
+        // paceValue: samma diff, men alltid på "högre = bättre"-skala oavsett
+        // tävlingsform - används som sorteringsnyckel istället för totalsumman,
+        // se paceValue-kommentaren vid rows.sort() nedan.
+        var subPaceValue = isStab ? subDiff : -subDiff;
         rows.push({
           pi: p.pi, name: p.name,
           brutto: subBrutto, netto: subNetto, poang: subPoang,
           thru: totalHoles, totalHoles: totalHoles,
-          diff: subDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, submitted: true,
+          diff: subDiff, rawDiff: subRawDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
           holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
         });
         seenPis[p.pi] = true;
@@ -9195,7 +9573,8 @@ function computeLiveStandingsRows(docs, t, ev) {
       }
       // "Diff": vid stableford - hur många poäng över/under vad hcp:et "ska" ge
       // (2 poäng/hål är nettopar), vid slaggolf - netto mot banans par så här långt.
-      var diff = isStab ? (poang - thru*2) : (netto - parSoFar);
+      var rawDiff = isStab ? (poang - thru*2) : (netto - parSoFar);
+      var diff = rawDiff;
       var headStart = null, sortValue = isStab ? poang : -netto;
       if(isFinal) {
         headStart = getHeadStart(t, ev, p.pi);
@@ -9204,9 +9583,17 @@ function computeLiveStandingsRows(docs, t, ev) {
         diff = isStab ? (poang + headStart - thru*2) : (netto - headStart - parSoFar);
         sortValue = isStab ? (poang + headStart) : -(netto - headStart);
       }
+      // paceValue: diff (poäng över/under förväntat pace, resp. netto mot par
+      // hittills) på "högre = bättre"-skala. Används som sorteringsnyckel så
+      // att den som ligger bäst till mot par/handicap rankas högst - OAVSETT
+      // hur många hål hen hunnit spela - istället för att den som bara spelat
+      // fler hål automatiskt hamnar högre upp bara för att totalsumman är
+      // större. sortValue (totalsumman) sparas kvar för ev. annat bruk men
+      // styr inte längre ställningens ordning.
+      var paceValue = isStab ? diff : -diff;
       rows.push({
         pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
-        diff: diff, isStab: isStab, headStart: headStart, sortValue: sortValue, submitted: false,
+        diff: diff, rawDiff: rawDiff, isStab: isStab, headStart: headStart, sortValue: sortValue, paceValue: paceValue, submitted: false,
         holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
       seenPis[p.pi] = true;
@@ -9227,26 +9614,45 @@ function computeLiveStandingsRows(docs, t, ev) {
       rows.push({
         pi: pi, name: p.name, brutto: 0, netto: 0, poang: 0, thru: 0, totalHoles: 18,
         diff: 0, isStab: ev.type==='stableford', headStart: isFinal ? getHeadStart(t, ev, pi) : null,
-        sortValue: -Infinity, submitted: false, notStarted: true,
+        sortValue: -Infinity, paceValue: -Infinity, submitted: false, notStarted: true,
         holesGross: [], holePars: [], holeHcpIndex: [], shcp: p.shcp||0
       });
       seenPis[pi] = true;
     });
   }
-  // Bäst placerad överst - flest stableford-poäng (eller lägst netto) vinner, justerat
-  // för finalens slagförsprång om tillämpligt. Mer spelat rankas före ospelat vid lika.
+  // Bäst placerad överst - PACE-sortering: den som ligger bäst till mot
+  // par/handicap för de hål hen faktiskt spelat vinner (paceValue), inte den
+  // med störst ackumulerad totalsumma. Så kan t.ex. någon som är +2 slag bättre
+  // än sitt handicap genom 7 hål ligga före någon som är sämre än sitt handicap
+  // men hunnit spela klart alla 18 - precis som på en riktig touringledartavla.
+  // Ospelat (thru===0) hamnar alltid sist, oavsett paceValue.
   rows.sort(function(a,b){
     if(a.thru===0 && b.thru===0) return 0;
     if(a.thru===0) return 1;
     if(b.thru===0) return -1;
-    return b.sortValue - a.sortValue;
+    if(b.paceValue !== a.paceValue) return b.paceValue - a.paceValue;
+    if(a.thru !== b.thru) return b.thru - a.thru; // lika pace: den som hunnit längst rankas som säkrare överst
+    // Fullständigt lika (även i antal spelade hål): lägst SHCP vinner - samma
+    // tiebreak-regel som används på riktigt när en deltävling stängs, se
+    // buildResultsFromApprovedSubmissions() (ah-bh). Utan den här raden vann
+    // den som råkade ligga tidigast i spelarlistan/registreringsordningen,
+    // vilket inte är en golfregel utan bara en slump i datastrukturen.
+    return (a.shcp||0) - (b.shcp||0);
   });
   return rows;
 }
 
 // Formaterar diff-värdet som "+2"/"E"/"-3", med grön/röd/neutral färg.
-function formatLiveDiff(diff, thru) {
+// Formaterar diff-värdet som "+2"/"E"/"-3".
+// Stableford (+/-): grön = fler poäng än förväntat pace, röd = färre.
+// Slaggolf (Par): röd = under par, svart = jämnt med par, blå = över par -
+// egen färgskala per önskemål, skiljer sig medvetet från Stableford-logiken.
+function formatLiveDiff(diff, thru, isStab) {
   if(!thru) return { text: '–', color: 'var(--text-3)' };
+  if(!isStab) {
+    if(diff === 0) return { text: 'E', color: '#111827' };
+    return { text: (diff>0?'+':'')+diff, color: diff<0 ? '#B42318' : '#1D4ED8' };
+  }
   if(diff === 0) return { text: 'E', color: 'var(--text-2)' };
   return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : '#B42318' };
 }
@@ -9281,29 +9687,54 @@ function liveScoreCellStyle(gross, par) {
 // ett spelarnamn (bara ett litet index i onclick-attributet) kan slå upp hela
 // spelarens hål-för-hål-data utan att behöva serialisera allt i HTML-strängen.
 var _liveStandingsRowsCache = [];
+// Sätts av openLiveFollow() till en funktion som ritar om samma live-tabell
+// igen - så att "Tillbaka"-knappen i openPlayerLiveScorecard() kan ta dig
+// tillbaka till tabellen istället för att bara kunna stänga hela modalen.
+// Nollställs dels när modalen stängs helt (se openLiveFollow), dels i
+// renderTourLiveStandingsHTML() eftersom den tabellen inte ligger i en modal
+// alls - där ska ett klick på en spelare bara kunna stängas, inte "gå tillbaka".
+var _liveStandingsBackTo = null;
 
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
-    var diffFmt = formatLiveDiff(r.diff, r.thru);
+    var diffFmt = formatLiveDiff(r.diff, r.thru, r.isStab);
+    // Slagförsprånget ska visas som startvärde (t.ex. "-10") så fort spelaren
+    // inte slagit ett enda slag än - gäller alla spelare med thru=0 (både den
+    // separata "utan boll alls"-fallback-raden och en vanlig boll-medlem som
+    // bara inte hunnit börja) - annars visade huvudkolumnen bara "-" ända
+    // fram tills första hålet var ifyllt, trots att startläget redan är känt.
+    if(r.thru === 0 && r.headStart != null) {
+      diffFmt = r.headStart > 0 ? { text: '-'+r.headStart, color: 'var(--gold)' } : { text: 'E', color: 'var(--gold)' };
+    }
+    // Rått till-par (utan slagförsprång) visas som EGEN kolumn i finaler, till
+    // höger om Netto - så man ser både "hur gick rundan rent sportsligt" och
+    // "var man hamnar i finalen inkl. förspránget" sida vid sida.
+    var rawDiffFmt = r.headStart != null
+      ? (r.thru === 0 ? { text:'–', color:'var(--text-3)' } : formatLiveDiff(r.rawDiff, r.thru, r.isStab))
+      : null;
+    // Badgen bredvid namnet ("(-10)") behövs bara för spelare som redan börjat
+    // spela (påminnelse om förspránget bredvid deras löpande resultat) - för
+    // den som inte startat än (thru===0) visas samma värde redan i
+    // huvudkolumnen ovan, en badge till hade bara varit dubblerad information.
     // Visas alltid som "-N" oavsett om headStart råkar vara sparat som ett
-    // positivt eller negativt tal (t.ex. om finalTable-rutan för en viss
-    // placering av misstag fylldes i med minustecken) - annars kunde det bli
-    // dubbla minustecken, "(--1)", istället för "(-1)".
-    var hsBadge = (r.headStart != null && r.headStart !== 0)
+    // positivt eller negativt tal - annars kunde det bli dubbla minustecken.
+    var hsBadge = (r.thru > 0 && r.headStart != null && r.headStart !== 0)
       ? ' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Slagförsprång inför finalen">(-'+Math.abs(r.headStart)+')</span>'
       : '';
-    // Ej startat: gråtonat namn, streck överallt, "Ej startat" istället för "T0".
+    // Ej startat: gråtonat namn, "-" istället för "Ej startat" (kortare text
+    // ger mer plats åt namnet i den smala kolumnen, syns ändå via tooltip).
     // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
-    var holeLabel = r.notStarted ? 'Ej startat' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
+    var holeLabel = r.notStarted ? '–' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
         '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
+        (rawDiffFmt ? '<span style="width:26px;text-align:center;font-weight:700;color:'+rawDiffFmt.color+'" title="Rått resultat mot par/hcp, UTAN slagförsprång">'+rawDiffFmt.text+'</span>' : '')+
         '<span style="width:22px;text-align:center;font-weight:700;color:var(--green-dark)" title="Stableford">'+(r.thru?r.poang:'–')+'</span>'+
-        '<span style="width:52px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px">'+holeLabel+'</span>'+
+        '<span style="width:30px;text-align:right;color:'+(r.submitted?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(r.submitted?'700':'400')+';font-size:10px" title="'+(r.notStarted?'Ej startat':'')+'">'+holeLabel+'</span>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -9356,17 +9787,29 @@ function buildNineHoleScorecardBlock(r, startIdx, sumLabel) {
 function openPlayerLiveScorecard(idx) {
   var r = _liveStandingsRowsCache[idx];
   if(!r) return;
+  var backBtn = _liveStandingsBackTo ? '<button class="btn btn-sm" onclick="_liveStandingsBackTo()"><i class="ti ti-arrow-left"></i> Tillbaka</button>' : '';
+  // Kommer vi hit från live-tabellen (_liveStandingsBackTo satt) byter vi bara
+  // ut modalens innehåll (se updateModalContent) så tabellens Firestore-
+  // lyssnare lever kvar och "Tillbaka" fungerar. Kommer vi hit från något
+  // annat läge (ingen modal öppen sedan innan) öppnar vi en ny modal som förut.
+  var render = _liveStandingsBackTo ? updateModalContent : function(h){ showModal(h, false, true); };
   if(r.notStarted) {
-    showModal('<h3 style="margin-bottom:6px;font-size:16px">'+esc(r.name)+'</h3>'+
+    render('<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:6px">'+
+        '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
+        '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
+      '</div>'+
       '<p style="font-size:13px;color:var(--text-3)">Har inte startat sin rond än - kanske spelas den en annan dag.</p>'+
-      '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>');
+      '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>');
     return;
   }
   var frontBlock = buildNineHoleScorecardBlock(r, 0, 'Ut');
   var backBlock = r.totalHoles > 9 ? buildNineHoleScorecardBlock(r, 9, 'In') : '';
   var totalPar = r.holePars.reduce(function(a,b){ return a+b; }, 0);
 
-  var h = '<h3 style="margin-bottom:2px;font-size:16px">'+esc(r.name)+'</h3>'+
+  var h = '<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:2px">'+
+      '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
+      '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
+    '</div>'+
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
       '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
@@ -9375,18 +9818,19 @@ function openPlayerLiveScorecard(idx) {
       '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span>'+
     '</div>'+
     frontBlock + backBlock +
-    '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, false, true);
+    '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>';
+  render(h);
 }
 
 function renderLiveFollowHTML(e, players, t) {
   var el = document.getElementById('live-follow-modal-body');
   if(!el) return;
 
+  var isStab = e.type === 'stableford';
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(e.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       buildLiveStandingsRowsHTML(rows)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
@@ -9502,6 +9946,39 @@ function buildSideBetsLiveSummaryHTML(e, players) {
 // separat, tydligt namngiven tabell per deltävling, aldrig en ihopslagen lista.
 var _tourLiveStandings = { tourId: null, unsub: null };
 
+// Preliminära OoM-poäng för PÅGÅENDE (ej stängda) deltävlingar, uträknat live
+// utifrån samma pace-ställning som Live-tabellen visar. Uppdateras i samma
+// Firestore-lyssnare som redan matar Live-tabellen (subscribeTourLiveStandings)
+// - se computeLiveOomPreview(). byPi: pi -> extra poäng just nu. byEvent:
+// eventId -> {eventName, rows} för ev. detaljvy. Skrivs ALDRIG till
+// t.events/e.results - bara en "om det slutade just nu"-prognos.
+var _liveOomPreview = { byPi: {}, byEvent: {} };
+
+// Räknar ut vilka OoM-poäng varje spelare SKULLE fått om de pågående
+// deltävlingarna stängdes just nu, baserat på nuvarande pace-placering
+// (computeLiveStandingsRows - samma sortering som Live-tabellen). Använder
+// EXAKT samma poängformel som closeEvent() gör på riktigt (poängskala ×
+// ev. majors-multiplikator), så prognosen stämmer med vad som faktiskt delas
+// ut den dagen admin stänger deltävlingen. Finaler ger inga OoM-poäng och
+// hoppas alltid över, precis som i closeEvent().
+function computeLiveOomPreview(docsByEvent, candidateEvents, t) {
+  var byPi = {}, byEvent = {};
+  candidateEvents.forEach(function(e){
+    if(e.closed || e.isFinal) return;
+    var docs = docsByEvent[e.id] || [];
+    var rows = computeLiveStandingsRows(docs, t, e).filter(function(r){ return r.thru > 0 && !r.notStarted; });
+    if(!rows.length) return;
+    var mult = e.isMajor ? 1.5 : 1;
+    var eventRows = rows.map(function(r, idx){
+      var pts = Math.round(((t.pointsScale && t.pointsScale[idx]) || 0) * mult * 10) / 10;
+      byPi[r.pi] = (byPi[r.pi]||0) + pts;
+      return { pi: r.pi, points: pts, thru: r.thru, totalHoles: r.totalHoles };
+    });
+    byEvent[e.id] = { eventName: e.name, rows: eventRows };
+  });
+  return { byPi: byPi, byEvent: byEvent };
+}
+
 function subscribeTourLiveStandings(t) {
   var todayStr = new Date().toISOString().slice(0,10);
   // "Live" = deltävlingen har minst en boll vars datum faktiskt kommit (annars
@@ -9511,6 +9988,7 @@ function subscribeTourLiveStandings(t) {
   // om de spelar en annan dag av samma deltävling) ska ändå synas i tabellen.
   var candidateEvents = (t.events||[]).filter(function(e){
     if(e.closed || !e.teeGroups || !e.teeGroups.length) return false;
+    if(e.forceLiveTable) return true; // admin har manuellt tvingat fram tabellen, se toggleForceLiveTable()
     return e.teeGroups.some(function(g){ return g.date && g.date <= todayStr; });
   });
   if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
@@ -9532,12 +10010,21 @@ function subscribeTourLiveStandings(t) {
       docsByEvent[d.eventId].push(d);
     });
     renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t);
+    // Räkna om och rendera OoM-förhandsvisningen i samma veva - oom-vyn kan
+    // ligga öppen (eller öppnas strax efter) medan livescoringen fylls i, och
+    // ska då hänga med i realtid precis som Live-tabellen gör.
+    _liveOomPreview = computeLiveOomPreview(docsByEvent, candidateEvents, t);
+    if(getTour() && getTour().id === t.id) renderOOM();
   }, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
 
 function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
   var el = document.getElementById('tour-live-standings');
   if(!el) return;
+  // Den här tabellen ligger inte i en modal (den sitter direkt i Tävlingar-fliken),
+  // så ett klick på en spelare här ska bara kunna stänga scorekortet, inte "gå
+  // tillbaka" till en modal som aldrig öppnades - se _liveStandingsBackTo ovan.
+  _liveStandingsBackTo = null;
   var players = t ? (t.players || getPlayersForTour(t)) : [];
 
   var liveEventIds = Object.keys(docsByEvent);
@@ -9556,6 +10043,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
     var ev = candidateEvents.find(function(e){ return e.id === eid; });
     var rows = computeLiveStandingsRows(docsByEvent[eid], t, ev);
     if(!rows.length) return '';
+    var isStab = ev && ev.type === 'stableford';
     var body = buildLiveStandingsRowsHTML(rows);
     var periodLabel = formatEventPeriodLabel(ev);
     var subLine = (ev ? esc(ev.name) : '')+(periodLabel?' · '+esc(periodLabel):'')+(ev && ev.course?' · '+esc(ev.course):'');
@@ -9566,7 +10054,7 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(ev && ev.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       body+
       buildSideBetsLiveSummaryHTML(ev, players)+
@@ -10466,6 +10954,48 @@ function computeOomStandings(t) {
   return totals;
 }
 
+// Som computeOomStandings(), men lägger in _liveOomPreview som en TILLFÄLLIG
+// extra "rond" per spelare innan bästa-X-uträkningen görs om - annars hade en
+// spelare som redan struckit sin sämsta rond kunnat få en missvisande hög
+// "om det slutade nu"-totalsumma. Ändrar aldrig den riktiga OoM-datan; bara
+// en förhandsvisning som räknas om varje gång livescoringen uppdateras.
+function computeOomStandingsWithLivePreview(t, liveByPi) {
+  if(!liveByPi || !Object.keys(liveByPi).length) {
+    return computeOomStandings(t).map(function(d){ d.livePts = 0; return d; });
+  }
+  var bestN = t.bestRounds || 0;
+  var closedRegular = t.events.filter(function(e){return e.closed&&e.results&&!e.isFinal;});
+  var playerRounds = {};
+  closedRegular.forEach(function(e){
+    e.results.forEach(function(r){
+      if(!playerRounds[r.pi]) playerRounds[r.pi] = [];
+      playerRounds[r.pi].push({ pts: r.points||0, eventId: e.id, live: false });
+    });
+  });
+  getPlayersForTour(t).forEach(function(p, pi){ if(p && !playerRounds[pi]) playerRounds[pi] = []; });
+  Object.keys(liveByPi).forEach(function(piStr){
+    var pi = parseInt(piStr, 10);
+    if(!playerRounds[pi]) playerRounds[pi] = [];
+    playerRounds[pi].push({ pts: liveByPi[piStr], eventId: '_live', live: true });
+  });
+  var totals = Object.keys(playerRounds).map(function(piStr){
+    var pi = parseInt(piStr, 10);
+    var rounds = playerRounds[pi].slice().sort(function(a,b){ return b.pts-a.pts; });
+    var counted = bestN > 0 ? rounds.slice(0, bestN) : rounds;
+    var wins = closedRegular.filter(function(e){ return e.results&&e.results[0]&&e.results[0].pi==pi; }).length;
+    var livePtsCounted = counted.filter(function(r){ return r.live; }).reduce(function(s,r){ return s+r.pts; }, 0);
+    return {
+      pi: pi,
+      pts: counted.reduce(function(s,r){ return s+r.pts; }, 0),
+      events: rounds.filter(function(r){ return !r.live; }).length,
+      counted: counted.length, wins: wins, livePts: livePtsCounted,
+      countedIds: counted.reduce(function(o,r){ if(!r.live) o[r.eventId]=true; return o; }, {})
+    };
+  });
+  totals.sort(function(a,b){ return b.pts-a.pts; });
+  return totals;
+}
+
 // ── VINSTPENGAR (stödjer både prispott-läge och vinst-per-deltävling-läge) ──
 function computeTourWinnings(t) {
   var players = getPlayersForTour(t);
@@ -10535,10 +11065,11 @@ function buildFinalResultRows(t, finalEv) {
       poang = isStab ? r.score : null;
     }
     var headStart = r.headStart != null ? r.headStart : 0;
+    var rawDiff = isStab ? (poang - totalHoles*2) : (netto - totalPar);
     var diff = isStab ? (r.adjusted - totalHoles*2) : (netto - headStart - totalPar);
     return {
       pi: r.pi, name: p ? p.name : '?', brutto: brutto, netto: netto, poang: poang,
-      thru: totalHoles, totalHoles: totalHoles, diff: diff, isStab: isStab,
+      thru: totalHoles, totalHoles: totalHoles, diff: diff, rawDiff: rawDiff, isStab: isStab,
       headStart: headStart, sortValue: 0, submitted: true,
       holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: shcp
     };
@@ -10563,8 +11094,9 @@ function buildTop3HTML(t, compact) {
     if(!finalEv || !finalEv.closed || !finalEv.results || !finalEv.results.length) return '';
     var finalRows = buildFinalResultRows(t, finalEv);
     var shownRows = compact ? finalRows.slice(0,3) : finalRows;
+    var isStabFinal = finalEv.type === 'stableford';
     var headerRow = '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">+/-</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:22px;text-align:center">Pts</span><span style="width:52px;text-align:right">Hål</span>'+
+        '<span style="width:26px;text-align:center">'+(isStabFinal?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:26px;text-align:center">Rått</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>';
     return '<div class="card" style="margin-bottom:'+(compact?'12px':'16px')+';padding:'+(compact?'10px 12px':'14px 16px')+'">'+
       '<div style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> Slutresultat</div>'+
@@ -10605,10 +11137,17 @@ function renderOOM(){
   }
   var t=getTour(),el=document.getElementById('oom-list');
   var bestN = t.bestRounds || 0;
-  var sorted = computeOomStandings(t);
+  var sorted = computeOomStandingsWithLivePreview(t, _liveOomPreview.byPi);
   if(!sorted.length){el.innerHTML='<p class="empty">Inga resultat ännu.</p>';return;}
   var winningsData = (t.fee>0 && isTourConcluded(t)) ? computeTourWinnings(t) : null;
+  var liveEventNames = Object.keys(_liveOomPreview.byEvent||{}).map(function(eid){ return _liveOomPreview.byEvent[eid].eventName; });
+  var liveBannerHtml = liveEventNames.length
+    ? '<div style="background:#EAF3FB;border:1px solid #B9D9F0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#123A4D;display:flex;align-items:center;gap:6px">'+
+        '<i class="ti ti-broadcast"></i> <span><strong>Preliminär ställning</strong> - '+esc(liveEventNames.join(', '))+' pågår just nu. Poängen nedan uppdateras live men blir inte officiella förrän deltävlingen stängs.</span>'+
+      '</div>'
+    : '';
   el.innerHTML='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Klicka på en spelare för statistik</p>'+
+    liveBannerHtml+
     sorted.map(function(d,idx){
       var pi=d.pi,p=t.players[pi]; if(!p) return '';
       var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
@@ -10625,6 +11164,7 @@ function renderOOM(){
         '</div>'+
         '<div style="text-align:right;flex-shrink:0">'+
           '<div style="font-weight:700;font-size:15px;color:var(--green-dark);white-space:nowrap">'+d.pts+' pts</div>'+
+          (d.livePts>0?'<div style="font-size:10px;color:#123A4D;font-weight:700;white-space:nowrap"><i class="ti ti-broadcast"></i> varav '+d.livePts+' p prel.</div>':'')+
           (won>0?'<div style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap"><i class="ti ti-cash" style="font-size:10px"></i> '+won+' kr</div>':'')+
         '</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3);flex-shrink:0"></i></div>';
@@ -13355,6 +13895,28 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '1 september 2026 (213)',
+    items: [
+      { type: 'fixed', text: 'RÄTTELSE till release 212: Pts-kolumnen döljdes av misstag för slaggolf-deltävlingar vid porteringen av live-tabellsförbättringarna - det var aldrig en del av det som skulle föras över hit (den hade fungerat annorlunda i den session ändringarna kom ifrån). Pts visas nu alltid, oavsett spelform, precis som innan.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (212)',
+    items: [
+      { type: 'new', text: 'Stor samlad uppdatering (portering av en rad förbättringar som tagits fram i en annan session och nu byggts in ovanpå den här filens release 211): Live-tabellen sorteras på pace (bäst mot par/hcp) istället för ackumulerad totalsumma, med SHCP som sista tiebreak. Par-kolumnen för slaggolf har en egen färgskala (röd/svart/blå) och visar slagförsprånget som startvärde innan man slagit sitt första slag. Ny "Rått"-kolumn i finaler visar opåverkat resultat bredvid det justerade. Pts-kolumnen döljs för slaggolf. Scorekortet har en "Tillbaka"-knapp till Live-tabellen samt visar SHCP uppe till höger.' },
+      { type: 'new', text: 'OoM visar nu en preliminär, live-uppdaterad ställning under pågående deltävling, tydligt märkt "prel." och skild från den officiella totalen. "Live scoring"-knappen hoppar rakt in i egen boll istället för att alltid visa bollväljaren först (den nås nu istället via en ny "Byt boll"-knapp inne i livescoringen). Ny admin-knapp "Visa scoringtabell nu" tvingar fram Live-tabellen på toursidan innan en runda annars räknas som "live".' },
+      { type: 'new', text: 'Ny SHCP-widget i "Kommande runda"-kortet på startsidan: visar spelarens spelhandicap för den kommande rondan (inte det allmänna HCP:et) med en gul uppmaning tills det fyllts i, och en liten personlig ruta (med Avbryt/Nollställ) för att mata in det utan att behöva öppna hela bollens SHCP-vy.' },
+      { type: 'new', text: 'Två nya admin-verktyg under Inställningar → Globala inställningar: "Kontrollera OoM-poäng" (jämför sparade poäng mot poängskalan för alla stängda deltävlingar) och "Hitta saknade resultat" (hittar spelare som spelat klart enligt livescoringen men saknas i det sparade resultatet). En stängd deltävlings eget resultatkort varnar nu även direkt om den senare typen av avvikelse hittas för just den deltävlingen.' },
+      { type: 'improved', text: 'Mindre förbättringar med: Banstatistikens "+N fler spelare" är nu klickbar och laddar 10 i taget. Chattens "Dela på startsidans flöde"-kryssruta är tydligare markerad. SHCP-bekräftelsen har alltid en Avbryt-knapp.' }
+    ]
+  },
+  {
+    date: '1 september 2026 (211)',
+    items: [
+      { type: 'fixed', text: 'Klick på själva "Kommande runda"/"Väntar på resultat"-kortet (bilden/ytan, inte knapparna) på startsidan tog rakt in i "Mitt resultat" - samma sak som "Mitt resultat"-knappen redan gör. Ett klick på kortytan tar nu istället till Tävlingar-fliken och ramar kortvarigt in just den deltävlingen i listan. Knapparna i kortet (Live scoring, Side bets, Mitt resultat) är opåverkade.' }
+    ]
+  },
   {
     date: '1 september 2026 (210)',
     items: [
