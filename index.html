@@ -57,6 +57,12 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 h2{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px}
 h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+/* Hopfällbart deltävlingskort: rubrik/period/status alltid synligt, resten (spelartabell, knappar) bakom en fäll ut-knapp */
+.ev-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:calc(100% + 2.5rem);margin:0 -1.25rem;padding:10px 1.25rem;min-height:46px;border:none;border-top:1px solid var(--border);background:transparent;font:inherit;font-size:13px;color:var(--text-2);cursor:pointer;text-align:left}
+.ev-toggle:hover{background:var(--surface2)}
+.ev-sum{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ev-chev{font-size:18px;transition:transform .15s}
+.ev-fold[hidden]{display:none}
 .btn{padding:8px 16px;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);font-size:14px;cursor:pointer;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{background:var(--surface2)}
 .btn-primary{background:var(--green);border-color:var(--green-dark);color:#fff}
@@ -1149,12 +1155,13 @@ function eventPeriodRowHTML(e) {
     }
     chip = '<span style="padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;'+style+'">'+label+'</span>';
   }
-  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:13px">'+
+  var ord = (isRange && e.date) ? '<span style="font-size:12px;color:var(--text-3)">Ordinarie datum: '+dateShortSv(e.date, false)+'</span>' : '';
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px">'+
       '<i class="ti ti-calendar" style="color:var(--text-3)"></i>'+
       '<span style="color:var(--text-3)">'+(isRange ? 'Spelperiod' : 'Speldatum')+'</span>'+
-      '<b style="color:var(--text)">'+txt+'</b>'+chip+
+      '<b style="color:var(--text)">'+txt+'</b>'+
     '</div>'+
-    (isRange && e.date ? '<div style="font-size:11px;color:var(--text-3);margin-top:2px;margin-left:20px">Ordinarie datum: '+dateShortSv(e.date, false)+'</div>' : '');
+    ((chip || ord) ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">'+chip+ord+'</div>' : '');
 }
 
 function compressImage(file, maxW, maxH, quality, cb) {
@@ -6223,6 +6230,26 @@ function joinSideBetGlobal(tourId, eventId, betId) {
   });
 }
 
+// Vilka deltävlingskort som är utfällda just nu (nyckel = deltävlingens id). Hålls i minnet så att kortet
+// förblir utfällt när listan ritas om (t.ex. vid datasynk). Alla kort startar hopfällda vid sidladdning.
+var _evOpen = {};
+function toggleEventFold(eid) {
+  var open = !_evOpen[eid];
+  _evOpen[eid] = open;
+  var card = document.getElementById('event-card-'+eid);
+  if(!card) return;
+  var fold = card.querySelector('.ev-fold');
+  var btn = card.querySelector('.ev-toggle');
+  if(fold) fold.hidden = !open;
+  if(btn) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var lbl = btn.querySelector('.ev-toggle-lbl');
+    if(lbl) lbl.textContent = open ? 'Visa färre' : 'Visa mer';
+    var chev = btn.querySelector('.ev-chev');
+    if(chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+  }
+}
+
 function eventCardHTML(i,e) {
   var tl=e.type==='stableford'?'Stableford':'Slag';
   var tc=e.type==='stableford'?'background:#E1F5EE;color:#0F6E56':'background:#EAF3DE;color:#3B6D11';
@@ -6232,6 +6259,7 @@ function eventCardHTML(i,e) {
   var regs = (regsRaw.length && typeof regsRaw[0] === 'object') ? regsRaw : regsRaw.map(function(ri){return {pi:ri, date:e.date};});
 
   var regsTable = '';
+  var missingWarnHtml = '';
   if(e.closed && e.results && e.results.length) {
     var isStab = e.type === 'stableford';
     var medals = ['🥇','🥈','🥉'];
@@ -6252,8 +6280,8 @@ function eventCardHTML(i,e) {
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
     }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>'+
-      '<div class="missing-results-warning" data-tour-id="'+t.id+'" data-eid="'+e.id+'"></div>';
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+    missingWarnHtml = '<div class="missing-results-warning" data-tour-id="'+t.id+'" data-eid="'+e.id+'"></div>';
   } else if(t.players.length) {
     var rowsData = t.players.map(function(p, pi){
       if(!p) return null;
@@ -6293,6 +6321,26 @@ function eventCardHTML(i,e) {
       '<table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   } else {
     regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
+  }
+
+  // Sammanfattning som visas på fäll ut-raden (syns även när kortet är hopfällt)
+  var foldOpen = !!_evOpen[e.id];
+  var summaryHtml;
+  if(e.closed && e.results && e.results.length) {
+    summaryHtml = '<span><i class="ti ti-users" style="font-size:14px;vertical-align:-2px"></i> '+e.results.length+' spelare</span>';
+  } else {
+    var cReg = 0, cUnk = 0, cDec = 0;
+    (t.players||[]).forEach(function(p, pi){
+      if(!p) return;
+      var rg = regs.find(function(r){ return r.pi===pi; });
+      if(!rg) cUnk++; else if(rg.declined) cDec++; else cReg++;
+    });
+    var sumDot = function(c){ return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+c+';margin-right:6px;vertical-align:middle"></span>'; };
+    var sumParts = [];
+    if(cReg) sumParts.push('<span>'+sumDot('#1D9E75')+cReg+(cReg===1?' anmäld':' anmälda')+'</span>');
+    if(cUnk) sumParts.push('<span>'+sumDot('#D9A62E')+cUnk+(cUnk===1?' osäker':' osäkra')+'</span>');
+    if(cDec) sumParts.push('<span>'+sumDot('#dc2626')+cDec+' deltar ej</span>');
+    summaryHtml = sumParts.length ? sumParts.join('') : '<span>Inga spelare</span>';
   }
 
   var mySub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
@@ -6343,6 +6391,8 @@ function eventCardHTML(i,e) {
   var sideBetsBtn = (e.sideBets && e.sideBets.length)
     ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
     : ((isAdmin()||myPi>=0) ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
+  // Anmälningar flyttas upp till övre högra hörnet (ovanför status) och ligger därför inte i den hopfällbara delen.
+  var registerBtn = e.closed ? '' : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>';
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Resultattavla</button>'+
       '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Placeringar</button>'+
@@ -6350,8 +6400,7 @@ function eventCardHTML(i,e) {
       '<button class="btn btn-sm" onclick="reopenEvent('+i+')"><i class="ti ti-lock-open"></i> Återöppna</button>' : '')+
       sideBetsBtn+
       chatBtn
-    : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>'+
-      myResultBtn+
+    : myResultBtn+
       ((e.teeGroups && e.teeGroups.length) ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Ställning & scorekort</button>' : '')+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
       '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Bana/bild</button>'+
@@ -6360,29 +6409,36 @@ function eventCardHTML(i,e) {
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
       sideBetsBtn+
       chatBtn;
-  return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;overflow:hidden':'')+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
+  var statusBadgeEv = '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>';
+  return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;':'')+'padding-bottom:0;overflow:hidden'+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
     (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
-    '<div class="row" style="justify-content:space-between;margin-bottom:8px">'+
-      '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
+    '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">'+
+      '<div style="min-width:0"><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           '<span><i class="ti ti-map-pin" style="font-size:12px"></i> '+e.course+'</span>'+
           '<span style="padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;'+tc+'">'+tl+'</span>'+
           (e.isFinal?'<span class="badge badge-gold">Final</span>':'')+
           (e.isMajor?'<span class="badge badge-gold"><i class="ti ti-star" style="font-size:10px"></i> Major 1.5x</span>':'')+
         '</div>'+
-        eventPeriodRowHTML(e)+
       '</div>'+
-      '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">'+registerBtn+statusBadgeEv+'</div>'+
     '</div>'+
+    '<div style="margin-bottom:10px">'+eventPeriodRowHTML(e)+'</div>'+
     (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
-    (e.closed && e.story ? '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
-      '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ti ti-book"></i> Story</div>'+
-      '<p style="font-size:13px;color:var(--text);margin:0;white-space:pre-wrap;line-height:1.4">'+esc(e.story)+'</p>'+
-    '</div>' : '')+
-    markerApprovalHtml+adminApprovalHtml+
-    '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
-    '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
-    buildSideBetsSummaryHTML(t, e, i)+
+    markerApprovalHtml+adminApprovalHtml+missingWarnHtml+
+    '<button type="button" class="ev-toggle" aria-expanded="'+(foldOpen?'true':'false')+'" onclick="toggleEventFold(\''+e.id+'\')">'+
+      '<span class="ev-sum">'+summaryHtml+'</span>'+
+      '<span style="display:flex;align-items:center;gap:4px"><span class="ev-toggle-lbl">'+(foldOpen?'Visa färre':'Visa mer')+'</span><i class="ti ti-chevron-down ev-chev" style="'+(foldOpen?'transform:rotate(180deg)':'')+'"></i></span>'+
+    '</button>'+
+    '<div class="ev-fold"'+(foldOpen?'':' hidden')+' style="padding:12px 0 1rem">'+
+      (e.closed && e.story ? '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px"><i class="ti ti-book"></i> Story</div>'+
+        '<p style="font-size:13px;color:var(--text);margin:0;white-space:pre-wrap;line-height:1.4">'+esc(e.story)+'</p>'+
+      '</div>' : '')+
+      '<div style="font-size:13px;margin-bottom:12px">'+regsTable+'</div>'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap">'+btns+'</div>'+
+      buildSideBetsSummaryHTML(t, e, i)+
+    '</div>'+
   '</div>';
 }
 
@@ -14115,6 +14171,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (220)',
+    items: [
+      { type: 'new', text: 'Hopfällbara deltävlingskort i touren. Varje deltävling visas nu kompakt med rubrik, bana, speltyp, spelperiod (med statuschip) och status. Under en rad med en kort sammanfattning (t.ex. \"2 anmälda · 1 osäker\") finns en fäll ut-knapp (\"Visa mer\") som visar teckenförklaring, spelartabell och alla knappar (Mitt resultat, Resultat, Bana/bild, Stableford, Stäng, Side bets, Chat m.fl.) samt side bet-sammanfattningen. Alla kort startar hopfällda och ett utfällt kort ligger kvar utfällt när sidan uppdateras. Knappen Anmälningar har flyttats upp till övre högra hörnet, ovanför status (Öppen/Färdigspelad). För färdigspelade deltävlingar syns vinnaren även när kortet är hopfällt, medan resultattabell och story ligger under knappen. Attestbegäranden (markör/admin) och admins varning för saknade resultat ligger kvar synliga utanför fällan eftersom de kräver handling.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (219)',
     items: [
