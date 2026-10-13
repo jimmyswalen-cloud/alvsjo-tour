@@ -27,6 +27,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .hero-title{font-size:clamp(36px,9vw,72px);font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1;text-shadow:0 3px 28px rgba(0,0,0,.5);margin-bottom:0;}
 .hero-sub{font-size:14px;color:rgba(255,255,255,.6);margin-top:8px;}
 .hero-scroll{position:absolute;bottom:0;left:0;right:0;height:48px;background:linear-gradient(0deg,var(--bg) 0%,transparent 100%);}
+/* Bredbilds-omslag (logotyp-banner, t.ex. 4:1 eller bredare), utan text-overlay eftersom bilden redan innehåller namn/varumärke.
+   Bred skärm: hela bilden visas med sin naturliga höjd. Smal skärm (mobil/surfplatta): en tydligt högre ruta där bilden
+   centreras och sidorna beskärs, så att loggan inte krymper till en liten remsa. */
+.hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:360px;background-position:center 40%}
+.hero.hero-banner::before,.hero.hero-banner .hero-content{display:none}
+.hero.hero-banner .hero-scroll{height:22px}
+img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1)}
+@media (max-width:999px){
+  .hero.hero-banner{aspect-ratio:auto;height:clamp(170px,46vw,260px);max-height:none}
+}
+@media (max-width:699px){
+  img.cover-banner{aspect-ratio:auto;height:clamp(120px,40vw,170px) !important}
+}
 .wrap{max-width:700px;margin:0 auto;padding:0 16px 4rem}
 .tours-header{display:flex;align-items:center;justify-content:space-between;margin:20px 0 16px}
 .tour-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s}
@@ -1052,6 +1065,33 @@ function simBadgeHTML(t) {
   if(!isSimTour(t)) return '';
   return '<span class="badge" style="background:#EEEDFE;color:#534AB7;margin-left:4px;white-space:nowrap"><i class="ti ti-device-gamepad-2"></i> Simulator</span>';
 }
+// ── BREDBILDS-OMSLAG (logotyp-banner) ───────────────────────────────────────
+// En omslagsbild som är mycket bredare än hög (aspect >= BANNER_MIN_ASPECT, t.ex. en
+// 4:1-logotyp) ska visas HEL, inte beskäras till en fast höjd som vanliga fotografier.
+var BANNER_MIN_ASPECT = 3.2;
+function isBannerAspect(w, h) { return !!(w && h && (w / h) >= BANNER_MIN_ASPECT); }
+// onload på tourkortens omslagsbild: breda bilder får sin naturliga höjd (desktop) eller en centrerad,
+// tillräckligt hög ruta (mobil) istället för den fasta beskärningen.
+function fitCoverImg(img) {
+  if(!img || !img.naturalHeight) return;
+  if(isBannerAspect(img.naturalWidth, img.naturalHeight)) {
+    img.style.setProperty('--ar', img.naturalWidth + ' / ' + img.naturalHeight);
+    img.classList.add('cover-banner'); // höjd/beskärning styrs av CSS (olika för mobil och desktop)
+  }
+}
+// Tourens hero: byter till bannerläge (hel bild, ingen overlay) om omslaget är en bred banner.
+function applyHeroBannerIfWide(heroBg, src, tourId) {
+  var im = new Image();
+  im.onload = function() {
+    if(heroBg.getAttribute('data-hero-tour') !== String(tourId)) return; // användaren har hunnit navigera vidare
+    if(isBannerAspect(im.naturalWidth, im.naturalHeight)) {
+      heroBg.style.setProperty('--hero-ar', im.naturalWidth + ' / ' + im.naturalHeight);
+      heroBg.classList.add('hero-banner');
+    }
+  };
+  im.src = src;
+}
+
 function weekdaySv(dateStr) {
   if(!dateStr) return '';
   var days = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
@@ -1123,7 +1163,10 @@ function compressImage(file, maxW, maxH, quality, cb) {
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      var w=img.width,h=img.height,scale=Math.min(1,maxW/w,maxH/h);
+      var w=img.width,h=img.height;
+      // Mycket breda bilder (logotyp-banner) får större maxbredd så de inte blir suddiga i full bredd.
+      var mW = isBannerAspect(w, h) ? Math.max(maxW, 2000) : maxW;
+      var scale=Math.min(1,mW/w,maxH/h);
       w=Math.round(w*scale); h=Math.round(h*scale);
       var c=document.createElement('canvas'); c.width=w;c.height=h;
       c.getContext('2d').drawImage(img,0,0,w,h);
@@ -3028,7 +3071,7 @@ function renderToursList() {
     var totalCount = events.length;
     var closedCount = events.filter(function(e){return e.closed;}).length;
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
-      (t.img?'<img src="'+t.img+'" style="width:100%;height:110px;object-fit:cover;display:block">':'')+
+      (t.img?'<img src="'+t.img+'" onload="fitCoverImg(this)" style="width:100%;height:110px;object-fit:cover;display:block">':'')+
       '<div style="padding:14px 16px 16px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
           '<div style="font-weight:700;font-size:17px">'+t.name+'</div>'+
@@ -3127,7 +3170,7 @@ function renderTourSearchList() {
     var registered = isRegisteredForTour(t);
     var feeText = (t.fee > 0) ? (t.fee+' kr/spelare') : 'Ingen avgift';
     return '<div class="tour-card" style="cursor:default">'+
-      (t.img?'<img src="'+t.img+'" style="width:100%;height:100px;object-fit:cover;display:block">':'')+
+      (t.img?'<img src="'+t.img+'" onload="fitCoverImg(this)" style="width:100%;height:100px;object-fit:cover;display:block">':'')+
       '<div style="padding:14px 16px 16px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
           '<div style="font-weight:700;font-size:17px">'+esc(t.name)+'</div>'+
@@ -14033,6 +14076,8 @@ function updateHero(tourId) {
   var heroBg=document.getElementById('hero-bg'), heroTitle=document.getElementById('hero-title'),
       heroSub=document.getElementById('hero-sub'), heroEye=document.getElementById('hero-eyebrow');
   if(!heroBg) return;
+  heroBg.classList.remove('hero-banner'); heroBg.style.removeProperty('--hero-ar');
+  heroBg.setAttribute('data-hero-tour', tourId || '');
   if(!tourId) {
     heroBg.style.backgroundImage = DEFAULT_BG;
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
@@ -14041,6 +14086,7 @@ function updateHero(tourId) {
     var t=S.tours.find(function(x){return x.id===tourId;});
     if(!t) return;
     heroBg.style.backgroundImage = t.img ? "url('"+t.img+"')" : DEFAULT_BG;
+    if(t.img) applyHeroBannerIfWide(heroBg, t.img, tourId);
     heroTitle.textContent=t.name; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='';
   }
@@ -14069,6 +14115,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (219)',
+    items: [
+      { type: 'improved', text: 'Bredbilds-omslag ser nu bra ut på både desktop och mobil. På bred skärm visas hela bilden utan beskärning, som i release 218. På smal skärm (mobil/surfplatta) blir bilden en tydligt högre ruta där den centreras och sidorna beskärs - annars krymper en 4:1-logotyp till en tunn remsa på drygt 80 px med en pytteliten logga. Gäller både tourkorten (kort på mobil ca 120-170 px hög, på desktop naturlig höjd) och tourens egen toppbild (mobil ca 170-260 px, desktop upp till 360 px). Vanliga fotografier påverkas inte. Obs: på smal skärm beskärs bildens sidor, så logotypen bör ligga centrerad i bilden.' }
+    ]
+  },
+  {
+    date: '13 oktober 2026 (218)',
+    items: [
+      { type: 'improved', text: 'Bredbilds-omslag (t.ex. en logotyp-banner i 4:1 eller bredare) beskärs inte längre. På tourkorten (Tourer-listan och Sök & anmäl) visas en bred omslagsbild nu hel med sin naturliga höjd istället för att kapas till fast 110 px. På tourens egen sida byter toppbilden till ett bannerläge där hela bilden visas utan beskärning och utan tournamnet ovanpå (bilden innehåller ju redan namnet). Vanliga fotografier fungerar precis som förut. Dessutom komprimeras mycket breda bilder nu till max 2000 px bredd (tidigare 1100 px) så de inte blir suddiga i full bredd - ladda upp en bred bild på nytt för att få den skarpare.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (217)',
     items: [
