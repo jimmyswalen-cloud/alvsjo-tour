@@ -1067,6 +1067,56 @@ function dateLongSv(dateStr) {
   return d.toLocaleDateString('sv-SE', {day:'numeric', month:'long', year:'numeric'});
 }
 
+// Kompakt svenskt datum med veckodag: "mån 2 nov" (eller "mån 2 nov 2026" med withYear).
+function dateShortSv(dateStr, withYear) {
+  if(!dateStr) return '';
+  var d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return dateStr;
+  var wd = ['sön','mån','tis','ons','tors','fre','lör'][d.getDay()];
+  var mo = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][d.getMonth()];
+  return wd+' '+d.getDate()+' '+mo+(withYear ? ' '+d.getFullYear() : '');
+}
+
+// Tydlig rad för en deltävlings speldatum/spelperiod på eventkortet. Visar
+// perioden man får spela inom (periodStart-periodEnd), ordinarie datum när
+// perioden är längre än en dag, och för öppna deltävlingar en statuschip
+// (börjar om N dagar / pågår - N dagar kvar / sista dagen / passerad).
+function eventPeriodRowHTML(e) {
+  var start = e.periodStart || e.date, end = e.periodEnd || e.date || start;
+  if(!start) return '';
+  var isRange = end && end !== start;
+  var sameYear = start.slice(0,4) === end.slice(0,4);
+  var txt = isRange ? dateShortSv(start, !sameYear)+' &ndash; '+dateShortSv(end, true) : dateShortSv(start, true);
+  var chip = '';
+  if(!e.closed) {
+    var today = new Date().toISOString().slice(0,10);
+    var DAY = 86400000;
+    var dTo = function(a, b){ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / DAY); };
+    var style, label;
+    if(today < start) {
+      var n = dTo(today, start);
+      style = 'background:var(--surface2);color:var(--text-2)';
+      label = n === 1 ? 'Börjar imorgon' : 'Börjar om '+n+' dagar';
+    } else if(today <= end) {
+      var left = dTo(today, end);
+      style = 'background:var(--green-light);color:#0F6E56';
+      if(!isRange) label = 'Spelas idag';
+      else if(left === 0) label = 'Sista dagen idag';
+      else label = 'Pågår &ndash; '+left+(left === 1 ? ' dag kvar' : ' dagar kvar');
+    } else {
+      style = 'background:var(--gold-light);color:var(--gold)';
+      label = 'Perioden har passerat';
+    }
+    chip = '<span style="padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;'+style+'">'+label+'</span>';
+  }
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:13px">'+
+      '<i class="ti ti-calendar" style="color:var(--text-3)"></i>'+
+      '<span style="color:var(--text-3)">'+(isRange ? 'Spelperiod' : 'Speldatum')+'</span>'+
+      '<b style="color:var(--text)">'+txt+'</b>'+chip+
+    '</div>'+
+    (isRange && e.date ? '<div style="font-size:11px;color:var(--text-3);margin-top:2px;margin-left:20px">Ordinarie datum: '+dateShortSv(e.date, false)+'</div>' : '');
+}
+
 function compressImage(file, maxW, maxH, quality, cb) {
   maxW=maxW||1200; maxH=maxH||900; quality=quality||0.75;
   var reader = new FileReader();
@@ -6189,11 +6239,11 @@ function eventCardHTML(i,e) {
       '<div><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           '<span><i class="ti ti-map-pin" style="font-size:12px"></i> '+e.course+'</span>'+
-          '<span>·</span><span>'+e.date+'</span>'+
           '<span style="padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;'+tc+'">'+tl+'</span>'+
           (e.isFinal?'<span class="badge badge-gold">Final</span>':'')+
           (e.isMajor?'<span class="badge badge-gold"><i class="ti ti-star" style="font-size:10px"></i> Major 1.5x</span>':'')+
         '</div>'+
+        eventPeriodRowHTML(e)+
       '</div>'+
       '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="flex-shrink:0;display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>'+
     '</div>'+
@@ -13935,6 +13985,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (216)',
+    items: [
+      { type: 'improved', text: 'Tydligare speldatum/spelperiod på deltävlingskortet. Under bana och speltyp visas nu en egen rad - \"Spelperiod\" med från- och tilldatum inklusive veckodagar (t.ex. mån 2 nov – sön 8 nov 2026), eller \"Speldatum\" om deltävlingen bara spelas en dag. Är perioden längre än en dag står tävlingens ordinarie datum under. För öppna deltävlingar visas dessutom en statuschip: \"Börjar om N dagar\", \"Pågår – N dagar kvar\", \"Sista dagen idag\" eller \"Perioden har passerat\". Det lösa datumet i rubrikraden är borttaget så att datumet inte visas två gånger.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (215)',
     items: [
