@@ -1250,11 +1250,13 @@ function computeMyTourWinningsOverview() {
   return { rows: rows, total: total };
 }
 
-function showMyBetting() {
+// Fliken "Mina vinster": personliga tourvinster, side bet-sammanfattning, aktiva bets
+// och bets man kan gå med i.
+function buildMyBettingTabHTML() {
   var stats = computePlayerSideBetStats(currentUser ? currentUser.username : '');
   var overview = computeMyBettingOverview();
   var tourWinnings = computeMyTourWinningsOverview();
-  var h = '<h3><i class="ti ti-coin" style="color:#BA7517"></i> Vinster &amp; betting</h3>';
+  var h = '';
 
   h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Vinster från tourer</div>';
   if(!tourWinnings.rows.length) {
@@ -1303,8 +1305,90 @@ function showMyBetting() {
     }).join('');
   }
 
+  return h;
+}
+
+// ── TOPPLISTA: TOTALA INKOMSTER (tourvinster + side bet-vinster) ────────────
+// Summerar för varje spelare (på användarnamn) vad hen vunnit i prispott/tourvinster
+// från avslutade tourer plus vinster från side bets, över ALLA tourer - både
+// vanlig golf och simulatorgolf. Sidospelsvinsten räknas exakt som "Total earnings"
+// i spelarens egen sammanfattning (computePlayerSideBetStats.totalWon), så siffrorna
+// stämmer mellan flikarna. Bara inkomster räknas (inte insatser/balans).
+function computeEarningsLeaderboard() {
+  var byUser = {};
+  function entry(p) {
+    var key = p.username;
+    if(!byUser[key]) byUser[key] = { username: key, name: p.name || key, tourWon: 0, betWon: 0 };
+    return byUser[key];
+  }
+  (S.tours||[]).forEach(function(t){
+    var players = getPlayersForTour(t);
+    // Alla som spelar i någon tour är med i underlaget (så att sidospelsvinster plockas upp).
+    players.forEach(function(p){ if(p && p.username) entry(p); });
+    if(!(t.fee > 0) || !isTourConcluded(t)) return;
+    var wd = computeTourWinnings(t);
+    Object.keys(wd.winnings||{}).forEach(function(pi){
+      var p = players[pi];
+      var amt = wd.winnings[pi] || 0;
+      if(p && p.username && amt > 0) entry(p).tourWon += amt;
+    });
+  });
+  var rows = Object.keys(byUser).map(function(u){
+    var r = byUser[u];
+    r.betWon = computePlayerSideBetStats(u).totalWon || 0;
+    r.total = r.tourWon + r.betWon;
+    return r;
+  }).filter(function(r){ return r.total > 0; });
+  rows.sort(function(a,b){ return b.total - a.total || (a.name||'').localeCompare(b.name||'', 'sv'); });
+  // Delad placering vid lika summa (1, 1, 3 ...)
+  rows.forEach(function(r, i){
+    r.rank = (i > 0 && rows[i-1].total === r.total) ? rows[i-1].rank : i + 1;
+  });
+  return rows;
+}
+
+function buildEarningsLeaderboardTabHTML() {
+  var rows = computeEarningsLeaderboard();
+  var me = currentUser ? currentUser.username : '';
+  var h = '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">Totala inkomster = vinster från tourer + vinster från side bets, över alla tourer (vanlig golf och simulatorgolf).</p>';
+  if(!rows.length) {
+    return h + '<p style="font-size:13px;color:var(--text-3);margin-bottom:10px">Inga inkomster att visa ännu.</p>';
+  }
+  var medals = ['🥇','🥈','🥉'];
+  var grand = rows.reduce(function(a, r){ return a + r.total; }, 0);
+  h += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr>'+
+    '<th style="width:34px;text-align:center">#</th><th>Spelare</th>'+
+    '<th style="text-align:right">Tour</th><th style="text-align:right">Bets</th><th style="text-align:right">Totalt</th>'+
+    '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    var isMe = r.username === me;
+    var badge = r.rank <= 3 ? medals[r.rank-1] : r.rank+'.';
+    h += '<tr'+(isMe ? ' style="background:var(--green-light)"' : '')+'>'+
+      '<td style="text-align:center;font-size:'+(r.rank<=3?'16':'13')+'px">'+badge+'</td>'+
+      '<td style="'+(isMe?'font-weight:700':'')+'">'+esc(r.name)+(isMe?' <span style="font-size:11px;color:var(--text-3);font-weight:400">(du)</span>':'')+'</td>'+
+      '<td style="text-align:right;color:var(--text-2)">'+r.tourWon+' kr</td>'+
+      '<td style="text-align:right;color:var(--text-2)">'+r.betWon+' kr</td>'+
+      '<td style="text-align:right;font-weight:800;color:var(--green-dark);white-space:nowrap">'+r.total+' kr</td>'+
+    '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Tour = prispott/tourvinster från avslutade tourer. Bets = vunna side bets. Insatser räknas inte av.</p>';
+  return h;
+}
+
+// Vinster & betting - två flikar: "Mina vinster" (personligt) och "Topplista"
+// (totala inkomster för alla spelare). Utan argument öppnas alltid "Mina vinster".
+function showMyBetting(tab) {
+  var active = (tab === 'top') ? 'top' : 'mine';
+  var switching = !!tab && !!document.getElementById('modal-mc');
+  function tabBtn(id, icon, label) {
+    return '<button class="btn btn-sm'+(active===id?' btn-primary':'')+'" style="flex:1;justify-content:center;padding:8px 10px" onclick="showMyBetting(\''+id+'\')"><i class="ti ti-'+icon+'"></i> '+label+'</button>';
+  }
+  var h = '<h3><i class="ti ti-coin" style="color:#BA7517"></i> Vinster &amp; betting</h3>';
+  h += '<div style="display:flex;gap:6px;margin-bottom:14px">'+tabBtn('mine','user','Mina vinster')+tabBtn('top','trophy','Topplista')+'</div>';
+  h += (active === 'top') ? buildEarningsLeaderboardTabHTML() : buildMyBettingTabHTML();
   h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
-  showModal(h, true);
+  if(switching) updateModalContent(h); else showModal(h, true);
 }
 
 function showHomeScreen() {
@@ -13985,6 +14069,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (217)',
+    items: [
+      { type: 'new', text: '\"Vinster & betting\" har nu två flikar. \"Mina vinster\" innehåller det som fanns tidigare (dina tourvinster, side bet-sammanfattning, aktiva bets och bets du kan gå med i). Den nya fliken \"Topplista\" är en standingstavla över totala inkomster för alla spelare: vinster från tourer + vinster från side bets sammanräknat, över alla tourer - både vanlig golf och simulatorgolf. Varje rad visar tour-vinster, bet-vinster och totalsumma, delad placering vid lika summa, och din egen rad är markerad. Bara inkomster räknas (insatser dras inte av), och bet-siffran är samma \"Total earnings\" som i din egen sammanfattning.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (216)',
     items: [
