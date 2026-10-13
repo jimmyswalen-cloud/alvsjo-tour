@@ -1036,12 +1036,13 @@ function ini(n) { return n.trim().split(/\s+/).map(function(w){return w[0];}).jo
 function fmtHcp(v) { var n = Number(v); if(isNaN(n)) n = 0; return n.toFixed(1); }
 
 // ── SIMULATORGOLF ──────────────────────────────────────────────────────────
-// En tour kan markeras som simulatorgolf (t.simulator) när den skapas. Då gäller:
-// inget HCP/SHCP (alla spelar med 0, så brutto = netto), inga puttar registreras,
-// och inga rundor/hål från touren räknas in i någon spelarstatistik (hålstatistik,
-// puttstatistik, karriär, banstatistik, heatmaps, scratch map) eller i feedens
-// birdie-/"stark rond"-poster. Allt detta för att inte blanda ihop simulatorrundor
-// med riktig golf. Flaggan sätts bara vid skapandet och kan inte ändras efteråt.
+// En tour kan markeras som simulatorgolf (t.simulator) när den skapas. HCP/SHCP,
+// resultat, ställning, leaderboard och OoM fungerar precis som i vanlig golf.
+// Skillnaden: inga puttar registreras, och inga rundor/hål från touren räknas
+// in i någon spelarstatistik (hålstatistik, puttstatistik, karriär, banstatistik,
+// heatmaps, scratch map) eller i feedens birdie-/stark rond-poster - så att
+// simulatorrundor aldrig blandas med riktig golf. Flaggan sätts bara vid
+// skapandet och kan inte ändras efteråt.
 function isSimTour(t) { return !!(t && t.simulator); }
 function isSimEventId(eid) {
   var f = findTourAndEventById(eid);
@@ -2240,7 +2241,7 @@ function getPlayersForTour(t) {
   var arr = new Array(maxIdx+1);
   accessUsers.forEach(function(u){
     var pi = t.playerIndexMap[u.username];
-    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (isSimTour(t) ? 0 : (u.hcp!=null?u.hcp:0)), img: playerPhoto(u.username, u.img), username: u.username, golfId: u.golfId||'' };
+    arr[pi] = { name: u.name || u.username, gender: u.gender||'', hcp: (u.hcp!=null?u.hcp:0), img: playerPhoto(u.username, u.img), username: u.username, golfId: u.golfId||'' };
   });
   return arr;
 }
@@ -2722,7 +2723,6 @@ function renderHomeNextRoundWidget() {
 function checkHomeShcpBadge(tourId, eid, gIdx) {
   var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
   if(!t) return;
-  if(isSimTour(t)) return; // simulatorgolf: inget SHCP
   var e = (t.events||[]).find(function(x){ return x.id===eid; });
   if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
   var g = e.teeGroups[gIdx];
@@ -3203,7 +3203,7 @@ function wizStep1() {
   h += '<hr class="divider">';
   h += '<div class="field" style="background:#EEEDFE;border-radius:10px;padding:10px 12px">';
   h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600;color:#534AB7"><input type="checkbox" id="w-sim" '+(wiz.simulator?'checked':'')+' style="width:auto;margin:0"> <i class="ti ti-device-gamepad-2"></i> Simulatorgolf</label>';
-  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">För tourer som spelas i golfsimulator. Ingen HCP används (alla spelar med 0), inga puttar registreras, och inga rundor från touren räknas in i spelarnas statistik &ndash; så att simulator och riktig golf inte blandas. Går inte att ändra efter att touren skapats.</p>';
+  h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">För tourer som spelas i golfsimulator. Tourens ställning, leaderboard och SHCP fungerar som vanligt, men inga puttar registreras och inga rundor räknas in i spelarnas profilstatistik &ndash; så att simulator och riktig golf inte blandas. Går inte att ändra efter att touren skapats.</p>';
   h += '</div>';
   h += '<div class="field"><label>Antal deltävlingar (ej finaler)</label><input id="w-numev" type="number" min="0" value="'+wiz.numEvents+'"></div>';
   h += '<div class="field"><label>Antal finaler</label><input id="w-numfin" type="number" min="0" value="'+wiz.numFinals+'"></div>';
@@ -3785,7 +3785,7 @@ function renderPlayers() {
       return '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--border);gap:10px;align-items:center">'+
         (uImg?'<img src="'+uImg+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+ini(u.name||u.username)+'</div>')+
         '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(u.name||u.username)+'</div>'+
-        '<div style="font-size:12px;color:var(--text-2)">'+(isSimTour(t)?'':'HCP '+fmtHcp(u.hcp))+'</div></div>'+
+        '<div style="font-size:12px;color:var(--text-2)">HCP '+fmtHcp(u.hcp)+'</div></div>'+
         '<button class="btn btn-sm btn-primary" onclick="addPlayerToTour(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i> Lägg till</button>'+
       '</div>';
     }).join('');
@@ -3854,7 +3854,7 @@ function renderPlayers() {
         (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
         '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
         (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
-        '<div style="font-size:13px;color:var(--text-2)">'+(isSimTour(t)?(p.gender?(p.gender==='kvinna'?'Kvinna':'Man'):''):'HCP '+fmtHcp(p.hcp)+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):''))+'</div>'+
+        '<div style="font-size:13px;color:var(--text-2)">HCP '+fmtHcp(p.hcp)+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
         (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
         '</div>'+
         (isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
@@ -4242,7 +4242,7 @@ function buildMyScoreContext(ei, myPi, liveDoc) {
   var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
   var hasScorecard = !!(course && course.holePars && course.holePars.length);
   var myHcp = t.players[myPi].hcp!=null ? t.players[myPi].hcp : 0;
-  var sim = isSimTour(t); // simulatorgolf: SHCP alltid 0, inga puttar
+  var sim = isSimTour(t); // simulatorgolf: inga puttar
 
   var sourceHoles = null, sourcePutts = null;
   // SHCP (spelhandicap) är alltid ett heltal antal slag - till skillnad från rå HCP som kan ha en decimal.
@@ -4269,7 +4269,7 @@ function buildMyScoreContext(ei, myPi, liveDoc) {
     }
   }
 
-  if(sim) { sourceShcp = 0; sourcePutts = null; }
+  if(sim) sourcePutts = null;
   var allFilled = hasScorecard && sourceHoles && sourceHoles.length===course.holePars.length && sourceHoles.every(function(v){ return v!=null; });
 
   _myScorecardCtx = {
@@ -4357,7 +4357,7 @@ function renderMyScoreModalBody() {
   if(!ctx.hasScorecard) {
     // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning. Inget granskningsläge här.
     h += '<p style="font-size:12px;color:#854F0B;background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Banan "'+esc(e.course)+'" saknar scorekortsdata (par/hcp per hål) i Bandatabasen ännu. Be admin fylla i det, eller ange totalresultat direkt här under.</p>';
-    h += (ctx.sim ? '<input type="hidden" id="my-shcp" value="0">' : '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>');
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>';
     if(!ctx.isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
     h += '<div class="field"><label>'+(ctx.isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!ctx.isStab?'readonly':'')+'></div>';
   } else if(ctx.mode==='review') {
@@ -4395,7 +4395,7 @@ function renderMyScoreReviewTableHTML(ctx) {
   var totalBrutto = 0, totalResult = 0;
   var hasPutts = ctx.sourcePutts && ctx.sourcePutts.some(function(v){ return v!=null; });
   var totalPutts = 0;
-  var sm = !!ctx.sim, hd = sm ? ';display:none' : ''; // simulatorgolf: dölj Hcp, Extra slag, Puttar, SHCP
+  var hd = ctx.sim ? ';display:none' : ''; // simulatorgolf: dölj puttkolumnen
   for(var idx=0; idx<ctx.totalHoles; idx++) {
     var par = ctx.holePars[idx];
     var hcpIdx = (ctx.holeHcpIndex[idx]!=null) ? ctx.holeHcpIndex[idx] : (idx+1);
@@ -4407,23 +4407,23 @@ function renderMyScoreReviewTableHTML(ctx) {
     rows += '<tr style="border-top:1px solid var(--border)">'+
       '<td style="padding:6px;font-weight:600">'+(idx+1)+'</td>'+
       '<td style="padding:6px;text-align:center;color:var(--text-2)">'+par+'</td>'+
-      '<td style="padding:6px;text-align:center;color:var(--text-3)'+hd+'">'+hcpIdx+'</td>'+
-      '<td style="padding:6px;text-align:center;color:var(--gold);font-weight:600'+hd+'">'+(strokesRecv>0?'+'+strokesRecv:'0')+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
+      '<td style="padding:6px;text-align:center;color:var(--gold);font-weight:600">'+(strokesRecv>0?'+'+strokesRecv:'0')+'</td>'+
       '<td style="padding:6px;text-align:center;font-weight:700">'+gross+'</td>'+
       '<td style="padding:6px;text-align:center;color:var(--text-3)'+hd+'">'+(putt!=null?putt:'–')+'</td>'+
       '<td style="padding:6px;text-align:center;font-weight:700;color:var(--green-dark)">'+result+'</td>'+
     '</tr>';
   }
-  return (sm ? '' : '<div class="field" style="max-width:160px;margin-bottom:10px"><label>Spelhandicap (SHCP)</label>'+
-      '<div style="padding:9px 10px;background:var(--surface2);border-radius:8px;font-weight:700">'+ctx.sourceShcp+'</div></div>')+
+  return '<div class="field" style="max-width:160px;margin-bottom:10px"><label>Spelhandicap (SHCP)</label>'+
+      '<div style="padding:9px 10px;background:var(--surface2);border-radius:8px;font-weight:700">'+ctx.sourceShcp+'</div></div>'+
     '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
     '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
-      '<th style="padding:6px;text-align:left">Hål</th><th style="padding:6px;text-align:center">Par</th><th style="padding:6px;text-align:center'+hd+'">Hcp</th>'+
-      '<th style="padding:6px;text-align:center'+hd+'">Extra<br>slag</th><th style="padding:6px;text-align:center">Slag</th><th style="padding:6px;text-align:center'+hd+'">Puttar</th>'+
+      '<th style="padding:6px;text-align:left">Hål</th><th style="padding:6px;text-align:center">Par</th><th style="padding:6px;text-align:center">Hcp</th>'+
+      '<th style="padding:6px;text-align:center">Extra<br>slag</th><th style="padding:6px;text-align:center">Slag</th><th style="padding:6px;text-align:center'+hd+'">Puttar</th>'+
       '<th style="padding:6px;text-align:center">'+(ctx.isStab?'Poäng':'Netto')+'</th>'+
     '</tr></thead><tbody>'+rows+
     '<tr style="border-top:2px solid var(--border);background:var(--surface2);font-weight:700">'+
-      '<td colspan="'+(sm?2:4)+'" style="padding:8px">Totalt</td>'+
+      '<td colspan="4" style="padding:8px">Totalt</td>'+
       '<td style="padding:8px;text-align:center">'+totalBrutto+'</td>'+
       '<td style="padding:8px;text-align:center;color:var(--text-3)'+hd+'">'+(hasPutts?totalPutts:'–')+'</td>'+
       '<td style="padding:8px;text-align:center;color:var(--green-dark)">'+totalResult+'</td>'+
@@ -4433,15 +4433,15 @@ function renderMyScoreReviewTableHTML(ctx) {
 // Den redigerbara scorekorts-vyn (samma tabell som tidigare varit den enda vyn),
 // nu med en frivillig Puttar-kolumn och förifylld från livescoring/tidigare inskick.
 function renderMyScoreEditTableHTML(ctx) {
-  var sm = !!ctx.sim, hd = sm ? ';display:none' : ''; // simulatorgolf: dölj Hcp, Extra slag, Puttar, SHCP
-  var h = sm ? '<input type="hidden" id="my-shcp" value="0">' : '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="recalcMyScorecard()"></div>';
-  h += (sm ? '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt.</p>' : '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt. Puttar är frivilligt.</p>');
+  var hd = ctx.sim ? ';display:none' : ''; // simulatorgolf: dölj puttkolumnen
+  var h = '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="recalcMyScorecard()"></div>';
+  h += (ctx.sim ? '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. Extra slag visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt.</p>' : '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt. Puttar är frivilligt.</p>');
   h += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
   h += '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
     '<th style="padding:6px;text-align:left">Hål</th>'+
     '<th style="padding:6px;text-align:center">Par</th>'+
-    '<th style="padding:6px;text-align:center'+hd+'">Hcp</th>'+
-    '<th style="padding:6px;text-align:center'+hd+'">Extra<br>slag</th>'+
+    '<th style="padding:6px;text-align:center">Hcp</th>'+
+    '<th style="padding:6px;text-align:center">Extra<br>slag</th>'+
     '<th style="padding:6px;text-align:center">Slag</th>'+
     '<th style="padding:6px;text-align:center'+hd+'">Puttar</th>'+
     '<th style="padding:6px;text-align:center">'+(ctx.isStab?'Poäng':'Netto')+'</th>'+
@@ -4453,17 +4453,17 @@ function renderMyScoreEditTableHTML(ctx) {
     h += '<tr style="border-top:1px solid var(--border)">'+
       '<td style="padding:7px;font-weight:600">'+(idx+1)+'</td>'+
       '<td style="padding:7px;text-align:center;color:var(--text-2)">'+par+'</td>'+
-      '<td style="padding:7px;text-align:center;color:var(--text-3)'+hd+'">'+hcpIdx+'</td>'+
-      '<td style="padding:7px;text-align:center;color:var(--gold);font-weight:600'+hd+'" id="my-extra-'+idx+'">–</td>'+
+      '<td style="padding:7px;text-align:center;color:var(--text-3)">'+hcpIdx+'</td>'+
+      '<td style="padding:7px;text-align:center;color:var(--gold);font-weight:600" id="my-extra-'+idx+'">–</td>'+
       '<td style="padding:5px;text-align:center"><input type="number" min="1" max="15" class="my-hole-inp" data-idx="'+idx+'" value="'+existingGross+'" oninput="recalcMyScorecard()" style="width:52px;margin:0;padding:6px;text-align:center;font-size:14px"></td>'+
       '<td style="padding:5px;text-align:center'+hd+'"><input type="number" min="0" max="10" class="my-putt-inp" data-idx="'+idx+'" value="'+existingPutt+'" style="width:44px;margin:0;padding:6px;text-align:center;font-size:13px;color:var(--text-2)"></td>'+
       '<td style="padding:7px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-hole-result-'+idx+'">–</td>'+
     '</tr>';
   });
   h += '<tr style="border-top:2px solid var(--border);background:var(--surface2)">'+
-    '<td colspan="'+(sm?2:4)+'" style="padding:8px;font-weight:700">Totalt</td>'+
+    '<td colspan="4" style="padding:8px;font-weight:700">Totalt</td>'+
     '<td style="padding:8px;text-align:center;font-weight:700" id="my-total-brutto">–</td>'+
-    '<td'+(sm?' style="display:none"':'')+'></td>'+
+    '<td'+(ctx.sim?' style="display:none"':'')+'></td>'+
     '<td style="padding:8px;text-align:center;font-weight:700;color:var(--green-dark)" id="my-total-result">–</td>'+
   '</tr>';
   h += '</tbody></table></div>';
@@ -4670,7 +4670,6 @@ function renderBulkScoreForm(eid, gIdx, course, liveData) {
   var myPi = getMyPi(t);
   var isMember = g.playerPis.indexOf(myPi) >= 0;
   var totalHoles = course.holePars.length;
-  var simB = isSimTour(t); // simulatorgolf: SHCP 0 och dold, inga puttar
 
   var players = g.playerPis.map(function(pi){
     var p = t.players[pi];
@@ -4681,12 +4680,12 @@ function renderBulkScoreForm(eid, gIdx, course, liveData) {
       : (p && p.hcp!=null ? Math.round(p.hcp) : 0);
     var liveHoles = (liveData && liveData.scores) ? liveData.scores[pi] : null;
     var existingHoles = (existingSub && existingSub.holes) ? existingSub.holes : null;
-    return { pi: pi, name: p?p.name:'?', shcp: simB ? 0 : shcp, liveHoles: liveHoles, existingHoles: existingHoles };
+    return { pi: pi, name: p?p.name:'?', shcp: shcp, liveHoles: liveHoles, existingHoles: existingHoles };
   });
 
-  _bulkScoreCtx = { eid: eid, gIdx: gIdx, sim: simB, isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex||[], totalHoles: totalHoles, playerPis: g.playerPis, liveScorePuttsByPi: (liveData && liveData.putts) || {} };
+  _bulkScoreCtx = { eid: eid, gIdx: gIdx, sim: isSimTour(t), isStab: isStab, holePars: course.holePars, holeHcpIndex: course.holeHcpIndex||[], totalHoles: totalHoles, playerPis: g.playerPis, liveScorePuttsByPi: (liveData && liveData.putts) || {} };
 
-  var shcpRow = '<tr'+(simB?' style="display:none"':'')+'><th style="padding:6px;text-align:left;position:sticky;left:0;background:var(--surface)">SHCP</th>'+players.map(function(pl){
+  var shcpRow = '<tr><th style="padding:6px;text-align:left;position:sticky;left:0;background:var(--surface)">SHCP</th>'+players.map(function(pl){
     return '<th style="padding:4px"><input type="number" step="1" class="bulk-shcp-inp" data-pi="'+pl.pi+'" value="'+pl.shcp+'" style="width:52px;margin:0;padding:5px;text-align:center;font-size:12px" oninput="recalcBulkScore()"></th>';
   }).join('')+'</tr>';
 
@@ -6878,7 +6877,7 @@ function openResults(i) {
     var prefillShcp = ex&&ex.shcp!=null ? ex.shcp : (approved && sub && sub.shcp!=null ? sub.shcp : null);
     var p=t.players[pi];
     var hs = e.isFinal ? getHeadStart(t,e,pi) : 0;
-    var shcpVal = isSimTour(t) ? 0 : Math.round((prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0));
+    var shcpVal = Math.round((prefillShcp!=null) ? prefillShcp : (p.hcp!=null?p.hcp:0));
     var autoCalc = false;
     if(isStab && holesForCalc && course && course.holePars && course.holePars.length) {
       var totalHoles = course.holePars.length;
@@ -6901,7 +6900,7 @@ function openResults(i) {
       '<span style="flex:1;font-size:14px;font-weight:500">'+p.name+(e.isFinal?' <span style="font-size:11px;color:var(--gold);font-weight:600">('+(hs>0?'-':'')+hs+' förspr.)</span>':'')+'</span>'+
       (!isStab?
         '<input type="number" style="width:64px;margin:0" placeholder="Brutto" id="brutto-'+pi+'" value="'+prefillBrutto+'" oninput="recalcNet('+pi+')">'+
-        '<input type="number" step="1" style="width:58px;margin:0'+(isSimTour(t)?';display:none':'')+'" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
+        '<input type="number" step="1" style="width:58px;margin:0" placeholder="SHCP" id="shcp-'+pi+'" value="'+shcpVal+'" oninput="recalcNet('+pi+')" title="Spelhandicap för denna tävling">'
         :'')+
       '<input type="number" style="width:74px;margin:0" placeholder="'+(isStab?'Poäng':'Netto')+'" id="res-'+pi+'" value="'+prefillScore+'" '+((!isStab||autoCalc)?'readonly':'')+' title="'+(autoCalc?'Beräknat automatiskt från hål-för-hål-resultatet (SHCP + hål-index + bruttoslag)':'')+'">'+
     '</div>'+
@@ -6909,7 +6908,7 @@ function openResults(i) {
   }).join('');
   var h='<h3>'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+'Resultatinmatning – '+e.name+'</h3>';
   h+='<p style="font-size:12px;color:var(--text-3);margin-bottom:10px"><i class="ti ti-info-circle"></i> Godkända resultat som spelarna skickat in är redan ifyllda. Du kan alltid skriva över manuellt.</p>';
-  if(!isStab && !isSimTour(t)) {
+  if(!isStab) {
     h+='<div class="row" style="gap:8px;align-items:center;margin-bottom:12px;padding:8px 10px;background:var(--surface2);border-radius:8px">';
     h+='<input type="checkbox" id="netto-only-chk" onchange="toggleNettoOnly('+i+')" style="width:18px;height:18px;margin:0;flex-shrink:0">';
     h+='<label for="netto-only-chk" style="font-size:13px;color:var(--text-2);cursor:pointer">Fyll i endast nettoscore (döljer brutto &amp; SHCP)</label>';
@@ -8590,14 +8589,14 @@ function openLiveScoring(eid, gIdx) {
     if(!doc.exists) {
       var players = g.playerPis.map(function(pi){
         var p = t.players[pi];
-        return { pi: pi, name: p ? p.name : '?', shcp: (!isSimTour(t) && p && p.hcp != null) ? Math.round(p.hcp) : 0 };
+        return { pi: pi, name: p ? p.name : '?', shcp: (p && p.hcp != null) ? Math.round(p.hcp) : 0 };
       });
       var scores = {}, putts = {};
       players.forEach(function(p){ scores[p.pi] = {}; putts[p.pi] = {}; });
       var initData = {
         eventId: eid, groupId: groupId, courseName: e.course || '',
         holePars: course.holePars, holeHcpIndex: course.holeHcpIndex || [],
-        players: players, scores: scores, putts: putts, shcpConfirmed: isSimTour(t), simulator: isSimTour(t), updatedAt: Date.now()
+        players: players, scores: scores, putts: putts, shcpConfirmed: false, simulator: isSimTour(t), updatedAt: Date.now()
       };
       ref.set(initData).then(function(){ subscribeLiveScoring(ref); });
     } else {
@@ -8634,7 +8633,7 @@ function subscribeLiveScoring(ref) {
     // inte redan är bekräftat för den här bollen/rundan, annars rakt till
     // hål-inmatningen. Ändras inte igen förrän man själv trycker "Ändra SHCP".
     if(_liveScoring.mode === null) {
-      _liveScoring.mode = (_liveScoring.data.shcpConfirmed || isLiveSim()) ? 'grid' : 'shcp';
+      _liveScoring.mode = _liveScoring.data.shcpConfirmed ? 'grid' : 'shcp';
     }
     // Första gången datan laddas: hoppa till rätt hål (där bollen ligger),
     // inte alltid hål 1. Ändras inte igen av snapshot-uppdateringar efteråt -
@@ -8646,12 +8645,12 @@ function subscribeLiveScoring(ref) {
   }, function(err){ console.error('Livescoring-lyssnare fel', err); });
 }
 
-// Simulatorgolf: ingen SHCP-vy och inget putt-steg i livescoringen.
+// Simulatorgolf: inget putt-steg i livescoringen (SHCP-steget fungerar som vanligt).
 function isLiveSim() { return !!(_liveScoring && _liveScoring.eid && isSimEventId(_liveScoring.eid)); }
 
 function renderLiveScoringView() {
   if(!document.getElementById('live-scoring-modal-body')) return;
-  if((_liveScoring.mode === 'shcp' || _liveScoring.mode === 'puttPicker') && isLiveSim()) _liveScoring.mode = 'grid';
+  if(_liveScoring.mode === 'puttPicker' && isLiveSim()) _liveScoring.mode = 'grid';
   if(_liveScoring.mode === 'shcp') renderLiveShcpHTML();
   else if(_liveScoring.mode === 'picker') renderLivePickerHTML();
   else if(_liveScoring.mode === 'puttPicker') renderLivePuttPickerHTML();
@@ -8731,7 +8730,7 @@ function renderLiveGridHTML() {
   var totalHoles = (d.holePars||[]).length || 18;
   var par = d.holePars[hole-1];
   var idxHcp = (d.holeHcpIndex && d.holeHcpIndex[hole-1] != null) ? d.holeHcpIndex[hole-1] : (hole);
-  var sim = isLiveSim(); // simulatorgolf: dölj extra slag, puttar och SHCP
+  var sim = isLiveSim(); // simulatorgolf: dölj puttar
 
   // ── ROND KLAR? ──────────────────────────────────────────────────────────
   // Så fort ALLA spelare i bollen har fyllt i ALLA hål visas en tydlig
@@ -8814,7 +8813,7 @@ function renderLiveGridHTML() {
         '<div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(p.name))+(submittedPis[p.pi]?' <i class="ti ti-lock" style="font-size:11px;color:var(--text-3)" title="Inskickat"></i>':'')+'</div>'+
         (lbl?'<div style="font-size:10px;color:var(--text-3);letter-spacing:.5px">'+lbl+'</div>':'')+
       '</div>'+
-      (sim?'':'<div style="width:34px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>')+
+      '<div style="width:34px;text-align:center;color:'+(extraStrokes>0?'var(--gold)':'var(--text-3)')+';font-weight:'+(extraStrokes>0?'700':'400')+';font-size:13px">'+(extraStrokes>0?'+'+extraStrokes:'0')+'</div>'+
       '<div style="width:32px;text-align:center;font-weight:600;font-size:14px">'+(played?total:'–')+'</div>'+
       scoreBtn+
       (sim?'':'<div style="width:44px;text-align:center;font-size:9px;color:var(--text-3)">'+puttLabel+'</div>')+
@@ -8828,7 +8827,7 @@ function renderLiveGridHTML() {
   el.innerHTML =
     completionBanner+
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;flex-wrap:wrap">'+
-      (sim?'':'<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>')+
+      '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
       (canSwitchBoll ? '<button class="btn btn-sm" onclick="closeModal();setTimeout(function(){openLiveScoringBollPicker(\''+d.eventId+'\','+_liveScoring.gIdx+')},60)"><i class="ti ti-users"></i> Byt boll</button>' : '')+
       '<button class="btn btn-sm" title="Se hela live-tabellen" onclick="openLiveFollow(\''+d.eventId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'+
     '</div>'+
@@ -8841,7 +8840,7 @@ function renderLiveGridHTML() {
       '<button class="btn" style="padding:18px 20px;font-size:20px" onclick="liveGridChangeHole(1)" '+(hole>=totalHoles?'disabled':'')+'><i class="ti ti-chevron-right"></i></button>'+
     '</div>'+
     '<div class="row" style="justify-content:space-between;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-      '<div style="flex:1">Spelare</div>'+(sim?'':'<div style="width:34px;text-align:center">Extra</div>')+'<div style="width:32px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div>'+(sim?'':'<div style="width:44px;text-align:center">Puttar</div>')+
+      '<div style="flex:1">Spelare</div><div style="width:34px;text-align:center">Extra</div><div style="width:32px;text-align:center">Total</div><div style="width:56px;text-align:center">Slag</div>'+(sim?'':'<div style="width:44px;text-align:center">Puttar</div>')+
     '</div>'+
     rows+
     '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">'+filledCount+' av '+d.players.length+' klara för hålet. Tryck på en spelares slag-knapp för att mata in - valfri ordning.</p>'+
@@ -9393,7 +9392,7 @@ function syncActivityFeedForHole(eid, pi, hole, gross, par) {
 function checkGoodRoundForFeed(pi, justSetHole, justSetValue) {
   var d = _liveScoring.data;
   if(!d) return;
-  if(isSimEventId(d.eventId)) return; // simulatorgolf: inga "stark rond"-poster i feeden
+  if(isSimEventId(d.eventId)) return; // simulatorgolf: inga stark rond-poster i feeden
   var totalHoles = (d.holePars||[]).length || 18;
   var sc = {};
   var existing = d.scores[pi] || {};
@@ -9591,7 +9590,7 @@ function computeLiveStandingsRows(docs, t, ev) {
           brutto: subBrutto, netto: subNetto, poang: subPoang,
           thru: totalHoles, totalHoles: totalHoles,
           diff: subDiff, rawDiff: subRawDiff, isStab: isStab, headStart: subHeadStart, sortValue: subSortValue, paceValue: subPaceValue, submitted: true,
-          holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp, sim: isSimEventId(d.eventId)
+          holesGross: subHoles, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: subShcp
         });
         seenPis[p.pi] = true;
         return;
@@ -9635,7 +9634,7 @@ function computeLiveStandingsRows(docs, t, ev) {
       rows.push({
         pi: p.pi, name: p.name, brutto: brutto, netto: netto, poang: poang, thru: thru, totalHoles: totalHoles,
         diff: diff, rawDiff: rawDiff, isStab: isStab, headStart: headStart, sortValue: sortValue, paceValue: paceValue, submitted: false,
-        holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0, sim: isSimEventId(d.eventId)
+        holesGross: holesGross, holePars: holePars, holeHcpIndex: holeHcpIndex, shcp: p.shcp||0
       });
       seenPis[p.pi] = true;
     });
@@ -9656,7 +9655,7 @@ function computeLiveStandingsRows(docs, t, ev) {
         pi: pi, name: p.name, brutto: 0, netto: 0, poang: 0, thru: 0, totalHoles: 18,
         diff: 0, isStab: ev.type==='stableford', headStart: isFinal ? getHeadStart(t, ev, pi) : null,
         sortValue: -Infinity, paceValue: -Infinity, submitted: false, notStarted: true,
-        holesGross: [], holePars: [], holeHcpIndex: [], shcp: p.shcp||0, sim: isSimTour(t)
+        holesGross: [], holePars: [], holeHcpIndex: [], shcp: p.shcp||0
       });
       seenPis[pi] = true;
     });
@@ -9837,7 +9836,7 @@ function openPlayerLiveScorecard(idx) {
   if(r.notStarted) {
     render('<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:6px">'+
         '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
-        (r.sim?'':'<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>')+
+        '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
       '</div>'+
       '<p style="font-size:13px;color:var(--text-3)">Har inte startat sin rond än - kanske spelas den en annan dag.</p>'+
       '<div class="row" style="justify-content:space-between;margin-top:14px">'+backBtn+'<button class="btn" onclick="closeModal()">Stäng</button></div>');
@@ -9849,7 +9848,7 @@ function openPlayerLiveScorecard(idx) {
 
   var h = '<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:2px">'+
       '<h3 style="margin:0;font-size:16px">'+esc(r.name)+'</h3>'+
-      (r.sim?'':'<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>')+
+      '<span style="font-size:12px;color:var(--text-2);white-space:nowrap"><span style="color:var(--text-3)">SHCP</span> <b>'+(r.shcp!=null?r.shcp:'–')+'</b></span>'+
     '</div>'+
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Thru '+r.thru+'/'+r.totalHoles+' · Par '+totalPar+' · Brutto <b>'+(r.thru?r.brutto:'–')+'</b> · Netto <b>'+(r.thru?r.netto:'–')+'</b> · Poäng <b>'+(r.thru?r.poang:'–')+'</b></p>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:8px">'+
@@ -13937,9 +13936,15 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '13 oktober 2026 (215)',
+    items: [
+      { type: 'improved', text: 'Justering av simulatorgolf (release 214): SHCP/HCP behålls nu i simulatortourer precis som i vanlig golf - spelarna har sitt vanliga HCP, SHCP-steget finns kvar i livescoringen och HCP-fälten visas som vanligt. Det som fortfarande gäller för en simulatortour: inga puttar registreras, och inga rundor räknas in i spelarnas profilstatistik. Tourens rundor, ställning, leaderboard, OoM, final och prispott visas som vanligt.' }
+    ]
+  },
+  {
     date: '13 oktober 2026 (214)',
     items: [
-      { type: 'new', text: 'Simulatorgolf-tourer! När man skapar en tour finns nu en ruta \"Simulatorgolf\" i första steget. En simulatortour märks med en lila \"Simulator\"-etikett på tourkorten, och för den gäller: (1) Ingen HCP - alla spelar med 0 (brutto = netto), HCP/SHCP visas och efterfrågas inte någonstans (spelarlistan, livescoringens SHCP-steg, \"Ändra SHCP\", \"Mitt resultat\", bollinlämning, resultatinmatning, startsidans SHCP-ruta och live-scorekortet). (2) Inga puttar - putt-steget i livescoringen, puttkolumnerna och puttfälten i \"Mitt resultat\" är borta, och inga puttdata sparas. (3) Ingen statistik sparas till spelarna - simulatorns rundor och hål räknas aldrig in i hålstatistik, puttstatistik, karriärstatistik, banstatistik, bankarta/scratch map, heatmaps, bana-historik eller topplistor, och feeden postar inga birdie-/\"stark rond\"-inlägg för dem. Tourens egen ställning, OoM, final och prispott fungerar som vanligt. Valet görs bara när touren skapas och kan inte ändras efteråt.' }
+      { type: 'new', text: 'Simulatorgolf-tourer! När man skapar en tour finns nu en ruta \"Simulatorgolf\" i första steget. En simulatortour märks med en lila \"Simulator\"-etikett på tourkorten. För den registreras inga puttar (putt-steget i livescoringen och puttfälten i \"Mitt resultat\" är borta) och ingen statistik sparas till spelarna - simulatorns rundor och hål räknas aldrig in i hålstatistik, puttstatistik, karriärstatistik, banstatistik, bankarta/scratch map, heatmaps, bana-historik eller topplistor, och feeden postar inga birdie-/\"stark rond\"-inlägg för dem. Tourens egen ställning, OoM, final och prispott fungerar som vanligt. Valet görs bara när touren skapas och kan inte ändras efteråt.' }
     ]
   },
   {
