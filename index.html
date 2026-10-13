@@ -63,6 +63,9 @@ h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px}
 .ev-sum{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .ev-chev{font-size:18px;transition:transform .15s}
 .ev-fold[hidden]{display:none}
+/* Bannamn + kartnål på eventkortet: klickbar, öppnar banans scorekort */
+.ev-course{display:inline-flex;align-items:center;gap:4px;background:none;border:none;padding:2px 0;margin:0;font:inherit;color:inherit;cursor:pointer;text-align:left;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.ev-course:hover{color:var(--green-dark)}
 .btn{padding:8px 16px;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);font-size:14px;cursor:pointer;color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{background:var(--surface2)}
 .btn-primary{background:var(--green);border-color:var(--green-dark);color:#fff}
@@ -6522,7 +6525,7 @@ function eventCardHTML(i,e) {
     '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">'+
       '<div style="min-width:0"><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
-          '<span><i class="ti ti-map-pin" style="font-size:12px"></i> '+e.course+'</span>'+
+          '<button type="button" class="ev-course" onclick="openEventCourseScorecard('+i+')" title="Visa banans scorekort"><i class="ti ti-map-pin" style="font-size:12px"></i> '+esc(e.course)+'</button>'+
           '<span style="padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;'+tc+'">'+tl+'</span>'+
           (e.isFinal?'<span class="badge badge-gold">Final</span>':'')+
           (e.isMajor?'<span class="badge badge-gold"><i class="ti ti-star" style="font-size:10px"></i> Major 1.5x</span>':'')+
@@ -11787,6 +11790,73 @@ function buildCourseProfileHTML(courseId) {
   return h;
 }
 
+// ── SCOREKORT-POPUP ─────────────────────────────────────────────────────────
+// Visar en banas scorekort (hål 1-18 med par, index och längd i meter) i en popup. Ut (1-9) och In
+// (10-18) ligger bredvid varandra som på ett riktigt scorekort, med delsummor för par och längd.
+// Banan slås upp i bandatabasen på namn (samma matchning som resten av appen).
+function openEventCourseScorecard(i) {
+  var t = getTour(), e = t && t.events ? t.events[i] : null;
+  if(!e) return;
+  openCourseScorecard(e.course);
+}
+function openCourseScorecard(courseName) {
+  var name = (courseName || '').trim();
+  var c = (courseDb || []).find(function(x){ return (x.name || '').toLowerCase() === name.toLowerCase(); });
+  var h = '<h3 style="margin-bottom:2px"><i class="ti ti-golf"></i> '+esc((c && c.name) || name || 'Bana')+'</h3>';
+  if(!c || !c.holePars || !c.holePars.length) {
+    h += '<p style="font-size:13px;color:var(--text-2);margin:8px 0 14px">Inget scorekort finns registrerat för den här banan i bandatabasen ännu.'+(isAdmin() ? ' Du kan lägga till det under Banor.' : '')+'</p>';
+    h += '<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+    showModal(h, true);
+    return;
+  }
+  if(c.klubb && c.klubb !== c.name) h += '<div style="font-size:13px;color:var(--text-2);margin-bottom:8px">'+esc(c.klubb)+'</div>';
+
+  var pars = c.holePars, idx = c.holeHcpIndex || [], len = c.holeLengths || [];
+  var n = pars.length;
+  var hasLen = len.some(function(l){ return l != null; });
+  function sum(arr, a, b) { var s = 0, any = false; for(var k = a; k < b; k++) { if(arr[k] != null) { s += arr[k]; any = true; } } return any ? s : null; }
+  var totalPar = sum(pars, 0, n), totalLen = hasLen ? sum(len, 0, n) : null;
+
+  // Sammanfattning (badges)
+  var badges = [n+' hål', 'Par '+totalPar];
+  if(totalLen != null) badges.push(totalLen+' m');
+  if(c.rating) badges.push('CR '+c.rating);
+  if(c.slope) badges.push('Slope '+c.slope);
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+badges.map(function(b){
+    return '<span style="font-size:12px;background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:20px;color:var(--text-2)">'+esc(b)+'</span>';
+  }).join('')+'</div>';
+
+  var th = 'padding:5px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--border)';
+  var td = 'padding:6px 4px;text-align:center;border-bottom:1px solid var(--border)';
+  function half(label, a, b) {
+    var t = '<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed"><thead><tr>'+
+      '<th style="'+th+';width:26%">Hål</th><th style="'+th+'">Par</th><th style="'+th+'">Index</th><th style="'+th+'">'+(hasLen ? 'Meter' : '')+'</th></tr></thead><tbody>';
+    for(var k = a; k < b; k++) {
+      t += '<tr><td style="'+td+';font-weight:600">'+(k+1)+'</td>'+
+        '<td style="'+td+';font-weight:700">'+(pars[k] != null ? pars[k] : '–')+'</td>'+
+        '<td style="'+td+';color:var(--text-2)">'+(idx[k] != null ? idx[k] : '–')+'</td>'+
+        '<td style="'+td+';color:var(--text-2)">'+(hasLen ? (len[k] != null ? len[k] : '–') : '')+'</td></tr>';
+    }
+    var sp = sum(pars, a, b), sl = hasLen ? sum(len, a, b) : null;
+    t += '<tr style="background:var(--surface2);font-weight:700"><td style="padding:6px 4px;text-align:center">'+label+'</td>'+
+      '<td style="padding:6px 4px;text-align:center">'+(sp != null ? sp : '–')+'</td><td style="padding:6px 4px;text-align:center"></td>'+
+      '<td style="padding:6px 4px;text-align:center">'+(sl != null ? sl : '')+'</td></tr>';
+    return t + '</tbody></table>';
+  }
+  if(n > 9) {
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">'+half('Ut', 0, 9)+half('In', 9, n)+'</div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:8px 10px;background:var(--surface2);border-radius:8px;font-size:13px;font-weight:700">'+
+      '<span>Totalt</span><span>Par '+totalPar+(totalLen != null ? ' &nbsp;·&nbsp; '+totalLen+' m' : '')+'</span></div>';
+  } else {
+    h += half('Totalt', 0, n);
+  }
+  if(!idx.length) h += '<p style="font-size:11px;color:var(--text-3);margin-top:8px">Index (hål-hcp) saknas för banan.</p>';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
+    (c.id ? '<button class="btn" onclick="closeModal();openCourseProfile(\''+c.id+'\')"><i class="ti ti-info-circle"></i> Banprofil</button>' : '')+
+    '<button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h, true);
+}
+
 function openCourseProfile(courseId) {
   var h = buildCourseProfileHTML(courseId);
   h += '<div class="row" style="justify-content:flex-end;margin-top:14px">'+
@@ -14282,6 +14352,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (224)',
+    items: [
+      { type: 'new', text: 'Kartnålen och bannamnet på deltävlingskortet är nu klickbara. Ett klick öppnar en popup med banans scorekort: hål 1-18 med par, index och längd i meter. Ut (hål 1-9) och In (hål 10-18) visas bredvid varandra som på ett riktigt scorekort, med delsummor för par och längd samt totalt par och total längd. Har banan CR/slope visas det också. Finns inget scorekort registrerat för banan i bandatabasen får du ett tydligt besked om det. Från popupen kommer man vidare till hela banprofilen med knappen Banprofil.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (223)',
     items: [
