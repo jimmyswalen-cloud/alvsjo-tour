@@ -2200,7 +2200,7 @@ function syncEditTourDraftFields() {
 // banbild). Varje plats får egen beskärning som passar formatet.
 var TOUR_IMG_SLOTS = {
   header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden.', ratio:0.25, outW:1800, maxW:2000, maxH:1200, path:'tour-headers/' },
-  tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla rutan under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1, outW:480, maxW:1200, maxH:1200, path:'tour-tiles/' }
+  tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla stående rutan (3:4) under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1.3333, outW:540, maxW:1400, maxH:1400, path:'tour-tiles/' }
 };
 function reopenTourEditModal() {
   if(_editTourDraft && _editTourDraft.mode === 'rename') openRenameTour(); else openEditTour();
@@ -2208,7 +2208,7 @@ function reopenTourEditModal() {
 function tourSlotFieldHTML(slot, extraHtml) {
   var cfg = TOUR_IMG_SLOTS[slot], cur = _editTourDraft[cfg.key];
   var prev = cur
-    ? '<img src="'+cur+'" '+(slot==='tile' ? 'style="width:96px;height:96px;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px"' : 'class="img-preview"')+'>'
+    ? '<img src="'+cur+'" '+(slot==='tile' ? 'style="width:90px;height:120px;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px"' : 'class="img-preview"')+'>'
     : '<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Ingen egen bild vald</p>';
   var h = '<div class="field"><label>'+cfg.label+'</label>';
   h += '<p style="font-size:11px;color:var(--text-3);margin:0 0 6px">'+cfg.hint+'</p>';
@@ -2613,6 +2613,9 @@ function showCropModal(dataUrl, ratio, cb, outW) {
     var cbox = document.getElementById('crop-box');
     if(!cbox) return;
     var cW = cbox.offsetWidth;
+    // Höga format (t.ex. stående bilder) får inte bli högre än skärmen tillåter: krymp rutan och centrera den.
+    var maxCH = Math.max(280, Math.round(window.innerHeight * 0.55));
+    if(cW * ratio > maxCH) { cW = Math.round(maxCH / ratio); cbox.style.width = cW + 'px'; cbox.style.margin = '0 auto'; }
     var cH = Math.round(cW * ratio);
     cbox.style.height = cH + 'px';
     crop.cW=cW; crop.cH=cH; crop.active=true;
@@ -14279,6 +14282,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (223)',
+    items: [
+      { type: 'fixed', text: 'Bilden för kommande tävling (den lilla rutan under "Kommande runda") är en stående ruta, ca 88 x 130 px, men beskärningen var kvadratisk så sidorna på en logotyp kapades. Bildplatsen har nu stående format (3:4) med eget utsnitt och en stående förhandsvisning i Redigera tour. Beskärningsrutan krymper dessutom automatiskt för höga format så att den ryms på skärmen (och centreras).' }
+    ]
+  },
   {
     date: '13 oktober 2026 (222)',
     items: [
