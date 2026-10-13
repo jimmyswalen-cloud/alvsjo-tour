@@ -30,15 +30,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 /* Bredbilds-omslag (logotyp-banner, t.ex. 4:1 eller bredare), utan text-overlay eftersom bilden redan innehåller namn/varumärke.
    Bred skärm: hela bilden visas med sin naturliga höjd. Smal skärm (mobil/surfplatta): en tydligt högre ruta där bilden
    centreras och sidorna beskärs, så att loggan inte krymper till en liten remsa. */
-.hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:360px;background-position:center 40%}
+.hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:460px;background-position:center 40%}
 .hero.hero-banner::before,.hero.hero-banner .hero-content{display:none}
 .hero.hero-banner .hero-scroll{height:22px}
-img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1)}
+img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1);max-height:240px}
 @media (max-width:999px){
   .hero.hero-banner{aspect-ratio:auto;height:clamp(170px,46vw,260px);max-height:none}
 }
 @media (max-width:699px){
-  img.cover-banner{aspect-ratio:auto;height:clamp(120px,40vw,170px) !important}
+  img.cover-banner{min-height:clamp(110px,32vw,150px)}
 }
 .wrap{max-width:700px;margin:0 auto;padding:0 16px 4rem}
 .tours-header{display:flex;align-items:center;justify-content:space-between;margin:20px 0 16px}
@@ -1074,7 +1074,7 @@ function simBadgeHTML(t) {
 // ── BREDBILDS-OMSLAG (logotyp-banner) ───────────────────────────────────────
 // En omslagsbild som är mycket bredare än hög (aspect >= BANNER_MIN_ASPECT, t.ex. en
 // 4:1-logotyp) ska visas HEL, inte beskäras till en fast höjd som vanliga fotografier.
-var BANNER_MIN_ASPECT = 3.2;
+var BANNER_MIN_ASPECT = 2.2;
 function isBannerAspect(w, h) { return !!(w && h && (w / h) >= BANNER_MIN_ASPECT); }
 // onload på tourkortens omslagsbild: breda bilder får sin naturliga höjd (desktop) eller en centrerad,
 // tillräckligt hög ruta (mobil) istället för den fasta beskärningen.
@@ -1086,11 +1086,14 @@ function fitCoverImg(img) {
   }
 }
 // Tourens hero: byter till bannerläge (hel bild, ingen overlay) om omslaget är en bred banner.
-function applyHeroBannerIfWide(heroBg, src, tourId) {
+// mode: 'show' = alltid vanlig header med tournamn över bilden, 'hide' = alltid hel bild utan text,
+// annars automatiskt (bred bild = bannerläge).
+function applyHeroBannerIfWide(heroBg, src, tourId, mode) {
+  if(mode === 'show') return;
   var im = new Image();
   im.onload = function() {
     if(heroBg.getAttribute('data-hero-tour') !== String(tourId)) return; // användaren har hunnit navigera vidare
-    if(isBannerAspect(im.naturalWidth, im.naturalHeight)) {
+    if(mode === 'hide' || isBannerAspect(im.naturalWidth, im.naturalHeight)) {
       heroBg.style.setProperty('--hero-ar', im.naturalWidth + ' / ' + im.naturalHeight);
       heroBg.classList.add('hero-banner');
     }
@@ -2123,7 +2126,8 @@ function openEditTour() {
   if(!isAdmin()) return;
   var t = getTour();
   if(tourHasStarted(t)) { alert('Touren har startat och kan inte redigeras.'); return; }
-  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null };
+  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null, headerImg: t.headerImg||null, headerText: t.headerText||'auto', tileImg: t.tileImg||null };
+  _editTourDraft.mode = 'edit';
 
   var evRows = (t.events||[]).map(function(e,i){
     return '<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center" id="edit-ev-row-'+i+'">'+
@@ -2160,6 +2164,7 @@ function openEditTour() {
   h += '</div>';
   h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
   h += '</div>';
+  h += tourExtraImagesHTML();
   h += '<hr class="divider">';
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Deltävlingar</div>';
   h += '<div id="edit-events-list">'+evRows+'</div>';
@@ -2175,6 +2180,7 @@ function openEditTour() {
     if(b) b.onclick=function(){ document.getElementById('edit-tour-img-inp').click(); };
     var inp=document.getElementById('edit-tour-img-inp');
     if(inp) inp.onchange=function(){ if(this.files[0]) handleEditTourImg(this.files[0]); };
+    wireTourSlotInputs();
   }, 50);
 }
 
@@ -2183,6 +2189,92 @@ function syncEditTourDraftFields() {
   var n=document.getElementById('edit-tour-name'), s=document.getElementById('edit-tour-season');
   if(n) _editTourDraft.name = n.value;
   if(s) _editTourDraft.season = s.value;
+  var ht=document.getElementById('edit-tour-header-text');
+  if(ht) _editTourDraft.headerText = ht.value;
+}
+
+// ── EXTRA TOURBILDER: header och "kommande tävling" ─────────────────────────
+// En tour har tre bildplatser: omslaget (t.img - kortet i Tourer-listan), headern
+// (t.headerImg - toppbilden inne i touren, annars används omslaget) och en liten
+// ruta för "kommande tävling" på startsidan (t.tileImg - annars deltävlingens egen
+// banbild). Varje plats får egen beskärning som passar formatet.
+var TOUR_IMG_SLOTS = {
+  header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden.', ratio:0.25, outW:1800, maxW:2000, maxH:1200, path:'tour-headers/' },
+  tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla rutan under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1, outW:480, maxW:1200, maxH:1200, path:'tour-tiles/' }
+};
+function reopenTourEditModal() {
+  if(_editTourDraft && _editTourDraft.mode === 'rename') openRenameTour(); else openEditTour();
+}
+function tourSlotFieldHTML(slot, extraHtml) {
+  var cfg = TOUR_IMG_SLOTS[slot], cur = _editTourDraft[cfg.key];
+  var prev = cur
+    ? '<img src="'+cur+'" '+(slot==='tile' ? 'style="width:96px;height:96px;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px"' : 'class="img-preview"')+'>'
+    : '<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Ingen egen bild vald</p>';
+  var h = '<div class="field"><label>'+cfg.label+'</label>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin:0 0 6px">'+cfg.hint+'</p>';
+  h += prev;
+  h += '<div class="row" style="gap:6px;flex-wrap:wrap">';
+  h += '<button type="button" class="btn btn-sm" onclick="tourSlotUpload(\''+slot+'\')"><i class="ti ti-photo"></i> Ladda upp</button>';
+  h += '<button type="button" class="btn btn-sm" onclick="tourSlotPick(\''+slot+'\')"><i class="ti ti-library-photo"></i> Bildbibliotek</button>';
+  if(cur) h += '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="tourSlotClear(\''+slot+'\')"><i class="ti ti-trash"></i> Ta bort</button>';
+  h += '</div>';
+  h += '<input type="file" id="edit-tour-'+slot+'-inp" accept="image/*" style="display:none">';
+  h += (extraHtml||'');
+  h += '</div>';
+  return h;
+}
+function tourExtraImagesHTML() {
+  var ht = _editTourDraft.headerText || 'auto';
+  var sel = '<div style="margin-top:10px"><label style="font-size:12px;color:var(--text-2)">Tournamn över headerbilden</label>'+
+    '<select id="edit-tour-header-text" style="margin-top:4px">'+
+      '<option value="auto"'+(ht==='auto'?' selected':'')+'>Automatiskt</option>'+
+      '<option value="show"'+(ht==='show'?' selected':'')+'>Visa tournamnet över bilden</option>'+
+      '<option value="hide"'+(ht==='hide'?' selected':'')+'>Dölj tournamnet (visa bilden hel)</option>'+
+    '</select>'+
+    '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Automatiskt: namnet visas över en egen headerbild, men döljs om du bara använder en bred logotyp som omslag.</p></div>';
+  return '<hr class="divider">'+tourSlotFieldHTML('header', sel)+tourSlotFieldHTML('tile','');
+}
+function wireTourSlotInputs() {
+  Object.keys(TOUR_IMG_SLOTS).forEach(function(slot){
+    var inp = document.getElementById('edit-tour-'+slot+'-inp');
+    if(inp) inp.onchange = function(){ if(this.files[0]) tourSlotFile(slot, this.files[0]); };
+  });
+}
+function tourSlotUpload(slot) {
+  syncEditTourDraftFields();
+  var inp = document.getElementById('edit-tour-'+slot+'-inp');
+  if(inp) inp.click();
+}
+function tourSlotFile(slot, file) {
+  var cfg = TOUR_IMG_SLOTS[slot];
+  syncEditTourDraftFields();
+  compressImage(file, cfg.maxW, cfg.maxH, 0.92, function(d) {
+    showCropModal(d, cfg.ratio, function(cropped) {
+      _editTourDraft[cfg.key] = cropped;
+      reopenTourEditModal();
+    }, cfg.outW);
+  });
+}
+function tourSlotPick(slot) {
+  var cfg = TOUR_IMG_SLOTS[slot];
+  syncEditTourDraftFields();
+  openTourCoverPicker(function(url){ _editTourDraft[cfg.key] = url; reopenTourEditModal(); }, function(){ reopenTourEditModal(); });
+}
+function tourSlotClear(slot) {
+  syncEditTourDraftFields();
+  _editTourDraft[TOUR_IMG_SLOTS[slot].key] = null;
+  reopenTourEditModal();
+}
+// Laddar upp/rensar header- och kommande-tävling-bilderna och sparar header-textvalet på touren.
+// Misslyckas en uppladdning behålls den gamla bilden istället för att rensas.
+function applyTourExtraImages(t, draft) {
+  if(!draft) return Promise.resolve();
+  if(draft.headerText === 'show' || draft.headerText === 'hide') t.headerText = draft.headerText; else delete t.headerText;
+  return Promise.all(Object.keys(TOUR_IMG_SLOTS).map(function(slot){
+    var cfg = TOUR_IMG_SLOTS[slot], want = draft[cfg.key] || null;
+    if(!want) { t[cfg.key] = null; return Promise.resolve(); }
+    return uploadImageToStorage(want, cfg.path + t.id + '.jpg').then(function(url){ if(url) t[cfg.key] = url; });
+  }));
 }
 
 function handleEditTourImg(file) {
@@ -2214,7 +2306,8 @@ function clearEditTourCover() {
 function openRenameTour() {
   if(!isAdmin()) return;
   var t = getTour();
-  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null };
+  if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null, headerImg: t.headerImg||null, headerText: t.headerText||'auto', tileImg: t.tileImg||null };
+  _editTourDraft.mode = 'rename';
 
   var h = '<h3><i class="ti ti-edit"></i> Byt namn/bild</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Touren har startat, så deltävlingarna kan inte ändras längre - men namn, säsong och omslagsbild går fortfarande fint att uppdatera.</p>';
@@ -2229,6 +2322,7 @@ function openRenameTour() {
   h += '</div>';
   h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
   h += '</div>';
+  h += tourExtraImagesHTML();
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
     '<button class="btn" onclick="_editTourDraft=null;closeModal()">Avbryt</button>'+
     '<button class="btn btn-primary" onclick="saveRenameTour()">Spara</button></div>';
@@ -2238,6 +2332,7 @@ function openRenameTour() {
     if(b) b.onclick=function(){ document.getElementById('edit-tour-img-inp').click(); };
     var inp=document.getElementById('edit-tour-img-inp');
     if(inp) inp.onchange=function(){ if(this.files[0]) handleRenameTourImg(this.files[0]); };
+    wireTourSlotInputs();
   }, 50);
 }
 
@@ -2269,14 +2364,18 @@ function saveRenameTour() {
   if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
   if(_editTourDraft) t.season = _editTourDraft.season.trim();
   var newImg = _editTourDraft ? _editTourDraft.img : t.img;
+  var draftSnap = _editTourDraft;
   _editTourDraft = null;
   uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
     t.img = url;
+    return applyTourExtraImages(t, draftSnap);
+  }).then(function(){
     save();
     document.getElementById('active-tour-name').textContent = t.name;
     closeModal();
     renderToursList();
     renderEditTourBtn();
+    updateHero(t.id);
   });
 }
 
@@ -2317,6 +2416,7 @@ function saveEditTour() {
   if(_editTourDraft && _editTourDraft.name.trim()) t.name = _editTourDraft.name.trim();
   if(_editTourDraft) t.season = _editTourDraft.season.trim();
   var newImg = _editTourDraft ? _editTourDraft.img : t.img;
+  var draftSnap = _editTourDraft;
   _editTourDraft = null;
 
   // Rebuild events from modal rows
@@ -2359,10 +2459,13 @@ function saveEditTour() {
   document.getElementById('active-tour-name').textContent = t.name;
   uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
     t.img = url;
+    return applyTourExtraImages(t, draftSnap);
+  }).then(function(){
     save();
     closeModal();
     renderEvents();
     renderEditTourBtn();
+    updateHero(t.id);
   });
 }
 
@@ -2479,8 +2582,9 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 // bred desktop-skärm. (Tidigare skickades en absolut pixelhöjd rakt av, vilket
 // på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
 // krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
-function showCropModal(dataUrl, ratio, cb) {
+function showCropModal(dataUrl, ratio, cb, outW) {
   crop.cb = cb;
+  crop.outW = outW || 900; // utbredd (px) för den sparade bilden - standard 900
   var h = '<h3 style="margin-bottom:6px">Välj bildutsnitt</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma &nbsp;·&nbsp; Rutan visar exakt hur bilden sparas</p>';
   h += '<div id="crop-box" style="position:relative;width:100%;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
@@ -2550,7 +2654,7 @@ function cropCommit(){
   // Render the output at a fixed high resolution (independent of the on-screen
   // crop box size) so the result stays sharp even when later displayed at full
   // container width (~700px) on high-DPI screens.
-  var OUTPUT_W = 900;
+  var OUTPUT_W = crop.outW || 900;
   var aspect = crop.cH / crop.cW;
   var outW = OUTPUT_W, outH = Math.round(OUTPUT_W * aspect);
   var c=document.createElement('canvas');
@@ -2807,7 +2911,7 @@ function renderHomeNextRoundWidget() {
   var info = findMyNextRoundInfo();
   if(!info) { el.innerHTML = ''; return; }
   var t = info.tour, e = info.event;
-  var img = getEventImage(e);
+  var img = (t && t.tileImg) || getEventImage(e); // egen bild för kommande tävling (t.tileImg) har företräde
   var dateLabel = formatSvDateFull(info.date);
 
   if(info.declined) {
@@ -14141,8 +14245,12 @@ function updateHero(tourId) {
   } else {
     var t=S.tours.find(function(x){return x.id===tourId;});
     if(!t) return;
-    heroBg.style.backgroundImage = t.img ? "url('"+t.img+"')" : DEFAULT_BG;
-    if(t.img) applyHeroBannerIfWide(heroBg, t.img, tourId);
+    // Egen headerbild (t.headerImg) har företräde framför omslaget. Med en egen headerbild visas tournamnet
+    // över bilden om inget annat valts; med bara omslaget (en logotyp) avgör bildens format.
+    var heroSrc = t.headerImg || t.img;
+    var heroMode = (t.headerText === 'show' || t.headerText === 'hide') ? t.headerText : (t.headerImg ? 'show' : 'auto');
+    heroBg.style.backgroundImage = heroSrc ? "url('"+heroSrc+"')" : DEFAULT_BG;
+    if(heroSrc) applyHeroBannerIfWide(heroBg, heroSrc, tourId, heroMode);
     heroTitle.textContent=t.name; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='';
   }
@@ -14171,6 +14279,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '13 oktober 2026 (222)',
+    items: [
+      { type: 'new', text: 'Tre egna bilder per tour. I \"Redigera tour\" (och \"Byt namn/bild\" för startade tourer) finns nu, utöver Omslagsbild (kortet i Tourer-listan), två nya bildplatser: (1) Headerbild - toppbilden inne i touren, med egen beskärning (4:1, högre upplösning). Utan egen bild används omslaget som förut. Ett val \"Tournamn över headerbilden\" (Automatiskt / Visa / Dölj) styr om namnet skrivs över bilden eller om bilden visas hel, t.ex. för en logotyp. (2) Bild för kommande tävling - den lilla rutan under \"Kommande runda\" på startsidan, beskärs som en kvadrat. Utan egen bild används deltävlingens banbild som förut. Varje bild kan laddas upp, väljas ur bildbiblioteket eller tas bort. Beskärningsrutan kan nu också spara större bilder (används för headern). Nya tourer väljer sina extra bilder via Redigera tour efter att de skapats.' }
+    ]
+  },
+  {
+    date: '13 oktober 2026 (221)',
+    items: [
+      { type: 'fixed', text: 'Omslagsbilder som är ganska breda men inte extremt breda (ca 2,2:1 och uppåt, t.ex. en logotyp-banner på ca 3:1) beskärs inte längre kraftigt i tourkortet på desktop. Tidigare krävdes minst 3,2:1 för att bilden skulle visas hel - en bild på ca 3,1:1 föll precis utanför och kapades då till fast 110 px (huvudet på siluetten och nederkanten försvann). Nu visas den hel med sin naturliga höjd (max 240 px). På mobil får kortet en lägsta höjd (ca 110-150 px) så loggan inte blir en tunn remsa. Samma gräns gäller tourens egen toppbild, som nu också får bli upp till 460 px hög (tidigare 360 px) så att en bred bild inte kapas på vanliga desktopbredder.' }
+    ]
+  },
   {
     date: '13 oktober 2026 (220)',
     items: [
