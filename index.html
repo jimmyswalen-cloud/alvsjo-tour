@@ -103,6 +103,12 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .oom-row:hover{background:var(--surface2)}
 .oom-row:last-child{border-bottom:none}
 .oom-pts{margin-left:auto;font-weight:600;font-size:16px;color:var(--green-dark)}
+.rotate-hint{display:flex;align-items:center;gap:12px;margin:10px 0 4px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--text-2);line-height:1.4}
+.rotate-hint svg{flex-shrink:0;width:34px;height:34px;overflow:visible}
+.rotate-hint .rh-phone{transform-origin:17px 17.5px;animation:rhRotate 2.8s ease-in-out infinite}
+@keyframes rhRotate{0%,20%{transform:rotate(0deg)}45%,80%{transform:rotate(-90deg)}100%{transform:rotate(0deg)}}
+@media (prefers-reduced-motion:reduce){.rotate-hint .rh-phone{animation:none;transform:rotate(-90deg)}}
+@media (orientation:landscape){.rotate-hint{display:none}}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
 .modal{background:var(--surface);border-radius:14px;padding:1.5rem;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
 .modal-wide{max-width:640px}
@@ -11246,7 +11252,7 @@ function renderOomTable() {
   if(!el) return;
   var regularEvents = t.events.filter(function(e){ return !e.isFinal; });
   var closedEvents = regularEvents.filter(function(e){ return e.closed && e.results && e.results.length; });
-  if(!closedEvents.length) { el.innerHTML = buildEmptyOomTableHTML(t, regularEvents); return; }
+  if(!closedEvents.length) { el.innerHTML = buildEmptyOomTableHTML(t, regularEvents) + oomRotateHintHTML(); return; }
 
   var bestN = t.bestRounds || 0;
   // Build per-player totals with bestRounds filtering
@@ -11305,7 +11311,24 @@ function renderOomTable() {
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
-  el.innerHTML = html;
+  el.innerHTML = html + oomRotateHintHTML();
+}
+
+// Tips under OoM-tabellen: vrid telefonen till liggande läge. Animerad ikon
+// (telefon som vrids från stående till liggande). Döljs via CSS när skärmen
+// redan är i liggande läge (och därmed även på datorer).
+function oomRotateHintHTML() {
+  return '<div class="rotate-hint">'+
+    '<svg viewBox="0 0 34 34" aria-hidden="true">'+
+      '<path d="M28 9 A13 13 0 0 0 6 9" fill="none" stroke="var(--text-3)" stroke-width="1.6" stroke-linecap="round"/>'+
+      '<path d="M4.2 5.6 L6 9.2 L9.6 7.8" fill="none" stroke="var(--text-3)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<g class="rh-phone">'+
+        '<rect x="12" y="7" width="10" height="21" rx="2.2" fill="none" stroke="var(--green-dark)" stroke-width="2"/>'+
+        '<line x1="15.5" y1="25" x2="18.5" y2="25" stroke="var(--green-dark)" stroke-width="1.6" stroke-linecap="round"/>'+
+      '</g>'+
+    '</svg>'+
+    '<span>Tabellen blir lättare att läsa om du vrider telefonen till <b>liggande läge</b>.</span>'+
+  '</div>';
 }
 
 // Tom OoM-tabell innan någon deltävling är stängd: alla spelare i touren med 0 p
@@ -14403,6 +14426,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 oktober 2026 (226)',
+    items: [
+      { type: 'improved', text: 'Under OoM-tabellen (vyn Tabell) finns nu ett tips med en liten animerad ikon: tabellen blir lättare att läsa om du vrider telefonen till liggande läge. Tipset försvinner automatiskt när telefonen redan ligger ner, och syns inte på dator.' }
+    ]
+  },
   {
     date: '20 oktober 2026 (225)',
     items: [
