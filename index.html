@@ -34,8 +34,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .hero.hero-banner::before,.hero.hero-banner .hero-content{display:none}
 .hero.hero-banner .hero-scroll{height:22px}
 img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1);max-height:240px}
-@media (max-width:999px){
-  .hero.hero-banner{aspect-ratio:auto;height:clamp(170px,46vw,260px);max-height:none}
+/* Mellanbredd (700-999 px, t.ex. bärbar dator med skärmskalning): visa hela bilden i sitt eget format
+   istället för en fast höjd som beskar sidorna och gjorde loggan jättestor. Bara riktigt smala skärmar
+   (mobil) får en högre ruta där sidorna beskärs. */
+@media (max-width:699px){
+  .hero.hero-banner{aspect-ratio:auto;height:clamp(140px,40vw,220px);max-height:none}
 }
 @media (max-width:699px){
   img.cover-banner{min-height:clamp(110px,32vw,150px)}
@@ -2209,7 +2212,7 @@ function syncEditTourDraftFields() {
 // ruta för "kommande tävling" på startsidan (t.tileImg - annars deltävlingens egen
 // banbild). Varje plats får egen beskärning som passar formatet.
 var TOUR_IMG_SLOTS = {
-  header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden. Den visas i full skärmbredd, så använd originalfilen i så hög upplösning som möjligt - helst minst 2400 px bred (format 4:1, t.ex. 2800 × 700 px). Ta inte en skärmdump eller en bild som laddats ner från appen.', ratio:0.25, outW:2800, maxW:3600, maxH:2400, warnMinW:1800, quality:0.95, path:'tour-headers/' },
+  header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden. Den visas i full skärmbredd, så använd originalfilen i så hög upplösning som möjligt - helst minst 2400 px bred (format 4:1, t.ex. 2800 × 700 px). Ta inte en skärmdump eller en bild som laddats ner från appen.', ratio:0.25, outW:2800, maxW:3600, maxH:2400, warnMinW:1800, quality:0.95, allowFit:true, path:'tour-headers/' },
   tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla stående rutan (3:4) under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1.3333, outW:540, maxW:1400, maxH:1400, warnMinW:300, path:'tour-tiles/' }
 };
 function reopenTourEditModal() {
@@ -2262,7 +2265,7 @@ function tourSlotFile(slot, file) {
     showCropModal(d, cfg.ratio, function(cropped) {
       _editTourDraft[cfg.key] = cropped;
       reopenTourEditModal();
-    }, cfg.outW, cfg.warnMinW, cfg.quality);
+    }, cfg.outW, cfg.warnMinW, cfg.quality, cfg.allowFit);
   });
 }
 function tourSlotPick(slot) {
@@ -2596,8 +2599,12 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 // bred desktop-skärm. (Tidigare skickades en absolut pixelhöjd rakt av, vilket
 // på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
 // krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
-function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality) {
+function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality, allowFit) {
   crop.cb = cb;
+  // allowFit: man får zooma ut tills HELA bilden syns (t.ex. en logga i headern).
+  // Tomrummet runt bilden fylls med bildens egen kantfärg så det smälter ihop.
+  crop.allowFit = !!allowFit;
+  crop.bg = null;
   crop.outW = outW || 900; // utbredd (px) för den sparade bilden - standard 900
   crop.warnMinW = warnMinW || 0; // under så här många px i originalet varnas för suddig bild
   crop.quality = quality || 0.92;
@@ -2606,7 +2613,8 @@ function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality) {
   h += '<div id="crop-box" style="position:relative;width:100%;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
   h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
   h += '<div id="crop-res-warn" style="display:none;font-size:12px;color:#7A4B00;background:#FFF4DC;border:1px solid #F2D49B;border-radius:8px;padding:8px 10px;margin-top:8px"></div>';
-  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap">';
+  if(allowFit) h += '<button class="btn" style="margin-right:auto" onclick="cropFitWhole()"><i class="ti ti-arrows-minimize"></i> Visa hela bilden</button>';
   h += '<button class="btn" onclick="closeCropModalOnly()">Avbryt</button>';
   h += '<button class="btn btn-primary" id="crop-save-btn"><i class="ti ti-check"></i> Använd utsnitt</button>';
   h += '</div>';
@@ -2640,6 +2648,12 @@ function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality) {
     img.onload = function() {
       crop.imgEl=img;
       var s = Math.max(cW/img.naturalWidth, cH/img.naturalHeight);
+      if(crop.allowFit) {
+        // Börja med hela bilden synlig och låt användaren zooma in vid behov.
+        s = Math.min(cW/img.naturalWidth, cH/img.naturalHeight);
+        crop.bg = cropEdgeColor(img);
+        cbox.style.background = crop.bg;
+      }
       crop.minScale=s; crop.scale=s;
       crop.x=(cW-img.naturalWidth*s)/2;
       crop.y=(cH-img.naturalHeight*s)/2;
@@ -2663,11 +2677,29 @@ function closeCropModalOnly() {
   if(ov) { try { ov.remove(); } catch(err) {} }
   crop.active = false;
 }
-function cropClamp(){var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;crop.x=Math.min(0,Math.max(crop.cW-iW,crop.x));crop.y=Math.min(0,Math.max(crop.cH-iH,crop.y));}
+function cropClamp(){var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;
+  // Är bilden mindre än rutan på en ledd (bara möjligt med allowFit) centreras den där.
+  crop.x = iW<=crop.cW ? (crop.cW-iW)/2 : Math.min(0,Math.max(crop.cW-iW,crop.x));
+  crop.y = iH<=crop.cH ? (crop.cH-iH)/2 : Math.min(0,Math.max(crop.cH-iH,crop.y));}
+function cropFitWhole(){ if(!crop.imgEl) return; crop.scale=crop.minScale; cropClamp(); cropRender(); }
+// Medelfärgen längs bildens vänster- och högerkant - används som fyllnad runt
+// bilden när hela bilden visas i en ruta med annat format.
+function cropEdgeColor(img){
+  try {
+    var c=document.createElement('canvas'), w=40, h=40; c.width=w; c.height=h;
+    var x=c.getContext('2d'); x.drawImage(img,0,0,w,h);
+    var r=0,g=0,b=0,n=0;
+    for(var yy=0; yy<h; yy++){ [0,1,w-2,w-1].forEach(function(xx){ var d=x.getImageData(xx,yy,1,1).data; r+=d[0]; g+=d[1]; b+=d[2]; n++; }); }
+    return 'rgb('+Math.round(r/n)+','+Math.round(g/n)+','+Math.round(b/n)+')';
+  } catch(err) { return '#000'; }
+}
 function cropRender(){var el=document.getElementById('crop-img-el');if(!el)return;var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;el.style.width=iW+'px';el.style.height=iH+'px';el.style.left=crop.x+'px';el.style.top=crop.y+'px';cropUpdateResWarn();}
 // Hur många pixlar i originalbilden det valda utsnittet faktiskt täcker på bredden.
 // Zoomar man in krymper det - och då blir bilden suddigare i appen.
 function cropSourceWidth(){ return (crop.imgEl && crop.scale) ? Math.round(crop.cW / crop.scale) : 0; }
+// (När hela bilden visas och den är smalare än rutan blir värdet större än bildens
+// egen bredd - det är rätt: utdatan ska då ha så många px för att bilden ska behålla
+// sin fulla upplösning i mitten.)
 function cropUpdateResWarn(){
   var w = document.getElementById('crop-res-warn'); if(!w) return;
   var srcW = cropSourceWidth();
@@ -2697,12 +2729,13 @@ function cropCommit(){
   c.width=outW; c.height=outH;
   var ctx=c.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
+  if(crop.bg) { ctx.fillStyle = crop.bg; ctx.fillRect(0,0,outW,outH); }
   var scaleUp = outW / crop.cW;
+  // Rita hela bilden på sin plats (canvasen klipper bort det som hamnar utanför).
+  // Fungerar både när bilden täcker rutan och när den är mindre (hela bilden + kantfärg).
   ctx.drawImage(
     crop.imgEl,
-    -crop.x/crop.scale, -crop.y/crop.scale,
-    crop.imgEl.naturalWidth, crop.imgEl.naturalHeight,
-    0, 0,
+    crop.x*scaleUp, crop.y*scaleUp,
     crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
   );
   var result=c.toDataURL('image/jpeg',crop.quality||0.92);
@@ -14449,6 +14482,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 oktober 2026 (228)',
+    items: [
+      { type: 'fixed', text: 'Headerbilden kunde bli jättestor och beskuren på sidorna på datorer med skärmskalning (fönster mellan ca 700 och 1000 px brett), eftersom den då fick en fast höjd. Nu visas hela headerbilden i sitt eget format överallt utom på mobil, där den fortfarande får en lite högre ruta.' },
+      { type: 'new', text: 'När du laddar upp en headerbild visas nu hela bilden från början, och du kan zooma ut tills allt syns, även om bilden har ett annat format än 4:1. Knappen "Visa hela bilden" återställer direkt. Tomrummet runt bilden fylls med bildens egen kantfärg, så loggan får luft runt sig istället för att beskäras.' }
+    ]
+  },
   {
     date: '20 oktober 2026 (227)',
     items: [
