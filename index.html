@@ -2209,8 +2209,8 @@ function syncEditTourDraftFields() {
 // ruta för "kommande tävling" på startsidan (t.tileImg - annars deltävlingens egen
 // banbild). Varje plats får egen beskärning som passar formatet.
 var TOUR_IMG_SLOTS = {
-  header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden.', ratio:0.25, outW:1800, maxW:2000, maxH:1200, path:'tour-headers/' },
-  tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla stående rutan (3:4) under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1.3333, outW:540, maxW:1400, maxH:1400, path:'tour-tiles/' }
+  header: { key:'headerImg', label:'Headerbild', hint:'Toppbilden när man är inne i touren. Utan egen bild används omslagsbilden. Den visas i full skärmbredd, så använd originalfilen i så hög upplösning som möjligt - helst minst 2400 px bred (format 4:1, t.ex. 2800 × 700 px). Ta inte en skärmdump eller en bild som laddats ner från appen.', ratio:0.25, outW:2800, maxW:3600, maxH:2400, warnMinW:1800, quality:0.95, path:'tour-headers/' },
+  tile:   { key:'tileImg',   label:'Bild för kommande tävling', hint:'Den lilla stående rutan (3:4) under "Kommande runda" på startsidan. Utan egen bild används deltävlingens banbild.', ratio:1.3333, outW:540, maxW:1400, maxH:1400, warnMinW:300, path:'tour-tiles/' }
 };
 function reopenTourEditModal() {
   if(_editTourDraft && _editTourDraft.mode === 'rename') openRenameTour(); else openEditTour();
@@ -2258,11 +2258,11 @@ function tourSlotUpload(slot) {
 function tourSlotFile(slot, file) {
   var cfg = TOUR_IMG_SLOTS[slot];
   syncEditTourDraftFields();
-  compressImage(file, cfg.maxW, cfg.maxH, 0.92, function(d) {
+  compressImage(file, cfg.maxW, cfg.maxH, cfg.quality||0.92, function(d) {
     showCropModal(d, cfg.ratio, function(cropped) {
       _editTourDraft[cfg.key] = cropped;
       reopenTourEditModal();
-    }, cfg.outW);
+    }, cfg.outW, cfg.warnMinW, cfg.quality);
   });
 }
 function tourSlotPick(slot) {
@@ -2287,13 +2287,17 @@ function applyTourExtraImages(t, draft) {
   }));
 }
 
+// Tour-omslaget visas även som header inne i touren (i full skärmbredd) när
+// touren saknar egen headerbild - därför sparas det i betydligt högre
+// upplösning än vanliga bilder (tidigare 900 px, vilket blev suddigt).
+var TOUR_COVER_OUT_W = 1800, TOUR_COVER_WARN_W = 1200;
 function handleEditTourImg(file) {
   syncEditTourDraftFields();
-  compressImage(file, 1100, 950, 0.92, function(d) {
+  compressImage(file, 2600, 2000, 0.92, function(d) {
     showCropModal(d, 0.32, function(cropped) {
       _editTourDraft.img = cropped;
       openEditTour();
-    });
+    }, TOUR_COVER_OUT_W, TOUR_COVER_WARN_W);
   });
 }
 
@@ -2348,11 +2352,11 @@ function openRenameTour() {
 
 function handleRenameTourImg(file) {
   syncEditTourDraftFields();
-  compressImage(file, 1100, 950, 0.92, function(d) {
+  compressImage(file, 2600, 2000, 0.92, function(d) {
     showCropModal(d, 0.32, function(cropped) {
       _editTourDraft.img = cropped;
       openRenameTour();
-    });
+    }, TOUR_COVER_OUT_W, TOUR_COVER_WARN_W);
   });
 }
 
@@ -2592,13 +2596,16 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 // bred desktop-skärm. (Tidigare skickades en absolut pixelhöjd rakt av, vilket
 // på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
 // krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
-function showCropModal(dataUrl, ratio, cb, outW) {
+function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality) {
   crop.cb = cb;
   crop.outW = outW || 900; // utbredd (px) för den sparade bilden - standard 900
+  crop.warnMinW = warnMinW || 0; // under så här många px i originalet varnas för suddig bild
+  crop.quality = quality || 0.92;
   var h = '<h3 style="margin-bottom:6px">Välj bildutsnitt</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Dra för att flytta &nbsp;·&nbsp; Scroll/nyp för att zooma &nbsp;·&nbsp; Rutan visar exakt hur bilden sparas</p>';
   h += '<div id="crop-box" style="position:relative;width:100%;overflow:hidden;border-radius:8px;background:#000;cursor:grab;border:2px solid var(--green)"></div>';
   h += '<p style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">Så här kommer bilden synas i appen</p>';
+  h += '<div id="crop-res-warn" style="display:none;font-size:12px;color:#7A4B00;background:#FFF4DC;border:1px solid #F2D49B;border-radius:8px;padding:8px 10px;margin-top:8px"></div>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">';
   h += '<button class="btn" onclick="closeCropModalOnly()">Avbryt</button>';
   h += '<button class="btn btn-primary" id="crop-save-btn"><i class="ti ti-check"></i> Använd utsnitt</button>';
@@ -2657,7 +2664,18 @@ function closeCropModalOnly() {
   crop.active = false;
 }
 function cropClamp(){var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;crop.x=Math.min(0,Math.max(crop.cW-iW,crop.x));crop.y=Math.min(0,Math.max(crop.cH-iH,crop.y));}
-function cropRender(){var el=document.getElementById('crop-img-el');if(!el)return;var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;el.style.width=iW+'px';el.style.height=iH+'px';el.style.left=crop.x+'px';el.style.top=crop.y+'px';}
+function cropRender(){var el=document.getElementById('crop-img-el');if(!el)return;var iW=crop.imgEl.naturalWidth*crop.scale,iH=crop.imgEl.naturalHeight*crop.scale;el.style.width=iW+'px';el.style.height=iH+'px';el.style.left=crop.x+'px';el.style.top=crop.y+'px';cropUpdateResWarn();}
+// Hur många pixlar i originalbilden det valda utsnittet faktiskt täcker på bredden.
+// Zoomar man in krymper det - och då blir bilden suddigare i appen.
+function cropSourceWidth(){ return (crop.imgEl && crop.scale) ? Math.round(crop.cW / crop.scale) : 0; }
+function cropUpdateResWarn(){
+  var w = document.getElementById('crop-res-warn'); if(!w) return;
+  var srcW = cropSourceWidth();
+  if(!crop.warnMinW || !srcW || srcW >= crop.warnMinW) { w.style.display = 'none'; return; }
+  w.style.display = '';
+  w.innerHTML = '<i class="ti ti-alert-triangle"></i> Utsnittet är bara ca <b>'+srcW+' px</b> brett i originalbilden och kan se <b>suddigt</b> ut i appen. '+
+    'Använd en större originalfil (minst '+crop.warnMinW+' px bred'+(crop.outW>crop.warnMinW?', helst '+crop.outW+' px':'')+') eller zooma ut.';
+}
 function cropMD(e){crop.drag=true;crop.lx=e.clientX;crop.ly=e.clientY;e.preventDefault();function mm(e){if(!crop.drag)return;crop.x+=e.clientX-crop.lx;crop.y+=e.clientY-crop.ly;crop.lx=e.clientX;crop.ly=e.clientY;cropClamp();cropRender();}function mu(){crop.drag=false;window.removeEventListener('mousemove',mm);window.removeEventListener('mouseup',mu);}window.addEventListener('mousemove',mm);window.addEventListener('mouseup',mu);}
 var _lastPinchDist=0;
 function cropTS(e){e.preventDefault();if(e.touches.length===1){crop.drag=true;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;function tm(e){if(!crop.drag)return;if(e.touches.length===2){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(_lastPinchDist){var delta=d/_lastPinchDist;cropZoom(delta,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);}_lastPinchDist=d;return;}crop.x+=e.touches[0].clientX-crop.lx;crop.y+=e.touches[0].clientY-crop.ly;crop.lx=e.touches[0].clientX;crop.ly=e.touches[0].clientY;cropClamp();cropRender();}function tu(){crop.drag=false;_lastPinchDist=0;document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);}document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu);}}
@@ -2669,6 +2687,11 @@ function cropCommit(){
   // container width (~700px) on high-DPI screens.
   var OUTPUT_W = crop.outW || 900;
   var aspect = crop.cH / crop.cW;
+  // Skala aldrig upp förbi originalets egna pixlar - det gör inte bilden
+  // skarpare, bara filen större. Är originalet mindre sparas det i sin
+  // egen storlek (webbläsaren skalar ändå upp lika bra vid visning).
+  var srcW = cropSourceWidth();
+  if(srcW && srcW < OUTPUT_W) OUTPUT_W = Math.max(400, srcW);
   var outW = OUTPUT_W, outH = Math.round(OUTPUT_W * aspect);
   var c=document.createElement('canvas');
   c.width=outW; c.height=outH;
@@ -2682,7 +2705,7 @@ function cropCommit(){
     0, 0,
     crop.imgEl.naturalWidth*crop.scale*scaleUp, crop.imgEl.naturalHeight*crop.scale*scaleUp
   );
-  var result=c.toDataURL('image/jpeg',0.92);
+  var result=c.toDataURL('image/jpeg',crop.quality||0.92);
   var cb=crop.cb;crop.active=false;closeCropModalOnly();if(cb)cb(result);
 }
 
@@ -3537,11 +3560,11 @@ function clearWizCover() {
 
 function handleWizImg(file) {
   wizSaveStep1Fields();
-  compressImage(file, 1100, 950, 0.92, function(d) {
+  compressImage(file, 2600, 2000, 0.92, function(d) {
     showCropModal(d, 0.32, function(cropped) {
       wiz.img = cropped;
       wizStep1();
-    });
+    }, TOUR_COVER_OUT_W, TOUR_COVER_WARN_W);
   });
 }
 
@@ -14426,6 +14449,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 oktober 2026 (227)',
+    items: [
+      { type: 'fixed', text: 'Headerbilden inne i en tour kunde bli grynig och suddig, särskilt på stora skärmar. Headerbilder sparas nu i mycket högre upplösning (upp till 2800 px bred i stället för 1800, och med högre bildkvalitet) och tourens omslagsbild, som används som header när touren saknar egen headerbild, sparas i 1800 px i stället för 900. Ladda upp originalbilden på nytt under Redigera tour för att få den skarpa versionen.' },
+      { type: 'new', text: 'När du beskär en bild varnar appen nu med en gul ruta om utsnittet har för låg upplösning för platsen (t.ex. om originalbilden är för liten eller om du zoomat in för mycket), så att du direkt ser att bilden kommer att bli suddig.' }
+    ]
+  },
   {
     date: '20 oktober 2026 (226)',
     items: [
