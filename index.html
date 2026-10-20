@@ -47,10 +47,14 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 .tours-header{display:flex;align-items:center;justify-content:space-between;margin:20px 0 16px}
 .tour-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s}
 .tour-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.10)}
-.app-header{display:flex;align-items:center;gap:10px;padding:14px 0 0;margin-bottom:4px}
+/* Rad 1: TOURER-knapp (vänster) + Redigera (höger). Rad 2: tournamnet i sin helhet. Rad 3 (nedanför): flikarna. */
+.app-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px 0 0;margin-bottom:4px}
+#edit-tour-btn-wrap{margin-left:auto;display:flex}
+#edit-tour-btn-wrap .btn{margin-left:0 !important}
 .back-to-tours{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text-2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:all .12s}
 .back-to-tours:hover{background:var(--surface2);color:var(--text)}
-#active-tour-name{font-weight:700;font-size:17px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#active-tour-name{order:3;flex:0 0 100%;font-weight:700;font-size:clamp(17px,4.6vw,21px);line-height:1.25;color:var(--text);margin:4px 0 6px;overflow-wrap:break-word}
+#active-tour-name:empty{display:none}
 .nav-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:8px}
 .nav{display:flex;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto}
 .nav-btn{flex:1;min-width:72px;padding:8px 4px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);font-size:11px;color:var(--text-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .15s}
@@ -14482,6 +14486,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '20 oktober 2026 (229)',
+    items: [
+      { type: 'improved', text: 'Toppen inne i en tour är omgjord i tre rader: överst TOURER-knappen till vänster och Redigera till höger, därunder tourens namn i sin helhet (lite större, och det radbryts istället för att kapas med "..." på mobilen), och sist flikarna Tävlingar, Spelare, Kalender, OoM och Inst.' }
+    ]
+  },
   {
     date: '20 oktober 2026 (228)',
     items: [
