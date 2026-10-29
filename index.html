@@ -2018,9 +2018,10 @@ function setCourseStatsMode(mode) {
 }
 // Vilken statistik som visas på Statistik-sidan: 'course' = Banstatistik,
 // 'score' = Scorestatistik. Följer samma Riktig golf/Simulator-val.
-var _statsView = (function(){ try { return localStorage.getItem('statsView')==='score' ? 'score' : 'course'; } catch(e){ return 'course'; } })();
+var STATS_VIEWS = ['course','score','analys','h2h'];
+var _statsView = (function(){ try { var v = localStorage.getItem('statsView'); return STATS_VIEWS.indexOf(v)>=0 ? v : 'course'; } catch(e){ return 'course'; } })();
 function setStatsView(v) {
-  if(v !== 'score') v = 'course';
+  if(STATS_VIEWS.indexOf(v) < 0) v = 'course';
   if(_statsView === v) return;
   _statsView = v;
   try { localStorage.setItem('statsView', v); } catch(e) {}
@@ -2031,11 +2032,13 @@ function setStatsView(v) {
 function statsViewTabsHTML() {
   var b = function(v, icon, label){
     var on = _statsView === v;
-    return '<button type="button" onclick="setStatsView(\''+v+'\')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:8px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:none;'+
+    return '<button type="button" onclick="setStatsView(\''+v+'\')" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 8px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;white-space:nowrap;'+
       (on?'background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)':'background:transparent;color:var(--text-2)')+'"><i class="ti '+icon+'"></i> '+label+'</button>';
   };
-  return '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:14px">'+
+  // 2x2 på mobil, en rad på bredare skärm
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:14px">'+
     b('course','ti-golf','Banstatistik')+b('score','ti-chart-bar','Scorestatistik')+
+    b('analys','ti-chart-dots','Spelanalys')+b('h2h','ti-swords','Inbördes')+
   '</div>';
 }
 
@@ -2070,6 +2073,466 @@ function computeScoreStats(sim) {
   return { players: Object.keys(players).map(function(k){ return players[k]; }), totals: totals, totalHoles: totalHoles, totalRounds: totalRounds };
 }
 
+// Puttstatistik för alla spelare (bara riktig golf - simulatorn registrerar inga puttar).
+// Snitt puttar/runda = snitt per hål x 18, så ofullständiga rundor (några hål utan
+// puttar) inte drar ner eller upp snittet. Bästa runda räknas bara på rundor där
+// puttar finns för alla 18 hål. Kräver minst 9 hål med puttar för att rankas.
+function computeAllPuttStats() {
+  var by = {};
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return;
+    var tp = getPlayersForTour(t);
+    (t.events||[]).forEach(function(e){
+      tp.forEach(function(p, pi){
+        if(!p) return;
+        var entry = getApprovedHolesForPlayerInEvent(e, pi);
+        if(!entry || !entry.holePutts) return;
+        var k = p.username || p.name;
+        var rp = 0, rh = 0;
+        entry.holePutts.forEach(function(pt){
+          if(typeof pt !== 'number' || isNaN(pt) || pt < 0) return;
+          if(!by[k]) by[k] = { name:p.name, username:p.username, putts:0, holes:0, one:0, three:0, zero:0, rounds:0, best:null };
+          by[k].putts += pt; by[k].holes++; rp += pt; rh++;
+          if(pt === 0) by[k].zero++; else if(pt === 1) by[k].one++; else if(pt >= 3) by[k].three++;
+        });
+        if(rh) { by[k].rounds++; if(rh >= 18 && (by[k].best == null || rp < by[k].best)) by[k].best = rp; }
+      });
+    });
+  });
+  return Object.keys(by).map(function(k){ return by[k]; }).filter(function(x){ return x.holes >= 9; });
+}
+
+function buildPuttLeaderboardHTML() {
+  var list = computeAllPuttStats();
+  if(!list.length) return '';
+  var perRound = function(x){ return x.putts / x.holes * 18; };
+  list.sort(function(a,b){ return (perRound(a)-perRound(b)) || (b.holes-a.holes); });
+  var fmt = function(v, d){ return v.toFixed(d).replace('.',','); };
+  var pc = function(n, d){ return d ? fmt(n/d*100, 0)+' %' : '–'; };
+  var allP = list.reduce(function(a,x){ return a+x.putts; },0), allH = list.reduce(function(a,x){ return a+x.holes; },0);
+  var bestRound = null;
+  list.forEach(function(x){ if(x.best != null && (!bestRound || x.best < bestRound.best)) bestRound = x; });
+  var COLS = '24px minmax(0,1fr) 46px 40px 40px';
+  var h = '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">';
+  h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)">'+
+    '<span style="font-size:22px">⛳</span>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px;color:#185FA5">Puttar</div>'+
+      '<div style="font-size:12px;color:var(--text-3)">Bäst: <strong style="color:var(--text)">'+esc(list[0].name)+'</strong> ('+fmt(perRound(list[0]),1)+' / runda)'+
+      (bestRound ? '<br>Färst puttar på en runda: <strong style="color:var(--text)">'+esc(bestRound.name)+'</strong> ('+bestRound.best+')' : '')+'</div></div>'+
+    '<div style="text-align:right"><div style="font-size:22px;font-weight:800;color:#185FA5">'+fmt(allP/allH*18,1)+'</div><div style="font-size:11px;color:var(--text-3)">snitt / runda</div></div>'+
+  '</div>';
+  h += '<div style="padding:0 16px">';
+  h += '<div style="display:grid;grid-template-columns:'+COLS+';gap:4px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
+    '<span style="text-align:center">#</span><span>Spelare</span><span style="text-align:right">/runda</span><span style="text-align:right">1-p</span><span style="text-align:right">3-p+</span></div>';
+  h += list.map(function(x, i){
+    var rk = i+1;
+    var badge = rk<=3 ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;background:'+(['#D4A017','#9CA3AF','#B87333'][rk-1])+'">'+rk+'</span>'
+                      : '<span style="font-size:12px;font-weight:600;color:var(--text-2)">'+rk+'</span>';
+    return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(x.username||'')+'\')" style="display:grid;grid-template-columns:'+COLS+';gap:4px;align-items:center;padding:8px 0;font-size:13px;cursor:pointer;'+(i<list.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+      '<div style="text-align:center">'+badge+'</div>'+
+      '<div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.name)+'</div><div style="font-size:11px;color:var(--text-3);white-space:nowrap">'+fmt(x.putts/x.holes,2)+'/hål · '+x.rounds+(x.rounds===1?' runda':' rundor')+(x.best!=null?' · bäst '+x.best:'')+'</div></div>'+
+      '<div style="text-align:right;font-weight:700;color:#185FA5">'+fmt(perRound(x),1)+'</div>'+
+      '<div style="text-align:right;font-size:12px;color:var(--text-2)">'+pc(x.one + x.zero, x.holes)+'</div>'+
+      '<div style="text-align:right;font-size:12px;color:var(--text-2)">'+pc(x.three, x.holes)+'</div>'+
+    '</div>';
+  }).join('');
+  h += '</div>';
+  h += '<div style="padding:7px 16px 9px;font-size:11px;color:var(--text-3);background:var(--surface2);border-top:1px solid var(--border)">/runda = snitt per hål × 18. 1-p = andel hål med 1 putt eller färre (chip-in räknas), 3-p+ = andel treputtar eller fler. Minst 9 hål med puttar krävs.</div>';
+  h += '</div>';
+  return h;
+}
+
+// ══ SPELANALYS ═══════════════════════════════════════════════════════════════
+// Gemensam datagrund för all avancerad statistik (statistikvyn + spelarprofilen).
+// En post per godkänd rond: hål, puttar, par, hcp-index, SHCP, netto mot par m.m.
+// sim=true -> bara simulatortourer, annars bara riktig golf (blandas aldrig).
+// Puttbaserade mått (GIR, scrambling) räknas bara där puttar finns registrerade.
+function collectAnalysisRounds(sim) {
+  var rounds = [];
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return;
+    var tp = getPlayersForTour(t);
+    (t.events||[]).forEach(function(e){
+      var course = courseDbEntryFor(e.course);
+      var pars = (course && course.holePars && course.holePars.length) ? course.holePars.map(Number) : null;
+      var parTotal = pars ? pars.reduce(function(a,b){ return a+b; },0) : ((course && course.par) || null);
+      tp.forEach(function(p, pi){
+        if(!p) return;
+        var sc = getApprovedScoreForPlayerInEvent(e, pi);
+        if(!sc || !(sc.score > 0)) return;
+        var hl = getApprovedHolesForPlayerInEvent(e, pi);
+        var both = computeRoundBothResults(e, sc, course);
+        var holes = null, putts = null, complete = false;
+        if(hl && hl.holes && pars) {
+          holes = pars.map(function(par, i){ var g = hl.holes[i]; return (typeof g==='number' && g>0) ? g : (g!=null && !isNaN(g) && Number(g)>0 ? Number(g) : null); });
+          complete = holes.every(function(g){ return g != null; });
+          if(hl.holePutts) putts = pars.map(function(par, i){ var v = hl.holePutts[i]; return (typeof v==='number' && v>=0) ? v : null; });
+        }
+        rounds.push({
+          username: p.username || p.name, name: p.name, eventId: e.id, tourId: t.id, eventName: e.name,
+          course: (e.course||'').trim(), date: e.date || '', pars: pars, parTotal: parTotal,
+          hcpIdx: (course && course.holeHcpIndex) || null, holes: holes, putts: putts, complete: complete,
+          shcp: both.shcp, netto: both.netto, brutto: both.brutto,
+          nettoVsPar: (both.netto != null && parTotal) ? both.netto - parTotal : null
+        });
+      });
+    });
+  });
+  rounds.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  return rounds;
+}
+
+// Räknar alla mått för en uppsättning ronder (en spelare eller alla).
+function computeAnalysisMetrics(rounds) {
+  var m = { rounds: rounds.length, holes:0,
+    girHoles:0, gir:0, scrOpp:0, scrOk:0,
+    par3:{n:0,sum:0}, par4:{n:0,sum:0}, par5:{n:0,sum:0},
+    bbOpp:0, bbOk:0, streak:0, streakRound:null,
+    fb:{n:0,front:0,back:0}, form:[] };
+  rounds.forEach(function(r){
+    if(r.nettoVsPar != null) m.form.push({ date:r.date, v:r.nettoVsPar, course:r.course });
+    if(!r.holes || !r.pars) return;
+    var run = 0;
+    r.holes.forEach(function(g, i){
+      var par = r.pars[i];
+      if(g == null || !par) { run = 0; return; }
+      m.holes++;
+      var d = g - par;
+      var bucket = par===3 ? m.par3 : par===4 ? m.par4 : par>=5 ? m.par5 : null;
+      if(bucket) { bucket.n++; bucket.sum += d; }
+      // Svit: par eller bättre i rad (inom samma rond)
+      if(d <= 0) { run++; if(run > m.streak) { m.streak = run; m.streakRound = r; } } else run = 0;
+      // Bounce-back: hålet efter bogey eller sämre -> par eller bättre
+      if(i > 0) {
+        var pg = r.holes[i-1], pp = r.pars[i-1];
+        if(pg != null && pp && pg - pp >= 1) { m.bbOpp++; if(d <= 0) m.bbOk++; }
+      }
+      // GIR/scrambling (kräver puttar för hålet)
+      var pt = r.putts ? r.putts[i] : null;
+      if(pt != null) {
+        m.girHoles++;
+        var isGir = (g - pt) <= (par - 2);
+        if(isGir) m.gir++;
+        else { m.scrOpp++; if(d <= 0) m.scrOk++; }
+      }
+    });
+    // Första 9 mot sista 9 (bara kompletta 18-hålsronder)
+    if(r.complete && r.holes.length === 18) {
+      var f = 0, b = 0;
+      for(var k=0;k<9;k++) f += r.holes[k]-r.pars[k];
+      for(var k2=9;k2<18;k2++) b += r.holes[k2]-r.pars[k2];
+      m.fb.n++; m.fb.front += f; m.fb.back += b;
+    }
+  });
+  var div = function(a,b){ return b ? a/b : null; };
+  m.girPct = div(m.gir, m.girHoles);
+  m.scrPct = div(m.scrOk, m.scrOpp);
+  m.bbPct = div(m.bbOk, m.bbOpp);
+  m.par3Avg = div(m.par3.sum, m.par3.n); m.par4Avg = div(m.par4.sum, m.par4.n); m.par5Avg = div(m.par5.sum, m.par5.n);
+  m.frontAvg = div(m.fb.front, m.fb.n); m.backAvg = div(m.fb.back, m.fb.n);
+  var fv = m.form.map(function(x){ return x.v; });
+  m.formAll = fv.length ? fv.reduce(function(a,b){return a+b;},0)/fv.length : null;
+  var last = fv.slice(-5);
+  m.formLast5 = last.length ? last.reduce(function(a,b){return a+b;},0)/last.length : null;
+  m.formTrend = (fv.length >= 3 && m.formAll != null) ? m.formLast5 - m.formAll : null; // negativ = bättre form
+  return m;
+}
+
+function groupRoundsByPlayer(rounds) {
+  var by = {};
+  rounds.forEach(function(r){ (by[r.username] = by[r.username] || { username:r.username, name:r.name, rounds:[] }).rounds.push(r); });
+  return Object.keys(by).map(function(k){ var x = by[k]; x.m = computeAnalysisMetrics(x.rounds); return x; });
+}
+
+// ── Formatering & grafiska byggstenar ───────────────────────────────────────
+function anFmt(v, d){ return (v==null||isNaN(v)) ? '–' : v.toFixed(d==null?1:d).replace('.',','); }
+function anPct(v){ return (v==null||isNaN(v)) ? '–' : Math.round(v*100)+' %'; }
+function anPm(v, d){ if(v==null||isNaN(v)) return '–'; var s = anFmt(Math.abs(v), d==null?2:d); return (v>0.0049?'+':v<-0.0049?'−':'±')+s; }
+function anRankBadge(rk){
+  return rk<=3 ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;background:'+(['#D4A017','#9CA3AF','#B87333'][rk-1])+'">'+rk+'</span>'
+               : '<span style="font-size:12px;font-weight:600;color:var(--text-2)">'+rk+'</span>';
+}
+function anCardHead(icon, title, color, sub, bigVal, bigLbl){
+  return '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)">'+
+    '<span style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:'+color+'1A;color:'+color+';flex-shrink:0"><i class="ti '+icon+'" style="font-size:19px"></i></span>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px;color:var(--text)">'+title+'</div>'+
+      (sub?'<div style="font-size:12px;color:var(--text-3);line-height:1.35">'+sub+'</div>':'')+'</div>'+
+    (bigVal!=null?'<div style="text-align:right;flex-shrink:0"><div style="font-size:21px;font-weight:800;color:'+color+'">'+bigVal+'</div><div style="font-size:11px;color:var(--text-3)">'+(bigLbl||'')+'</div></div>':'')+
+  '</div>';
+}
+function anFoot(txt){ return '<div style="padding:7px 16px 9px;font-size:11px;color:var(--text-3);background:var(--surface2);border-top:1px solid var(--border);line-height:1.4">'+txt+'</div>'; }
+
+// Topplista med horisontella staplar. rows: {username,name,value,label,sub}
+function anBarBoard(rows, opts){
+  opts = opts || {};
+  if(!rows.length) return '<div style="padding:12px 16px;font-size:13px;color:var(--text-3)">Inte tillräckligt med data ännu.</div>';
+  rows = rows.slice().sort(function(a,b){ return opts.lowerBetter ? a.value-b.value : b.value-a.value; });
+  var vals = rows.map(function(r){ return r.value; });
+  var max = opts.max != null ? opts.max : Math.max.apply(null, vals);
+  var min = opts.min != null ? opts.min : Math.min(0, Math.min.apply(null, vals));
+  var span = (max - min) || 1;
+  var rank = [];
+  rows.forEach(function(r,i){ rank[i] = (i>0 && Math.abs(r.value-rows[i-1].value)<1e-9) ? rank[i-1] : i+1; });
+  return '<div style="padding:4px 16px 6px">'+rows.map(function(r, i){
+    var w = Math.max(3, Math.round((r.value - min)/span*100));
+    if(opts.lowerBetter) w = Math.max(3, 100 - Math.round((r.value - min)/span*85));
+    return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(r.username||'')+'\')" style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;cursor:pointer;'+(i<rows.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+      '<div style="text-align:center">'+anRankBadge(rank[i])+'</div>'+
+      '<div style="min-width:0">'+
+        '<div style="display:flex;justify-content:space-between;gap:6px;font-size:13px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.name)+'</span></div>'+
+        '<div style="height:7px;border-radius:4px;background:var(--surface2);margin-top:4px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+(opts.color||'var(--green)')+';border-radius:4px"></div></div>'+
+        (r.sub?'<div style="font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.sub+'</div>':'')+
+      '</div>'+
+      '<div style="text-align:right;font-weight:700;font-size:14px;color:'+(opts.color||'var(--green-dark)')+';min-width:44px">'+r.label+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+
+// Liten linjegraf (SVG) för formkurvan. values: tal (lägre = bättre), ritas så att lägre hamnar högre upp.
+function anSparkline(values, w, h, color){
+  if(!values || values.length < 2) return '';
+  w = w || 120; h = h || 34; color = color || '#185FA5';
+  var mn = Math.min.apply(null, values), mx = Math.max.apply(null, values), sp = (mx-mn) || 1;
+  var pts = values.map(function(v, i){ return [ (i/(values.length-1))*(w-6)+3, ((v-mn)/sp)*(h-8)+4 ]; });
+  var d = pts.map(function(p,i){ return (i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1); }).join(' ');
+  var last = pts[pts.length-1];
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block">'+
+    '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'+
+    '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="3" fill="'+color+'"/></svg>';
+}
+function anTrendChip(trend){
+  if(trend == null) return '<span style="font-size:11px;color:var(--text-3)">för få rundor</span>';
+  var better = trend < -0.25, worse = trend > 0.25;
+  var c = better ? '#0F6E56' : worse ? '#A32D2D' : 'var(--text-2)';
+  var bg = better ? '#E1F5EE' : worse ? '#FCEBEB' : 'var(--surface2)';
+  var ic = better ? 'ti-trending-up' : worse ? 'ti-trending-down' : 'ti-arrow-right';
+  return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;color:'+c+';background:'+bg+'"><i class="ti '+ic+'"></i> '+(better?'Bättre form':worse?'Sämre form':'Stabil form')+(better||worse?' · '+anFmt(Math.abs(trend),1)+' slag':'')+'</span>';
+}
+// Färg för "snitt mot par" (grön = under, röd = över)
+// ref = jämförelsevärde (t.ex. gruppens/banans snitt) - färgen visar avvikelsen
+// från det, så att även en grupp som i snitt ligger över par får både grönt och rött.
+function anHeatColor(v, ref){
+  if(v == null) return 'var(--surface2)';
+  var c = v - (ref || 0);
+  if(c <= 0) { var a = Math.min(1, -c/0.5); return 'rgba(29,158,117,'+(0.12+0.6*a).toFixed(2)+')'; }
+  var b = Math.min(1, c/0.5); return 'rgba(226,75,74,'+(0.12+0.6*b).toFixed(2)+')';
+}
+
+// ── Statistikvyn: Spelanalys (alla spelare) ─────────────────────────────────
+var AN_MIN_HOLES = 18; // minst 18 hål (eller motsv.) för att rankas i topplistorna
+function renderAnalysisHTML(sim) {
+  var rounds = collectAnalysisRounds(sim);
+  if(!rounds.length) return '<p class="empty">'+(sim?'Inga simulatorrundor ännu.':'Inga godkända rundor ännu.')+'</p>';
+  var ps = groupRoundsByPlayer(rounds);
+  var all = computeAnalysisMetrics(rounds);
+  var h = '';
+  var row = function(p, value, label, sub){ return { username:p.username, name:p.name, value:value, label:label, sub:sub }; };
+
+  // Översiktsrutor
+  var tile = function(lbl, val, sub, color){ return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-width:0"><div style="font-size:11px;color:var(--text-3)">'+lbl+'</div><div style="font-size:21px;font-weight:800;color:'+(color||'var(--text)')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sub+'</div>':'')+'</div>'; };
+  h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px">'+
+    (sim ? '' : tile('Greenträff (GIR)', anPct(all.girPct), 'gruppen, '+all.girHoles+' hål', '#0F6E56')+tile('Scrambling', anPct(all.scrPct), 'räddat par vid missad green', '#185FA5'))+
+    tile('Bounce-back', anPct(all.bbPct), 'par+ efter bogey', '#6D28D9')+
+    tile('Längsta svit', all.streak ? all.streak+' hål' : '–', all.streakRound ? esc(all.streakRound.name)+' · '+esc(all.streakRound.course) : 'par eller bättre i rad', '#BA7517')+
+  '</div>';
+
+  // 1. GIR & 2. Scrambling (bara riktig golf - kräver puttar)
+  if(!sim) {
+    var girRows = ps.filter(function(p){ return p.m.girHoles >= AN_MIN_HOLES; }).map(function(p){ return row(p, p.m.girPct, anPct(p.m.girPct), p.m.gir+' av '+p.m.girHoles+' hål'); });
+    h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-target','Greenträff (GIR)','#0F6E56','Andel hål där bollen låg på green på "regulation" (par − 2 slag).', anPct(all.girPct), 'gruppen')+
+      anBarBoard(girRows, { color:'#1D9E75', min:0, max:1 })+anFoot('Räknas som slag − puttar ≤ par − 2. Kräver registrerade puttar och minst '+AN_MIN_HOLES+' hål.')+'</div>';
+    var scrRows = ps.filter(function(p){ return p.m.scrOpp >= 9 && p.m.girHoles >= AN_MIN_HOLES; }).map(function(p){ return row(p, p.m.scrPct, anPct(p.m.scrPct), p.m.scrOk+' av '+p.m.scrOpp+' missade greener'); });
+    h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-lifebuoy','Scrambling','#185FA5','Hur ofta man ändå gör par eller bättre när man missat greenen.', anPct(all.scrPct), 'gruppen')+
+      anBarBoard(scrRows, { color:'#378ADD', min:0, max:1 })+anFoot('Visar närspelet: chip, pitch och bunkerslag. Kräver minst 9 missade greener.')+'</div>';
+  }
+
+  // 3. Snitt per par 3/4/5 - värmetabell
+  var parPs = ps.filter(function(p){ return p.m.holes >= AN_MIN_HOLES; });
+  var bestOf = function(key){ var b=null; parPs.forEach(function(p){ var v=p.m[key]; if(v!=null && (b==null || v<b.v)) b={v:v,name:p.name}; }); return b; };
+  var b3 = bestOf('par3Avg'), b4 = bestOf('par4Avg'), b5 = bestOf('par5Avg');
+  var colMean = function(key){ var v = parPs.map(function(p){ return p.m[key]; }).filter(function(x){ return x!=null; }); return v.length ? v.reduce(function(a,b){return a+b;},0)/v.length : 0; };
+  var ref3 = colMean('par3Avg'), ref4 = colMean('par4Avg'), ref5 = colMean('par5Avg');
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-flag-3','Snitt per hål­typ','#BA7517',
+      (b3?'Par 3-kung: <strong style="color:var(--text)">'+esc(b3.name)+'</strong>':'')+(b5?' · Långhålskung: <strong style="color:var(--text)">'+esc(b5.name)+'</strong>':''), null)+
+    '<div style="padding:4px 16px 8px">'+
+      '<div style="display:grid;grid-template-columns:minmax(0,1fr) 56px 56px 56px;gap:6px;font-size:11px;color:var(--text-3);padding:6px 0;border-bottom:1px solid var(--border)"><span>Spelare</span><span style="text-align:center">Par 3</span><span style="text-align:center">Par 4</span><span style="text-align:center">Par 5</span></div>'+
+      (parPs.length ? parPs.sort(function(a,b){ var sa=(a.m.par3Avg||0)+(a.m.par4Avg||0)+(a.m.par5Avg||0), sb=(b.m.par3Avg||0)+(b.m.par4Avg||0)+(b.m.par5Avg||0); return sa-sb; }).map(function(p){
+        var cell = function(v, best, ref){ return '<span style="text-align:center;font-size:12px;font-weight:700;padding:5px 0;border-radius:6px;background:'+anHeatColor(v, ref)+';'+(best?'outline:2px solid #D4A017;':'')+'">'+anPm(v,2)+'</span>'; };
+        return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username)+'\')" style="display:grid;grid-template-columns:minmax(0,1fr) 56px 56px 56px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer">'+
+          '<span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</span>'+
+          cell(p.m.par3Avg, b3 && b3.name===p.name, ref3)+cell(p.m.par4Avg, b4 && b4.name===p.name, ref4)+cell(p.m.par5Avg, b5 && b5.name===p.name, ref5)+
+        '</div>';
+      }).join('') : '<div style="padding:10px 0;font-size:13px;color:var(--text-3)">Inte tillräckligt med data ännu.</div>')+
+    '</div>'+anFoot('Snitt slag över (+) eller under (−) par per hål, brutto. Grön = bättre än gruppens snitt, röd = sämre. Guldram = bäst i gruppen.')+'</div>';
+
+  // 6. Bounce-back
+  var bbRows = ps.filter(function(p){ return p.m.bbOpp >= 5; }).map(function(p){ return row(p, p.m.bbPct, anPct(p.m.bbPct), p.m.bbOk+' av '+p.m.bbOpp+' tillfällen'); });
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-arrow-back-up','Bounce-back','#6D28D9','Par eller bättre direkt efter ett hål med bogey eller sämre - mental styrka.', anPct(all.bbPct), 'gruppen')+
+    anBarBoard(bbRows, { color:'#8B5CF6', min:0, max:1 })+anFoot('Kräver minst 5 tillfällen (hål efter bogey eller sämre).')+'</div>';
+
+  // 7. Längsta svit
+  var stRows = ps.filter(function(p){ return p.m.streak > 0; }).map(function(p){ var r=p.m.streakRound; return row(p, p.m.streak, p.m.streak+' hål', r ? esc(r.course)+(r.date?' · '+r.date:'') : ''); });
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-flame','Längsta svit','#BA7517','Flest hål i rad med par eller bättre under en runda.'+(all.streakRound?' Rekord: <strong style="color:var(--text)">'+esc(all.streakRound.name)+'</strong>':''), all.streak||'–', 'rekord')+
+    anBarBoard(stRows, { color:'#E0A030', min:0 })+'</div>';
+
+  // 8. Första 9 mot sista 9 - divergerande staplar
+  var fbPs = ps.filter(function(p){ return p.m.fb.n >= 1; }).map(function(p){ return { p:p, diff:p.m.backAvg - p.m.frontAvg }; }).sort(function(a,b){ return a.diff-b.diff; });
+  var fbMax = Math.max.apply(null, [1].concat(fbPs.map(function(x){ return Math.abs(x.diff); })));
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-arrows-left-right','Första 9 mot sista 9','#0F6E56','Vem stänger starkt och vem tröttnar? Skillnad i slag mellan sista och första nio.', null)+
+    '<div style="padding:6px 16px 8px">'+(fbPs.length ? fbPs.map(function(x, i){
+      var w = Math.round(Math.abs(x.diff)/fbMax*48);
+      var good = x.diff < 0;
+      var bar = '<div style="position:relative;height:16px;background:var(--surface2);border-radius:4px">'+
+        '<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--text-3)"></div>'+
+        '<div style="position:absolute;top:3px;bottom:3px;border-radius:3px;'+(good?'right:50%;background:#1D9E75;':'left:50%;background:#E24B4A;')+'width:'+w+'%"></div></div>';
+      return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(x.p.username)+'\')" style="display:grid;grid-template-columns:minmax(0,1fr) 110px 46px;gap:8px;align-items:center;padding:7px 0;cursor:pointer;'+(i<fbPs.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+        '<div style="min-width:0"><div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.p.name)+'</div><div style="font-size:11px;color:var(--text-3)">ut '+anPm(x.p.m.frontAvg,1)+' · in '+anPm(x.p.m.backAvg,1)+'</div></div>'+
+        bar+
+        '<div style="text-align:right;font-weight:700;font-size:13px;color:'+(good?'#0F6E56':'#A32D2D')+'">'+anPm(x.diff,1)+'</div>'+
+      '</div>';
+    }).join('') : '<div style="padding:10px 0;font-size:13px;color:var(--text-3)">Kräver kompletta 18-hålsscorekort.</div>')+'</div>'+
+    anFoot('Grönt åt vänster = bättre på sista nio ("closer"). Rött åt höger = tappar mot slutet. Snitt per runda, brutto mot par.')+'</div>';
+
+  // 9. Formkurva
+  var fPs = ps.filter(function(p){ return p.m.form.length >= 3; }).sort(function(a,b){ return a.m.formTrend - b.m.formTrend; });
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-chart-line','Formkurva','#185FA5','Senaste 5 rundorna mot spelarens eget snitt (netto mot par). Hetast form överst.', null)+
+    '<div style="padding:4px 16px 8px">'+(fPs.length ? fPs.map(function(p, i){
+      var vals = p.m.form.slice(-10).map(function(x){ return x.v; });
+      return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username)+'\')" style="display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:8px;align-items:center;padding:8px 0;cursor:pointer;'+(i<fPs.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+        '<div style="min-width:0"><div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</div>'+
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px">'+anTrendChip(p.m.formTrend)+'<span style="font-size:11px;color:var(--text-3)">snitt '+anPm(p.m.formAll,1)+' · senaste 5 '+anPm(p.m.formLast5,1)+'</span></div></div>'+
+        '<div>'+anSparkline(vals, 104, 34, '#185FA5')+'</div>'+
+      '</div>';
+    }).join('') : '<div style="padding:10px 0;font-size:13px;color:var(--text-3)">Kräver minst 3 rundor per spelare.</div>')+'</div>'+
+    anFoot('Kurvan visar de 10 senaste rundorna - högre upp = bättre (lägre netto mot par). Uppskattad form, olika banor jämförs mot banans par.')+'</div>';
+  return h;
+}
+
+// ── Banstatistik: hål för hål (4 & 5) ───────────────────────────────────────
+function computeCourseHoleBreakdown(courseName, sim) {
+  var rounds = collectAnalysisRounds(sim).filter(function(r){ return r.course.toLowerCase()===(courseName||'').trim().toLowerCase() && r.holes && r.pars; });
+  if(!rounds.length) return null;
+  var n = rounds[0].pars.length;
+  var holes = [];
+  for(var i=0;i<n;i++) holes.push({ no:i+1, par:rounds[0].pars[i], idx: rounds[0].hcpIdx ? rounds[0].hcpIdx[i] : null, n:0, sum:0, birdie:0, dbl:0 });
+  rounds.forEach(function(r){ r.holes.forEach(function(g, i){ if(g==null || !holes[i]) return; var d = g - r.pars[i]; holes[i].n++; holes[i].sum += d; if(d<=-1) holes[i].birdie++; if(d>=2) holes[i].dbl++; }); });
+  holes.forEach(function(x){ x.avg = x.n ? x.sum/x.n : null; });
+  return { rounds: rounds.length, holes: holes };
+}
+function buildCourseHoleBreakdownHTML(courseName, sim) {
+  var hb = computeCourseHoleBreakdown(courseName, sim);
+  if(!hb) return '';
+  var valid = hb.holes.filter(function(x){ return x.avg != null; });
+  if(!valid.length) return '';
+  var holeMean = valid.reduce(function(a,x){ return a+x.avg; },0)/valid.length;
+  var hardest = valid.slice().sort(function(a,b){ return b.avg-a.avg; })[0];
+  var easiest = valid.slice().sort(function(a,b){ return a.avg-b.avg; })[0];
+  var cell = function(x){
+    return '<div title="Hål '+x.no+' · par '+x.par+' · snitt '+anPm(x.avg,2)+' · '+x.birdie+' birdies · '+x.dbl+' dubbel+" style="border-radius:7px;padding:4px 0 5px;text-align:center;background:'+anHeatColor(x.avg, holeMean)+';'+(x===hardest?'outline:2px solid #A32D2D;':x===easiest?'outline:2px solid #0F6E56;':'')+'">'+
+      '<div style="font-size:10px;color:var(--text-2)">'+x.no+'</div>'+
+      '<div style="font-size:11px;font-weight:800;color:var(--text)">'+(x.avg==null?'–':anPm(x.avg,1))+'</div>'+
+      '<div style="font-size:9px;color:var(--text-2)">p'+x.par+'</div></div>';
+  };
+  var grid = function(list){ return '<div style="display:grid;grid-template-columns:repeat('+list.length+',minmax(0,1fr));gap:3px;margin-bottom:4px">'+list.map(cell).join('')+'</div>'; };
+  var top = function(key, lbl){ var b = valid.slice().sort(function(a,b){ return b[key]-a[key]; })[0]; return b && b[key] ? lbl+' hål '+b.no+' ('+b[key]+')' : ''; };
+  return '<details style="margin:0 16px 12px;border:1px solid var(--border);border-radius:10px;padding:8px 10px" ontoggle="_courseHoleOpen[\''+esc(courseName)+'\']=this.open"'+(_courseHoleOpen[courseName]?' open':'')+'>'+
+    '<summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text-2)"><i class="ti ti-grid-dots"></i> Hål för hål <span style="font-weight:400;color:var(--text-3)">· svårast hål '+hardest.no+' ('+anPm(hardest.avg,1)+') · lättast hål '+easiest.no+' ('+anPm(easiest.avg,1)+')</span></summary>'+
+    '<div style="margin-top:10px">'+
+      grid(hb.holes.slice(0, Math.min(9, hb.holes.length)))+(hb.holes.length>9?grid(hb.holes.slice(9)):'')+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;font-size:12px">'+
+        '<div style="background:#FCEBEB;border-radius:8px;padding:7px 9px"><div style="font-size:11px;color:#A32D2D;font-weight:700">Svåraste hålet</div><div><strong>Hål '+hardest.no+'</strong> · par '+hardest.par+' · snitt '+anPm(hardest.avg,2)+'</div></div>'+
+        '<div style="background:#E1F5EE;border-radius:8px;padding:7px 9px"><div style="font-size:11px;color:#0F6E56;font-weight:700">Lättaste hålet</div><div><strong>Hål '+easiest.no+'</strong> · par '+easiest.par+' · snitt '+anPm(easiest.avg,2)+'</div></div>'+
+      '</div>'+
+      '<div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.4">Snitt slag mot par per hål (brutto). Grönt = lättare än banans snitt, rött = svårare. '+hb.rounds+(hb.rounds===1?' runda':' rundor')+' med scorekort. '+[top('birdie','Flest birdies:'), top('dbl','Flest dubbelbogeys:')].filter(Boolean).join(' · ')+'</div>'+
+    '</div></details>';
+}
+var _courseHoleOpen = {};
+
+// ── Inbördes möten (10) ─────────────────────────────────────────────────────
+var _h2hA = '', _h2hB = '';
+function setH2H(which, val){ if(which==='a') _h2hA = val; else _h2hB = val; var el = document.getElementById('course-stats-content'); if(el) el.innerHTML=''; renderCourseStatsView(); }
+function renderH2HHTML(sim) {
+  var rounds = collectAnalysisRounds(sim).filter(function(r){ return r.netto != null; });
+  var players = {};
+  rounds.forEach(function(r){ players[r.username] = r.name; });
+  var list = Object.keys(players).map(function(u){ return { u:u, name:players[u] }; }).sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+  if(list.length < 2) return '<p class="empty">För få spelare med rundor ännu.</p>';
+  if(!players[_h2hA]) _h2hA = (currentUser && players[currentUser.username]) ? currentUser.username : list[0].u;
+  if(!players[_h2hB] || _h2hB===_h2hA) _h2hB = (list.find(function(x){ return x.u!==_h2hA; })||{}).u;
+  var sel = function(which, cur){ return '<select onchange="setH2H(\''+which+'\',this.value)" style="width:100%;margin:0;font-weight:600">'+list.map(function(x){ return '<option value="'+esc(x.u)+'"'+(x.u===cur?' selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+'</select>'; };
+  // Möten = samma deltävling där båda har netto
+  var byEv = {};
+  rounds.forEach(function(r){ if(r.username===_h2hA || r.username===_h2hB) (byEv[r.tourId+'|'+r.eventId] = byEv[r.tourId+'|'+r.eventId] || {})[r.username===_h2hA?'a':'b'] = r; });
+  var meets = Object.keys(byEv).map(function(k){ return byEv[k]; }).filter(function(x){ return x.a && x.b; }).sort(function(x,y){ return (y.a.date||'').localeCompare(x.a.date||''); });
+  var wa=0, wb=0, tie=0;
+  meets.forEach(function(x){ if(x.a.netto < x.b.netto) wa++; else if(x.b.netto < x.a.netto) wb++; else tie++; });
+  var tot = meets.length || 1;
+  var nameA = players[_h2hA], nameB = players[_h2hB];
+  var h = '<div class="card" style="padding:14px 16px;margin-bottom:12px">'+
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center">'+sel('a', _h2hA)+'<span style="font-weight:800;color:var(--text-3)">VS</span>'+sel('b', _h2hB)+'</div>';
+  if(!meets.length) return h + '<p style="font-size:13px;color:var(--text-3);margin:12px 0 0">De har inte spelat samma deltävling ännu.</p></div>';
+  h += '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:end;margin-top:14px;text-align:center">'+
+      '<div><div style="font-size:34px;font-weight:800;color:#0F6E56;line-height:1">'+wa+'</div><div style="font-size:11px;color:var(--text-3)">vinster '+esc(nameA.split(' ')[0])+'</div></div>'+
+      '<div style="padding:0 10px"><div style="font-size:16px;font-weight:700;color:var(--text-2)">'+tie+'</div><div style="font-size:11px;color:var(--text-3)">lika</div></div>'+
+      '<div><div style="font-size:34px;font-weight:800;color:#185FA5;line-height:1">'+wb+'</div><div style="font-size:11px;color:var(--text-3)">vinster '+esc(nameB.split(' ')[0])+'</div></div>'+
+    '</div>'+
+    '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin:10px 0 4px;background:var(--surface2)">'+
+      '<div style="width:'+(wa/tot*100)+'%;background:#1D9E75"></div><div style="width:'+(tie/tot*100)+'%;background:#C9CED6"></div><div style="width:'+(wb/tot*100)+'%;background:#378ADD"></div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text-3);text-align:center">'+meets.length+(meets.length===1?' möte':' möten')+' · lägst netto i samma deltävling vinner</div></div>';
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-swords','Alla möten','#6D28D9','', null)+
+    '<div style="padding:0 16px">'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 46px 46px;gap:6px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)"><span>Deltävling</span><span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nameA.split(' ')[0])+'</span><span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nameB.split(' ')[0])+'</span></div>'+
+    meets.map(function(x, i){
+      var aw = x.a.netto < x.b.netto, bw = x.b.netto < x.a.netto;
+      return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 46px 46px;gap:6px;align-items:center;padding:7px 0;font-size:13px;'+(i<meets.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+        '<div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.a.eventName||x.a.course)+'</div><div style="font-size:11px;color:var(--text-3)">'+esc(x.a.course)+(x.a.date?' · '+x.a.date:'')+'</div></div>'+
+        '<div style="text-align:right;font-weight:'+(aw?'800':'400')+';color:'+(aw?'#0F6E56':'var(--text-2)')+'">'+x.a.netto+'</div>'+
+        '<div style="text-align:right;font-weight:'+(bw?'800':'400')+';color:'+(bw?'#185FA5':'var(--text-2)')+'">'+x.b.netto+'</div>'+
+      '</div>';
+    }).join('')+'</div>'+anFoot('Netto per runda. Fetstil = vinnare i mötet.')+'</div>';
+  return h;
+}
+
+// ── Spelarprofil: egen spelanalys ───────────────────────────────────────────
+function buildPlayerAnalysisHTML(username, sim) {
+  var rounds = collectAnalysisRounds(sim).filter(function(r){ return r.username===username; });
+  if(!rounds.length) return '';
+  var m = computeAnalysisMetrics(rounds);
+  if(!m.holes && m.form.length < 2) return '';
+  var tile = function(lbl, val, sub, color){ return '<div style="background:var(--surface2);border-radius:10px;padding:8px 10px;min-width:0"><div style="font-size:11px;color:var(--text-3)">'+lbl+'</div><div style="font-size:19px;font-weight:800;color:'+(color||'var(--text)')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sub+'</div>':'')+'</div>'; };
+  var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-chart-dots"></i> Spelanalys'+(sim?' (simulator)':'')+'</div>';
+  h += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">'+m.rounds+(m.rounds===1?' runda':' rundor')+(m.holes?' · '+m.holes+' hål med scorekort':'')+'</div>';
+  var tiles = [];
+  if(!sim && m.girHoles) tiles.push(tile('Greenträff (GIR)', anPct(m.girPct), m.gir+' av '+m.girHoles+' hål', '#0F6E56'));
+  if(!sim && m.scrOpp) tiles.push(tile('Scrambling', anPct(m.scrPct), m.scrOk+' av '+m.scrOpp+' räddade', '#185FA5'));
+  if(m.bbOpp) tiles.push(tile('Bounce-back', anPct(m.bbPct), 'par+ efter bogey', '#6D28D9'));
+  if(m.streak) tiles.push(tile('Längsta svit', m.streak+' hål', m.streakRound ? esc(m.streakRound.course) : '', '#BA7517'));
+  if(tiles.length) h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:12px">'+tiles.join('')+'</div>';
+  // Par 3/4/5 som staplar
+  if(m.par3.n || m.par4.n || m.par5.n) {
+    var mx = Math.max(0.5, Math.abs(m.par3Avg||0), Math.abs(m.par4Avg||0), Math.abs(m.par5Avg||0));
+    var bar = function(lbl, v, n){ var w = v==null?0:Math.round(Math.abs(v)/mx*100); return '<div style="display:grid;grid-template-columns:44px 1fr 46px;gap:8px;align-items:center;margin-bottom:5px;font-size:12px">'+
+      '<span style="color:var(--text-2)">'+lbl+'</span><div style="height:9px;background:var(--surface2);border-radius:5px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+(v!=null&&v<=0?'#1D9E75':'#E0A030')+'"></div></div>'+
+      '<span style="text-align:right;font-weight:700">'+anPm(v,2)+'</span></div>'; };
+    h += '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">Snitt mot par per hål­typ</div>'+bar('Par 3', m.par3Avg)+bar('Par 4', m.par4Avg)+bar('Par 5', m.par5Avg);
+  }
+  // Första/sista nio
+  if(m.fb.n) {
+    var diff = m.backAvg - m.frontAvg;
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-top:6px;border-top:1px solid var(--border);font-size:13px">'+
+      '<span style="color:var(--text-2)">Första 9 / sista 9</span><span><strong>'+anPm(m.frontAvg,1)+'</strong> / <strong>'+anPm(m.backAvg,1)+'</strong> <span style="font-size:11px;color:'+(diff<0?'#0F6E56':'#A32D2D')+'">('+(diff<0?'stänger starkt':'tappar mot slutet')+')</span></span></div>';
+  }
+  // Formkurva
+  if(m.form.length >= 2) {
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px;border-top:1px solid var(--border)">'+
+      '<div><div style="font-size:13px;color:var(--text-2)">Formkurva</div><div style="margin-top:3px">'+anTrendChip(m.formTrend)+'</div><div style="font-size:11px;color:var(--text-3);margin-top:3px">snitt '+anPm(m.formAll,1)+' · senaste 5 '+anPm(m.formLast5,1)+' (netto mot par)</div></div>'+
+      anSparkline(m.form.slice(-10).map(function(x){ return x.v; }), 110, 38, '#185FA5')+
+    '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
 function renderScoreStatsHTML(sim) {
   var st = computeScoreStats(sim);
   if(!st.totalHoles) return '<p class="empty">'+(sim?'Inga simulatorrundor med hål-för-hål-scorekort ännu.':'Inga rundor med hål-för-hål-scorekort ännu.')+'</p>';
@@ -2080,6 +2543,7 @@ function renderScoreStatsHTML(sim) {
     '<div><div style="font-size:11px;color:var(--text-3)">Spelare</div><div style="font-size:20px;font-weight:700">'+st.players.length+'</div></div>'+
     '<div style="flex-basis:100%;font-size:11px;color:var(--text-3)">Bygger på godkända rundor med hål-för-hål-scorekort'+(sim?' (simulator)':' (riktig golf)')+'.</div>'+
   '</div>';
+  if(!sim) h += buildPuttLeaderboardHTML(); // simulatorn registrerar inga puttar
   HOLE_CATEGORY_META.forEach(function(cat){
     var total = st.totals[cat.key] || 0;
     // Rankas på ANDEL av spelarens hål (inte antal), så den som spelat fler rundor
@@ -2136,8 +2600,10 @@ function courseStatsModeChooserHTML() {
 function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
-  if(_statsView === 'score') {
-    el.innerHTML = statsViewTabsHTML() + courseStatsModeChooserHTML() + renderScoreStatsHTML(_courseStatsMode === 'sim');
+  if(_statsView === 'score' || _statsView === 'analys' || _statsView === 'h2h') {
+    var simSel = _courseStatsMode === 'sim';
+    var body = _statsView === 'score' ? renderScoreStatsHTML(simSel) : _statsView === 'analys' ? renderAnalysisHTML(simSel) : renderH2HHTML(simSel);
+    el.innerHTML = statsViewTabsHTML() + courseStatsModeChooserHTML() + body;
     return;
   }
 
@@ -2330,6 +2796,7 @@ function renderCourseStatsView() {
           '</div>'+
           // Rutnät med 2 kolumner; sista rutans kantlinjer döljs via negativ marginal
           '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 -1px -1px 0">'+tiles+'</div>'+
+          '<div style="height:12px"></div>'+buildCourseHoleBreakdownHTML(c.name, simMode)+
           '<div style="padding:0 16px">'+
             '<div style="font-size:11px;color:var(--text-3);padding:8px 0 2px">Spelarnas bästa runda, rankad på '+(primary==='netto'?'netto (lika netto → lägre SHCP först)':'poäng (lika poäng → lägre SHCP först)')+'</div>'+
             '<div style="display:grid;grid-template-columns:'+COLS+';gap:4px;font-size:11px;color:var(--text-3);padding:5px 0 7px;border-bottom:1px solid var(--border)">'+
@@ -11211,10 +11678,12 @@ var _profileStatsMode = (function(){ try { return localStorage.getItem('profileS
 var _profileStatsSeq = 0;
 function buildProfileStatsBlockHTML(username, name, defaultMode) {
   var golfHtml = buildCareerStatsHTML(username, false)+
+    buildPlayerAnalysisHTML(username, false)+
     buildHoleStatsHTML(computePlayerHoleStats(username, false), 'Hålstatistik')+
     buildPuttingStatsHTML(computePlayerPuttingStats(username))+
     buildPlayerGolfMapStatsHTML(username, name);
   var simHtml = buildCareerStatsHTML(username, true)+
+    buildPlayerAnalysisHTML(username, true)+
     buildHoleStatsHTML(computePlayerHoleStats(username, true), 'Hålstatistik (simulator)')+
     buildSimCoursesHTML(username);
   if(!simHtml) return golfHtml;
@@ -11305,6 +11774,10 @@ function buildPuttingStatsHTML(stats) {
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-golf"></i> Puttstatistik</div>';
   h += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Baserat på '+stats.roundsWithPutts+' rond'+(stats.roundsWithPutts===1?'':'er')+' med registrerade puttar ('+stats.totalHolesWithPutts+' hål)</div>';
   h += '<div style="display:flex;flex-direction:column;gap:2px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'+
+    '<span style="font-size:13px;color:var(--text-2)">Snitt puttar/runda <span style="font-size:11px;color:var(--text-3)">(18 hål)</span></span>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+(stats.avgPerHole*18).toFixed(1).replace('.',',')+'</span>'+
+  '</div>';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'+
     '<span style="font-size:13px;color:var(--text-2)">Snitt puttar/hål</span>'+
     '<span style="font-size:13px;font-weight:700;color:var(--green-dark)">'+stats.avgPerHole.toFixed(2)+'</span>'+
@@ -15045,6 +15518,22 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (245)',
+    items: [
+      { type: 'new', text: 'Ny flik "Spelanalys" i Statistik (följer valet Riktig golf/Simulator) med översiktsrutor och grafiska topplistor: Greenträff/GIR % (slag − puttar ≤ par − 2), Scrambling % (par eller bättre trots missad green), snitt mot par på par 3/4/5 som färgad värmetabell (par 3-kung och långhålskung), Bounce-back % (par eller bättre direkt efter bogey), Längsta svit med par eller bättre i rad (med rekordhållare), Första 9 mot sista 9 som divergerande staplar (vem stänger starkt?) och Formkurva med minigraf över de senaste rundorna och trendpil. GIR och scrambling kräver registrerade puttar och visas därför bara för riktig golf.' },
+      { type: 'new', text: 'Ny flik "Inbördes": välj två spelare och se hur många gånger var och en haft lägst netto när de spelat samma deltävling - med vinststapel och lista över alla möten.' },
+      { type: 'new', text: 'Bankorten i Banstatistik har fått "Hål för hål": en färgkodad karta över alla hål (snitt mot par, grönt = lätt, rött = svårt) med banans svåraste och lättaste hål markerade, samt vilket hål som gett flest birdies och flest dubbelbogeys.' },
+      { type: 'new', text: 'Spelarprofilen har fått kortet "Spelanalys" med spelarens egen statistik: GIR %, scrambling %, bounce-back %, längsta svit, snitt mot par på par 3/4/5 (staplar), första mot sista nio och formkurva med minigraf. Finns i både Riktig golf- och Simulator-läget (GIR/scrambling bara för riktig golf).' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (244)',
+    items: [
+      { type: 'new', text: 'Puttar i Scorestatistik (riktig golf): topplista över snitt puttar per runda (lägst först), med andel enputtar och treputtar per spelare, snitt per hål och färst puttar på en hel runda. Kortets rubrik visar gruppens snitt och vem som har färst puttar på en runda. Kräver minst 9 hål med registrerade puttar.' },
+      { type: 'improved', text: 'Puttstatistiken på spelarprofilen visar nu även "Snitt puttar/runda" (18 hål) överst.' }
+    ]
+  },
   {
     date: '30 oktober 2026 (243)',
     items: [
