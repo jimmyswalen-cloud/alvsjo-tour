@@ -7,6 +7,11 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F6E56">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tourer">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -168,6 +173,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -249,6 +255,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 <div id="tours-screen">
   <div id="home-screen-content">
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
+    <div id="home-push-banner"></div>
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
@@ -772,7 +779,8 @@ function save() {
     if (sizeKB > 850) {
       alert('Varning: databasen är nästan full (' + sizeKB + ' KB av max ~1000 KB). Ta bort gamla bilder eller komprimera mer för att undvika sparfel.');
     }
-    DOC_REF.set({ data: payload }).catch(function(err) {
+    // lastActor: vem som sparade - pushservern skickar aldrig notiser till den som själv gjorde ändringen
+    DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now() }).catch(function(err) {
       console.error('Firestore save failed', err);
       alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
     });
@@ -1505,6 +1513,7 @@ function showHomeScreen() {
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
   subscribeHomeActivityFeed();
+  try { renderHomePushBanner(); } catch(e) {}
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
   // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
@@ -1646,6 +1655,7 @@ function renderHomeUserBar() {
     '<div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px">'+(isAdmin()?'Admin':'Spelare')+' &middot; HCP '+hcpVal+
       ' <i class="ti ti-edit" style="cursor:pointer;font-size:12px" onclick="event.stopPropagation();quickEditHcpFromHome()" title="Ändra HCP"></i>'+
     '</div></div>' +
+    '<button class="btn btn-sm" onclick="openPushSettings()" title="Notiser" style="margin-right:6px"><i class="ti ti-bell"></i></button>' +
     '<button class="btn btn-sm" onclick="viewMyProfile()" style="margin-right:6px"><i class="ti ti-user"></i></button>' +
     '<button class="btn btn-sm" onclick="logout()"><i class="ti ti-logout"></i></button>';
 }
@@ -9720,6 +9730,259 @@ var ACTIVITY_FEED_COL = db.collection('activityFeed');
 // Inloggningslogg för admin: vem loggade in, när, med vilken webbläsare/OS,
 // och ungefärlig plats (stad/land) via en gratis IP-baserad geolocation-tjänst.
 var LOGIN_LOG_COL = db.collection('loginLog');
+
+// ══ PUSHNOTISER ══════════════════════════════════════════════════════════════
+// Klientdelen. Själva utskicken görs av Firebase Cloud Functions (mappen
+// firebase-functions), som lyssnar på databasen och skickar via Firebase Cloud
+// Messaging (FCM) till de enheter som finns i pushTokens.
+//   pushTokens/{token}    -> { username, platform, ua, updatedAt }  (en per enhet)
+//   pushPrefs/{username}  -> { reminders, todo, live, livebirdie, wall, likes } (true/false)
+//   pushOutbox/{id}       -> admin-utskick / testnotis, plockas upp av servern
+//   golfapp/pushConfig    -> { vapidKey }  (Web Push-nyckeln, klistras in av admin i appen)
+// iPhone: webbnotiser fungerar bara när appen är tillagd på hemskärmen (iOS 16.4+)
+// och öppnas därifrån - inte i vanliga Safari.
+var PUSH_TOKENS_COL = db.collection('pushTokens');
+var PUSH_PREFS_COL = db.collection('pushPrefs');
+var PUSH_OUTBOX_COL = db.collection('pushOutbox');
+var PUSH_CONFIG_REF = db.collection('golfapp').doc('pushConfig');
+var PUSH_CATEGORIES = [
+  { key:'reminders',  icon:'ti-alarm',          label:'Påminnelser om rundor', desc:'Anmälan stänger ikväll, din starttid i morgon och idag.' },
+  { key:'todo',       icon:'ti-clipboard-check', label:'Att göra för mig',      desc:'Attestera som markör, side bets du lagts till i, lottad i boll.' },
+  { key:'live',       icon:'ti-trophy',          label:'Resultat & rekord',     desc:'Vinnare, säsongsmästare, nytt banrekord, stark rond, side bet-vinst.' },
+  { key:'livebirdie', icon:'ti-feather',         label:'Birdies & eagles live', desc:'Birdie, eagle, albatross och hole-in-one från andra bollar.' },
+  { key:'wall',       icon:'ti-messages',        label:'The ÄGCC Wall',         desc:'Nya inlägg och bilder på väggen.' },
+  { key:'likes',      icon:'ti-thumb-up',        label:'Gillningar',            desc:'När någon gillar ditt inlägg.' }
+];
+var _pushSwReg = null, _pushOnMsgBound = false, _pushPrefs = null;
+
+function pushEnv() {
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  var apis = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  var fcm = false;
+  try { fcm = apis && firebase.messaging && firebase.messaging.isSupported && !!firebase.messaging.isSupported(); } catch(e) { fcm = false; }
+  return { isIOS:isIOS, standalone:standalone, supported: apis && fcm,
+    needsInstall: isIOS && !standalone,
+    permission: ('Notification' in window) ? Notification.permission : 'unsupported',
+    platform: isIOS ? 'ios' : (/Android/i.test(ua) ? 'android' : 'desktop') };
+}
+
+function pushGetSwReg() {
+  if(_pushSwReg) return Promise.resolve(_pushSwReg);
+  // Relativ sökväg -> fungerar även under GitHub Pages-undermappen /alvsjo-tour/
+  return navigator.serviceWorker.register('firebase-messaging-sw.js').then(function(reg){ _pushSwReg = reg; return reg; });
+}
+function pushGetVapidKey() {
+  return PUSH_CONFIG_REF.get().then(function(d){ return d.exists ? (d.data().vapidKey || null) : null; });
+}
+
+// Hämtar/förnyar enhetens token och sparar den kopplad till inloggad spelare.
+function refreshPushToken(interactive) {
+  var env = pushEnv();
+  if(!currentUser || !env.supported || Notification.permission !== 'granted') return Promise.resolve(null);
+  // "Logga in som" (admin) - registrera aldrig admins enhet på en annan spelare
+  if(typeof impersonatorAdmin !== 'undefined' && impersonatorAdmin) return Promise.resolve(null);
+  return Promise.all([pushGetSwReg(), pushGetVapidKey()]).then(function(res){
+    var reg = res[0], vapidKey = res[1];
+    if(!vapidKey) {
+      if(interactive) alert('Pushnotiser är inte färdigkonfigurerade ännu (admin behöver klistra in Web Push-nyckeln under Notiser).');
+      return null;
+    }
+    return firebase.messaging().getToken({ vapidKey: vapidKey, serviceWorkerRegistration: reg }).then(function(token){
+      if(!token) return null;
+      try { localStorage.setItem('pushToken', token); } catch(e) {}
+      bindPushForeground();
+      return PUSH_TOKENS_COL.doc(token).set({
+        username: currentUser.username, platform: env.platform, standalone: env.standalone,
+        ua: (navigator.userAgent||'').slice(0, 200), updatedAt: Date.now()
+      }, { merge: true }).then(function(){ return token; });
+    });
+  }).catch(function(err){
+    console.error('Push: kunde inte registrera enheten', err);
+    if(interactive) alert('Kunde inte aktivera notiser på den här enheten: '+(err && err.message ? err.message : err));
+    return null;
+  });
+}
+
+// Måste anropas från ett klick (krav i iOS/Safari för att få fråga om tillstånd).
+function enablePushOnThisDevice() {
+  var env = pushEnv();
+  if(env.needsInstall) { closeModal(); showHelp(); setTimeout(function(){ toggleHelpTopic('iphone-install'); }, 100); return; }
+  if(!env.supported) { alert('Den här webbläsaren stöder inte pushnotiser.'); return; }
+  Notification.requestPermission().then(function(perm){
+    if(perm !== 'granted') {
+      alert(perm === 'denied' ? 'Notiser är blockerade för appen. Tillåt dem i telefonens inställningar (Inställningar → Notiser → Tourer) och försök igen.' : 'Du valde att inte tillåta notiser just nu.');
+      openPushSettings(); return;
+    }
+    refreshPushToken(true).then(function(tok){
+      ensurePushPrefsDoc();
+      openPushSettings();
+      if(tok) showPushToast('Notiser aktiverade', 'Den här enheten får nu notiser från appen.');
+    });
+  });
+}
+
+function disablePushOnThisDevice() {
+  var tok = null; try { tok = localStorage.getItem('pushToken'); } catch(e) {}
+  var p = Promise.resolve();
+  try { if(pushEnv().supported) p = firebase.messaging().deleteToken().catch(function(){}); } catch(e) {}
+  p.then(function(){ return tok ? PUSH_TOKENS_COL.doc(tok).delete().catch(function(){}) : null; }).then(function(){
+    try { localStorage.removeItem('pushToken'); } catch(e) {}
+    openPushSettings();
+    showPushToast('Notiser avstängda', 'Den här enheten får inga fler notiser.');
+  });
+}
+
+function ensurePushPrefsDoc() {
+  if(!currentUser) return Promise.resolve();
+  var ref = PUSH_PREFS_COL.doc(currentUser.username);
+  return ref.get().then(function(d){
+    if(!d.exists) { var def = {}; PUSH_CATEGORIES.forEach(function(c){ def[c.key] = true; }); return ref.set(def); }
+  }).catch(function(){});
+}
+function setPushPref(key, val) {
+  if(!currentUser) return;
+  var upd = {}; upd[key] = !!val;
+  if(_pushPrefs) _pushPrefs[key] = !!val;
+  PUSH_PREFS_COL.doc(currentUser.username).set(upd, { merge: true }).catch(function(err){ console.error(err); });
+}
+
+// Notis medan appen är öppen: FCM visar ingen systemnotis då, så vi visar en egen ruta.
+function bindPushForeground() {
+  if(_pushOnMsgBound) return;
+  try {
+    firebase.messaging().onMessage(function(payload){
+      var n = (payload && (payload.notification || payload.data)) || {};
+      showPushToast(n.title || 'Tourer', n.body || '', (payload.fcmOptions && payload.fcmOptions.link) || (payload.data && payload.data.link));
+    });
+    _pushOnMsgBound = true;
+  } catch(e) {}
+}
+function showPushToast(title, body, link) {
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;width:min(92vw,420px);background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:10px 14px;cursor:pointer;font-family:inherit';
+  el.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start"><i class="ti ti-bell-ringing" style="font-size:20px;color:var(--green-dark);margin-top:1px"></i>'+
+    '<div style="min-width:0"><div style="font-weight:700;font-size:14px;color:var(--text)">'+esc(title)+'</div>'+(body?'<div style="font-size:13px;color:var(--text-2);margin-top:2px">'+esc(body)+'</div>':'')+'</div></div>';
+  el.onclick = function(){ el.remove(); if(link && link.indexOf('#')>=0) { try { location.hash = link.split('#')[1]; } catch(e) {} } };
+  document.body.appendChild(el);
+  setTimeout(function(){ if(el.parentNode) el.remove(); }, 6000);
+}
+
+function openPushSettings() {
+  if(!currentUser) return;
+  var env = pushEnv();
+  var tok = null; try { tok = localStorage.getItem('pushToken'); } catch(e) {}
+  var active = env.supported && env.permission === 'granted' && !!tok;
+  Promise.all([
+    PUSH_PREFS_COL.doc(currentUser.username).get().catch(function(){ return null; }),
+    isAdmin() ? PUSH_CONFIG_REF.get().catch(function(){ return null; }) : Promise.resolve(null),
+    PUSH_TOKENS_COL.where('username','==',currentUser.username).get().catch(function(){ return null; })
+  ]).then(function(res){
+    var prefsDoc = res[0], cfgDoc = res[1], myTokens = res[2];
+    _pushPrefs = (prefsDoc && prefsDoc.exists) ? prefsDoc.data() : {};
+    var deviceCount = myTokens ? myTokens.size : 0;
+    var h = '<h3 style="margin-bottom:4px"><i class="ti ti-bell" style="color:var(--green-dark)"></i> Notiser</h3>';
+    // Status för den här enheten
+    var statusHtml;
+    if(env.needsInstall) {
+      statusHtml = '<div style="background:var(--gold-light);border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;color:#854F0B">'+
+        '<strong>Lägg till appen på hemskärmen först.</strong> På iPhone fungerar notiser bara när Tourer är tillagd som app på hemskärmen och öppnas därifrån.'+
+        '<button class="btn btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="enablePushOnThisDevice()"><i class="ti ti-brand-apple"></i> Visa hur man gör</button></div>';
+    } else if(!env.supported) {
+      statusHtml = '<div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;color:var(--text-2)">Den här webbläsaren stöder inte pushnotiser. Prova Safari (via hemskärmen) på iPhone, eller Chrome på Android/dator.</div>';
+    } else if(active) {
+      statusHtml = '<div style="background:#E1F5EE;border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;color:#0F6E56;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+        '<i class="ti ti-circle-check" style="font-size:20px"></i><div style="flex:1;min-width:160px"><strong>Notiser är på för den här enheten.</strong><div style="font-size:12px">Du har '+deviceCount+(deviceCount===1?' enhet':' enheter')+' med notiser.</div></div>'+
+        '<button class="btn btn-sm" onclick="sendPushTest()"><i class="ti ti-send"></i> Testa</button>'+
+        '<button class="btn btn-sm" onclick="disablePushOnThisDevice()">Stäng av</button></div>';
+    } else if(env.permission === 'denied') {
+      statusHtml = '<div style="background:#FCEBEB;border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;color:#A32D2D">Notiser är blockerade för appen. Tillåt dem i telefonens/webbläsarens inställningar och öppna sedan den här rutan igen.</div>';
+    } else {
+      statusHtml = '<div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;color:var(--text-2)">Få en notis när anmälan stänger, när du ska attestera ett resultat, när någon gör birdie och mycket mer.'+
+        '<button class="btn btn-primary" style="margin-top:10px;width:100%;justify-content:center;padding:11px" onclick="enablePushOnThisDevice()"><i class="ti ti-bell-ringing"></i> Aktivera notiser på den här enheten</button></div>';
+    }
+    h += statusHtml;
+    // Kategorier
+    h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Vad vill du få notiser om?</div>';
+    h += PUSH_CATEGORIES.map(function(c){
+      var on = _pushPrefs[c.key] !== false;
+      return '<label style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">'+
+        '<i class="ti '+c.icon+'" style="font-size:20px;color:var(--green-dark);width:22px;text-align:center"></i>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+c.label+'</div><div style="font-size:12px;color:var(--text-3)">'+c.desc+'</div></div>'+
+        '<input type="checkbox" '+(on?'checked':'')+' onchange="setPushPref(\''+c.key+'\', this.checked)" style="width:20px;height:20px;margin:0;flex-shrink:0"></label>';
+    }).join('');
+    h += '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Valen gäller alla dina enheter. Du får aldrig notiser om sådant du själv gjort.</p>';
+    // Admin
+    if(isAdmin()) {
+      var vk = (cfgDoc && cfgDoc.exists && cfgDoc.data().vapidKey) || '';
+      h += '<details style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px"'+(vk?'':' open')+'>'+
+        '<summary style="cursor:pointer;font-weight:600;font-size:13px"><i class="ti ti-shield"></i> Admin</summary>'+
+        '<div style="margin-top:10px">'+
+          '<label style="font-size:12px;color:var(--text-2)">Web Push-nyckel (VAPID, från Firebase-konsolen → Projektinställningar → Cloud Messaging)</label>'+
+          '<div style="display:flex;gap:6px;margin:4px 0 12px"><input id="push-vapid-inp" type="text" value="'+esc(vk)+'" placeholder="B..." style="flex:1;margin:0;font-size:12px"><button class="btn btn-sm btn-primary" onclick="savePushVapidKey()">Spara</button></div>'+
+          '<label style="font-size:12px;color:var(--text-2)">Skicka utskick till alla med notiser på</label>'+
+          '<input id="push-bc-title" type="text" placeholder="Rubrik, t.ex. Tee-tider klara!" style="margin:4px 0 6px">'+
+          '<textarea id="push-bc-body" rows="2" placeholder="Meddelande" style="margin:0 0 6px"></textarea>'+
+          '<button class="btn btn-sm btn-primary" onclick="sendPushBroadcast()"><i class="ti ti-speakerphone"></i> Skicka till alla</button>'+
+        '</div></details>';
+    }
+    h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
+    showModal(h);
+  });
+}
+
+function savePushVapidKey() {
+  if(!isAdmin()) return;
+  var v = (document.getElementById('push-vapid-inp')||{}).value || '';
+  PUSH_CONFIG_REF.set({ vapidKey: v.trim() }, { merge: true }).then(function(){ showPushToast('Sparat', 'Web Push-nyckeln är sparad.'); }).catch(function(e){ alert('Kunde inte spara: '+e.message); });
+}
+function sendPushTest() {
+  if(!currentUser) return;
+  PUSH_OUTBOX_COL.add({ kind:'test', toUsers:[currentUser.username], title:'Testnotis ⛳', body:'Det fungerar! Notiser är på för '+(currentUser.name||currentUser.username)+'.', createdBy: currentUser.username, createdAt: Date.now() })
+    .then(function(){ showPushToast('Testnotis skickad', 'Den kommer inom några sekunder (stäng gärna appen för att se den som riktig notis).'); })
+    .catch(function(e){ alert('Kunde inte skicka: '+e.message); });
+}
+function sendPushBroadcast() {
+  if(!isAdmin()) return;
+  var t = ((document.getElementById('push-bc-title')||{}).value||'').trim();
+  var b = ((document.getElementById('push-bc-body')||{}).value||'').trim();
+  if(!t) { alert('Skriv en rubrik.'); return; }
+  if(!confirm('Skicka "'+t+'" till alla spelare med notiser på?')) return;
+  PUSH_OUTBOX_COL.add({ kind:'broadcast', toUsers:'all', title:t, body:b, createdBy: currentUser.username, createdAt: Date.now() })
+    .then(function(){ showPushToast('Utskick skickat', t); closeModal(); })
+    .catch(function(e){ alert('Kunde inte skicka: '+e.message); });
+}
+
+// Liten ruta på startsidan som erbjuder notiser (tills man aktiverat eller stängt den).
+function renderHomePushBanner() {
+  var el = document.getElementById('home-push-banner');
+  if(!el) return;
+  el.innerHTML = '';
+  if(!currentUser) return;
+  var env = pushEnv();
+  var dismissed = false; try { dismissed = localStorage.getItem('pushBannerDismissed') === '1'; } catch(e) {}
+  var tok = null; try { tok = localStorage.getItem('pushToken'); } catch(e) {}
+  if(dismissed || (env.permission === 'granted' && tok) || env.permission === 'denied') return;
+  if(!env.supported && !env.needsInstall) return;
+  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;border-color:var(--green)">'+
+    '<i class="ti ti-bell-ringing" style="font-size:24px;color:var(--green-dark)"></i>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">Missa inget – slå på notiser</div>'+
+      '<div style="font-size:12px;color:var(--text-3)">'+(env.needsInstall?'Lägg först till appen på hemskärmen, sedan kan du slå på notiser.':'Anmälan som stänger, starttider, attest, birdies och väggen.')+'</div></div>'+
+    '<button class="btn btn-sm btn-primary" onclick="'+(env.needsInstall?'enablePushOnThisDevice()':'openPushSettings()')+'">'+(env.needsInstall?'Visa hur':'Slå på')+'</button>'+
+    '<button class="btn btn-sm" title="Inte nu" onclick="try{localStorage.setItem(\'pushBannerDismissed\',\'1\')}catch(e){};renderHomePushBanner()" style="padding:4px 8px"><i class="ti ti-x"></i></button>'+
+  '</div>';
+}
+
+// Efter inloggning: förnya token tyst om tillstånd redan finns (tokens kan bytas ut av webbläsaren).
+function initPushAfterLogin() {
+  try {
+    var env = pushEnv();
+    if(env.supported && env.permission === 'granted') refreshPushToken(false);
+    renderHomePushBanner();
+  } catch(e) { console.error('Push init', e); }
+}
+
 var _liveScoring = { docId:null, unsub:null, data:null, activeHole:1, activePi:null, mode:null };
 
 // VIKTIGT: docId får ALDRIG baseras på bollens array-index (gIdx) i e.teeGroups -
@@ -15519,6 +15782,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '30 oktober 2026 (246)',
+    items: [
+      { type: 'new', text: 'Pushnotiser! Tryck på klockan bredvid din profilknapp på startsidan för att slå på notiser för din telefon/dator och välja vad du vill få notiser om: påminnelser om rundor (anmälan stänger, starttid i morgon och idag), att göra (attestera som markör, side bets, lottad i boll), resultat och rekord (vinnare, säsongsmästare, nytt banrekord, stark rond), birdies och eagles live, The ÄGCC Wall och gillningar. Du får aldrig notiser om sådant du själv gjort. På iPhone fungerar notiser när appen är tillagd på hemskärmen och öppnas därifrån. Admin kan skicka egna utskick till alla.' }
+    ]
+  },
+  {
     date: '30 oktober 2026 (245)',
     items: [
       { type: 'new', text: 'Ny flik "Spelanalys" i Statistik (följer valet Riktig golf/Simulator) med översiktsrutor och grafiska topplistor: Greenträff/GIR % (slag − puttar ≤ par − 2), Scrambling % (par eller bättre trots missad green), snitt mot par på par 3/4/5 som färgad värmetabell (par 3-kung och långhålskung), Bounce-back % (par eller bättre direkt efter bogey), Längsta svit med par eller bättre i rad (med rekordhållare), Första 9 mot sista 9 som divergerande staplar (vem stänger starkt?) och Formkurva med minigraf över de senaste rundorna och trendpil. GIR och scrambling kräver registrerade puttar och visas därför bara för riktig golf.' },
@@ -17956,6 +18225,7 @@ function afterLogin() {
   }
   showHomeScreen();
   renderImpersonationBanner();
+  setTimeout(function(){ if(typeof initPushAfterLogin==='function') initPushAfterLogin(); }, 1500);
   if(!currentUser.golfId || currentUser.golfId.length !== 10) {
     setTimeout(function(){
       alert('Du saknar ett giltigt Golf-ID (10 tecken). Fyll i det i din profil för att kunna fortsätta.');
