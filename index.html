@@ -8279,7 +8279,10 @@ function computeCareerStats(username) {
     var nonFinalPtsSorted = nonFinal.map(function(x){ return x.result.points||0; }).sort(function(a,b){ return b-a; });
     var countedPts = bestN > 0 ? nonFinalPtsSorted.slice(0, bestN) : nonFinalPtsSorted;
     var tourPts = countedPts.reduce(function(s,p){ return s+p; }, 0);
-    nonFinal.forEach(function(x){
+    // Snittscore räknar ALLA rundor inkl. finaler (rått resultat r.score, inte det
+    // justerade med försprång) - finaler ska inte hoppas över i statistiken. Bara
+    // OoM-poängen ovan bygger på nonFinal, eftersom finaler inte ger OoM-poäng.
+    results.forEach(function(x){
       var isStab = x.event.type==='stableford';
       if(isStab && x.result.score>0) allStabScores.push(x.result.score);
       if(!isStab && x.result.score>0) allSlagScores.push(x.result.score);
@@ -10974,8 +10977,9 @@ function buildProfileHTML(pi){
   var podiums = results.filter(function(x){ return x.pos<=3; }).length;
   var bestPos = numEvents ? Math.min.apply(null,results.map(function(x){return x.pos;})) : null;
   var worstPos = numEvents ? Math.max.apply(null,results.map(function(x){return x.pos;})) : null;
-  var slagR = results.filter(function(x){ return !x.event.isFinal && (!x.event.type||x.event.type==='slag') && x.result.score>0; });
-  var stabR = results.filter(function(x){ return !x.event.isFinal && x.event.type==='stableford' && x.result.score>0; });
+  // Bästa/snitt-score inkluderar finaler (rått resultat) - bara OoM-poängen nedan exkluderar dem.
+  var slagR = results.filter(function(x){ return (!x.event.type||x.event.type==='slag') && x.result.score>0; });
+  var stabR = results.filter(function(x){ return x.event.type==='stableford' && x.result.score>0; });
   var bestNetto = slagR.length ? Math.min.apply(null,slagR.map(function(x){return x.result.score;})) : null;
   var bestStab  = stabR.length ? Math.max.apply(null,stabR.map(function(x){return x.result.score;})) : null;
   var avgSlag   = slagR.length ? (slagR.reduce(function(s,x){return s+x.result.score;},0)/slagR.length).toFixed(1) : null;
@@ -14673,6 +14677,7 @@ var RELEASE_NOTES = [
   {
     date: '29 oktober 2026 (234)',
     items: [
+      { type: 'fixed', text: 'Spelarprofilens bästa netto/bästa Stableford/snitt och karriärstatistikens snittscore hoppade också över finaler. Nu räknas finalrundor in där också (med faktiskt resultat, inte det justerade). OoM-poäng påverkas inte - finaler ger fortfarande inga OoM-poäng.' },
       { type: 'fixed', text: 'Banstatistiken saknade banor som spelats i en final (t.ex. Nynäshamn), eftersom finaler felaktigt filtrerades bort i banlistan och i Heatmaps (mest spelade/högst snittscore/svåraste banor/distrikt). Finalrundor räknas nu in som vanliga rundor med sitt faktiska resultat (inte det justerade med försprång) - samma som banans egen profilsida och hålstatistiken redan gjorde.' }
     ]
   },
