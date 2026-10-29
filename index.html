@@ -2037,7 +2037,7 @@ function renderCourseStatsView() {
         if(!(entry.score > 0)) return;
         if(!courseMap[key]) courseMap[key] = { name:key, rounds:[], players:{} };
         var both = computeRoundBothResults(e, entry, courseDbEntryFor(key));
-        var rd = { netto:both.netto, brutto:both.brutto, poang:both.poang, shcp:both.shcp, isStab:isStab, date:e.date||'', name:p.name, username:p.username };
+        var rd = { netto:both.netto, brutto:both.brutto, poang:both.poang, poangEst:both.poangEst, shcp:both.shcp, isStab:isStab, date:e.date||'', name:p.name, username:p.username };
         courseMap[key].rounds.push(rd);
         if(!courseMap[key].players[p.name]) courseMap[key].players[p.name] = { name:p.name, username:p.username, rounds:[] };
         courseMap[key].players[p.name].rounds.push(rd);
@@ -2111,6 +2111,8 @@ function renderCourseStatsView() {
         // så slag- och Stableford-rundor på samma bana kan jämföras i båda kategorierna.
         var nR = c.rounds.filter(function(r){ return r.netto != null; });
         var pR = c.rounds.filter(function(r){ return r.poang != null; });
+        var pExact = pR.filter(function(r){ return !r.poangEst; }); // banrekord poäng: bara exakta
+        var anyEst = pR.some(function(r){ return r.poangEst; });
         var bR = c.rounds.filter(function(r){ return r.brutto != null && r.brutto > 0; });
         var primary = nR.length ? 'netto' : 'poang'; // rankning: netto om det finns, annars poäng
         var mean = function(arr, f){ return arr.length ? (arr.reduce(function(s2,r){ return s2+r[f]; },0)/arr.length).toFixed(1) : null; };
@@ -2122,7 +2124,7 @@ function renderCourseStatsView() {
         var cmpBrutto = function(x, y){ return (x.brutto - y.brutto) || dateOrd(x, y); };
         var recN = nR.length ? nR.slice().sort(cmpNetto)[0] : null;
         var recB = bR.length ? bR.slice().sort(cmpBrutto)[0] : null;
-        var recP = pR.length ? pR.slice().sort(cmpPoang)[0] : null;
+        var recP = pExact.length ? pExact.slice().sort(cmpPoang)[0] : null;
         var hasStab = c.rounds.some(function(r){ return r.isStab; }), hasSlag = c.rounds.some(function(r){ return !r.isStab; });
         var typeLabel = (hasStab && hasSlag) ? 'Slag & poängbogey' : (hasStab ? 'Poängbogey' : 'Slag');
         var img = getCourseImage(c.name);
@@ -2141,7 +2143,7 @@ function renderCourseStatsView() {
         };
         var tiles = '';
         if(nR.length) tiles += tile('Snitt netto', mean(nR,'netto'), null);
-        if(pR.length) tiles += tile('Snitt poäng', mean(pR,'poang'), null);
+        if(pR.length) tiles += tile('Snitt poäng'+(anyEst?' <span style="color:var(--gold)">≈</span>':''), pR.length ? (anyEst?'≈ ':'')+mean(pR,'poang') : null, null);
         if(recN) tiles += tile('Banrekord netto', recN.netto, recN, 'SHCP '+(recN.shcp!=null?recN.shcp:'?')+(recN.brutto!=null?' · brutto '+recN.brutto:''));
         if(recB) tiles += tile('Banrekord brutto', recB.brutto, recB, (recB.netto!=null?'netto '+recB.netto:''));
         if(recP) tiles += tile('Banrekord poäng', recP.poang+' p', recP, 'SHCP '+(recP.shcp!=null?recP.shcp:'?'));
@@ -2189,7 +2191,8 @@ function renderCourseStatsView() {
               '<div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+star+'</div>'+(subParts.length?'<div style="font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+subParts.join(' · ')+'</div>':'')+'</div></div>'+
             '<span style="text-align:right;'+(primary==='netto'?'color:var(--green-dark);font-weight:700':'color:var(--text)')+'">'+(b&&b.netto!=null?b.netto:dash)+'</span>'+
             '<span style="text-align:right;color:var(--text)">'+(b&&b.brutto!=null?b.brutto:dash)+'</span>'+
-            '<span style="text-align:right;'+(primary==='poang'?'color:var(--green-dark);font-weight:700':'color:var(--text-2)')+'">'+(b&&b.poang!=null?b.poang:dash)+'</span>'+
+            '<span style="text-align:right;'+(primary==='poang'?'color:var(--green-dark);font-weight:700':'color:var(--text-2)')+'"'+(b&&b.poangEst?' title="Uppskattad poäng - hål-för-hål-scorekort saknas"':'')+'>'+
+              (b&&b.poang!=null ? (b.poangEst ? '<span style="color:var(--gold);font-style:italic;white-space:nowrap">≈'+b.poang+'</span>' : b.poang) : dash)+'</span>'+
           '</div>';
         }).join('');
         return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
@@ -2206,6 +2209,10 @@ function renderCourseStatsView() {
               '<span style="text-align:center">#</span><span>Spelare</span><span style="text-align:right">Netto</span><span style="text-align:right">Brutto</span><span style="text-align:right">Poäng</span>'+
             '</div>'+playerRows+
           '</div>'+
+          (anyEst ? '<div style="margin:0 16px;padding:8px 10px 10px;font-size:11px;color:var(--text-2);line-height:1.4;border-top:1px dashed var(--border)">'+
+            '<span style="color:var(--gold);font-weight:700;font-style:italic">≈</span> = <strong>uppskattad poäng</strong>. Rundan saknar hål-för-hål-scorekort, så poängen är beräknad som 36 + banans par − netto. '+
+            'Det är ett tak: verklig poäng är samma eller lägre (ett hål kan aldrig ge under 0 p). Uppskattningar räknas inte till banrekord poäng.'+
+          '</div>' : '')+
           (players.length>visibleCount?'<div onclick="expandCourseStatsPlayers(\''+esc(c.name)+'\')" style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-2);text-align:center;cursor:pointer;font-weight:500">+' +Math.min(10,players.length-visibleCount)+' fler spelare</div>':'')+
         '</div>';
       }).join('');
@@ -10903,7 +10910,18 @@ function computeRoundBothResults(e, entry, course) {
       if(ok) poang = total;
     }
   }
-  return { netto: netto, brutto: brutto, poang: poang, shcp: shcp, isStab: isStab };
+  // Saknas hål-för-hål-scorekort för en slagrond uppskattas poängen ur netto:
+  //   ≈ 2 x antal hål + banans par - netto   (18 hål: 36 + par - netto)
+  // Det är ett TAK - verklig poäng är samma eller lägre, eftersom ett hål aldrig
+  // kan ge under 0 poäng (ett sprängt hål kostar fler slag än poäng). Markeras
+  // poangEst=true och räknas aldrig in i banrekord.
+  var poangEst = false;
+  if(poang == null && netto != null && course) {
+    var nH = (course.holePars && course.holePars.length) || course.holes || 18;
+    var par = (course.holePars && course.holePars.length) ? course.holePars.reduce(function(a,b){ return a+Number(b||0); }, 0) : (course.par || null);
+    if(par) { poang = Math.max(0, 2*nH + par - netto); poangEst = true; }
+  }
+  return { netto: netto, brutto: brutto, poang: poang, poangEst: poangEst, shcp: shcp, isStab: isStab };
 }
 
 function computeCourseHoleStats(courseName) {
@@ -14909,6 +14927,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (239)',
+    items: [
+      { type: 'improved', text: 'Banstatistiken visar nu uppskattad poäng för slagrundor som saknar hål-för-hål-scorekort (t.ex. där bara totalen matades in). Uppskattningen är 36 + banans par − netto och visas i guld kursiv med "≈" (t.ex. ≈30), med en förklaring under bankortet. Det är ett tak - verklig poäng är samma eller lägre, eftersom ett hål aldrig kan ge under 0 poäng. Snitt poäng märks med ≈ när uppskattningar ingår, och Banrekord poäng bygger bara på exakta poäng från kompletta scorekort.' }
+    ]
+  },
   {
     date: '29 oktober 2026 (238)',
     items: [
