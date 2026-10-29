@@ -1984,6 +1984,32 @@ function courseDbEntryFor(name) {
   return (courseDb||[]).find(function(x){ return (x.name||'').toLowerCase()===k; }) || null;
 }
 
+// 'golf' = riktig golf, 'sim' = simulatorgolf. Kommer ihåg valet per webbläsare.
+var _courseStatsMode = (function(){ try { return localStorage.getItem('courseStatsMode')==='sim' ? 'sim' : 'golf'; } catch(e){ return 'golf'; } })();
+function setCourseStatsMode(mode) {
+  if(mode !== 'sim') mode = 'golf';
+  if(_courseStatsMode === mode) return;
+  _courseStatsMode = mode;
+  try { localStorage.setItem('courseStatsMode', mode); } catch(e) {}
+  var el = document.getElementById('course-stats-content');
+  if(el) el.innerHTML = ''; // bygg om hela vyn (filtren skiljer sig mellan lägena)
+  renderCourseStatsView();
+}
+function courseStatsModeChooserHTML() {
+  var card = function(mode, icon, title, sub, color, bg){
+    var on = _courseStatsMode === mode;
+    return '<button type="button" onclick="setCourseStatsMode(\''+mode+'\')" style="flex:1;min-width:0;text-align:left;cursor:pointer;border-radius:12px;padding:12px 14px;font:inherit;'+
+      'border:2px solid '+(on?color:'var(--border)')+';background:'+(on?bg:'var(--surface)')+';color:var(--text)">'+
+      '<div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:'+(on?color:'var(--text)')+'"><i class="ti '+icon+'" style="font-size:20px"></i> '+title+(on?' <i class="ti ti-check" style="margin-left:auto"></i>':'')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+sub+'</div>'+
+    '</button>';
+  };
+  return '<div style="display:flex;gap:10px;margin-bottom:14px">'+
+    card('golf', 'ti-golf', 'Riktig golf', 'Rundor på banan', '#0F6E56', '#E1F5EE')+
+    card('sim', 'ti-device-desktop', 'Simulator', 'Simulatorrundor', '#6D28D9', '#F1EBFD')+
+  '</div>';
+}
+
 function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
@@ -1992,7 +2018,10 @@ function renderCourseStatsView() {
   // direkt, precis som övrig bana-/hål-/puttstatistik, istället för att vänta
   // på att HELA deltävlingen ska stängas av admin.
   var courseMap = {};
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  // Två separata databaser: riktig golf och simulator blandas aldrig. Vilken som
+  // visas styrs av valet överst i vyn (_courseStatsMode).
+  var simMode = _courseStatsMode === 'sim';
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== simMode) return;
     var players = getPlayersForTour(t);
     // Finaler räknas in som vanliga rundor (rått resultat, inte det justerade med
     // försprång) - de spelas ju på en riktig bana. Tidigare filtrerades de bort här,
@@ -2032,7 +2061,7 @@ function renderCourseStatsView() {
   if(distEl) filterDistrict = distEl.value;
 
   // Filter UI
-  var filterHtml = '<div id="csf-bar" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
+  var filterHtml = courseStatsModeChooserHTML() + '<div id="csf-bar" data-mode="'+_courseStatsMode+'" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
   filterHtml += '<div style="position:relative;flex:1;min-width:160px">'+
     '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
     '<input id="csf-name" type="text" placeholder="Sök bana..." value="'+esc(filterName)+'" oninput="applyCourseStatsFilter()" style="padding-left:32px;width:100%;box-sizing:border-box">'+
@@ -2041,9 +2070,11 @@ function renderCourseStatsView() {
     '<option value="">Alla distrikt</option>'+
     districts.map(function(d){ return '<option value="'+esc(d)+'"'+(d===filterDistrict?' selected':'')+'>'+esc(d)+'</option>'; }).join('')+
   '</select>';
-  filterHtml += '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Karta</button>';
-  filterHtml += '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-map-pin-search"></i> Nära mig</button>';
-  filterHtml += '<button class="btn btn-sm" onclick="openGolfHeatmaps()"><i class="ti ti-chart-bar"></i> Heatmaps</button>';
+  if(!simMode) { // karta/närhet/heatmaps gäller bara riktig golf
+    filterHtml += '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Karta</button>';
+    filterHtml += '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-map-pin-search"></i> Nära mig</button>';
+    filterHtml += '<button class="btn btn-sm" onclick="openGolfHeatmaps()"><i class="ti ti-chart-bar"></i> Heatmaps</button>';
+  }
   filterHtml += '</div>';
 
   var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
@@ -2053,10 +2084,10 @@ function renderCourseStatsView() {
   var setCourseStatsOutput = function(body){
     var bar = document.getElementById('csf-bar');
     var out = document.getElementById('csf-results');
-    if(bar && out && el.contains(bar) && el.contains(out)) { out.innerHTML = body; return; }
+    if(bar && out && el.contains(bar) && el.contains(out) && bar.getAttribute('data-mode')===_courseStatsMode) { out.innerHTML = body; return; }
     el.innerHTML = filterHtml + '<div id="csf-results">' + body + '</div>';
   };
-  if(!courses.length) { setCourseStatsOutput('<p class="empty">Inga avslutade tävlingar ännu.</p>'); return; }
+  if(!courses.length) { setCourseStatsOutput('<p class="empty">'+(simMode?'Inga simulatorrundor ännu.':'Inga avslutade tävlingar ännu.')+'</p>'); return; }
 
   // Apply filters
   var filtered = courses.filter(function(c){
@@ -8328,11 +8359,11 @@ function goToProfileFromModal(pi){
 }
 
 // ── KARRIÄRSTATISTIK (alla tourer & säsonger) ───────────────────────────────
-function computeCareerStats(username) {
+function computeCareerStats(username, sim) {
   var perTour = [];
   var totalWins = 0, totalPodiums = 0, totalEvents = 0, bestPosEver = null, totalPts = 0;
   var allSlagScores = [], allStabScores = [];
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return; // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username === username; });
     if(pi < 0) return; // spelaren har inte access till denna tour
@@ -8376,8 +8407,8 @@ function computeCareerStats(username) {
   };
 }
 
-function buildCareerStatsHTML(username) {
-  var c = computeCareerStats(username);
+function buildCareerStatsHTML(username, sim) {
+  var c = computeCareerStats(username, sim);
   if(!c.toursPlayed) return '';
   var cards = [
     { val:c.toursPlayed,  lbl:'Tourer spelade',  icon:'ti-calendar-event', color:'#185FA5' },
@@ -10952,10 +10983,10 @@ function buildSideBetStatsHTML(stats, title) {
   return h;
 }
 
-function computePlayerHoleStats(username) {
+function computePlayerHoleStats(username, sim) {
   var counts = emptyHoleCounts();
   var totalHolesPlayed = 0;
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return; // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
@@ -10995,6 +11026,89 @@ function computePlayerHoleCategoryLeaders(categoryKey) {
     });
   });
   return Object.keys(counts).map(function(u){ return counts[u]; }).sort(function(a,b){ return b.count-a.count; }).slice(0,10);
+}
+
+// Spelarens simulatorbanor: antal rundor och bästa netto per bana (bara simulatortourer).
+function computePlayerSimCourses(username) {
+  var map = {};
+  (S.tours||[]).forEach(function(t){ if(!isSimTour(t)) return;
+    var players = getPlayersForTour(t);
+    var pi = players.findIndex(function(p){ return p && p.username===username; });
+    if(pi < 0) return;
+    (t.events||[]).forEach(function(e){
+      var entry = getApprovedScoreForPlayerInEvent(e, pi);
+      if(!entry || !(entry.score > 0)) return;
+      var key = (e.course||'Okänd bana').trim();
+      var both = computeRoundBothResults(e, entry, courseDbEntryFor(key));
+      if(!map[key]) map[key] = { name:key, rounds:0, bestNetto:null, bestBrutto:null };
+      var m = map[key]; m.rounds++;
+      if(both.netto != null && (m.bestNetto == null || both.netto < m.bestNetto)) m.bestNetto = both.netto;
+      if(both.brutto != null && (m.bestBrutto == null || both.brutto < m.bestBrutto)) m.bestBrutto = both.brutto;
+    });
+  });
+  return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){ return b.rounds-a.rounds || a.name.localeCompare(b.name,'sv'); });
+}
+
+function buildSimCoursesHTML(username) {
+  var list = computePlayerSimCourses(username);
+  if(!list.length) return '';
+  return '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+    '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px"><i class="ti ti-device-desktop"></i> Simulatorbanor</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 52px 52px 52px;gap:4px;font-size:11px;color:var(--text-3);padding-bottom:6px;border-bottom:1px solid var(--border)"><span>Bana</span><span style="text-align:right">Rundor</span><span style="text-align:right">Bäst net</span><span style="text-align:right">Bäst brt</span></div>'+
+    list.map(function(c){
+      return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 52px 52px 52px;gap:4px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--border);align-items:center">'+
+        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</span>'+
+        '<span style="text-align:right;color:var(--text-2)">'+c.rounds+'</span>'+
+        '<span style="text-align:right;color:var(--green-dark);font-weight:700">'+(c.bestNetto!=null?c.bestNetto:'–')+'</span>'+
+        '<span style="text-align:right">'+(c.bestBrutto!=null?c.bestBrutto:'–')+'</span>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+
+// Statistikdelen på spelarprofilen (både tourprofil och global profil), med en
+// växlare Golf | Simulator. Båda lägena byggs direkt och växlaren visar/döljer -
+// ingen omritning behövs. Växlaren visas bara om spelaren har simulatorrundor.
+// Golf: karriär, hålstatistik, puttstatistik, golfkarta. Simulator: karriär,
+// hålstatistik och simulatorbanor (inga puttar och ingen karta i simulator).
+var _profileStatsMode = (function(){ try { return localStorage.getItem('profileStatsMode')==='sim' ? 'sim' : 'golf'; } catch(e){ return 'golf'; } })();
+var _profileStatsSeq = 0;
+function buildProfileStatsBlockHTML(username, name, defaultMode) {
+  var golfHtml = buildCareerStatsHTML(username, false)+
+    buildHoleStatsHTML(computePlayerHoleStats(username, false), 'Hålstatistik')+
+    buildPuttingStatsHTML(computePlayerPuttingStats(username))+
+    buildPlayerGolfMapStatsHTML(username, name);
+  var simHtml = buildCareerStatsHTML(username, true)+
+    buildHoleStatsHTML(computePlayerHoleStats(username, true), 'Hålstatistik (simulator)')+
+    buildSimCoursesHTML(username);
+  if(!simHtml) return golfHtml;
+  var mode = defaultMode || _profileStatsMode;
+  if(!golfHtml) mode = 'sim';
+  var id = 'pst'+(++_profileStatsSeq);
+  var btn = function(m, icon, label, color){
+    var on = mode===m;
+    return '<button type="button" class="pst-btn" data-m="'+m+'" data-c="'+color+'" onclick="setProfileStatsMode(\''+id+'\',\''+m+'\')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;'+
+      (on?'background:'+color+';color:#fff':'background:transparent;color:var(--text-2)')+'"><i class="ti '+icon+'"></i> '+label+'</button>';
+  };
+  return '<div id="'+id+'">'+
+    '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:12px">'+
+      btn('golf','ti-golf','Riktig golf','#0F6E56')+btn('sim','ti-device-desktop','Simulator','#6D28D9')+
+    '</div>'+
+    '<div class="pst-pane" data-m="golf"'+(mode==='golf'?'':' hidden')+'>'+(golfHtml||'<p class="empty">Inga golfrundor ännu.</p>')+'</div>'+
+    '<div class="pst-pane" data-m="sim"'+(mode==='sim'?'':' hidden')+'>'+simHtml+'</div>'+
+  '</div>';
+}
+function setProfileStatsMode(id, m) {
+  var root = document.getElementById(id);
+  if(!root) return;
+  _profileStatsMode = m;
+  try { localStorage.setItem('profileStatsMode', m); } catch(e) {}
+  Array.prototype.forEach.call(root.querySelectorAll('.pst-pane'), function(p){ p.hidden = p.getAttribute('data-m') !== m; });
+  Array.prototype.forEach.call(root.querySelectorAll('.pst-btn'), function(b){
+    var on = b.getAttribute('data-m') === m;
+    b.style.background = on ? b.getAttribute('data-c') : 'transparent';
+    b.style.color = on ? '#fff' : 'var(--text-2)';
+  });
 }
 
 function buildHoleStatsHTML(stats, title) {
@@ -11328,11 +11442,9 @@ function buildProfileHTML(pi){
         '</div>'+
       '</div>'+
     '</div>'+
-    buildCareerStatsHTML(p.username)+
-    buildHoleStatsHTML(computePlayerHoleStats(p.username), 'Hålstatistik')+
-    buildPuttingStatsHTML(computePlayerPuttingStats(p.username))+
+    // Inne i en simulatortour öppnas statistiken i simulatorläget, annars golf
+    buildProfileStatsBlockHTML(p.username, p.name, isSimTour(t) ? 'sim' : 'golf')+
     buildSideBetStatsHTML(computePlayerSideBetStats(p.username), 'Side bets')+
-    buildPlayerGolfMapStatsHTML(p.username, p.name)+
     swHtml+
     buildBagDisplayHTML(p, tourUser)+
     ((numEvents || pendingSubmissions.length)?
@@ -14798,6 +14910,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '29 oktober 2026 (238)',
+    items: [
+      { type: 'new', text: 'Egen statistik för simulatorgolf! Banstatistik har nu två separata databaser: välj "Riktig golf" eller "Simulator" överst på sidan. Simulatorläget har samma bankort (banrekord netto/brutto/poäng, rankning på bästa runda med SHCP-särskiljning) men bygger bara på simulatortourer. Karta, Nära mig och Heatmaps finns bara för riktig golf. Valet kommer ihåg till nästa gång.' },
+      { type: 'new', text: 'Spelarprofilen har en växlare "Riktig golf | Simulator" för statistiken (visas bara för spelare som har simulatorrundor). Golf: karriärstatistik, hålstatistik, puttstatistik och golfkarta. Simulator: karriärstatistik, hålstatistik och en lista över spelade simulatorbanor med bästa netto/brutto. Side bets, Styrkor & svagheter och bagen är gemensamma. Inne i en simulatortour öppnas profilen direkt i simulatorläget. Golf och simulator blandas aldrig - topplistor, heatmaps, banprofiler och golfkarta bygger fortfarande bara på riktig golf.' }
+    ]
+  },
+  {
     date: '29 oktober 2026 (237)',
     items: [
       { type: 'fixed', text: 'Sökfältet "Sök bana..." i Banstatistik tappade fokus efter varje inmatat tecken på mobilen (man hoppade ur fältet och tangentbordet stängdes), eftersom hela vyn inklusive sökfältet byggdes om vid varje knapptryckning. Nu byggs bara resultatlistan om medan man skriver. Samma fel fanns i "Sök bland registrerade spelare" (Spelare-fliken) och sökningen i Bandatabasen - fixat där också.' }
@@ -17443,9 +17562,7 @@ function buildGlobalPlayerProfileHTML(username) {
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
   h += '</div>';
 
-  h += buildCareerStatsHTML(u.username);
-  h += buildHoleStatsHTML(computePlayerHoleStats(u.username), 'Hålstatistik');
-  h += buildPuttingStatsHTML(computePlayerPuttingStats(u.username));
+  h += buildProfileStatsBlockHTML(u.username, displayName);
   h += buildSideBetStatsHTML(computePlayerSideBetStats(u.username), 'Side bets');
 
   // Styrkor och svagheter - samma "Alt 1"-design (punktlista på genomgående grå
@@ -17484,7 +17601,7 @@ function buildGlobalPlayerProfileHTML(username) {
   h += swHtml;
 
   h += buildBagDisplayHTML({username: u.username}, u);
-  h += buildPlayerGolfMapStatsHTML(u.username, displayName);
+  // (Golfkartan ligger nu i statistikblockets Golf-läge ovan)
 
   return h;
 }
