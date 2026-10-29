@@ -9877,9 +9877,10 @@ function openPushSettings() {
   Promise.all([
     PUSH_PREFS_COL.doc(currentUser.username).get().catch(function(){ return null; }),
     isAdmin() ? PUSH_CONFIG_REF.get().catch(function(){ return null; }) : Promise.resolve(null),
-    PUSH_TOKENS_COL.where('username','==',currentUser.username).get().catch(function(){ return null; })
+    PUSH_TOKENS_COL.where('username','==',currentUser.username).get().catch(function(){ return null; }),
+    isAdmin() ? PUSH_TOKENS_COL.get().catch(function(){ return null; }) : Promise.resolve(null)
   ]).then(function(res){
-    var prefsDoc = res[0], cfgDoc = res[1], myTokens = res[2];
+    var prefsDoc = res[0], cfgDoc = res[1], myTokens = res[2], allTokens = res[3];
     _pushPrefs = (prefsDoc && prefsDoc.exists) ? prefsDoc.data() : {};
     var deviceCount = myTokens ? myTokens.size : 0;
     var h = '<h3 style="margin-bottom:4px"><i class="ti ti-bell" style="color:var(--green-dark)"></i> Notiser</h3>';
@@ -9916,6 +9917,7 @@ function openPushSettings() {
     // Admin
     if(isAdmin()) {
       var vk = (cfgDoc && cfgDoc.exists && cfgDoc.data().vapidKey) || '';
+      h += buildPushAdoptionHTML(allTokens);
       h += '<details style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px"'+(vk?'':' open')+'>'+
         '<summary style="cursor:pointer;font-weight:600;font-size:13px"><i class="ti ti-shield"></i> Admin</summary>'+
         '<div style="margin-top:10px">'+
@@ -9930,6 +9932,47 @@ function openPushSettings() {
     h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
     showModal(h);
   });
+}
+
+// Admin: vilka spelare som har notiser påslagna (minst en registrerad enhet).
+function buildPushAdoptionHTML(allTokens) {
+  var byUser = {};
+  if(allTokens) allTokens.forEach(function(d){
+    var x = d.data() || {}; var u = String(x.username||'').toLowerCase(); if(!u) return;
+    (byUser[u] = byUser[u] || []).push(x);
+  });
+  var players = (S.users||[]).filter(function(u){
+    var plays = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
+    return plays || byUser[String(u.username||'').toLowerCase()];
+  }).map(function(u){
+    var devs = byUser[String(u.username||'').toLowerCase()] || [];
+    var last = devs.reduce(function(m, d){ return Math.max(m, d.updatedAt||0); }, 0);
+    var plats = devs.map(function(d){ return d.platform; }).filter(function(v, i, a){ return v && a.indexOf(v)===i; });
+    return { name: u.name || u.username, on: devs.length > 0, n: devs.length, plats: plats, last: last };
+  }).sort(function(a,b){ return (b.on - a.on) || a.name.localeCompare(b.name,'sv'); });
+  if(!players.length) return '';
+  var onCount = players.filter(function(p){ return p.on; }).length;
+  var pct = Math.round(onCount/players.length*100);
+  var platIcon = { ios:'ti-brand-apple', android:'ti-brand-android', desktop:'ti-device-desktop' };
+  var platLbl = { ios:'iPhone', android:'Android', desktop:'Dator' };
+  var fmtDay = function(ts){ if(!ts) return ''; var d = new Date(ts); return d.getDate()+'/'+(d.getMonth()+1); };
+  var h = '<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:12px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px">'+
+      '<div style="font-weight:700;font-size:13px"><i class="ti ti-users"></i> Vilka har notiser på?</div>'+
+      '<div style="font-size:13px;font-weight:800;color:var(--green-dark)">'+onCount+' av '+players.length+'</div></div>'+
+    '<div style="height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+pct+'%;background:var(--green)"></div></div>'+
+    players.map(function(p){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:13px">'+
+        '<i class="ti '+(p.on?'ti-bell-check':'ti-bell-off')+'" style="font-size:16px;color:'+(p.on?'var(--green-dark)':'var(--text-3)')+'"></i>'+
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'+(p.on?'':'color:var(--text-3)')+'">'+esc(p.name)+'</span>'+
+        (p.on
+          ? '<span style="font-size:11px;color:var(--text-3);white-space:nowrap">'+p.plats.map(function(x){ return '<i class="ti '+(platIcon[x]||'ti-device-mobile')+'" title="'+(platLbl[x]||x)+'"></i>'; }).join(' ')+(p.n>1?' '+p.n+' enheter':'')+(p.last?' · '+fmtDay(p.last):'')+'</span>'
+          : '<span style="font-size:11px;color:var(--text-3)">Ej aktiverat</span>')+
+      '</div>';
+    }).join('')+
+    '<div style="font-size:11px;color:var(--text-3);margin-top:6px">Datum = senast enheten registrerades. Spelare utan notiser ser rutan "Slå på notiser" på startsidan.</div>'+
+  '</div>';
+  return h;
 }
 
 function savePushVapidKey() {
@@ -15781,6 +15824,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (247)',
+    items: [
+      { type: 'new', text: 'Admin: under 🔔 Notiser finns nu "Vilka har notiser på?" - hur många av spelarna som slagit på notiser (t.ex. 8 av 12) med en stapel, och en lista med namn, vilken typ av enhet (iPhone/Android/dator) och när den senast registrerades. De som inte aktiverat visas gråade med "Ej aktiverat".' }
+    ]
+  },
   {
     date: '30 oktober 2026 (246)',
     items: [
