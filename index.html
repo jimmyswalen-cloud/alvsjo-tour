@@ -1989,7 +1989,11 @@ function renderCourseStatsView() {
   var courseMap = {};
   (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     var players = getPlayersForTour(t);
-    (t.events||[]).filter(function(e){ return !e.isFinal; }).forEach(function(e){
+    // Finaler räknas in som vanliga rundor (rått resultat, inte det justerade med
+    // försprång) - de spelas ju på en riktig bana. Tidigare filtrerades de bort här,
+    // så en bana som bara spelats i en final (t.ex. Nynäshamn) saknades helt i listan,
+    // fast den syntes på banans egen profilsida.
+    (t.events||[]).forEach(function(e){
       var key = (e.course||'Okänd bana').trim();
       var isStab = e.type === 'stableford';
       players.forEach(function(p, pi){
@@ -14213,7 +14217,7 @@ function initTourMap(t) {
 function computeGolfHeatmaps() {
   var courseRounds = {}; // key(lower) -> {name, rounds:[{score,isStab}], district}
   (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
-    (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && e.course && !e.isFinal; }).forEach(function(e){
+    (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && e.course; }).forEach(function(e){ // inkl. finaler (rått resultat r.score)
       var key = e.course.trim().toLowerCase();
       if(!key) return;
       if(!courseRounds[key]) {
@@ -14666,6 +14670,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (234)',
+    items: [
+      { type: 'fixed', text: 'Banstatistiken saknade banor som spelats i en final (t.ex. Nynäshamn), eftersom finaler felaktigt filtrerades bort i banlistan och i Heatmaps (mest spelade/högst snittscore/svåraste banor/distrikt). Finalrundor räknas nu in som vanliga rundor med sitt faktiska resultat (inte det justerade med försprång) - samma som banans egen profilsida och hålstatistiken redan gjorde.' }
+    ]
+  },
   {
     date: '29 oktober 2026 (233)',
     items: [
