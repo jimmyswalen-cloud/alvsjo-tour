@@ -1979,6 +1979,11 @@ function expandCourseStatsPlayers(courseName) {
   renderCourseStatsView();
 }
 
+function courseDbEntryFor(name) {
+  var k = (name||'').trim().toLowerCase();
+  return (courseDb||[]).find(function(x){ return (x.name||'').toLowerCase()===k; }) || null;
+}
+
 function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
@@ -2000,11 +2005,13 @@ function renderCourseStatsView() {
         if(!p) return;
         var entry = getApprovedScoreForPlayerInEvent(e, pi);
         if(!entry || entry.score == null) return;
-        var golfResult = entry.score || 0;
+        if(!(entry.score > 0)) return;
         if(!courseMap[key]) courseMap[key] = { name:key, rounds:[], players:{} };
-        courseMap[key].rounds.push({ golfResult:golfResult, isStab:isStab });
+        var both = computeRoundBothResults(e, entry, courseDbEntryFor(key));
+        var rd = { netto:both.netto, brutto:both.brutto, poang:both.poang, shcp:both.shcp, isStab:isStab, date:e.date||'', name:p.name, username:p.username };
+        courseMap[key].rounds.push(rd);
         if(!courseMap[key].players[p.name]) courseMap[key].players[p.name] = { name:p.name, username:p.username, rounds:[] };
-        courseMap[key].players[p.name].rounds.push({ golfResult:golfResult, isStab:isStab });
+        courseMap[key].players[p.name].rounds.push(rd);
       });
     });
   });
@@ -2060,44 +2067,89 @@ function renderCourseStatsView() {
   var cardsHtml = filtered.length === 0
     ? '<p class="empty">Inga banor matchar filtret.</p>'
     : filtered.map(function(c){
-        var stabR = c.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
-        var slagR = c.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
-        var useStab = stabR.length >= slagR.length && stabR.length > 0;
-        var statR = useStab ? stabR : slagR;
-        var avg = statR.length ? (statR.reduce(function(s,r){return s+r.golfResult;},0)/statR.length).toFixed(1) : '-';
-        var best = statR.length ? (useStab ? Math.max : Math.min).apply(null, statR.map(function(r){return r.golfResult;})) : '-';
-        var avgLabel = useStab ? 'Snitt poäng' : 'Snitt netto';
-        var bestLabel = useStab ? 'Bästa runda' : 'Bästa netto';
-        var typeLabel = (stabR.length&&slagR.length) ? 'Blandat' : (useStab?'Stableford':'Slag');
+        // Både netto och poäng räknas fram för varje rond (se computeRoundBothResults),
+        // så slag- och Stableford-rundor på samma bana kan jämföras i båda kategorierna.
+        var nR = c.rounds.filter(function(r){ return r.netto != null; });
+        var pR = c.rounds.filter(function(r){ return r.poang != null; });
+        var bR = c.rounds.filter(function(r){ return r.brutto != null && r.brutto > 0; });
+        var primary = nR.length ? 'netto' : 'poang'; // rankning: netto om det finns, annars poäng
+        var mean = function(arr, f){ return arr.length ? (arr.reduce(function(s2,r){ return s2+r[f]; },0)/arr.length).toFixed(1) : null; };
+        var shcpOrd = function(r){ return r.shcp == null ? 999 : r.shcp; };
+        var dateOrd = function(x, y){ return (x.date||'').localeCompare(y.date||''); };
+        // Banrekord - särskiljning: netto/poäng -> lägst SHCP, sedan först satt; brutto -> först satt
+        var cmpNetto = function(x, y){ return (x.netto - y.netto) || (shcpOrd(x) - shcpOrd(y)) || dateOrd(x, y); };
+        var cmpPoang = function(x, y){ return (y.poang - x.poang) || (shcpOrd(x) - shcpOrd(y)) || dateOrd(x, y); };
+        var cmpBrutto = function(x, y){ return (x.brutto - y.brutto) || dateOrd(x, y); };
+        var recN = nR.length ? nR.slice().sort(cmpNetto)[0] : null;
+        var recB = bR.length ? bR.slice().sort(cmpBrutto)[0] : null;
+        var recP = pR.length ? pR.slice().sort(cmpPoang)[0] : null;
+        var hasStab = c.rounds.some(function(r){ return r.isStab; }), hasSlag = c.rounds.some(function(r){ return !r.isStab; });
+        var typeLabel = (hasStab && hasSlag) ? 'Slag & poängbogey' : (hasStab ? 'Poängbogey' : 'Slag');
         var img = getCourseImage(c.name);
-        var dbEntry = (courseDb||[]).find(function(x){ return x.name.toLowerCase()===c.name.toLowerCase(); });
+        var dbEntry = courseDbEntryFor(c.name);
         var districtBadge = (dbEntry&&dbEntry.district)
           ? ' &nbsp;<span style="font-size:11px;background:var(--surface2);border:1px solid var(--border);padding:1px 7px;border-radius:20px;color:var(--text-2)">'+esc(dbEntry.district)+'</span>'
           : '';
-        var players = Object.values(c.players).sort(function(a,b){
-          var getAvg = function(rounds, stab){
-            var rs = rounds.filter(function(r){ return r.isStab===stab && r.golfResult>0; });
-            if(!rs.length) return stab ? 0 : 999;
-            return rs.reduce(function(s,r){return s+r.golfResult;},0)/rs.length;
-          };
-          var st = b.rounds.some(function(r){ return r.isStab; });
-          return st ? getAvg(b.rounds,true)-getAvg(a.rounds,true) : getAvg(a.rounds,false)-getAvg(b.rounds,false);
+        var fmtDate = function(d){ return d ? formatSvDateShort(d)+' '+String(d).slice(0,4) : ''; };
+        var tile = function(label, val, rec, extra){
+          return '<div style="padding:10px 12px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:0">'+
+            '<div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+label+'</div>'+
+            '<div style="font-size:20px;font-weight:600;color:'+(rec?'var(--green-dark)':'var(--text)')+'">'+(val==null?'–':val)+'</div>'+
+            (rec ? '<div style="font-size:12px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(rec.name)+'"><i class="ti ti-trophy" style="font-size:12px;color:var(--gold);vertical-align:-1px"></i> '+esc(rec.name)+'</div>'+
+                   '<div style="font-size:11px;color:var(--text-3);white-space:nowrap">'+(extra||'')+(rec.date?(extra?' · ':'')+fmtDate(rec.date):'')+'</div>' : '')+
+          '</div>';
+        };
+        var tiles = '';
+        if(nR.length) tiles += tile('Snitt netto', mean(nR,'netto'), null);
+        if(pR.length) tiles += tile('Snitt poäng', mean(pR,'poang'), null);
+        if(recN) tiles += tile('Banrekord netto', recN.netto, recN, 'SHCP '+(recN.shcp!=null?recN.shcp:'?')+(recN.brutto!=null?' · brutto '+recN.brutto:''));
+        if(recB) tiles += tile('Banrekord brutto', recB.brutto, recB, (recB.netto!=null?'netto '+recB.netto:''));
+        if(recP) tiles += tile('Banrekord poäng', recP.poang+' p', recP, 'SHCP '+(recP.shcp!=null?recP.shcp:'?'));
+
+        // Spelarlistan: rankas på varje spelares bästa runda (netto, lika -> lägre SHCP).
+        var cmpRound = primary==='netto' ? cmpNetto : cmpPoang;
+        var players = Object.values(c.players).map(function(p){
+          var rs = p.rounds.filter(function(r){ return r[primary] != null; });
+          var bestRound = rs.length ? rs.slice().sort(cmpRound)[0] : null;
+          var avgN = mean(p.rounds.filter(function(r){ return r.netto != null; }), 'netto');
+          return { name:p.name, username:p.username, best:bestRound, avg:avgN, n:p.rounds.length };
+        }).sort(function(a,b){
+          if(a.best && !b.best) return -1;
+          if(!a.best && b.best) return 1;
+          if(a.best && b.best) { var d = cmpRound(a.best, b.best); if(d) return d; }
+          return (a.name||'').localeCompare(b.name||'', 'sv');
+        });
+        var sameRank = function(x, y){ return x[primary]===y[primary] && shcpOrd(x)===shcpOrd(y); };
+        var rankOf = [];
+        players.forEach(function(p, idx){
+          if(idx>0 && p.best && players[idx-1].best && sameRank(p.best, players[idx-1].best)) rankOf[idx] = rankOf[idx-1];
+          else rankOf[idx] = p.best ? idx+1 : null;
         });
         var visibleCount = _courseStatsExpanded[c.name] || 5;
-        var playerRows = players.slice(0,visibleCount).map(function(p){
-          var pS = p.rounds.filter(function(r){ return r.isStab && r.golfResult>0; });
-          var pL = p.rounds.filter(function(r){ return !r.isStab && r.golfResult>0; });
-          var pUseS = pS.length >= pL.length && pS.length > 0;
-          var pR = pUseS ? pS : pL;
-          var pAvg = pR.length ? (pR.reduce(function(s,r){return s+r.golfResult;},0)/pR.length).toFixed(1) : '-';
-          var pBest = pR.length ? (pUseS ? Math.max : Math.min).apply(null, pR.map(function(r){return r.golfResult;})) : '-';
+        var COLS = '24px minmax(0,1fr) 42px 46px 42px';
+        var dash = '<span style="color:var(--text-3)">–</span>';
+        var playerRows = players.slice(0,visibleCount).map(function(p, idx){
+          var rk = rankOf[idx];
+          var rankHtml = rk==null ? dash
+            : (rk<=3 ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;background:'+(['#D4A017','#9CA3AF','#B87333'][rk-1])+'">'+rk+'</span>'
+                     : '<span style="font-size:12px;font-weight:600;color:var(--text-2)">'+rk+'</span>');
           var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
           var pImg = playerPhoto(p.username, pUser&&pUser.img);
           var pIni = ini(p.name);
-          return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username)+'\')" style="display:grid;grid-template-columns:1fr 56px 56px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center;cursor:pointer">'+
-            '<div style="display:flex;align-items:center;gap:8px">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2)">'+pIni+'</div>')+esc(p.name)+'</div>'+
-            '<span style="text-align:right;color:var(--green-dark);font-weight:600">'+pAvg+'</span>'+
-            '<span style="text-align:right;color:var(--green-dark)">'+pBest+'</span>'+
+          var b = p.best;
+          var subParts = [];
+          if(b) subParts.push('SHCP '+(b.shcp!=null?b.shcp:'?'));
+          if(p.n>1 && p.avg!=null) subParts.push('snitt '+p.avg);
+          // Pokal vid namnet om spelaren håller något av banrekorden
+          var holds = [recN, recB, recP].some(function(r){ return r && r.username===p.username; });
+          var star = holds ? ' <i class="ti ti-trophy" style="font-size:12px;color:var(--gold)" title="Banrekord"></i>' : '';
+          return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username)+'\')" style="display:grid;grid-template-columns:'+COLS+';gap:4px;font-size:13px;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border);align-items:center;cursor:pointer">'+
+            '<div style="text-align:center">'+rankHtml+'</div>'+
+            '<div style="display:flex;align-items:center;gap:8px;min-width:0">'+(pImg?'<img src="'+pImg+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div style="width:26px;height:26px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text-2);flex-shrink:0">'+pIni+'</div>')+
+              '<div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+star+'</div>'+(subParts.length?'<div style="font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+subParts.join(' · ')+'</div>':'')+'</div></div>'+
+            '<span style="text-align:right;'+(primary==='netto'?'color:var(--green-dark);font-weight:700':'color:var(--text)')+'">'+(b&&b.netto!=null?b.netto:dash)+'</span>'+
+            '<span style="text-align:right;color:var(--text)">'+(b&&b.brutto!=null?b.brutto:dash)+'</span>'+
+            '<span style="text-align:right;'+(primary==='poang'?'color:var(--green-dark);font-weight:700':'color:var(--text-2)')+'">'+(b&&b.poang!=null?b.poang:dash)+'</span>'+
           '</div>';
         }).join('');
         return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
@@ -2106,13 +2158,12 @@ function renderCourseStatsView() {
             '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+esc(c.name)+districtBadge+'</div>'+
             '<div style="font-size:12px;color:var(--text-3)">'+c.rounds.length+(c.rounds.length!==1?' rundor':' runda')+' · '+typeLabel+'</div></div>'+
           '</div>'+
-          '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">'+
-            '<div style="padding:10px 16px;border-right:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+avgLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--text)">'+avg+'</div></div>'+
-            '<div style="padding:10px 16px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">'+bestLabel+'</div><div style="font-size:20px;font-weight:600;color:var(--green-dark)">'+best+'</div></div>'+
-          '</div>'+
+          // Rutnät med 2 kolumner; sista rutans kantlinjer döljs via negativ marginal
+          '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 -1px -1px 0">'+tiles+'</div>'+
           '<div style="padding:0 16px">'+
-            '<div style="display:grid;grid-template-columns:1fr 56px 56px;font-size:11px;color:var(--text-3);padding:7px 0;border-bottom:1px solid var(--border)">'+
-              '<span>Spelare</span><span style="text-align:right">Snitt</span><span style="text-align:right">Bäst</span>'+
+            '<div style="font-size:11px;color:var(--text-3);padding:8px 0 2px">Spelarnas bästa runda, rankad på '+(primary==='netto'?'netto (lika netto → lägre SHCP först)':'poäng (lika poäng → lägre SHCP först)')+'</div>'+
+            '<div style="display:grid;grid-template-columns:'+COLS+';gap:4px;font-size:11px;color:var(--text-3);padding:5px 0 7px;border-bottom:1px solid var(--border)">'+
+              '<span style="text-align:center">#</span><span>Spelare</span><span style="text-align:right">Netto</span><span style="text-align:right">Brutto</span><span style="text-align:right">Poäng</span>'+
             '</div>'+playerRows+
           '</div>'+
           (players.length>visibleCount?'<div onclick="expandCourseStatsPlayers(\''+esc(c.name)+'\')" style="padding:9px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text-2);text-align:center;cursor:pointer;font-weight:500">+' +Math.min(10,players.length-visibleCount)+' fler spelare</div>':'')+
@@ -10742,14 +10793,62 @@ function getApprovedHolesForPlayerInEvent(e, pi) {
 // stänger HELA deltävlingen.
 function getApprovedScoreForPlayerInEvent(e, pi) {
   var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+  // Returnerar även brutto (totala slag) och rondens SHCP när de finns, så att
+  // banstatistiken kan visa brutto och särskilja lika netto (lägre SHCP vinner).
+  var bruttoOf = function(o){
+    if(o.brutto != null && !isNaN(o.brutto) && o.brutto > 0) return Number(o.brutto);
+    if(o.holes && o.holes.length && o.holes.every(function(h){ return h != null && h > 0; })) {
+      return o.holes.reduce(function(a,h){ return a + Number(h); }, 0);
+    }
+    return null;
+  };
+  var shcpOf = function(o){ return (o.shcp != null && !isNaN(o.shcp)) ? Math.round(o.shcp) : null; };
   if(sub && isSubmissionApproved(sub) && sub.score != null) {
-    return { score: sub.score };
+    return { score: sub.score, brutto: bruttoOf(sub), shcp: shcpOf(sub), holes: sub.holes || null };
   }
   if(e.closed && e.results) {
     var r = e.results.find(function(x){ return x.pi===pi; });
-    if(r && r.score != null) return { score: r.score };
+    if(r && r.score != null) {
+      // Saknar resultatraden brutto/SHCP (t.ex. manuellt inmatat) - ta det från inskickat scorekort om det finns
+      var b = bruttoOf(r), sh = shcpOf(r), hl = r.holes || null;
+      if(sub) { if(b == null) b = bruttoOf(sub); if(sh == null) sh = shcpOf(sub); if(!hl) hl = sub.holes || null; }
+      return { score: r.score, brutto: b, shcp: sh, holes: hl };
+    }
   }
   return null;
+}
+
+// Räknar fram BÅDA resultattyperna för en rond, oavsett om deltävlingen spelades
+// som slag eller poängbogey (Stableford):
+//   netto  = slag: rondens resultat. Stableford: brutto - SHCP (kräver brutto + SHCP).
+//   poang  = Stableford: rondens resultat. Slag: räknas hål för hål från scorekortet
+//            (kräver alla hål + banans par/hcp-index i bandatabasen).
+//   brutto = totala slag (från scorekortet eller inmatat brutto).
+// Saknas underlag för en typ blir den null - den rundan räknas då bara i den typ den har.
+function computeRoundBothResults(e, entry, course) {
+  var isStab = e.type === 'stableford';
+  var brutto = entry.brutto != null ? entry.brutto : null;
+  var shcp = entry.shcp != null ? entry.shcp : null;
+  var netto = null, poang = null;
+  if(isStab) {
+    poang = entry.score;
+    if(brutto != null && shcp != null) netto = brutto - shcp;
+  } else {
+    netto = entry.score;
+    var holes = entry.holes;
+    if(holes && course && course.holePars && course.holePars.length && shcp != null &&
+       holes.length >= course.holePars.length) {
+      var n = course.holePars.length, total = 0, ok = true;
+      for(var i=0; i<n; i++) {
+        var g = holes[i];
+        if(g == null || isNaN(g) || g <= 0) { ok = false; break; }
+        var idx = (course.holeHcpIndex && course.holeHcpIndex[i] != null) ? course.holeHcpIndex[i] : (i+1);
+        total += computeHoleStablefordPoints(Number(g), course.holePars[i], computeHcpStrokesForHole(shcp, idx, n));
+      }
+      if(ok) poang = total;
+    }
+  }
+  return { netto: netto, brutto: brutto, poang: poang, shcp: shcp, isStab: isStab };
 }
 
 function computeCourseHoleStats(courseName) {
@@ -14674,6 +14773,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (236)',
+    items: [
+      { type: 'new', text: 'Banrekord i Banstatistiken! Varje bankort visar nu Banrekord netto, Banrekord brutto och (när det går att räkna fram) Banrekord poäng - med vem som håller rekordet, rundans SHCP och datum. Lika netto/poäng särskiljs med lägre SHCP, därefter den som satte det först. Lika brutto: den som satte det först.' },
+      { type: 'improved', text: 'Banstatistiken räknar nu fram BÅDA resultattyperna för varje rond, oavsett om den spelades som slag eller poängbogey: en slagrond får även Stableford-poäng (räknat hål för hål från scorekortet med banans par/hcp-index och rondens SHCP), och en poängbogeyrond får även netto (brutto minus SHCP). Därmed kan alla rundor på en bana jämföras i båda kategorierna. Spelarlistan visar nu Netto, Brutto och Poäng för spelarens bästa runda, med rundans SHCP och spelarens nettosnitt (vid flera rundor) under namnet. Pokal vid namnet = håller ett banrekord.' }
+    ]
+  },
+  {
+    date: '29 oktober 2026 (235)',
+    items: [
+      { type: 'improved', text: 'Banstatistikens spelarlista rankas nu på varje spelares bästa runda på banan (lägst netto, eller flest poäng på Stableford-banor) med placeringssiffra (1-3 med guld/silver/brons). Lika resultat särskiljs med SHCP för den rundan - lägre SHCP placeras före, som vid särskiljning i en tävling (t.ex. 77 netto på SHCP 8 före 77 netto på SHCP 12). Ny kolumn Brutto visar totala slag för den bästa rundan, och under namnet syns rundans SHCP och antal rundor på banan.' }
+    ]
+  },
   {
     date: '29 oktober 2026 (234)',
     items: [
