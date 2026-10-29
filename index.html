@@ -2082,18 +2082,20 @@ function renderScoreStatsHTML(sim) {
   '</div>';
   HOLE_CATEGORY_META.forEach(function(cat){
     var total = st.totals[cat.key] || 0;
-    // Flest av kategorin; lika antal -> delad placering (sorteras sedan på färre spelade hål)
+    // Rankas på ANDEL av spelarens hål (inte antal), så den som spelat fler rundor
+    // inte automatiskt hamnar överst. Lika andel -> delad placering (sedan flest antal).
+    var share = function(p){ return p.holes ? p.counts[cat.key]/p.holes : 0; };
     var list = st.players.filter(function(p){ return p.counts[cat.key] > 0; }).sort(function(a,b){
-      return (b.counts[cat.key]-a.counts[cat.key]) || (a.holes-b.holes) || (a.name||'').localeCompare(b.name||'','sv');
+      return (share(b)-share(a)) || (b.counts[cat.key]-a.counts[cat.key]) || (a.name||'').localeCompare(b.name||'','sv');
     });
     var rank = [];
-    list.forEach(function(p, i){ rank[i] = (i>0 && p.counts[cat.key]===list[i-1].counts[cat.key]) ? rank[i-1] : i+1; });
+    list.forEach(function(p, i){ rank[i] = (i>0 && Math.abs(share(p)-share(list[i-1]))<1e-9) ? rank[i-1] : i+1; });
     var leaders = list.filter(function(p, i){ return rank[i]===1; });
     h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">';
     h += '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)">'+
       '<span style="font-size:22px">'+cat.icon+'</span>'+
       '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px;color:'+cat.color+'">'+esc(cat.label)+'</div>'+
-        '<div style="font-size:12px;color:var(--text-3)">'+(leaders.length ? 'Flest: <strong style="color:var(--text)">'+esc(leaders.map(function(p){return p.name;}).join(', '))+'</strong> ('+leaders[0].counts[cat.key]+')' : 'Ingen ännu')+'</div></div>'+
+        '<div style="font-size:12px;color:var(--text-3)">'+(leaders.length ? 'Högst andel: <strong style="color:var(--text)">'+esc(leaders.map(function(p){return p.name;}).join(', '))+'</strong> ('+pct(leaders[0].counts[cat.key], leaders[0].holes)+')' : 'Ingen ännu')+'</div></div>'+
       '<div style="text-align:right"><div style="font-size:22px;font-weight:800;color:'+cat.color+'">'+total+'</div><div style="font-size:11px;color:var(--text-3)">'+pct(total, st.totalHoles)+' av hålen</div></div>'+
     '</div>';
     if(list.length) {
@@ -2105,8 +2107,8 @@ function renderScoreStatsHTML(sim) {
         return '<div onclick="goToGlobalPlayerFromCourseStats(\''+esc(p.username||'')+'\')" style="display:grid;grid-template-columns:24px minmax(0,1fr) 44px 64px;gap:6px;align-items:center;padding:8px 0;font-size:13px;cursor:pointer;'+(i<shown.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
           '<div style="text-align:center">'+badge+'</div>'+
           '<div style="min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</div><div style="font-size:11px;color:var(--text-3)">'+p.rounds+(p.rounds===1?' runda':' rundor')+' · '+p.holes+' hål</div></div>'+
-          '<div style="text-align:right;font-weight:700;color:'+cat.color+'">'+p.counts[cat.key]+'</div>'+
-          '<div style="text-align:right;font-size:12px;color:var(--text-2)">'+pct(p.counts[cat.key], p.holes)+'</div>'+
+          '<div style="text-align:right;font-size:12px;color:var(--text-2)">'+p.counts[cat.key]+' st</div>'+
+          '<div style="text-align:right;font-weight:700;color:'+cat.color+'">'+pct(p.counts[cat.key], p.holes)+'</div>'+
         '</div>';
       }).join('')+'</div>';
       if(list.length > 5) h += '<div style="padding:7px 16px;font-size:11px;color:var(--text-3);background:var(--surface2);border-top:1px solid var(--border)">+'+(list.length-5)+' fler spelare med '+esc(cat.label.toLowerCase())+'</div>';
@@ -15043,6 +15045,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (243)',
+    items: [
+      { type: 'improved', text: 'Scorestatistiken rankar nu spelarna på andel (procent av spelarens hål) istället för antal, så den som spelat flest rundor inte automatiskt hamnar överst. Procenten visas i fetstil och antalet bredvid; "Flest" heter nu "Högst andel".' }
+    ]
+  },
   {
     date: '30 oktober 2026 (242)',
     items: [
