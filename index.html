@@ -6466,36 +6466,102 @@ function eventCardHTML(i,e) {
       var status = reg ? (reg.declined ? 'declined' : 'registered') : 'unknown';
       return { p:p, pi:pi, reg:reg, status:status };
     }).filter(Boolean);
-    var statusOrder = { registered:0, unknown:1, declined:2 };
-    rowsData.sort(function(a,b){
-      if(statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status]-statusOrder[b.status];
-      if(a.status==='registered') return new Date(a.reg.date)-new Date(b.reg.date);
-      return (a.p.name||'').localeCompare(b.p.name||'');
-    });
+    // Anmälningslistan grupperas tydligt:
+    //  Nivå 1 (ingen boll skapad än): anmälda grupperas per speldatum (datumrubrik),
+    //    datum i stigande ordning, namn i bokstavsordning inom datumet.
+    //  Nivå 2 (bollar skapade): inom varje datum visas bollarna som egna block
+    //    ("Boll 1 · 18:00"), sorterade på starttid (bollar utan tid sist), och
+    //    eventuella anmälda som ännu inte ligger i någon boll under "Ej i boll".
+    //  Därefter Osäkra och Deltar ej som egna sektioner.
     var STATUS_DOT = { registered:'#1D9E75', declined:'#dc2626', unknown:'#D9A62E' };
-    var rows = rowsData.map(function(x){
-      var dot = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+STATUS_DOT[x.status]+';margin-right:8px;vertical-align:middle;flex-shrink:0"></span>';
-      var altDate = x.reg && x.reg.date !== e.date;
-      var timeStr = '';
-      if(x.status==='registered' && e.teeGroups) {
-        var g = e.teeGroups.find(function(gr){ return gr.date===x.reg.date && gr.playerPis.indexOf(x.pi)>=0; });
-        if(g && g.time) timeStr = g.time;
-      }
+    var dotHtml = function(c){ return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+c+';margin-right:8px;vertical-align:middle;flex-shrink:0"></span>'; };
+    var teeGroupsAll = e.teeGroups || [];
+    var regRows = rowsData.filter(function(x){ return x.status==='registered'; });
+    var unkRows = rowsData.filter(function(x){ return x.status==='unknown'; });
+    var decRows = rowsData.filter(function(x){ return x.status==='declined'; });
+    var byName = function(a,b){ return (a.p.name||'').localeCompare(b.p.name||'', 'sv'); };
+    unkRows.sort(byName); decRows.sort(byName);
+    regRows.forEach(function(x){
+      x.gIdx = teeGroupsAll.findIndex(function(gr){ return gr.date===x.reg.date && (gr.playerPis||[]).indexOf(x.pi)>=0; });
+    });
+    var dateKeys = [];
+    regRows.forEach(function(x){ var d = x.reg.date || ''; if(dateKeys.indexOf(d)<0) dateKeys.push(d); });
+    dateKeys.sort(function(a,b){ return (a||'').localeCompare(b||''); });
+    var playerRowHTML = function(x, opts){
+      opts = opts || {};
+      var tdStyle = opts.bar ? 'border-left:3px solid '+opts.bar+';padding-left:12px'+(opts.bg?';background:'+opts.bg:'') : '';
+      var tdStyle2 = opts.bg ? 'background:'+opts.bg : '';
+      if(opts.lastInBlock) { tdStyle += (tdStyle?';':'')+'border-bottom:none'; tdStyle2 += (tdStyle2?';':'')+'border-bottom:none'; }
       return '<tr onclick="showPlayerProfile('+x.pi+')" style="cursor:pointer'+(x.status==='declined'?';opacity:0.55':'')+'">'+
-        '<td>'+dot+esc(x.p.name)+'</td>'+
-        '<td>'+(x.status==='registered'
-          ? ('<div>'+x.reg.date+'</div><div style="color:var(--text-3);font-size:11px">'+weekdaySv(x.reg.date)+'</div>'+(altDate?'<div style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</div>':''))
-          : '<span style="color:var(--text-3)">–</span>')+'</td>'+
-        '<td>'+(timeStr || '<span style="color:var(--text-3)">–</span>')+'</td>'+
+        '<td style="'+tdStyle+'">'+dotHtml(STATUS_DOT[x.status])+esc(x.p.name)+'</td>'+
+        '<td style="text-align:right;white-space:nowrap;'+tdStyle2+'">'+(opts.time ? '<span style="font-weight:600">'+esc(opts.time)+'</span>' : '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
-    }).join('');
+    };
+    var sectionHdr = function(html, sub){
+      return '<tr><td colspan="2" style="background:var(--surface2);padding:8px 10px;font-size:12px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)">'+html+
+        (sub?'<span style="font-weight:400;color:var(--text-3);margin-left:6px">'+sub+'</span>':'')+'</td></tr>';
+    };
+    var groupHdr = function(label, timeStr, count, color, bg){
+      return '<tr><td colspan="2" style="border-left:3px solid '+color+';background:'+bg+';padding:7px 10px 3px 12px;border-bottom:none">'+
+        '<span style="font-size:12px;font-weight:700;color:'+color+'"><i class="ti ti-golf" style="font-size:13px;vertical-align:-2px"></i> '+label+'</span>'+
+        (timeStr?'<span style="font-size:12px;font-weight:700;color:var(--text);margin-left:8px"><i class="ti ti-clock" style="font-size:12px;vertical-align:-1px"></i> '+esc(timeStr)+'</span>':'<span style="font-size:11px;color:var(--text-3);margin-left:8px">Tid ej satt</span>')+
+        '<span style="font-size:11px;color:var(--text-3);margin-left:8px">'+count+' spelare</span>'+
+      '</td></tr>';
+    };
+    var GROUP_COLORS = [ {c:'#0F6E56', bg:'#EEF8F3'}, {c:'#BA7517', bg:'#FDF6EA'} ];
+    var rows = '';
+    dateKeys.forEach(function(d){
+      var inDate = regRows.filter(function(x){ return (x.reg.date||'')===d; });
+      var wd = weekdaySv(d);
+      var dateLabel = '<i class="ti ti-calendar" style="font-size:13px;vertical-align:-2px"></i> '+(wd ? wd.charAt(0).toUpperCase()+wd.slice(1)+' ' : '')+(dateLongSv(d) || d || 'Datum saknas')+
+        (d && d!==e.date ? ' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>' : '');
+      rows += sectionHdr(dateLabel, inDate.length+(inDate.length===1?' anmäld':' anmälda'));
+      // Bollar för datumet, sorterade på starttid (utan tid sist, sedan skapandeordning)
+      var gIdxs = [];
+      inDate.forEach(function(x){ if(x.gIdx>=0 && gIdxs.indexOf(x.gIdx)<0) gIdxs.push(x.gIdx); });
+      gIdxs.sort(function(a,b){
+        var ta = teeGroupsAll[a].time || '', tb = teeGroupsAll[b].time || '';
+        if(ta && !tb) return -1;
+        if(!ta && tb) return 1;
+        if(ta !== tb) return ta.localeCompare(tb);
+        return a-b;
+      });
+      gIdxs.forEach(function(gIdx, n){
+        var g = teeGroupsAll[gIdx];
+        var col = GROUP_COLORS[n % GROUP_COLORS.length];
+        // Spelarordning inom bollen = ordningen i bollen (som i livescoringen)
+        var members = inDate.filter(function(x){ return x.gIdx===gIdx; });
+        members.sort(function(a,b){ return (g.playerPis||[]).indexOf(a.pi)-(g.playerPis||[]).indexOf(b.pi); });
+        rows += groupHdr('Boll '+(n+1), g.time||'', members.length, col.c, col.bg);
+        members.forEach(function(x, k){
+          rows += playerRowHTML(x, { time:g.time||'', bar:col.c, bg:col.bg, lastInBlock: k===members.length-1 });
+        });
+      });
+      var loose = inDate.filter(function(x){ return x.gIdx<0; }).sort(byName);
+      if(loose.length) {
+        if(gIdxs.length) {
+          rows += '<tr><td colspan="2" style="border-left:3px dashed var(--border);padding:7px 10px 3px 12px;border-bottom:none;font-size:12px;font-weight:700;color:var(--text-3)"><i class="ti ti-user-question" style="font-size:13px;vertical-align:-2px"></i> Ej i boll än <span style="font-weight:400;margin-left:6px">'+loose.length+' spelare</span></td></tr>';
+          loose.forEach(function(x){ rows += playerRowHTML(x, { bar:'var(--border)' }); });
+        } else {
+          loose.forEach(function(x){ rows += playerRowHTML(x); });
+        }
+      }
+    });
+    if(unkRows.length) {
+      rows += sectionHdr('<span style="color:#B7861F">'+dotHtml('#D9A62E')+'Osäkra</span>', unkRows.length+' spelare');
+      unkRows.forEach(function(x){ rows += playerRowHTML(x); });
+    }
+    if(decRows.length) {
+      rows += sectionHdr('<span style="color:#dc2626">'+dotHtml('#dc2626')+'Deltar ej</span>', decRows.length+' spelare');
+      decRows.forEach(function(x){ rows += playerRowHTML(x); });
+    }
     regsTable = '<div style="overflow-x:auto;margin-bottom:12px">'+
       '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-3);padding:0 2px 8px">'+
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1D9E75;margin-right:4px"></span>Anmäld</span>'+
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D9A62E;margin-right:4px"></span>Osäker</span>'+
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Deltar ej</span>'+
       '</div>'+
-      '<table class="hist-table"><thead><tr><th>Namn</th><th>Datum</th><th>Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<table class="hist-table reg-grouped"><thead><tr><th>Namn</th><th style="text-align:right">Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   } else {
     regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
   }
@@ -14486,6 +14552,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (230)',
+    items: [
+      { type: 'improved', text: 'Anmälningslistan i deltävlingskortet är nu tydligt grupperad. Innan bollar är skapade grupperas de anmälda per speldatum med en datumrubrik (t.ex. "Söndag 15 november 2026 (ej ordinarie)"), i datumordning. När bollar är skapade visas varje boll som ett eget färgmarkerat block ("Boll 1 · 18:00 · 3 spelare") sorterat på datum och starttid, så man direkt ser vem som spelar med vem. Anmälda som ännu inte lagts i någon boll samlas under "Ej i boll än", och Osäkra respektive Deltar ej visas som egna sektioner längst ner.' }
+    ]
+  },
   {
     date: '20 oktober 2026 (229)',
     items: [
