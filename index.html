@@ -2032,7 +2032,7 @@ function renderCourseStatsView() {
   if(distEl) filterDistrict = distEl.value;
 
   // Filter UI
-  var filterHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
+  var filterHtml = '<div id="csf-bar" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">';
   filterHtml += '<div style="position:relative;flex:1;min-width:160px">'+
     '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
     '<input id="csf-name" type="text" placeholder="Sök bana..." value="'+esc(filterName)+'" oninput="applyCourseStatsFilter()" style="padding-left:32px;width:100%;box-sizing:border-box">'+
@@ -2047,7 +2047,16 @@ function renderCourseStatsView() {
   filterHtml += '</div>';
 
   var courses = Object.values(courseMap).sort(function(a,b){ return b.rounds.length-a.rounds.length; });
-  if(!courses.length) { el.innerHTML = filterHtml+'<p class="empty">Inga avslutade tävlingar ännu.</p>'; return; }
+  // Sökfältet/filtren byggs bara första gången. Vid sökning (oninput) byts enbart
+  // resultatdelen ut - annars byggs input-fältet om vid varje tecken och tappar
+  // fokus (på mobil hoppar man ur sökfältet och tangentbordet stängs).
+  var setCourseStatsOutput = function(body){
+    var bar = document.getElementById('csf-bar');
+    var out = document.getElementById('csf-results');
+    if(bar && out && el.contains(bar) && el.contains(out)) { out.innerHTML = body; return; }
+    el.innerHTML = filterHtml + '<div id="csf-results">' + body + '</div>';
+  };
+  if(!courses.length) { setCourseStatsOutput('<p class="empty">Inga avslutade tävlingar ännu.</p>'); return; }
 
   // Apply filters
   var filtered = courses.filter(function(c){
@@ -2170,7 +2179,22 @@ function renderCourseStatsView() {
         '</div>';
       }).join('');
 
-  el.innerHTML = filterHtml + resultInfo + cardsHtml;
+  setCourseStatsOutput(resultInfo + cardsHtml);
+}
+
+// Kör en render-funktion som bygger om ett sökfält och behåller fokus + markörposition
+// i fältet efteråt (annars hoppar man ur fältet efter varje inmatat tecken på mobil).
+function keepFocusWhileRendering(inputId, renderFn) {
+  var a = document.activeElement;
+  var had = a && a.id === inputId;
+  var st = had ? a.selectionStart : null, en = had ? a.selectionEnd : null;
+  renderFn();
+  if(!had) return;
+  var n = document.getElementById(inputId);
+  if(n && document.activeElement !== n) {
+    try { n.focus({ preventScroll: true }); } catch(e) { n.focus(); }
+    try { if(st != null) n.setSelectionRange(st, en); } catch(e) {}
+  }
 }
 
 function applyCourseStatsFilter() {
@@ -4215,7 +4239,7 @@ function renderPlayers() {
       '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px"><i class="ti ti-user-plus" style="color:var(--green-dark)"></i> Lägg till spelare</div>'+
       '<div style="position:relative;margin-bottom:10px">'+
         '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
-        '<input id="player-search-inp" type="text" placeholder="Sök bland registrerade spelare..." value="'+esc(searchVal)+'" oninput="renderPlayers()" style="padding-left:34px;width:100%;box-sizing:border-box">'+
+        '<input id="player-search-inp" type="text" placeholder="Sök bland registrerade spelare..." value="'+esc(searchVal)+'" oninput="keepFocusWhileRendering(\'player-search-inp\', renderPlayers)" style="padding-left:34px;width:100%;box-sizing:border-box">'+
       '</div>'+
       (eligibleUsers.length === 0
         ? '<p style="font-size:13px;color:var(--text-3);margin:0">Alla registrerade spelare är redan med i touren.</p>'
@@ -14614,7 +14638,7 @@ function renderCourseDbSection(targetId) {
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
     html += '<div style="position:relative;flex:1;min-width:180px">'+
       '<i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:15px;pointer-events:none"></i>'+
-      '<input id="course-db-search" type="text" placeholder="Sök bana, klubb eller distrikt..." value="'+esc(_courseDbSearch)+'" oninput="_courseDbSearch=this.value;renderCourseDbList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0">'+
+      '<input id="course-db-search" type="text" placeholder="Sök bana, klubb eller distrikt..." value="'+esc(_courseDbSearch)+'" oninput="_courseDbSearch=this.value;keepFocusWhileRendering(\'course-db-search\', renderCourseDbList)" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0">'+
     '</div>';
     html += '<select id="course-db-filter" onchange="_courseDbFilter=this.value;renderCourseDbList()" style="margin:0;min-width:170px">'+
       '<option value="all"'+(_courseDbFilter==='all'?' selected':'')+'>Alla banor</option>'+
@@ -14773,6 +14797,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (237)',
+    items: [
+      { type: 'fixed', text: 'Sökfältet "Sök bana..." i Banstatistik tappade fokus efter varje inmatat tecken på mobilen (man hoppade ur fältet och tangentbordet stängdes), eftersom hela vyn inklusive sökfältet byggdes om vid varje knapptryckning. Nu byggs bara resultatlistan om medan man skriver. Samma fel fanns i "Sök bland registrerade spelare" (Spelare-fliken) och sökningen i Bandatabasen - fixat där också.' }
+    ]
+  },
   {
     date: '29 oktober 2026 (236)',
     items: [
