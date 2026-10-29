@@ -1426,19 +1426,23 @@ function buildEarningsLeaderboardTabHTML() {
   }
   var medals = ['🥇','🥈','🥉'];
   var grand = rows.reduce(function(a, r){ return a + r.total; }, 0);
+  // Belopp + "kr" ska alltid stå på samma rad (white-space:nowrap), och tabellen
+  // har tätare cellpadding så att alla kolumner får plats på mobil - spelarnamnet
+  // får radbrytas istället.
+  var cp = 'padding:9px 6px;';
   h += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr>'+
-    '<th style="width:34px;text-align:center">#</th><th>Spelare</th>'+
-    '<th style="text-align:right">Tour</th><th style="text-align:right">Bets</th><th style="text-align:right">Totalt</th>'+
+    '<th style="'+cp+'width:28px;text-align:center">#</th><th style="'+cp+'">Spelare</th>'+
+    '<th style="'+cp+'text-align:right">Tour</th><th style="'+cp+'text-align:right">Bets</th><th style="'+cp+'text-align:right">Totalt</th>'+
     '</tr></thead><tbody>';
   rows.forEach(function(r){
     var isMe = r.username === me;
     var badge = r.rank <= 3 ? medals[r.rank-1] : r.rank+'.';
     h += '<tr'+(isMe ? ' style="background:var(--green-light)"' : '')+'>'+
-      '<td style="text-align:center;font-size:'+(r.rank<=3?'16':'13')+'px">'+badge+'</td>'+
-      '<td style="'+(isMe?'font-weight:700':'')+'">'+esc(r.name)+(isMe?' <span style="font-size:11px;color:var(--text-3);font-weight:400">(du)</span>':'')+'</td>'+
-      '<td style="text-align:right;color:var(--text-2)">'+r.tourWon+' kr</td>'+
-      '<td style="text-align:right;color:var(--text-2)">'+r.betWon+' kr</td>'+
-      '<td style="text-align:right;font-weight:800;color:var(--green-dark);white-space:nowrap">'+r.total+' kr</td>'+
+      '<td style="'+cp+'text-align:center;font-size:'+(r.rank<=3?'16':'13')+'px">'+badge+'</td>'+
+      '<td style="'+cp+(isMe?'font-weight:700':'')+'">'+esc(r.name)+(isMe?' <span style="font-size:11px;color:var(--text-3);font-weight:400">(du)</span>':'')+'</td>'+
+      '<td style="'+cp+'text-align:right;color:var(--text-2);white-space:nowrap">'+r.tourWon+'&nbsp;kr</td>'+
+      '<td style="'+cp+'text-align:right;color:var(--text-2);white-space:nowrap">'+r.betWon+'&nbsp;kr</td>'+
+      '<td style="'+cp+'text-align:right;font-weight:800;color:var(--green-dark);white-space:nowrap">'+r.total+'&nbsp;kr</td>'+
     '</tr>';
   });
   h += '</tbody></table></div>';
@@ -6819,8 +6823,16 @@ function buildBollarManagementHTML(e, t, groups, dates) {
     html += '<div class="card" style="margin-bottom:10px">';
     html += '<div class="row" style="justify-content:space-between;margin-bottom:8px">';
     html += '<span style="font-weight:600;font-size:14px"><i class="ti ti-calendar"></i> '+d+'</span>';
-    if(isAdmin() && unassigned.length) {
-      html += '<button class="btn btn-sm btn-primary" onclick="autoCreateTeeGroups(\''+e.id+'\',\''+d+'\')"><i class="ti ti-wand"></i> Skapa bollar</button>';
+    var shuffleable = pisForDate.filter(function(pi){ return !!t.players[pi]; });
+    if(isAdmin() && (unassigned.length || shuffleable.length >= 2)) {
+      html += '<div class="row" style="gap:6px">';
+      if(shuffleable.length >= 2) {
+        html += '<button class="btn btn-sm" title="Blanda alla spelare som inte börjat spela slumpmässigt i nya bollar. Starttiderna behålls." onclick="shuffleTeeGroups(\''+e.id+'\',\''+d+'\')"><i class="ti ti-arrows-shuffle"></i> Lotta bollar</button>';
+      }
+      if(unassigned.length) {
+        html += '<button class="btn btn-sm btn-primary" onclick="autoCreateTeeGroups(\''+e.id+'\',\''+d+'\')"><i class="ti ti-wand"></i> Skapa bollar</button>';
+      }
+      html += '</div>';
     }
     html += '</div>';
 
@@ -6909,7 +6921,7 @@ function autoCreateTeeGroups(eid, date) {
   var e = t.events.find(function(x){return x.id===eid;});
   if(!e) return;
   if(!e.teeGroups) e.teeGroups = [];
-  var regs = (e.registrations||[]).filter(function(r){return r.date===date;});
+  var regs = (e.registrations||[]).filter(function(r){return r.date===date && !r.declined;});
   var assigned = {};
   e.teeGroups.filter(function(g){return g.date===date;}).forEach(function(g){
     g.playerPis.forEach(function(pi){assigned[pi]=true;});
@@ -6923,6 +6935,81 @@ function autoCreateTeeGroups(eid, date) {
   // re-render in place
   var ei = t.events.indexOf(e);
   refreshRegisterModal(ei);
+}
+
+// "Lotta bollar": blandar slumpmässigt alla anmälda (ej "Deltar ej") för ett
+// datum i nya bollar. Skydd: bollar där någon redan skickat in ett resultat, ELLER
+// där livescoringen redan har ett dokument (dvs. någon har börjat räkna) lämnas
+// helt orörda - bara spelare som inte börjat spela lottas om. Starttiderna från
+// de bollar som lottas om behålls och delas ut i tidsordning till de nya bollarna.
+// Spelarna fördelas jämnt (t.ex. 10 spelare -> 4+3+3, inte 4+4+2), max 4 per boll.
+function shuffleTeeGroups(eid, date) {
+  if(!isAdmin()) return;
+  var t = getTour();
+  var e = (t.events||[]).find(function(x){ return x.id===eid; });
+  if(!e) return;
+  if(!e.teeGroups) e.teeGroups = [];
+  var groupsForDate = e.teeGroups.filter(function(g){ return g.date===date; });
+  // Kolla livescoring-dokument för datumets bollar innan något ändras
+  var checks = groupsForDate.map(function(g){
+    var docId = liveScoringDocId(eid, ensureTeeGroupId(g));
+    return LIVE_SCORING_COL.doc(docId).get().then(function(doc){ return doc.exists; }).catch(function(){ return true; });
+  });
+  Promise.all(checks).then(function(started){
+    // Avgör vilka bollar som är skyddade (börjat livescora eller har inskickat resultat)
+    var subPis = {};
+    (e.scoreSubmissions||[]).forEach(function(s){ if(!s.date || s.date===date) subPis[s.pi] = true; });
+    var protectedIds = {};
+    groupsForDate.forEach(function(g, k){
+      var hasSub = (g.playerPis||[]).some(function(pi){ return subPis[pi]; });
+      if(started[k] || hasSub) protectedIds[g.id] = true;
+    });
+    var current = e.teeGroups.filter(function(g){ return g.date===date; });
+    var keep = current.filter(function(g){ return protectedIds[g.id]; });
+    var redo = current.filter(function(g){ return !protectedIds[g.id]; });
+    var inKept = {};
+    keep.forEach(function(g){ g.playerPis.forEach(function(pi){ inKept[pi] = true; }); });
+    var pool = (e.registrations||[])
+      .filter(function(r){ return r.date===date && !r.declined && t.players[r.pi] && !inKept[r.pi] && !subPis[r.pi]; })
+      .map(function(r){ return r.pi; })
+      .filter(function(pi, idx, arr){ return arr.indexOf(pi)===idx; });
+    if(pool.length < 2) {
+      alert('Det finns för få spelare som inte börjat spela för att kunna lotta bollar för det här datumet.');
+      return;
+    }
+    var nGroups = Math.ceil(pool.length / 4);
+    var msg = 'Lotta bollar för '+formatSvDateFull(date)+'?\n\n'+pool.length+' spelare blandas slumpmässigt i '+nGroups+' bollar.';
+    if(redo.length) msg += ' Nuvarande '+redo.length+(redo.length===1?' boll':' bollar')+' som inte börjat spela ersätts (starttiderna behålls).';
+    if(keep.length) msg += '\n\n'+keep.length+(keep.length===1?' boll':' bollar')+' som redan börjat spela lämnas orörd'+(keep.length===1?'':'a')+'.';
+    if(!confirm(msg)) return;
+    // Fisher-Yates
+    for(var i = pool.length-1; i > 0; i--) {
+      var j = Math.floor(Math.random()*(i+1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    // Jämn fördelning: de första (pool % nGroups) bollarna får en spelare extra
+    var base = Math.floor(pool.length / nGroups), extra = pool.length % nGroups;
+    var times = redo.map(function(g){ return g.time||''; }).filter(Boolean).sort();
+    var newGroups = [], pos = 0;
+    for(var k = 0; k < nGroups; k++) {
+      var size = base + (k < extra ? 1 : 0);
+      newGroups.push({ id: 'tg_'+uid(), date: date, time: times[k] || '', playerPis: pool.slice(pos, pos+size) });
+      pos += size;
+    }
+    var redoIds = {};
+    redo.forEach(function(g){ redoIds[g.id] = true; });
+    // Ta bort ombollade spelare även ur ev. andra bollar för datumet (säkerhetsnät)
+    var poolSet = {};
+    pool.forEach(function(pi){ poolSet[pi] = true; });
+    e.teeGroups = e.teeGroups.filter(function(g){ return !(g.date===date && redoIds[g.id]); });
+    e.teeGroups.forEach(function(g){
+      if(g.date===date && !protectedIds[g.id]) g.playerPis = g.playerPis.filter(function(pi){ return !poolSet[pi]; });
+    });
+    e.teeGroups = e.teeGroups.filter(function(g){ return g.playerPis.length > 0; });
+    newGroups.forEach(function(g){ e.teeGroups.push(g); });
+    save();
+    refreshRegisterModal(t.events.indexOf(e));
+  });
 }
 
 function setTeeGroupTime(eid, gIdx, time) {
@@ -14552,6 +14639,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '29 oktober 2026 (232)',
+    items: [
+      { type: 'new', text: 'Ny knapp "Lotta bollar" (admin) i Anmälningar, per speldatum. Den blandar alla anmälda för datumet slumpmässigt i nya bollar med max 4 per boll, jämnt fördelat (t.ex. 10 spelare blir 4+3+3 i stället för 4+4+2). Starttiderna från de gamla bollarna behålls och delas ut i tidsordning. Bollar där någon redan börjat livescora eller skickat in resultat lämnas helt orörda, och man får bekräfta innan något ändras. Tryck igen för en ny lottning.' },
+      { type: 'fixed', text: '"Skapa bollar" tog felaktigt med spelare som markerat "Deltar ej" för datumet. Nu skapas bollar bara av de som faktiskt är anmälda.' }
+    ]
+  },
+  {
+    date: '29 oktober 2026 (231)',
+    items: [
+      { type: 'fixed', text: 'Topplistan i "Vinster & betting" bröt beloppen så att "kr" hamnade på en egen rad under siffran (Tour/Bets), och Totalt-kolumnen kunde kapas i kanten på mobilen. Nu står belopp och kr alltid på samma rad, och tabellen är tätare så att alla kolumner får plats - långa spelarnamn radbryts istället.' }
+    ]
+  },
   {
     date: '29 oktober 2026 (230)',
     items: [
