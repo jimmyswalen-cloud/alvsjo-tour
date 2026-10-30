@@ -230,6 +230,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .chw-bg.cam>span{background:var(--surface);border:1px dashed var(--border-strong);font-size:24px;color:var(--green-dark)}
 .ch-done{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:45vh;text-align:center}
 .ch-done-ic{width:84px;height:84px;border-radius:24px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:44px;animation:champPop .7s cubic-bezier(.2,1.6,.4,1) both}
+.ch-sv{font-size:20px;font-weight:700;color:var(--green-dark);line-height:1.2}
+.ch-sv small{font-size:12px;color:var(--text-3);font-weight:600}
+.ch-sl{font-size:11px;color:var(--text-3)}
+.ch-dl{display:flex;align-items:center;gap:8px;padding:3px 0}
+.ch-dl i{font-size:15px;color:var(--text-3);width:18px;text-align:center}
 /* Eclectic-scorekort */
 .ecl-t{border-collapse:collapse;width:100%;font-size:12px;text-align:center}
 .ecl-t th,.ecl-t td{padding:4px 3px;border-bottom:1px solid var(--border);min-width:24px}
@@ -493,7 +498,12 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
         <div class="home-card-label" style="color:#0B4F3F">Mitt HCP</div>
         <div class="home-card-sub" style="color:#13664F">Utveckling över tid</div>
       </div>
-      <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
+      <div class="home-card" onclick="showChallenges()" style="background:#DCE8A8;border:none">
+        <i class="ti ti-swords" style="font-size:32px;color:#4A5A12" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#4A5A12">Utmaningar</div>
+        <div class="home-card-sub" style="color:#5E7016">Utmana gänget</div>
+      </div>
+      <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none">
         <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
         <div class="home-card-label" style="color:#5B2C8C">Idéer &amp; nyheter</div>
         <div class="home-card-sub" style="color:#7A4CAE">Föreslå funktioner, se vad som är nytt</div>
@@ -2366,16 +2376,12 @@ function chOpenMoneyPaid(id) {
 function chMoneyCardHTML(c, stand) {
   if(!chHasMoney(c)) return '';
   var pot = chPot(c), sp = CH_SPLITS[c.money.split] || CH_SPLITS.all, ended = chStatus(c) === 'ended';
-  var pay = chPayouts(c, stand), paid = (c.money && c.money.paid) || {}, paidN = (c.participants||[]).filter(function(u){ return paid[u]; }).length;
-  var h = '<div class="card ch-prize" style="display:block"><div style="display:flex;align-items:center;gap:14px"><span class="ch-prize-ic"><i class="ti ti-coins"></i></span>'+
-    '<div style="flex:1"><div class="ch-eyebrow" style="color:var(--gold)">Potten</div><div style="font-weight:800;font-size:22px;color:var(--gold)">'+pot+' kr</div>'+
-    '<div style="font-size:12px;color:var(--text-2)">'+(c.participants||[]).length+' × '+c.money.stake+' kr · '+sp.label+'</div></div></div>';
-  var users = Object.keys(pay).filter(function(u){ return pay[u] > 0; }).sort(function(a,b){ return pay[b] - pay[a]; });
-  if(users.length) h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #F3D19E"><div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">'+(ended?'Utdelning':'Om utmaningen slutade nu')+'</div>'+
-    users.map(function(u){ return '<div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0"><span>'+esc(chName(u))+'</span><b style="white-space:nowrap">'+pay[u]+'&nbsp;kr</b></div>'; }).join('')+'</div>';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--text-2)"><span><i class="ti ti-cash"></i> '+paidN+' av '+(c.participants||[]).length+' har betalat</span>'+
-    (chIsOrganizer(c) ? '<button class="btn btn-sm" onclick="chOpenMoneyPaid(\''+c.id+'\')">Markera betalningar</button>' : (paid[currentUser.username] ? '<span style="color:var(--green-dark);font-weight:700">✓ Du har betalat</span>' : (chIsIn(c) ? '<span style="color:#A32D2D;font-weight:700">Din insats: '+c.money.stake+' kr</span>' : '')))+'</div></div>';
-  return h;
+  var paid = (c.money && c.money.paid) || {}, paidN = (c.participants||[]).filter(function(u){ return paid[u]; }).length;
+  var right = chIsOrganizer(c) ? '<button class="btn btn-sm" onclick="chOpenMoneyPaid(\''+c.id+'\')"><i class="ti ti-cash"></i> Betalningar</button>'
+    : (paid[currentUser.username] ? '<span style="font-size:12px;color:var(--green-dark);font-weight:700">✓ Betalt</span>' : (chIsIn(c) ? '<span style="font-size:12px;color:#A32D2D;font-weight:700">Insats '+c.money.stake+' kr</span>' : ''));
+  return '<div class="card" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--gold-light);border-color:#F3D19E">'+
+    '<i class="ti ti-coins" style="font-size:22px;color:var(--gold)"></i><div style="flex:1;min-width:0"><div style="font-size:14px"><b style="color:var(--gold)">Pott '+pot+' kr</b> <span style="font-size:12px;color:var(--text-2)">· '+(c.participants||[]).length+' × '+c.money.stake+' kr</span></div>'+
+    '<div style="font-size:11px;color:var(--text-2)">'+sp.label+' · '+paidN+'/'+(c.participants||[]).length+' betalt'+(ended?'':' · utdelning syns i ledartavlan')+'</div></div>'+right+'</div>';
 }
 function chValueText(c, v) {
   if(v == null) return '–';
@@ -2464,48 +2470,59 @@ function chDetailHTML() {
   var me = currentUser.username, st = chStatus(c), stand = chStandings(c), T = CH_TYPES[c.type];
   var mine = stand.find(function(s){ return s.u === me; });
   var when = st==='ended' ? 'Avslutad' : st==='upcoming' ? 'Startar '+c.start : chDaysLeft(c)+' dagar kvar';
-  var h = '<div class="tours-header"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button><span style="flex:1"></span>'+
+  // Rubrikrad som på appens övriga sidor
+  var h = '<div class="tours-header"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button>'+
+    '<h2 style="margin:0;flex:1;text-align:center;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name)+'</h2>'+
     '<button class="btn btn-sm" onclick="chShare(\''+c.id+'\')" title="Dela"><i class="ti ti-share"></i></button>'+
     '<button class="btn btn-sm" onclick="chMenu(\''+c.id+'\')" title="Mer"><i class="ti ti-dots"></i></button></div>';
-  h += '<div class="ch-hero" style="background:'+chBgCss(c)+'"><div class="ch-hero-in">'+chIconHTML(c.type, 58)+
-    '<div style="min-width:0"><div class="ch-hero-eye">Utmaning · '+esc(T.title)+'</div><div class="ch-hero-title">'+esc(c.name)+'</div>'+
-    '<div class="ch-hero-meta"><span><i class="ti ti-users"></i> '+(c.participants||[]).length+' deltagare</span><span><i class="ti ti-calendar-time"></i> '+when+'</span></div></div></div></div>';
-  h += '<p style="color:var(--text-2);font-size:14px;line-height:1.5;margin:12px 2px 12px">'+esc(chRuleText(c))+'</p>';
-  if(chIsInvited(c)) h += '<div class="card ch-invite" style="display:flex;align-items:center;gap:10px"><i class="ti ti-mail-opened" style="font-size:22px;color:var(--gold)"></i><div style="flex:1;font-size:13px"><b>'+esc(chName((c.invitedBy||{})[me]||c.createdBy))+'</b> har bjudit in dig.</div><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button><button class="btn btn-primary btn-sm" onclick="chJoin(\''+c.id+'\')">Gå med</button></div>';
-  // Ditt läge
+  // Översikt: smal bakgrundsremsa, ikon, typ, regler och nyckeltal
+  h += '<div class="card" style="padding:0;overflow:hidden"><div style="height:6px;background:'+chBgCss(c)+'"></div><div style="padding:12px 14px">'+
+    '<div style="display:flex;align-items:center;gap:10px">'+chIconHTML(c.type, 36)+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">'+esc(T.title)+'</div>'+
+      '<div style="font-size:12px;color:var(--text-3)">'+c.start+' – '+c.end+(c.courses && c.courses.length ? ' · '+(c.courses.length===1 ? esc(c.courses[0]) : c.courses.length+' banor') : '')+'</div></div>'+
+      '<span class="badge" style="background:'+(st==='ended'?'var(--surface2)':'var(--green-light)')+';color:'+(st==='ended'?'var(--text-2)':'var(--green-dark)')+';white-space:nowrap">'+when+'</span></div>'+
+    '<p style="font-size:13px;color:var(--text-2);line-height:1.45;margin:10px 0 0">'+esc(chRuleText(c))+'</p>'+
+    (c.desc ? '<p style="font-size:13px;color:var(--text);white-space:pre-wrap;margin:8px 0 0">'+esc(c.desc)+'</p>' : '')+
+  '</div></div>';
+  if(chIsInvited(c)) h += '<div class="card ch-invite" style="display:flex;align-items:center;gap:10px;padding:10px 14px"><i class="ti ti-mail-opened" style="font-size:20px;color:var(--gold)"></i><div style="flex:1;font-size:13px"><b>'+esc(chName((c.invitedBy||{})[me]||c.createdBy))+'</b> har bjudit in dig.</div><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button><button class="btn btn-primary btn-sm" onclick="chJoin(\''+c.id+'\')">Gå med</button></div>';
+  // Ditt läge – kompakt
   if(mine) {
     var hasGoal = c.goal && T.goal, pct = hasGoal && mine.value != null ? Math.min(100, Math.round(mine.value / c.goal * 100)) : 0;
-    var lbl = c.type==='stroke' ? 'Bästa rond mot par' : (c.type==='eclectic' && c.eclMode==='netto') ? 'Netto mot par' : (T.unit==='p' ? 'Poäng' : T.unit.charAt(0).toUpperCase()+T.unit.slice(1));
-    h += '<div class="card ch-mine"><div class="ch-eyebrow">Ditt läge</div><div class="ch-mine-row">'+
-      '<div class="ch-stat"><div class="ch-stat-v">'+mine.display+(hasGoal?'<small>/'+c.goal+'</small>':'')+'</div><div class="ch-stat-l">'+lbl+'</div></div>'+
-      '<div class="ch-stat"><div class="ch-stat-v">'+(mine.rank ? mine.rank+'<small>/'+stand.length+'</small>' : '–')+'</div><div class="ch-stat-l">Placering</div></div>'+
-      '<div class="ch-stat"><div class="ch-stat-v">'+mine.rounds+'</div><div class="ch-stat-l">Ronder</div></div></div>'+
-      (hasGoal ? '<div class="ch-bar"><span style="width:'+Math.max(pct,2)+'%"></span></div><div style="font-size:12px;color:'+(mine.done?'var(--green-dark)':'var(--text-3)')+';margin-top:6px;font-weight:'+(mine.done?700:400)+'">'+(mine.done ? '✓ Mål nått! Du kan fortfarande förbättra ditt resultat.' : pct+' % av målet')+'</div>' : '')+'</div>';
+    var lbl = c.type==='stroke' ? 'Bästa rond' : (c.type==='eclectic' && c.eclMode==='netto') ? 'Netto mot par' : (T.unit==='p' ? 'Poäng' : T.unit.charAt(0).toUpperCase()+T.unit.slice(1));
+    h += '<div class="card" style="padding:12px 14px"><div style="display:flex;text-align:center">'+
+      '<div style="flex:1"><div class="ch-sv">'+mine.display+(hasGoal?'<small>/'+c.goal+'</small>':'')+'</div><div class="ch-sl">'+lbl+'</div></div>'+
+      '<div style="flex:1;border-left:1px solid var(--border)"><div class="ch-sv">'+(mine.rank ? mine.rank+'<small>/'+stand.length+'</small>' : '–')+'</div><div class="ch-sl">Placering</div></div>'+
+      '<div style="flex:1;border-left:1px solid var(--border)"><div class="ch-sv">'+mine.rounds+(c.type==='eclectic'&&c.maxRounds?'<small>/'+c.maxRounds+'</small>':'')+'</div><div class="ch-sl">Ronder</div></div></div>'+
+      (hasGoal ? '<div class="ch-bar" style="height:6px;margin-top:10px"><span style="width:'+Math.max(pct,2)+'%"></span></div><div style="font-size:11px;margin-top:4px;color:'+(mine.done?'var(--green-dark)':'var(--text-3)')+';font-weight:'+(mine.done?700:400)+'">'+(mine.done ? '✓ Mål nått – du kan fortfarande förbättra resultatet' : pct+' % av målet')+'</div>' : '')+'</div>';
   } else if(st !== 'ended') {
-    h += '<button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-bottom:12px" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med i utmaningen</button>';
+    h += '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:12px" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med i utmaningen</button>';
   }
-  if(c.type === 'eclectic' && mine) h += '<div class="card"><div class="ch-eyebrow" style="margin-bottom:8px">Ditt eclectic-scorekort · '+esc((c.courses||[])[0]||'')+'</div>'+chEclecticCardHTML(c, mine)+'</div>';
-  // Ledartavla (i appens OoM-stil)
-  h += '<div class="card" style="padding:0;overflow:hidden"><div class="ch-board-head"><b><i class="ti ti-list-numbers"></i> Ledartavla</b>'+
+  // Ledartavla i samma stil som OoM-listan
+  h += '<div class="card" style="padding:10px 12px"><div style="display:flex;align-items:center;justify-content:space-between;margin:0 2px 4px">'+
+    '<span style="font-weight:600;font-size:14px"><i class="ti ti-list-numbers" style="color:var(--text-3)"></i> Ledartavla</span>'+
     (chIsIn(c) && st !== 'ended' ? '<button class="btn btn-sm" onclick="chOpenPeople(\''+c.id+'\',\'invite\')"><i class="ti ti-user-plus"></i> Bjud in</button>' : '<button class="btn btn-sm" onclick="chOpenPeople(\''+c.id+'\')"><i class="ti ti-users"></i> Deltagare</button>')+'</div>';
+  var pay = chHasMoney(c) ? chPayouts(c, stand) : {};
   h += stand.length ? stand.map(function(s){
     var isMe = s.u === me, r = s.rank;
-    var badge = r ? '<span class="ch-pos'+(r<=3?' p'+r:'')+'">'+r+'</span>' : '<span class="ch-pos">–</span>';
-    return '<div class="ch-row'+(isMe?' me':'')+'"'+(c.type==='eclectic' ? ' style="cursor:pointer" onclick="chShowEclectic(\''+c.id+'\',\''+esc(s.u)+'\')"' : '')+'>'+badge+chAvatar(s.u, 36)+
-      '<div style="flex:1;min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(chName(s.u))+(isMe?' <span style="font-size:11px;color:var(--text-3)">(du)</span>':'')+'</div>'+
-      '<div style="font-size:11px;color:var(--text-3)">'+s.rounds+' rond'+(s.rounds===1?'':'er')+(s.done?' · <span style="color:var(--green-dark);font-weight:700">✓ mål</span>':'')+'</div></div>'+
-      '<span class="ch-val">'+s.display+(T.unit && s.value!=null && c.type!=='stroke' && !(c.type==='eclectic' && c.eclMode==='netto')?' <small>'+T.unit+'</small>':'')+'</span>'+(c.type==='eclectic'?'<i class="ti ti-chevron-right" style="color:var(--text-3)"></i>':'')+'</div>';
+    var rk = r && r <= 3 ? ['🥇','🥈','🥉'][r-1] : (r || '–');
+    var x = findUser(s.u) || {}, img = playerPhoto(s.u, x.img);
+    var av = img ? '<img src="'+img+'" class="avatar" style="width:36px;height:36px;object-fit:cover;border-radius:50%;flex-shrink:0" alt="">' : '<div class="avatar-ph" style="width:36px;height:36px;font-size:13px;flex-shrink:0">'+esc(ini(chName(s.u)))+'</div>';
+    var sub = s.rounds+' rond'+(s.rounds===1?'':'er')+(s.done?' · ✓ mål':'')+(pay[s.u] ? ' · '+pay[s.u]+' kr' : '');
+    var rowAttr = ' style="'+(c.type==='eclectic'?'':'cursor:default;')+(isMe?'background:var(--green-light)':'')+'"'+(c.type==='eclectic' ? ' onclick="chShowEclectic(\''+c.id+'\',\''+esc(s.u)+'\')"' : '');
+    return '<div class="oom-row"'+rowAttr+'>'+
+      '<div style="width:24px;text-align:center;font-size:'+(r && r<=3?'16px':'12px')+';font-weight:700;color:var(--text-2);flex-shrink:0">'+rk+'</div>'+av+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(chName(s.u))+(isMe?' <span style="font-size:11px;color:var(--text-3);font-weight:400">(du)</span>':'')+'</div>'+
+      '<div style="font-size:11px;color:var(--text-3)">'+sub+'</div></div>'+
+      '<div style="text-align:right;flex-shrink:0;font-weight:700;font-size:15px;color:var(--green-dark)">'+s.display+(T.unit && s.value!=null && c.type!=='stroke' && !(c.type==='eclectic' && c.eclMode==='netto') ? ' <span style="font-size:11px;color:var(--text-3);font-weight:600">'+T.unit+'</span>' : '')+'</div></div>';
   }).join('') : '<p class="empty">Inga deltagare än.</p>';
   h += '</div>';
+  if(c.type === 'eclectic' && mine) h += '<div class="card" style="padding:12px 14px"><div style="font-weight:600;font-size:14px;margin-bottom:8px"><i class="ti ti-table" style="color:var(--text-3)"></i> Ditt eclectic-scorekort</div>'+chEclecticCardHTML(c, mine)+'</div>';
   h += chMoneyCardHTML(c, stand);
-  if(c.prize) h += '<div class="card ch-prize"><span class="ch-prize-ic"><i class="ti ti-trophy"></i></span><div><div class="ch-eyebrow" style="color:var(--gold)">'+(chHasMoney(c)?'Övrigt pris':'Det här står på spel')+'</div><div style="font-weight:700;font-size:15px">'+esc(c.prize)+'</div></div></div>';
-  h += '<div class="card ch-details"><div class="ch-eyebrow" style="margin-bottom:4px">Detaljer</div>'+
-    '<div><i class="ti ti-calendar"></i> '+c.start+' – '+c.end+'</div>'+
-    '<div><i class="ti ti-crown"></i> Organisatör: '+esc(chName(c.createdBy))+'</div>'+
-    '<div><i class="ti ti-target"></i> '+esc(chCriterionText(c))+(c.goal && T.goal ? ' · mål '+c.goal : '')+'</div>'+
-    '<div><i class="ti ti-flag"></i> '+(c.courses && c.courses.length ? '<a href="javascript:void(0)" onclick="chShowCourses(\''+c.id+'\')">Giltiga banor ('+c.courses.length+')</a>' : 'Alla banor')+'</div>'+
-    '<div><i class="ti ti-list-check"></i> Tourronder och sällskapsronder räknas (ej simulator)</div>'+
-    (c.desc ? '<p style="white-space:pre-wrap;font-size:14px;color:var(--text);margin:10px 0 0;padding-top:10px;border-top:1px solid var(--border)">'+esc(c.desc)+'</p>' : '')+'</div>';
+  if(c.prize) h += '<div class="card" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--gold-light);border-color:#F3D19E"><i class="ti ti-trophy" style="font-size:20px;color:var(--gold)"></i><div style="font-size:13px"><span style="color:var(--gold);font-weight:700">'+(chHasMoney(c)?'Övrigt pris':'Pris')+':</span> '+esc(c.prize)+'</div></div>';
+  h += '<div class="card" style="padding:10px 14px;font-size:13px;color:var(--text-2)"><div class="ch-dl"><i class="ti ti-crown"></i> Organisatör: '+esc(chName(c.createdBy))+'</div>'+
+    '<div class="ch-dl"><i class="ti ti-target"></i> '+esc(chCriterionText(c))+(c.goal && T.goal ? ' · mål '+c.goal : '')+'</div>'+
+    '<div class="ch-dl"><i class="ti ti-flag"></i> '+(c.courses && c.courses.length ? '<a href="javascript:void(0)" onclick="chShowCourses(\''+c.id+'\')">Giltiga banor ('+c.courses.length+')</a>' : 'Alla banor')+'</div>'+
+    '<div class="ch-dl"><i class="ti ti-info-circle"></i> Tourronder och sällskapsronder räknas (ej simulator)</div></div>';
   return h;
 }
 function chShowCourses(id) {
@@ -18365,6 +18382,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (273)',
+    items: [
+      { type: 'improved', text: 'Utmaningar finns nu även som en egen ruta i menyn på startsidan (bredvid Idéer & nyheter).' },
+    ]
+  },
+  {
+    date: '30 oktober 2026 (272)',
+    items: [
+      { type: 'improved', text: 'Utmaningssidan är omgjord för att likna resten av appen: vanlig rubrikrad, ett kompakt översiktskort (typ, period, regler och status), mindre nyckeltal för ditt läge, en ledartavla i samma stil som OoM-listan med spelarbilder, och kompakta rader för pott, pris och detaljer.' },
+    ]
+  },
   {
     date: '30 oktober 2026 (271)',
     items: [
