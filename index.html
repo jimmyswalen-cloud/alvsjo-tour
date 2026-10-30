@@ -256,6 +256,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
   <div id="home-screen-content">
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
     <div id="home-push-banner"></div>
+    <div id="home-billing-widget"></div>
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
@@ -1514,6 +1515,7 @@ function showHomeScreen() {
   renderHomeSideBetWidget();
   subscribeHomeActivityFeed();
   try { renderHomePushBanner(); } catch(e) {}
+  try { renderHomeBillingWidget(); } catch(e) {}
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
   // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
@@ -8990,6 +8992,28 @@ function goToProfileFromModal(pi){
 }
 
 // ── KARRIÄRSTATISTIK (alla tourer & säsonger) ───────────────────────────────
+// Både netto och poäng för en spelad rond, oavsett spelform:
+//   netto: slag -> rondens resultat; poängbogey -> brutto − SHCP (kräver brutto + SHCP)
+//   poäng: poängbogey -> rondens resultat; slag -> räknas hål för hål (kräver ifyllt
+//          scorekort + SHCP + banans par/hcp-index). Uppskattade poäng (≈) tas INTE med.
+// Används av spelarprofilen och karriärstatistiken. Gäller alla rundor, även framtida.
+function resultBothValues(e, pi, r) {
+  var appr = getApprovedScoreForPlayerInEvent(e, pi) || {};
+  r = r || {};
+  var entry = {
+    score: r.score != null ? r.score : appr.score,
+    brutto: appr.brutto != null ? appr.brutto : (r.brutto != null && Number(r.brutto) > 0 ? Number(r.brutto) : null),
+    shcp: appr.shcp != null ? appr.shcp : (r.shcp != null ? Math.round(r.shcp) : null),
+    holes: appr.holes || r.holes || null
+  };
+  if(entry.brutto == null && Array.isArray(entry.holes) && entry.holes.length && entry.holes.every(function(h){ return h != null && Number(h) > 0; })) {
+    entry.brutto = entry.holes.reduce(function(a, h){ return a + Number(h); }, 0);
+  }
+  if(!(entry.score > 0)) return { netto: null, poang: null };
+  var both = computeRoundBothResults(e, entry, courseDbEntryFor(e.course));
+  return { netto: (both.netto != null && both.netto > 0) ? both.netto : null, poang: both.poangEst ? null : both.poang };
+}
+
 function computeCareerStats(username, sim) {
   var perTour = [];
   var totalWins = 0, totalPodiums = 0, totalEvents = 0, bestPosEver = null, totalPts = 0;
@@ -9019,10 +9043,12 @@ function computeCareerStats(username, sim) {
     // Snittscore räknar ALLA rundor inkl. finaler (rått resultat r.score, inte det
     // justerade med försprång) - finaler ska inte hoppas över i statistiken. Bara
     // OoM-poängen ovan bygger på nonFinal, eftersom finaler inte ger OoM-poäng.
+    // Båda resultattyperna för varje rond (se resultBothValues) - en slagrond med
+    // scorekort ger även poäng, en poängbogeyrond med brutto + SHCP ger även netto.
     results.forEach(function(x){
-      var isStab = x.event.type==='stableford';
-      if(isStab && x.result.score>0) allStabScores.push(x.result.score);
-      if(!isStab && x.result.score>0) allSlagScores.push(x.result.score);
+      var v = resultBothValues(x.event, pi, x.result);
+      if(v.netto != null) allSlagScores.push(v.netto);
+      if(v.poang != null) allStabScores.push(v.poang);
     });
     totalWins += wins; totalPodiums += podiums; totalEvents += results.length; totalPts += tourPts;
     if(bestPosEver===null || bestPos<bestPosEver) bestPosEver = bestPos;
@@ -9080,8 +9106,8 @@ function buildCareerStatsHTML(username, sim) {
       '<div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
         '<div>'+
           dRow2('Bästa placering någonsin', c.bestPosEver!=null?c.bestPosEver+':a':'–')+
-          dRow2('Snitt slag-runda', c.avgSlag||'–')+
-          dRow2('Snitt poäng-runda', c.avgStab||'–')+
+          dRow2('Snitt netto/runda', c.avgSlag||'–')+
+          dRow2('Snitt poäng/runda', c.avgStab||'–')+
         '</div>'+
         '<div>'+
           dRow2('OoM-poäng totalt (alla tourer)', c.totalPts+'p')+
@@ -9908,9 +9934,10 @@ function openPushSettings() {
     PUSH_PREFS_COL.doc(currentUser.username).get().catch(function(){ return null; }),
     isAdmin() ? PUSH_CONFIG_REF.get().catch(function(){ return null; }) : Promise.resolve(null),
     PUSH_TOKENS_COL.where('username','==',currentUser.username).get().catch(function(){ return null; }),
-    isAdmin() ? PUSH_TOKENS_COL.get().catch(function(){ return null; }) : Promise.resolve(null)
+    isAdmin() ? PUSH_TOKENS_COL.get().catch(function(){ return null; }) : Promise.resolve(null),
+    isAdmin() ? BILLING_STATUS_REF.get().catch(function(){ return null; }) : Promise.resolve(null)
   ]).then(function(res){
-    var prefsDoc = res[0], cfgDoc = res[1], myTokens = res[2], allTokens = res[3];
+    var prefsDoc = res[0], cfgDoc = res[1], myTokens = res[2], allTokens = res[3], billDoc = res[4];
     _pushPrefs = (prefsDoc && prefsDoc.exists) ? prefsDoc.data() : {};
     var deviceCount = myTokens ? myTokens.size : 0;
     var h = '<h3 style="margin-bottom:4px"><i class="ti ti-bell" style="color:var(--green-dark)"></i> Notiser</h3>';
@@ -9947,6 +9974,7 @@ function openPushSettings() {
     // Admin
     if(isAdmin()) {
       var vk = (cfgDoc && cfgDoc.exists && cfgDoc.data().vapidKey) || '';
+      h += buildBillingAdminLineHTML(billDoc);
       h += buildPushAdoptionHTML(allTokens);
       h += '<details style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px"'+(vk?'':' open')+'>'+
         '<summary style="cursor:pointer;font-weight:600;font-size:13px"><i class="ti ti-shield"></i> Admin</summary>'+
@@ -9962,6 +9990,47 @@ function openPushSettings() {
     h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
     showModal(h);
   });
+}
+
+// ── Kostnadslarm (admin) ────────────────────────────────────────────────────
+// Servern (billingAlert) sparar Google Clouds budgetuppdateringar i
+// golfapp/billingStatus. Kostar det något visas ett larmkort på startsidan för admin
+// (gult, rött från 90 % av budgeten). Kortet kan tryckas bort tills kostnaden ändras.
+var BILLING_STATUS_REF = db.collection('golfapp').doc('billingStatus');
+function fmtKr(v) { return (Math.round((v||0)*100)/100).toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function renderHomeBillingWidget() {
+  var el = document.getElementById('home-billing-widget');
+  if(!el) return;
+  el.innerHTML = '';
+  if(!isAdmin()) return;
+  BILLING_STATUS_REF.get().then(function(d){
+    if(!d.exists) return;
+    var b = d.data();
+    if(!(b.cost > 0)) return;
+    var key = b.period+'_'+fmtKr(b.cost);
+    var dismissed = null; try { dismissed = localStorage.getItem('billingDismissed'); } catch(e) {}
+    if(dismissed === key) return;
+    var pct = b.budget > 0 ? b.cost / b.budget : 0;
+    var red = pct >= 0.9;
+    var c = red ? '#A32D2D' : '#854F0B', bg = red ? '#FCEBEB' : 'var(--gold-light)';
+    el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;background:'+bg+';border-color:'+c+'">'+
+      '<i class="ti '+(red?'ti-alert-triangle':'ti-credit-card')+'" style="font-size:24px;color:'+c+'"></i>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;color:'+c+'">Google Cloud kostar '+fmtKr(b.cost)+' '+(b.currency==='SEK'?'kr':esc(b.currency))+' denna månad</div>'+
+        '<div style="font-size:12px;color:var(--text-2)">'+(b.budget>0?Math.round(pct*100)+' % av budgeten på '+fmtKr(b.budget)+' kr · ':'')+'uppdaterad '+new Date(b.updatedAt||Date.now()).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>'+
+        '<div style="height:6px;border-radius:3px;background:rgba(0,0,0,.08);margin-top:6px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,Math.round(pct*100))+'%;background:'+c+'"></div></div></div>'+
+      '<a class="btn btn-sm" href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Öppna</a>'+
+      '<button class="btn btn-sm" title="Dölj tills kostnaden ändras" style="padding:4px 8px" onclick="try{localStorage.setItem(\'billingDismissed\',\''+key+'\')}catch(e){};renderHomeBillingWidget()"><i class="ti ti-x"></i></button>'+
+    '</div>';
+  }).catch(function(){});
+}
+function buildBillingAdminLineHTML(bDoc) {
+  if(!bDoc || !bDoc.exists) return '<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-3)"><i class="ti ti-credit-card"></i> Kostnadslarm är inte kopplat ännu.</div>';
+  var b = bDoc.data(); var pct = b.budget > 0 ? Math.round(b.cost/b.budget*100) : 0;
+  return '<div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:8px">'+
+    '<i class="ti ti-credit-card" style="font-size:18px;color:'+(b.cost>0?'#854F0B':'var(--green-dark)')+'"></i>'+
+    '<div style="flex:1"><strong>Google Cloud denna månad: '+fmtKr(b.cost)+' kr</strong>'+(b.budget>0?' <span style="color:var(--text-3)">av '+fmtKr(b.budget)+' kr ('+pct+' %)</span>':'')+
+    '<div style="font-size:11px;color:var(--text-3)">Larm skickas till admin när en larmnivå passeras. Uppdaterad '+new Date(b.updatedAt||Date.now()).toLocaleString('sv-SE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div></div>'+
+    (b.cost>0?'':'<i class="ti ti-circle-check" style="color:var(--green-dark);font-size:18px"></i>')+'</div>';
 }
 
 // Admin: vilka spelare som har notiser påslagna (minst en registrerad enhet).
@@ -12233,11 +12302,14 @@ function buildProfileHTML(pi){
   var bestPos = numEvents ? Math.min.apply(null,results.map(function(x){return x.pos;})) : null;
   var worstPos = numEvents ? Math.max.apply(null,results.map(function(x){return x.pos;})) : null;
   // Bästa/snitt-score inkluderar finaler (rått resultat) - bara OoM-poängen nedan exkluderar dem.
-  var slagR = results.filter(function(x){ return (!x.event.type||x.event.type==='slag') && x.result.score>0; });
-  var stabR = results.filter(function(x){ return x.event.type==='stableford' && x.result.score>0; });
-  var bestNetto = slagR.length ? Math.min.apply(null,slagR.map(function(x){return x.result.score;})) : null;
-  var bestStab  = stabR.length ? Math.max.apply(null,stabR.map(function(x){return x.result.score;})) : null;
-  var avgSlag   = slagR.length ? (slagR.reduce(function(s,x){return s+x.result.score;},0)/slagR.length).toFixed(1) : null;
+  // Båda resultattyperna för varje rond, oavsett spelform (se resultBothValues)
+  var bothVals = results.map(function(x){ return resultBothValues(x.event, pi, x.result); });
+  var nettoVals = bothVals.map(function(v){ return v.netto; }).filter(function(v){ return v != null; });
+  var poangVals = bothVals.map(function(v){ return v.poang; }).filter(function(v){ return v != null; });
+  var bestNetto = nettoVals.length ? Math.min.apply(null, nettoVals) : null;
+  var bestStab  = poangVals.length ? Math.max.apply(null, poangVals) : null;
+  var avgSlag   = nettoVals.length ? (nettoVals.reduce(function(s,v){return s+v;},0)/nettoVals.length).toFixed(1) : null;
+  var avgPoang  = poangVals.length ? (poangVals.reduce(function(s,v){return s+v;},0)/poangVals.length).toFixed(1) : null;
   var totalPts  = nonFinal.reduce(function(s,x){return s+(x.result.points||0);},0);
   var bestN = t.bestRounds || 0;
   var countedIds = {};
@@ -12259,7 +12331,7 @@ function buildProfileHTML(pi){
   // Stat cards row
   var statCards = [
     {val: countedPts+'p', lbl:'Totalt poäng',  icon:'ti-award',  color:'#0F6E56'},
-    {val: avgSlag||'–',   lbl:'Snitt slag',    icon:'ti-target', color:'#0F6E56'},
+    {val: avgSlag||'–',   lbl:'Snitt netto',   icon:'ti-target', color:'#0F6E56'},
     {val: wins,           lbl:'Segrar',         icon:'ti-trophy', color:'#BA7517'},
     {val: podiums,        lbl:'Pallplatser',    icon:'ti-medal',  color:'#888780'},
   ];
@@ -12454,9 +12526,10 @@ function buildProfileHTML(pi){
           dRow('Tävlingar spelade', numEvents, false)+
         '</div>'+
         '<div><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Rundor</div>'+
-          dRow('Bästa slag-runda', bestNetto!=null?bestNetto+' slag':'–', false)+
+          dRow('Bästa netto-runda', bestNetto!=null?bestNetto+' netto':'–', false)+
           dRow('Bästa poäng-runda', bestStab!=null?bestStab+' p':'–', true)+
-          dRow('Snitt poäng/runda', nonFinal.length?(nonFinal.reduce(function(s,x){return s+(x.result.points||0);},0)/nonFinal.length).toFixed(1)+' p':'–', false)+
+          dRow('Snitt poäng (poängbogey)', avgPoang!=null?avgPoang+' p':'–', false)+
+          dRow('Snitt OoM-poäng/deltävling', nonFinal.length?(nonFinal.reduce(function(s,x){return s+(x.result.points||0);},0)/nonFinal.length).toFixed(1)+' p':'–', false)+
         '</div>'+
       '</div>'+
     '</div>'+
@@ -15927,6 +16000,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (251)',
+    items: [
+      { type: 'improved', text: 'Spelarprofilen och karriärstatistiken räknar nu fram BÅDE netto och poäng (poängbogey) för varje rond som har SHCP och ifyllt scorekort, oavsett om tävlingen spelades som slag eller poängbogey - samma princip som Banstatistiken. En slagrond ger alltså även poäng (räknat hål för hål), och en poängbogeyrond ger även netto (brutto − SHCP). Gäller alla befintliga rundor med scorekort och alla framtida rundor automatiskt. Uppskattade poäng (≈) räknas inte med. Etiketter: "Snitt netto", "Bästa netto-runda", "Bästa poäng-runda", "Snitt poäng (poängbogey)" och i karriären "Snitt netto/runda" och "Snitt poäng/runda". Den tidigare raden "Snitt poäng/runda" i tourprofilen (som visade OoM-poäng) heter nu "Snitt OoM-poäng/deltävling" för att inte förväxlas.' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (250)',
+    items: [
+      { type: 'new', text: 'Kostnadslarm för admin: kopplat till budgeten i Google Cloud. Admin får push och popup när en larmnivå passeras (t.ex. första kronan, 50 %, 90 % och 100 % av budgeten), och så länge appens molntjänster kostar något visas ett larmkort på startsidan med månadens kostnad, andel av budgeten och en länk till Google Cloud Billing (gult, rött från 90 %). Under 🔔 → Admin syns alltid månadens kostnad.' }
+    ]
+  },
   {
     date: '30 oktober 2026 (249)',
     items: [
