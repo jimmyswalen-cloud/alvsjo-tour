@@ -432,7 +432,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
     <button type="button" class="bs-it" style="background:#FFB870;color:#7A3D00" onclick="bsheetGo(showMyBetting)"><i class="ti ti-coin"></i>Vinster &amp; betting</button>
     <button type="button" class="bs-it" style="background:#E5D4F5;color:#5B2C8C" onclick="bsheetGo(showIdeaWall)"><i class="ti ti-bulb"></i>Idéer &amp; nyheter</button>
     <button type="button" class="bs-it" style="background:#D3D1C7;color:#444441" onclick="bsheetGo(showGlobalSettings)"><i class="ti ti-settings" id="bsheet-settings-icon"></i><span id="bsheet-settings-label">Inställningar</span></button>
-    <button type="button" class="bs-it" style="background:#1E3A5F;color:#fff" onclick="bsheetGo(showHelp)"><i class="ti ti-help-circle"></i>Hjälp &amp; tips</button>
+    <button type="button" class="bs-it" style="background:#1E3A5F;color:#fff" onclick="bsheetGo(showHelp)"><i class="ti ti-help-circle"></i>Regler, hjälp &amp; tips</button>
   </div>
 </div>
 
@@ -510,8 +510,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
       </div>
       <div class="home-card" onclick="showHelp()" style="background:#1E3A5F;border:none;grid-column:1 / -1">
         <i class="ti ti-help-circle" style="font-size:32px;color:#fff" aria-hidden="true"></i>
-        <div class="home-card-label" style="color:#fff">Hjälp &amp; tips</div>
-        <div class="home-card-sub" style="color:#C9D9EC">Guider och vanliga frågor</div>
+        <div class="home-card-label" style="color:#fff">Regler, hjälp &amp; tips</div>
+        <div class="home-card-sub" style="color:#C9D9EC">Tourens regler, guider och vanliga frågor</div>
       </div>
     </div>
     <div id="app-version-label" style="text-align:center;font-size:11px;color:var(--text-3);padding:6px 0 18px;letter-spacing:.3px"></div>
@@ -599,7 +599,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
   <div id="help-screen" style="display:none">
     <div class="tours-header">
       <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
-      <h2 style="margin:0;flex:1;text-align:center">Hjälp &amp; tips</h2>
+      <h2 style="margin:0;flex:1;text-align:center">Regler, hjälp &amp; tips</h2>
     </div>
     <div id="help-content"></div>
   </div>
@@ -18383,6 +18383,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '30 oktober 2026 (274)',
+    items: [
+      { type: 'new', text: 'Tourens regler finns nu i appen! Knappen heter "Regler, hjälp & tips" och första avsnittet är "Tourens regler" – markör, spelperiod och ordinarie speldatum, både som text och som bild (tryck för att förstora).' },
+    ]
+  },
+  {
     date: '30 oktober 2026 (273)',
     items: [
       { type: 'improved', text: 'Utmaningar finns nu även som en egen ruta i menyn på startsidan (bredvid Idéer & nyheter).' },
@@ -20634,6 +20640,22 @@ function helpIphoneMockupHTML() {
 }
 
 var HELP_TOPICS = [
+  {
+    id: 'tour-rules',
+    icon: 'ti-gavel',
+    title: 'Tourens regler',
+    body:
+      '<p style="font-size:13px;color:var(--text-2);margin:12px 0 10px">En kort summering av hur vi spelar på touren – samma regler för alla.</p>'+
+      '<div style="margin-top:6px">'+
+        helpStepRow(1, 'ti-users', 'Markör', 'Vi spelar i första hand med en markör som är en del av touren – alltså en annan deltagare. Spela tillsammans är roligast! I enstaka fall kan det vara svårt att få ihop spel med övriga. Behöver du spela ensam ska dispens sökas hos tävlingsledningen i förväg. Separat markör kan godkännas i undantagsfall, men vi vill minimera dessa tillfällen – vår grundtanke är att vi spelar golf tillsammans.')+
+        helpStepRow(2, 'ti-calendar-event', 'Spelperiod', 'Varje deltävling har ett fastställt start- och slutdatum. Inom det intervallet ska rundan genomföras och resultatet registreras.')+
+        helpStepRow(3, 'ti-calendar-check', 'Ordinarie speldatum', 'De datum som föreslås för respektive deltävling är våra ordinarie speldagar. Men vi vet alla hur svårt det kan vara att få ihop livet ibland – därför finns ett spelintervall som ger alla goda möjligheter att delta i samtliga deltävlingar. Flexibla datum – fler kan vara med!')+
+      '</div>'+
+      '<div style="margin-top:12px;font-size:13px;font-weight:700;color:var(--green-dark);text-align:center">Schysst golf – schyssta förutsättningar!</div>'+
+      '<p style="font-size:12px;color:var(--text-3);text-align:center;margin:4px 0 12px">Tack för att alla hjälps åt att göra touren så rolig och schysst som möjligt! /Tävlingsledningen</p>'+
+      '<img src="regler-touren.jpg" alt="Tourens regler i bild" loading="lazy" onclick="openImageLightbox(this.src)" onerror="this.style.display=\'none\'" style="width:100%;border-radius:12px;border:1px solid var(--border);cursor:zoom-in;display:block">'+
+      '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:6px 0 0"><i class="ti ti-zoom-in"></i> Tryck på bilden för att förstora</p>'
+  },
   {
     id: 'iphone-install',
     icon: 'ti-brand-apple',
