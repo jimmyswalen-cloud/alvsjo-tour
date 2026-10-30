@@ -137,6 +137,16 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .home-divider{display:flex;align-items:center;gap:12px;margin:22px 2px 16px}
 .home-divider-line{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--border-strong) 20%,var(--border-strong) 80%,transparent)}
 .home-divider-label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px;white-space:nowrap}
+/* ── "Hey Champ"-hälsning för regerande tourchampion ── */
+.champ-hello{position:relative;overflow:hidden;border-radius:14px;margin-bottom:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#3B2A05 0%,#7A5A0E 45%,#C99A2E 100%);color:#fff;box-shadow:0 6px 18px rgba(122,90,14,.28)}
+.champ-hello .ch-cup{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,#FFE9A8,#E2B13C 60%,#A9781A);box-shadow:0 0 0 3px rgba(255,233,168,.35);font-size:28px;color:#4A3305}
+.champ-hello .ch-hey{font-size:22px;font-weight:900;letter-spacing:.02em;line-height:1.1;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.champ-hello .ch-sub{font-size:12.5px;color:#FBE9BC;margin-top:3px;line-height:1.35}
+.champ-hello::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);pointer-events:none}
+.champ-hello.shine::after{animation:champShine 1.6s ease .3s 2}
+.champ-hello.shine .ch-cup{animation:champPop .7s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes champShine{to{left:130%}}
+@keyframes champPop{0%{transform:scale(.3) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
 /* ── Bottenmeny (fast menyrad längst ner) + "Mer"-ark ── */
 #bnav{position:fixed;left:0;right:0;bottom:0;z-index:150;background:rgba(255,255,255,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:none;justify-content:space-around;align-items:flex-end;padding:6px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.06)}
 body.has-bnav #bnav{display:flex}
@@ -304,6 +314,7 @@ body.has-bnav.kb-open #bnav{display:none}
 
 <div id="tours-screen">
   <div id="home-screen-content">
+    <div id="home-champ-greeting"></div>
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
     <div id="home-push-banner"></div>
     <div id="home-billing-widget"></div>
@@ -891,6 +902,7 @@ function initFirebaseSync(onFirstLoad) {
     } else {
       // Data changed remotely (another visitor edited something) — re-render current view.
       refreshCurrentView();
+      try { renderHomeChampGreeting(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -1624,6 +1636,7 @@ function showHomeScreen() {
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
   renderHomeUserBar();
+  try { renderHomeChampGreeting(); } catch(e) { console.error('champ', e); }
   updateHero(null);
   // Startsidan ska ha en egen, mer personlig hero-rubrik ("Älvsjö GCC TOUR") istället för
   // den generiska "TOURER" som visas i Tourer-listvyn (showToursView) och övriga undersidor.
@@ -1739,6 +1752,47 @@ function setupBottomNav() {
   syncBottomNav();
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupBottomNav); else setupBottomNav();
+
+
+// ══ "HEY CHAMP" ══════════════════════════════════════════════════════════════
+// Regerande tourchampion hälsas med "Hey Champ" överst på startsidan när hen
+// loggar in. Gäller bara tourer MED final: mästaren är vinnaren av finalen (samma
+// regel som säsongsmästar-inlägget på väggen, se checkAndPostTourConclusion).
+// Regerande = vinnaren av den senast avgjorda finalen. Titeln går alltså vidare
+// automatiskt när nästa tour med final avgörs.
+function reigningTourChampion() {
+  var best = null;
+  (S.tours||[]).forEach(function(t){
+    if(!t || !t.events || !t.events.some(function(e){ return e.isFinal; })) return;
+    if(!isTourConcluded(t)) return;
+    var finalEv = t.events.find(function(e){ return e.isFinal && e.closed; });
+    if(!finalEv || !finalEv.results || !finalEv.results.length) return;
+    // pi -> användarnamn via playerIndexMap (t.players byggs bara för öppen tour)
+    var pi = finalEv.results[0].pi, map = t.playerIndexMap || {}, uname = null;
+    Object.keys(map).forEach(function(k){ if(map[k] === pi) uname = k; });
+    if(!uname) return;
+    var cu = findUser(uname), champ = { username: uname, name: (cu && cu.name) || uname };
+    var lastFinal = t.events.filter(function(e){ return e.isFinal; }).map(function(e){ return e.periodEnd || e.date || ''; }).sort().pop() || '';
+    if(!best || lastFinal > best.date) best = { username: champ.username, name: champ.name, tour: t, date: lastFinal };
+  });
+  return best;
+}
+function renderHomeChampGreeting() {
+  var el = document.getElementById('home-champ-greeting');
+  if(!el) return;
+  var c = currentUser ? reigningTourChampion() : null;
+  if(!c || c.username !== currentUser.username) { el.innerHTML = ''; return; }
+  var u = findUser(currentUser.username) || currentUser;
+  var first = String(u.name || c.name || currentUser.username).split(' ')[0];
+  // Glans-animationen körs första gången startsidan visas efter inloggning/appstart
+  var shine = false;
+  try { if(!sessionStorage.getItem('champHelloShown')) { shine = true; sessionStorage.setItem('champHelloShown', '1'); } } catch(e) { shine = !window._champHelloShown; }
+  window._champHelloShown = true;
+  el.innerHTML = '<div class="champ-hello'+(shine?' shine':'')+'" role="status">'+
+    '<div class="ch-cup"><i class="ti ti-trophy"></i></div>'+
+    '<div style="min-width:0"><div class="ch-hey">Hey Champ! 🏆</div>'+
+    '<div class="ch-sub">Välkommen '+esc(first)+' – regerande tourchampion i <b>'+esc(c.tour.name||'touren')+'</b></div></div></div>';
+}
 
 function updateSettingsCard() {
   var icon = document.getElementById('settings-card-icon');
@@ -17290,6 +17344,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '30 oktober 2026 (261)',
+    items: [
+      { type: 'new', text: '"Hey Champ!" – regerande tourchampion välkomnas med en guldfärgad hälsning överst på startsidan när hen loggar in (med en liten glans-animation första gången). Gäller tourer med final: mästaren är vinnaren av den senast avgjorda finalen, och titeln går automatiskt vidare när nästa final avgörs.' },
+    ]
+  },
+  {
     date: '30 oktober 2026 (260)',
     items: [
       { type: 'new', text: 'Ny menyrad längst ner på skärmen som alltid syns när man är inloggad: Hem, Tourer, Ny rond (sällskapsrond, den orange mittknappen), Statistik och Mer. Inget mer scrollande ner till menyknapparna – allt nås med ett tumtryck var man än är i appen.' },
@@ -19804,6 +19864,8 @@ function tryAutoLogin() {
 function logout() {
   try { if(typeof unsubscribePushInbox === 'function') unsubscribePushInbox(); } catch(e) {}
   localStorage.removeItem('tourapp_session');
+  try { sessionStorage.removeItem('champHelloShown'); } catch(e) {}
+  window._champHelloShown = false;
   currentUser = null;
   activeTourId = null;
   var userBar = document.getElementById('user-bar');
