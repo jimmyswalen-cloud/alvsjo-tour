@@ -182,6 +182,16 @@ body.has-bnav.kb-open #bnav{display:none}
 #bsheet .bs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 #bsheet .bs-it{border:none;border-radius:14px;padding:16px 6px 14px;display:flex;flex-direction:column;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:700;text-align:center;cursor:pointer;line-height:1.2;min-height:86px;justify-content:center}
 #bsheet .bs-it i{font-size:28px}
+#bsheet .bs-it.bs-wide{grid-column:1 / -1;flex-direction:row;min-height:56px;padding:12px;gap:10px;font-size:14px}
+#bsheet .bs-it.bs-wide i{font-size:24px}
+#bnav .bn-main .bn-c{position:relative;transition:background .25s}
+#bnav .bn-main .bn-dot{display:none;position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:#E24B4A;border:2px solid var(--surface);animation:bnPulse 1.6s ease-out infinite}
+#bnav .bn-main.st-casual .bn-dot{display:block}
+#bnav .bn-main.st-casual .bn-c{background:linear-gradient(135deg,#FF9F45,#D9480F);box-shadow:0 6px 16px rgba(217,72,15,.45)}
+#bnav .bn-main.st-casual{color:#B4380C}
+#bnav .bn-main.st-tour .bn-c{background:linear-gradient(135deg,#2BB98A,#0F6E56);box-shadow:0 6px 16px rgba(15,110,86,.45)}
+#bnav .bn-main.st-tour{color:#0F6E56}
+@keyframes bnPulse{0%{box-shadow:0 0 0 0 rgba(226,75,74,.55)}70%{box-shadow:0 0 0 9px rgba(226,75,74,0)}100%{box-shadow:0 0 0 0 rgba(226,75,74,0)}}
 .home-wall-end{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px -16px -14px;padding:9px 16px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 12px 12px;font-size:11px;color:var(--text-3)}
 .hist-table{width:100%;border-collapse:collapse;font-size:13px}
 .hist-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2)}
@@ -293,7 +303,7 @@ body.has-bnav.kb-open #bnav{display:none}
 <nav id="bnav" aria-label="Huvudmeny">
   <button type="button" data-k="hem" onclick="bnavGo('hem')"><i class="ti ti-home"></i>Hem</button>
   <button type="button" data-k="tour" onclick="bnavGo('tour')"><i class="ti ti-trophy"></i>Tour</button>
-  <button type="button" class="bn-main" data-k="rond" onclick="bnavGo('rond')"><span class="bn-c"><i class="ti ti-golf"></i></span>Ny rond</button>
+  <button type="button" class="bn-main" data-k="rond" onclick="bnavGo('rond')"><span class="bn-c"><i class="ti ti-golf" id="bn-main-icon"></i><span class="bn-dot"></span></span><span id="bn-main-label">Ny rond</span></button>
   <button type="button" data-k="stat" onclick="bnavGo('stat')"><i class="ti ti-chart-bar"></i>Stats</button>
   <button type="button" data-k="mer" onclick="bnavGo('mer')"><i class="ti ti-menu-2"></i>Mer</button>
 </nav>
@@ -302,6 +312,7 @@ body.has-bnav.kb-open #bnav{display:none}
   <div class="bs-grab" id="bsheet-grab"><span></span></div>
   <div class="bs-head"><b>Mer</b></div>
   <div class="bs-grid">
+    <button type="button" class="bs-it bs-wide" style="background:linear-gradient(135deg,#FFE3B3,#FFD08A);color:#7A4100" onclick="bsheetGo(startCasualRoundWizard)"><i class="ti ti-users-group"></i>Ny sällskapsrond</button>
     <button type="button" class="bs-it" style="background:#FAC775;color:#633806" onclick="bsheetGo(showGlobalPlayers)"><i class="ti ti-users"></i>Spelare</button>
     <button type="button" class="bs-it" style="background:#BFE3D9;color:#0B4F3F" onclick="bsheetGo(showMyHcp)"><i class="ti ti-chart-line"></i>Mitt HCP</button>
     <button type="button" class="bs-it" style="background:#FFB870;color:#7A3D00" onclick="bsheetGo(showMyBetting)"><i class="ti ti-coin"></i>Vinster &amp; betting</button>
@@ -914,6 +925,7 @@ function initFirebaseSync(onFirstLoad) {
       // Data changed remotely (another visitor edited something) — re-render current view.
       refreshCurrentView();
       try { renderHomeChampGreeting(); } catch(e) {}
+      try { renderBnavMain(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -1688,6 +1700,7 @@ function syncBottomNav() {
   var loggedIn = !!currentUser && !(loginEl && loginEl.style.display !== 'none');
   document.body.classList.toggle('has-bnav', loggedIn);
   if(!loggedIn) { closeBottomSheet(); return; }
+  try { renderBnavMain(); } catch(e) {}
   var k = bnavActiveKey();
   var sheetOpen = document.getElementById('bsheet').classList.contains('open');
   document.querySelectorAll('#bnav button').forEach(function(b){
@@ -1696,13 +1709,55 @@ function syncBottomNav() {
   var lbl = document.getElementById('bsheet-settings-label'), ic = document.getElementById('bsheet-settings-icon');
   if(lbl && ic) { var adm = isAdmin(); lbl.textContent = adm ? 'Inställningar' : 'Min profil'; ic.className = 'ti ' + (adm ? 'ti-settings' : 'ti-user-circle'); }
 }
+// Mittknappen är dynamisk: 1) pågående sällskapsrond där jag är med -> "Fortsätt",
+// 2) tourrond som spelas IDAG där jag är anmäld och lottad i en boll -> "Livescore",
+// 3) annars "Ny rond" (ny sällskapsrond). Sällskapsrond går före tourrond.
+function bnavMainState() {
+  if(!currentUser) return { kind:'new' };
+  var me = currentUser.username;
+  var mine = (_casualAll||[]).filter(function(r){ return r && r.status === 'active' && (r.createdBy === me || casualIsParticipant(r, me)); })
+    .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+  if(mine.length) return { kind:'casual', id: mine[0].id, round: mine[0] };
+  var today = hcpTodayISO(), access = currentUser.tourAccess || [], cands = [], order = 0;
+  (S.tours||[]).forEach(function(t){
+    if(!t || access.indexOf(t.id) < 0) return;
+    var myPi = getMyPi(t);
+    if(myPi < 0) return;
+    (t.events||[]).forEach(function(e){
+      order++;
+      if(!e || e.closed || !e.teeGroups) return;
+      var regs = e.registrations || [];
+      var regsNorm = (regs.length && typeof regs[0] === 'object') ? regs : regs.map(function(ri){ return { pi: ri, date: e.date }; });
+      var myReg = regsNorm.find(function(r){ return r.pi === myPi && !r.declined; });
+      if(!myReg) return;
+      // Redan inlämnat resultat (väntar på attest eller godkänt) -> rondan är klar för mig,
+      // så knappen går vidare till nästa rond samma dag (t.ex. 36 hål)
+      if((e.scoreSubmissions||[]).some(function(x){ return x.pi === myPi; })) return;
+      var gIdx = e.teeGroups.findIndex(function(g){ return g && (g.date || e.date) === today && (g.playerPis||[]).indexOf(myPi) >= 0; });
+      if(gIdx >= 0) cands.push({ kind:'tour', tourId: t.id, eventId: e.id, gIdx: gIdx, event: e, time: e.teeGroups[gIdx].time || '', order: order });
+    });
+  });
+  // Tidigaste starttid först (saknas tid: listordning, efter de med tid)
+  cands.sort(function(a,b){ return ((a.time?0:1) - (b.time?0:1)) || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0) || (a.order - b.order); });
+  return cands[0] || { kind:'new' };
+}
+function renderBnavMain() {
+  var btn = document.querySelector('#bnav .bn-main'), ic = document.getElementById('bn-main-icon'), lb = document.getElementById('bn-main-label');
+  if(!btn || !ic || !lb) return;
+  var st = bnavMainState();
+  btn.classList.toggle('st-casual', st.kind === 'casual');
+  btn.classList.toggle('st-tour', st.kind === 'tour');
+  if(st.kind === 'casual') { ic.className = 'ti ti-player-play'; lb.textContent = 'Fortsätt'; btn.title = 'Fortsätt sällskapsronden på ' + (st.round.courseName || ''); }
+  else if(st.kind === 'tour') { ic.className = 'ti ti-broadcast'; lb.textContent = 'Livescore'; btn.title = 'Livescore – ' + (st.event.name || 'dagens rond'); }
+  else { ic.className = 'ti ti-golf'; lb.textContent = 'Ny rond'; btn.title = 'Starta en ny sällskapsrond'; }
+}
 function bnavGo(k) {
   if(k !== 'mer') closeBottomSheet();
   try { closeModal(); } catch(e) {}
   if(k === 'hem') showHomeScreen();
   else if(k === 'tour') showToursList();
   else if(k === 'stat') showCourseStats();
-  else if(k === 'rond') startCasualRoundWizard();
+  else if(k === 'rond') { var st = bnavMainState(); if(st.kind === 'casual') openCasualRound(st.id); else if(st.kind === 'tour') goToMyLiveScoring(st.tourId, st.eventId, st.gIdx); else startCasualRoundWizard(); }
   else if(k === 'mer') { if(document.getElementById('bsheet').classList.contains('open')) closeBottomSheet(); else openBottomSheet(); }
   syncBottomNav();
 }
@@ -1761,6 +1816,9 @@ function setupBottomNav() {
     var el = document.getElementById(id); if(el) mo.observe(el, { attributes: true, attributeFilter: ['style'] });
   });
   syncBottomNav();
+  // Byt läge vid dygnsskifte (t.ex. Livescore försvinner efter speldagen)
+  setInterval(function(){ try { if(currentUser) renderBnavMain(); } catch(e) {} }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) { try { if(currentUser) renderBnavMain(); } catch(e) {} } });
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupBottomNav); else setupBottomNav();
 
@@ -10157,6 +10215,7 @@ function subscribeCasualRounds() {
     _casualAll = all;
     _casualRounds = all.filter(function(r){ return r.status === 'finished'; });
     renderHomeCasualWidget();
+    try { renderBnavMain(); } catch(e) {}
   }, function(err){ console.error('casualRounds', err); });
 }
 function casualIsParticipant(r, username) {
@@ -10261,7 +10320,7 @@ function renderCasualWizard() {
     h += casualStepHeader(1, 'Välj bana');
     h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
-        '<label style="font-size:12px;color:var(--text-2)">Datum<br><input type="date" value="'+_cw.date+'" max="'+hcpTodayISO()+'" onchange="_cw.date=this.value" style="margin:2px 0 0;width:160px"></label>'+
+        '<label style="font-size:12px;color:var(--text-2)">Datum<br><input type="date" value="'+_cw.date+'" max="'+hcpTodayISO()+'" onchange="_cw.date=this.value;renderCasualCourseList()" style="margin:2px 0 0;width:160px"></label>'+
         '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:14px"><input type="checkbox" '+(_cw.sim?'checked':'')+' onchange="_cw.sim=this.checked" style="width:18px;height:18px;margin:0"> <i class="ti ti-device-desktop"></i> Simulatorrunda</label>'+
       '</div></div>';
     h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
@@ -10346,6 +10405,7 @@ function casualRequestPos() {
 }
 function casualCourseRowHTML(c, extra) {
   var ok = casualCourseHasCard(c), img = getCourseImage(c.name), fav = casualFavIds().indexOf(c.id) >= 0;
+  if(currentUser && _cw && casualCompetitionConflict(currentUser.username, c, _cw.date)) extra = '<span style="color:#C2410C">⚠️ Tävlingsbana idag</span>' + (extra ? ' · ' + extra : '');
   return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
     (img?'<img src="'+img+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:52px;height:38px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="color:var(--text-3)"></i></div>')+
     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</div>'+
@@ -10404,7 +10464,43 @@ function renderCasualCourseList() {
   }
   el.innerHTML = h;
 }
-function casualPickCourse(id) { _cw.courseId = id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0); }
+// Golfregel 5.2b: man får inte spela/träna på tävlingsbanan före (eller mellan) sina
+// tävlingsronder samma dag. Ger en VARNING (inte spärr) om spelaren har en ej inlämnad
+// tourrond samma dag på samma bana. Banan matchas på normaliserat namn.
+function casualCompetitionConflict(username, course, dateISO) {
+  if(!username || !course || !dateISO) return null;
+  var cn = normCourseName(course.name), hit = null;
+  if(!cn) return null;
+  (S.tours||[]).forEach(function(t){
+    if(!t || !t.events) return;
+    var pi = (t.playerIndexMap || {})[username];
+    if(pi == null) return;
+    t.events.forEach(function(e){
+      if(!e || e.closed || normCourseName(e.course) !== cn) return;
+      var regs = e.registrations || [];
+      var regsNorm = (regs.length && typeof regs[0] === 'object') ? regs : regs.map(function(ri){ return { pi: ri, date: e.date }; });
+      var r = regsNorm.find(function(x){ return x.pi === pi && !x.declined; });
+      if(!r) return;
+      var g = (e.teeGroups||[]).find(function(g){ return g && (g.playerPis||[]).indexOf(pi) >= 0; });
+      var d = (g && g.date) || r.date || e.date;
+      if(d !== dateISO) return;
+      if((e.scoreSubmissions||[]).some(function(x){ return x.pi === pi; })) return; // redan spelat och lämnat in
+      var cand = { tour: t, event: e, time: (g && g.time) || '' };
+      if(!hit || (cand.time && (!hit.time || cand.time < hit.time))) hit = cand; // tidigaste rondens starttid
+    });
+  });
+  return hit;
+}
+function casualConflictText(name, c, conf) {
+  return (name ? name + ' har' : 'Du har') + ' en tävlingsrond på ' + c.name + ' idag (' + (conf.event.name || 'deltävling') + (conf.time ? ', start ' + conf.time : '') + ').\n\n' +
+    'Enligt golfregel 5.2b får man inte spela eller träna på tävlingsbanan samma dag före sin tävlingsrond.\n\nVill du ändå fortsätta?';
+}
+function casualPickCourse(id) {
+  var c = (courseDb||[]).find(function(x){ return x.id === id; });
+  var conf = c && currentUser ? casualCompetitionConflict(currentUser.username, c, _cw.date) : null;
+  if(conf && !confirm('⚠️ Tävlingsbana idag\n\n' + casualConflictText(null, c, conf))) return;
+  _cw.courseId = id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0);
+}
 function casualSaveMyShcp() {
   var v = parseInt((document.getElementById('cw-myshcp')||{}).value);
   if(isNaN(v)) { alert('Ange ditt SHCP.'); return; }
@@ -10469,6 +10565,9 @@ function renderCasualUserList(q) {
 }
 function casualAddUser(username) {
   var u = findUser(username); if(!u) return;
+  var c = (courseDb||[]).find(function(x){ return x.id === _cw.courseId; });
+  var conf = c ? casualCompetitionConflict(u.username, c, _cw.date) : null;
+  if(conf && !confirm('⚠️ Tävlingsbana idag\n\n' + casualConflictText(u.name || u.username, c, conf))) return;
   _cw.players.push({ key:'u_'+u.username, username:u.username, name:u.name||u.username, guest:false, shcp: Math.round(u.hcp||0) });
   renderCasualWizard();
 }
@@ -17372,6 +17471,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (265)',
+    items: [
+      { type: 'improved', text: 'Spelar man flera tourronder samma dag (t.ex. 36 hål) öppnar mittknappen "Livescore" alltid den rond som har tidigast starttid, och går vidare till nästa rond så fort man lämnat in den förra – man behöver inte vänta på attesten.' },
+      { type: 'new', text: 'Varning för tävlingsbana (golfregel 5.2b): väljer man en bana för en sällskapsrond där man själv – eller en spelare man lägger till – har en ej inlämnad tourrond samma dag, märks banan med "⚠️ Tävlingsbana idag" och man får en varning. Man kan välja att fortsätta ändå. Efter inlämnad tävlingsrond försvinner varningen.' },
+    ]
+  },
+  {
+    date: '30 oktober 2026 (264)',
+    items: [
+      { type: 'new', text: 'Mittknappen i menyraden är nu dynamisk: har du en pågående sällskapsrond visar den "Fortsätt" (med röd pulserande prick) och tar dig rakt in i ronden. Spelar du en deltävling idag där du är lottad i en boll visar den "Livescore" (grön) och öppnar livescoringen för din boll. Annars "Ny rond" som förut.' },
+      { type: 'improved', text: '"Ny sällskapsrond" finns nu även överst i Mer-arket, så man kan alltid starta en ny rond även när mittknappen visar Fortsätt eller Livescore.' },
+    ]
+  },
   {
     date: '30 oktober 2026 (263)',
     items: [
