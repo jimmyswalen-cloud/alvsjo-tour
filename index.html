@@ -24,18 +24,27 @@
   --radius:8px;--danger-bg:#fef2f2;--danger-border:#fecaca;--danger-text:#dc2626;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.hero{position:relative;width:100%;height:280px;background:#1a2e22 center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+/* ── Topplåst header: headerbilden ligger kvar överst (kortare än förr) och allt annat
+   scrollar in under den. Under bildens nederkant ligger en mjuk fade så innehållet
+   tonar ut när det glider in under headern. --hero-h hålls uppdaterad av JS (syncHeroHeight)
+   så att andra klistrade element (tourflikarna) och scroll-till-element hamnar under den. */
+html{scroll-padding-top:calc(var(--hero-h,0px) + 12px)}
+.hero.hero-sticky{position:sticky;top:0;z-index:120;overflow:visible}
+.hero.hero-sticky::after{content:"";position:absolute;left:0;right:0;bottom:-26px;height:26px;background:linear-gradient(180deg,var(--bg) 0%,rgba(240,244,241,0) 100%);pointer-events:none}
+.hero.hero-sticky .hero-scroll{height:40px}
+.nav-wrap{top:var(--hero-h,0px) !important}
+.hero{position:relative;width:100%;height:200px;background:#1a2e22 center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 .hero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.12) 0%,rgba(3,30,18,.70) 100%);}
 .hero-content{position:relative;text-align:center;padding:0 20px;transition:opacity .15s}
 .hero-content:hover{opacity:.85}
-.hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:8px;}
-.hero-title{font-size:clamp(36px,9vw,72px);font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1;text-shadow:0 3px 28px rgba(0,0,0,.5);margin-bottom:0;}
+.hero-eyebrow{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:6px;}
+.hero-title{font-size:clamp(28px,7.4vw,58px);font-weight:800;color:#fff;letter-spacing:-.025em;line-height:1;text-shadow:0 3px 28px rgba(0,0,0,.5);margin-bottom:0;}
 .hero-sub{font-size:14px;color:rgba(255,255,255,.6);margin-top:8px;}
 .hero-scroll{position:absolute;bottom:0;left:0;right:0;height:48px;background:linear-gradient(0deg,var(--bg) 0%,transparent 100%);}
 /* Bredbilds-omslag (logotyp-banner, t.ex. 4:1 eller bredare), utan text-overlay eftersom bilden redan innehåller namn/varumärke.
    Bred skärm: hela bilden visas med sin naturliga höjd. Smal skärm (mobil/surfplatta): en tydligt högre ruta där bilden
    centreras och sidorna beskärs, så att loggan inte krymper till en liten remsa. */
-.hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:460px;background-position:center 40%}
+.hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:260px;background-position:center 40%}
 .hero.hero-banner::before,.hero.hero-banner .hero-content{display:none}
 .hero.hero-banner .hero-scroll{height:22px}
 img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1);max-height:240px}
@@ -43,7 +52,9 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
    istället för en fast höjd som beskar sidorna och gjorde loggan jättestor. Bara riktigt smala skärmar
    (mobil) får en högre ruta där sidorna beskärs. */
 @media (max-width:699px){
-  .hero.hero-banner{aspect-ratio:auto;height:clamp(140px,40vw,220px);max-height:none}
+  .hero{height:168px}
+  .hero-eyebrow{font-size:10px;letter-spacing:.14em;margin-bottom:4px}
+  .hero.hero-banner{aspect-ratio:auto;height:clamp(120px,34vw,170px);max-height:none}
 }
 @media (max-width:699px){
   img.cover-banner{min-height:clamp(110px,32vw,150px)}
@@ -224,11 +235,11 @@ body.has-bnav.kb-open #bnav{display:none}
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
-<div class="hero" id="hero-bg">
+<div class="hero hero-sticky" id="hero-bg">
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
-      <img src="logo-hero.png" style="height:clamp(56px,11vw,90px);width:auto" alt="ÄGCC Tour">
+      <img src="logo-hero.png" style="height:clamp(44px,9vw,72px);width:auto" alt="ÄGCC Tour">
       <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
@@ -1793,6 +1804,24 @@ function renderHomeChampGreeting() {
     '<div style="min-width:0"><div class="ch-hey">Hey Champ! 🏆</div>'+
     '<div class="ch-sub">Välkommen '+esc(first)+' – regerande tourchampion i <b>'+esc(c.tour.name||'touren')+'</b></div></div></div>';
 }
+
+
+// Topplåst header: håll --hero-h = headerns faktiska höjd (varierar med bannerbilder och skärmbredd)
+function syncHeroHeight() {
+  var h = document.getElementById('hero-bg');
+  var px = (h && h.offsetParent !== null && getComputedStyle(h).display !== 'none') ? h.offsetHeight : 0;
+  document.documentElement.style.setProperty('--hero-h', px + 'px');
+}
+(function(){
+  function init(){
+    var h = document.getElementById('hero-bg'); if(!h) return;
+    syncHeroHeight();
+    if(window.ResizeObserver) new ResizeObserver(syncHeroHeight).observe(h);
+    new MutationObserver(syncHeroHeight).observe(h, { attributes:true, attributeFilter:['style','class'] });
+    window.addEventListener('resize', syncHeroHeight);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
 
 function updateSettingsCard() {
   var icon = document.getElementById('settings-card-icon');
@@ -17343,6 +17372,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (263)',
+    items: [
+      { type: 'new', text: 'Topplåst header: headerbilden ligger nu kvar överst på alla sidor (startsidan, tourer, statistik m.m.) och allt innehåll scrollar in under den med en mjuk fade. Headern är samtidigt lite lägre så att mer innehåll får plats.' },
+      { type: 'improved', text: 'Tourens flikar (Tävlingar, Spelare, Kalender …) fastnar nu direkt under headern när man scrollar, och hopp till ett visst kort hamnar inte bakom headern.' },
+    ]
+  },
   {
     date: '30 oktober 2026 (262)',
     items: [
