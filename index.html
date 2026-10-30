@@ -134,6 +134,10 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .stat-card{background:var(--surface2);border-radius:var(--radius);padding:12px 10px;text-align:center;border:1px solid var(--border)}
 .stat-val{font-size:24px;font-weight:600;color:var(--text);line-height:1.1}
 .stat-lbl{font-size:11px;color:var(--text-3);margin-top:3px}
+.home-divider{display:flex;align-items:center;gap:12px;margin:22px 2px 16px}
+.home-divider-line{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--border-strong) 20%,var(--border-strong) 80%,transparent)}
+.home-divider-label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.home-wall-end{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px -16px -14px;padding:9px 16px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 12px 12px;font-size:11px;color:var(--text-3)}
 .hist-table{width:100%;border-collapse:collapse;font-size:13px}
 .hist-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2)}
 .hist-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -262,6 +266,12 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
     <div id="home-activity-feed"></div>
+    <!-- Tydlig avdelare mellan The ÄGCC Wall och menyknapparna -->
+    <div class="home-divider" role="separator" aria-label="Meny">
+      <span class="home-divider-line"></span>
+      <span class="home-divider-label"><i class="ti ti-layout-grid"></i> Meny</span>
+      <span class="home-divider-line"></span>
+    </div>
     <div id="home-casual-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
@@ -6531,6 +6541,7 @@ function renderHomeActivityFeed(items) {
     '</div>'+
     rows+
     toggleBtn+
+    '<div class="home-wall-end"><i class="ti ti-messages"></i> Slut på The ÄGCC Wall</div>'+
   '</div>';
 }
 
@@ -10004,6 +10015,8 @@ function setCasualTitle(t) { var el = document.getElementById('casual-title'); i
 function startCasualRoundWizard() {
   if(!currentUser) return;
   var me = findUser(currentUser.username) || currentUser;
+  _cwTab = 'fav'; // börja alltid på Favoriter
+  _cwUserLimit = 8;
   _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, search:'',
     players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
   if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
@@ -10083,7 +10096,7 @@ function renderCasualWizard() {
 // koordinater, via enhetens plats) och "Favoriter" (spelarens stjärnmärkta banor,
 // max 5, mest spelade först). Med sökord visas sökträffarna. Stjärnan på varje bana
 // lägger till/tar bort favorit (sparas på spelaren: u.favoriteCourses).
-var _cwTab = (function(){ try { return localStorage.getItem('casualCourseTab') === 'fav' ? 'fav' : 'near'; } catch(e){ return 'near'; } })();
+var _cwTab = 'fav'; // Favoriter är alltid förvalt när man startar en ny sällskapsrond
 var _cwPos = null, _cwPosState = 'idle'; // idle | loading | ok | denied | unsupported
 function casualFavIds() { var u = currentUser ? findUser(currentUser.username) : null; return (u && Array.isArray(u.favoriteCourses)) ? u.favoriteCourses : []; }
 function toggleCasualFavorite(id, ev) {
@@ -10096,8 +10109,7 @@ function toggleCasualFavorite(id, ev) {
   renderCasualCourseList();
 }
 function setCasualCourseTab(t) {
-  _cwTab = t === 'fav' ? 'fav' : 'near';
-  try { localStorage.setItem('casualCourseTab', _cwTab); } catch(e) {}
+  _cwTab = t === 'near' ? 'near' : 'fav';
   renderCasualCourseList();
 }
 function casualRequestPos() {
@@ -10138,7 +10150,7 @@ function renderCasualCourseList() {
       (on?'background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)':'background:transparent;color:var(--text-2)')+'"><i class="ti '+icon+'"></i> '+label+(n!=null?' <span style="font-size:11px;color:var(--text-3)">('+n+')</span>':'')+'</button>';
   };
   h += '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px">'+
-    tab('near','ti-map-pin','Nära mig')+tab('fav','ti-star','Favoriter', favIds.length)+'</div>';
+    tab('fav','ti-star','Favoriter', favIds.length)+tab('near','ti-map-pin','Nära mig')+'</div>';
   if(_cwTab === 'near') {
     if(_cwPosState === 'idle') { casualRequestPos(); return; }
     if(_cwPosState === 'loading') { h += '<p style="text-align:center;color:var(--text-3);font-size:13px;padding:14px 0"><i class="ti ti-loader-2"></i> Hämtar din position…</p>'; el.innerHTML = h; return; }
@@ -10173,20 +10185,62 @@ function casualSaveMyShcp() {
   if(isNaN(v)) { alert('Ange ditt SHCP.'); return; }
   _cw.players[0].shcp = v; _cw.step = 3; renderCasualWizard(); window.scrollTo(0,0);
 }
+// Spelare man senast spelat med: först från sällskapsronder (nyast först), sedan
+// fylls på med bollkompisar från tourernas bollar (nyast deltävling först). Max 4.
+function casualRecentMates() {
+  if(!currentUser) return [];
+  var me = currentUser.username, out = [], seen = {}; seen[me] = true;
+  var push = function(u){ if(u && !seen[u] && findUser(u)) { seen[u] = true; out.push(u); } };
+  (_casualAll||[]).filter(function(r){ return r.createdBy === me || casualIsParticipant(r, me); })
+    .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); })
+    .forEach(function(r){ (r.players||[]).forEach(function(p){ if(!p.guest) push(p.username); }); });
+  if(out.length < 4) {
+    var groups = [];
+    (S.tours||[]).forEach(function(t){
+      var piU = {}; Object.keys(t.playerIndexMap||{}).forEach(function(u){ piU[t.playerIndexMap[u]] = u; });
+      var myPi = (t.playerIndexMap||{})[me];
+      if(myPi == null) return;
+      (t.events||[]).forEach(function(e){ (e.teeGroups||[]).forEach(function(g){
+        if((g.playerPis||[]).indexOf(myPi) >= 0) groups.push({ d: g.date || e.date || '', users: g.playerPis.map(function(pi){ return piU[pi]; }) });
+      }); });
+    });
+    groups.sort(function(a,b){ return (b.d||'').localeCompare(a.d||''); }).forEach(function(g){ g.users.forEach(push); });
+  }
+  return out.slice(0, 4);
+}
+var _cwUserLimit = 8;
+function casualShowMoreUsers() { _cwUserLimit += 10; renderCasualUserList((document.getElementById('cw-usersearch')||{}).value || ''); }
 function renderCasualUserList(q) {
   var el = document.getElementById('cw-userlist');
   if(!el) return;
   q = (q||'').trim().toLowerCase();
   var inRound = {}; _cw.players.forEach(function(p){ if(p.username) inRound[p.username] = true; });
-  var users = (S.users||[]).filter(function(u){
-    if(!u || u.username === 'admin' || inRound[u.username]) return false;
-    return !q || (u.name||u.username).toLowerCase().indexOf(q) >= 0;
-  }).sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); }).slice(0, q ? 20 : 8);
-  el.innerHTML = users.length ? users.map(function(u){
+  var row = function(u, sub){
     return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'+
-      '<span style="flex:1;font-size:14px">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+'</span></span>'+
+      '<span style="flex:1;font-size:14px">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+(sub?' · '+sub:'')+'</span></span>'+
       '<button class="btn btn-sm btn-primary" onclick="casualAddUser(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i></button></div>';
-  }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:4px 0 0">Inga fler spelare'+(q?' matchar':'')+'.</p>';
+  };
+  var all = (S.users||[]).filter(function(u){
+    if(!u || u.username === 'admin' || inRound[u.username] || (currentUser && u.username === currentUser.username)) return false;
+    return !q || (u.name||u.username).toLowerCase().indexOf(q) >= 0;
+  }).sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
+  var h = '';
+  if(!q) {
+    // Senast spelat med (max 4) överst
+    var recent = casualRecentMates().filter(function(u){ return !inRound[u]; }).map(findUser).filter(Boolean);
+    if(recent.length) {
+      h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 2px"><i class="ti ti-history"></i> Senast spelat med</div>'+
+        recent.map(function(u){ return row(u); }).join('')+
+        '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 2px">Alla spelare</div>';
+      var rset = {}; recent.forEach(function(u){ rset[u.username] = true; });
+      all = all.filter(function(u){ return !rset[u.username]; });
+    }
+  }
+  var limit = q ? 30 : _cwUserLimit;
+  var shown = all.slice(0, limit);
+  h += shown.length ? shown.map(function(u){ return row(u); }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:4px 0 0">Inga fler spelare'+(q?' matchar':'')+'.</p>';
+  if(all.length > shown.length) h += '<button type="button" class="btn btn-sm" style="width:100%;justify-content:center;margin-top:8px" onclick="casualShowMoreUsers()"><i class="ti ti-plus"></i> Visa fler spelare ('+(all.length - shown.length)+')</button>';
+  el.innerHTML = h;
 }
 function casualAddUser(username) {
   var u = findUser(username); if(!u) return;
@@ -17093,6 +17147,24 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (259)',
+    items: [
+      { type: 'improved', text: 'Spelarvalet i Sällskapsrond visar nu de fyra spelare du senast spelat med överst ("Senast spelat med" – från dina sällskapsronder, kompletterat med dina senaste bollkompisar på tourerna). Under listan "Alla spelare" finns knappen "+ Visa fler spelare" som visar 10 till åt gången.' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (258)',
+    items: [
+      { type: 'improved', text: 'Banvalet i Sällskapsrond öppnar nu alltid på fliken Favoriter, som också ligger först (till vänster). Nära mig ligger till höger.' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (257)',
+    items: [
+      { type: 'improved', text: 'Tydligare avslut på The ÄGCC Wall på startsidan: väggen avslutas med en egen grå fotrad, och en avdelare märkt "MENY" skiljer väggen från knapparna (Sällskapsrond, Tourer, Statistik m.fl.).' }
+    ]
+  },
   {
     date: '30 oktober 2026 (256)',
     items: [
