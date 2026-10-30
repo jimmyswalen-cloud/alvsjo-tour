@@ -261,6 +261,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
     <div id="home-activity-feed"></div>
+    <div id="home-casual-widget"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="home-card" onclick="showToursList()" style="background:#9FE1CB;border:none">
         <i class="ti ti-trophy" style="font-size:32px;color:#085041" aria-hidden="true"></i>
@@ -282,10 +283,15 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
         <div class="home-card-label" style="color:#444441" id="settings-card-label">Inställningar</div>
         <div class="home-card-sub" style="color:#5F5E5A" id="settings-card-sub">Banor &amp; konfiguration</div>
       </div>
-      <div class="home-card" onclick="showMyBetting()" style="background:#FFB870;border:none;grid-column:1 / -1">
+      <div class="home-card" onclick="showMyBetting()" style="background:#FFB870;border:none">
         <i class="ti ti-coin" style="font-size:32px;color:#7A3D00" aria-hidden="true"></i>
         <div class="home-card-label" style="color:#7A3D00">Vinster &amp; betting</div>
         <div class="home-card-sub" style="color:#8F4B00">Side bets &amp; tour-vinster</div>
+      </div>
+      <div class="home-card" onclick="showMyHcp()" style="background:#BFE3D9;border:none">
+        <i class="ti ti-chart-line" style="font-size:32px;color:#0B4F3F" aria-hidden="true"></i>
+        <div class="home-card-label" style="color:#0B4F3F">Mitt HCP</div>
+        <div class="home-card-sub" style="color:#13664F">Utveckling över tid</div>
       </div>
       <div class="home-card" onclick="showIdeaWall()" style="background:#E5D4F5;border:none;grid-column:1 / -1">
         <i class="ti ti-bulb" style="font-size:32px;color:#5B2C8C" aria-hidden="true"></i>
@@ -324,6 +330,20 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
       <input id="tour-search-input" type="text" placeholder="Sök på tourens namn..." oninput="renderTourSearchList()">
     </div>
     <div id="tour-search-list"></div>
+  </div>
+  <div id="casual-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="leaveCasualScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <h2 id="casual-title" style="margin:0;flex:1;text-align:center">Sällskapsrond</h2>
+    </div>
+    <div id="casual-content"></div>
+  </div>
+  <div id="my-hcp-screen" style="display:none">
+    <div class="tours-header">
+      <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <h2 style="margin:0;flex:1;text-align:center">Mitt HCP</h2>
+    </div>
+    <div id="my-hcp-content"></div>
   </div>
   <div id="course-stats-screen" style="display:none">
     <div class="tours-header">
@@ -1110,6 +1130,47 @@ function buildSwListBlockHTML(strengths, weaknesses, boxStyle) {
 }
 
 function isSimTour(t) { return !!(t && t.simulator); }
+
+// ══ SÄLLSKAPSRONDER – datakälla för statistiken ═════════════════════════════
+// Färdiga sällskapsronder (Firestore: casualRounds, status 'finished') görs om till
+// interna "tourer" (en per rond, _casual:true) så att all befintlig statistik kan
+// återanvändas. Gäster räknas aldrig. Statistiklägen (mode):
+//   false/'golf' = tourer (riktig golf)   'casual' = sällskapsronder (riktig golf)
+//   true/'sim'   = simulatortourer + sällskapsronder markerade som simulator
+var _casualRounds = []; // färdiga ronder (data från Firestore)
+function statsModeIsSim(m) { return m === true || m === 'sim'; }
+function statsModeIsCasual(m) { return m === 'casual'; }
+function casualRoundToTour(r) {
+  if(!r || !r.holePars || !r.holePars.length) return null;
+  var n = r.holePars.length, map = {}, players = [], results = [];
+  (r.players||[]).forEach(function(pl){
+    if(pl.guest || !pl.username) return; // gäster sparas aldrig i statistiken
+    var u = (S.users||[]).find(function(x){ return x.username === pl.username; });
+    var pi = players.length;
+    map[pl.username] = pi;
+    players.push({ name: (u && (u.name||u.username)) || pl.name, username: pl.username, hcp: u ? u.hcp : 0, img: u ? u.img : null });
+    var sc = (r.scores||{})[pl.key] || {}, pt = (r.putts||{})[pl.key] || {};
+    var holes = [], putts = [], complete = true;
+    for(var h=1; h<=n; h++) { var g = sc[h]; if(typeof g !== 'number' || g <= 0) { complete = false; holes.push(null); } else holes.push(g); putts.push(typeof pt[h] === 'number' ? pt[h] : null); }
+    if(!complete) return; // bara kompletta ronder räknas i statistiken
+    var brutto = holes.reduce(function(a,b){ return a+b; }, 0);
+    var shcp = pl.shcp != null ? Math.round(pl.shcp) : 0;
+    results.push({ pi: pi, score: brutto - shcp, brutto: brutto, shcp: shcp, holes: holes, holePutts: putts.some(function(x){ return x != null; }) ? putts : null });
+  });
+  if(!results.length) return null;
+  return { id: 'casual_'+r.id, _casual: true, simulator: !!r.sim, name: 'Sällskapsrond', playerIndexMap: map, _players: players,
+    events: [{ id: r.id, name: 'Sällskapsrond', course: r.courseName, date: r.date, type: 'slag', closed: true, results: results, scoreSubmissions: [] }] };
+}
+function statsTours(mode) {
+  var sim = statsModeIsSim(mode), casual = statsModeIsCasual(mode);
+  var out = [];
+  if(!casual) (S.tours||[]).forEach(function(t){ if(isSimTour(t) === sim) out.push(t); });
+  if(casual || sim) (_casualRounds||[]).forEach(function(r){
+    if(!!r.sim !== sim) return;
+    var t = casualRoundToTour(r); if(t) out.push(t);
+  });
+  return out;
+}
 function isSimEventId(eid) {
   var f = findTourAndEventById(eid);
   return !!(f && f.tour && f.tour.simulator);
@@ -1500,7 +1561,7 @@ function showHomeScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
@@ -1515,6 +1576,7 @@ function showHomeScreen() {
   renderHomeSideBetWidget();
   subscribeHomeActivityFeed();
   try { renderHomePushBanner(); } catch(e) {}
+  try { if(_cr && _cr.unsub) { _cr.unsub(); _cr.unsub = null; _cr.id = null; } subscribeCasualRounds(); renderHomeCasualWidget(); } catch(e) { console.error('casual', e); }
   try { renderHomeBillingWidget(); } catch(e) {}
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
@@ -1545,7 +1607,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -1559,7 +1621,7 @@ function showCourseStats() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
@@ -1571,7 +1633,7 @@ function showTourSearch() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tour-search-screen' ? '' : 'none';
   });
@@ -1583,7 +1645,7 @@ function showTourSearch() {
 }
 
 function showGlobalPlayers() {
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
   });
@@ -1595,7 +1657,7 @@ function showGlobalSettings() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
@@ -1612,7 +1674,7 @@ function showCourseDataPage() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-data-screen' ? '' : 'none';
   });
@@ -1635,7 +1697,7 @@ function showBrandLogosPage() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'brand-logos-screen' ? '' : 'none';
   });
@@ -1684,10 +1746,12 @@ function saveHcpUpdateFromHome() {
   if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
   var u = findUser(currentUser.username); // se kommentar i selfRegisterTour om varför detta krävs
   if(!u) return;
+  recordHcpChange(u, val); // sparas i spelarens HCP-historik (Mitt HCP)
   u.hcp = val;
   u.hcpLastConfirmed = new Date().toISOString();
   currentUser = u;
   save();
+  try { var mh = document.getElementById('my-hcp-screen'); if(mh && mh.style.display !== 'none') setTimeout(renderMyHcp, 50); } catch(e) {}
   closeModal();
   renderHomeUserBar();
 }
@@ -2018,9 +2082,11 @@ function courseDbEntryFor(name) {
 }
 
 // 'golf' = riktig golf, 'sim' = simulatorgolf. Kommer ihåg valet per webbläsare.
-var _courseStatsMode = (function(){ try { return localStorage.getItem('courseStatsMode')==='sim' ? 'sim' : 'golf'; } catch(e){ return 'golf'; } })();
+var _courseStatsMode = (function(){ try { var v = localStorage.getItem('courseStatsMode'); return (v==='sim'||v==='casual') ? v : 'golf'; } catch(e){ return 'golf'; } })();
+// Översätter Statistik-sidans val till statistikläge (se statsTours)
+function courseStatsModeKey() { return _courseStatsMode === 'sim' ? true : _courseStatsMode === 'casual' ? 'casual' : false; }
 function setCourseStatsMode(mode) {
-  if(mode !== 'sim') mode = 'golf';
+  if(mode !== 'sim' && mode !== 'casual') mode = 'golf';
   if(_courseStatsMode === mode) return;
   _courseStatsMode = mode;
   try { localStorage.setItem('courseStatsMode', mode); } catch(e) {}
@@ -2057,10 +2123,10 @@ function statsViewTabsHTML() {
 // Scorestatistik: antal HIO/albatross/eagle/birdie/par/bogey/dubbelbogey+ över
 // alla spelare (hål-för-hål från godkända scorekort), och vem som har flest av
 // varje. sim=true -> bara simulatortourer, annars bara riktig golf.
-function computeScoreStats(sim) {
+function computeScoreStats(sim) { // sim = statistikläge (se statsTours)
   var players = {}; // username -> {name, username, holes, rounds, counts}
   var totals = emptyHoleCounts(), totalHoles = 0, totalRounds = 0;
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return;
+  statsTours(sim).forEach(function(t){
     var tp = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       var course = courseDbEntryFor(e.course);
@@ -2089,9 +2155,9 @@ function computeScoreStats(sim) {
 // Snitt puttar/runda = snitt per hål x 18, så ofullständiga rundor (några hål utan
 // puttar) inte drar ner eller upp snittet. Bästa runda räknas bara på rundor där
 // puttar finns för alla 18 hål. Kräver minst 9 hål med puttar för att rankas.
-function computeAllPuttStats() {
+function computeAllPuttStats(mode) {
   var by = {};
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return;
+  statsTours(mode || false).forEach(function(t){
     var tp = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       tp.forEach(function(p, pi){
@@ -2113,8 +2179,8 @@ function computeAllPuttStats() {
   return Object.keys(by).map(function(k){ return by[k]; }).filter(function(x){ return x.holes >= 9; });
 }
 
-function buildPuttLeaderboardHTML() {
-  var list = computeAllPuttStats();
+function buildPuttLeaderboardHTML(mode) {
+  var list = computeAllPuttStats(mode);
   if(!list.length) return '';
   var perRound = function(x){ return x.putts / x.holes * 18; };
   list.sort(function(a,b){ return (perRound(a)-perRound(b)) || (b.holes-a.holes); });
@@ -2160,7 +2226,7 @@ function buildPuttLeaderboardHTML() {
 // Puttbaserade mått (GIR, scrambling) räknas bara där puttar finns registrerade.
 function collectAnalysisRounds(sim) {
   var rounds = [];
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return;
+  statsTours(sim).forEach(function(t){
     var tp = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       var course = courseDbEntryFor(e.course);
@@ -2333,7 +2399,8 @@ function anHeatColor(v, ref){
 var AN_MIN_HOLES = 18; // minst 18 hål (eller motsv.) för att rankas i topplistorna
 function renderAnalysisHTML(sim) {
   var rounds = collectAnalysisRounds(sim);
-  if(!rounds.length) return '<p class="empty">'+(sim?'Inga simulatorrundor ännu.':'Inga godkända rundor ännu.')+'</p>';
+  var noPutts = statsModeIsSim(sim);
+  if(!rounds.length) return '<p class="empty">'+(statsModeIsSim(sim)?'Inga simulatorrundor ännu.':statsModeIsCasual(sim)?'Inga avslutade sällskapsronder ännu.':'Inga godkända rundor ännu.')+'</p>';
   var ps = groupRoundsByPlayer(rounds);
   var all = computeAnalysisMetrics(rounds);
   var h = '';
@@ -2342,13 +2409,13 @@ function renderAnalysisHTML(sim) {
   // Översiktsrutor
   var tile = function(lbl, val, sub, color){ return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-width:0"><div style="font-size:11px;color:var(--text-3)">'+lbl+'</div><div style="font-size:21px;font-weight:800;color:'+(color||'var(--text)')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sub+'</div>':'')+'</div>'; };
   h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px">'+
-    (sim ? '' : tile('Greenträff (GIR)', anPct(all.girPct), 'gruppen, '+all.girHoles+' hål', '#0F6E56')+tile('Scrambling', anPct(all.scrPct), 'räddat par vid missad green', '#185FA5'))+
+    (noPutts ? '' : tile('Greenträff (GIR)', anPct(all.girPct), 'gruppen, '+all.girHoles+' hål', '#0F6E56')+tile('Scrambling', anPct(all.scrPct), 'räddat par vid missad green', '#185FA5'))+
     tile('Bounce-back', anPct(all.bbPct), 'par+ efter bogey', '#6D28D9')+
     tile('Längsta svit', all.streak ? all.streak+' hål' : '–', all.streakRound ? esc(all.streakRound.name)+' · '+esc(all.streakRound.course) : 'par eller bättre i rad', '#BA7517')+
   '</div>';
 
   // 1. GIR & 2. Scrambling (bara riktig golf - kräver puttar)
-  if(!sim) {
+  if(!noPutts) {
     var girRows = ps.filter(function(p){ return p.m.girHoles >= AN_MIN_HOLES; }).map(function(p){ return row(p, p.m.girPct, anPct(p.m.girPct), p.m.gir+' av '+p.m.girHoles+' hål'); });
     h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+anCardHead('ti-target','Greenträff (GIR)','#0F6E56','Andel hål där bollen låg på green på "regulation" (par − 2 slag).', anPct(all.girPct), 'gruppen')+
       anBarBoard(girRows, { color:'#1D9E75', min:0, max:1 })+anFoot('Räknas som slag − puttar ≤ par − 2. Kräver registrerade puttar och minst '+AN_MIN_HOLES+' hål.')+'</div>';
@@ -2541,11 +2608,11 @@ function buildPlayerAnalysisHTML(username, sim) {
   if(!m.holes && m.form.length < 2) return '';
   var tile = function(lbl, val, sub, color){ return '<div style="background:var(--surface2);border-radius:10px;padding:8px 10px;min-width:0"><div style="font-size:11px;color:var(--text-3)">'+lbl+'</div><div style="font-size:19px;font-weight:800;color:'+(color||'var(--text)')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sub+'</div>':'')+'</div>'; };
   var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
-  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-chart-dots"></i> Spelanalys'+(sim?' (simulator)':'')+'</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px"><i class="ti ti-chart-dots"></i> Spelanalys'+(statsModeIsSim(sim)?' (simulator)':statsModeIsCasual(sim)?' (sällskap)':'')+'</div>';
   h += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">'+m.rounds+(m.rounds===1?' runda':' rundor')+(m.holes?' · '+m.holes+' hål med scorekort':'')+'</div>';
   var tiles = [];
-  if(!sim && m.girHoles) tiles.push(tile('Greenträff (GIR)', anPct(m.girPct), m.gir+' av '+m.girHoles+' hål', '#0F6E56'));
-  if(!sim && m.scrOpp) tiles.push(tile('Scrambling', anPct(m.scrPct), m.scrOk+' av '+m.scrOpp+' räddade', '#185FA5'));
+  if(!statsModeIsSim(sim) && m.girHoles) tiles.push(tile('Greenträff (GIR)', anPct(m.girPct), m.gir+' av '+m.girHoles+' hål', '#0F6E56'));
+  if(!statsModeIsSim(sim) && m.scrOpp) tiles.push(tile('Scrambling', anPct(m.scrPct), m.scrOk+' av '+m.scrOpp+' räddade', '#185FA5'));
   if(m.bbOpp) tiles.push(tile('Bounce-back', anPct(m.bbPct), 'par+ efter bogey', '#6D28D9'));
   if(m.streak) tiles.push(tile('Längsta svit', m.streak+' hål', m.streakRound ? esc(m.streakRound.course) : '', '#BA7517'));
   if(tiles.length) h += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:12px">'+tiles.join('')+'</div>';
@@ -2576,15 +2643,15 @@ function buildPlayerAnalysisHTML(username, sim) {
 
 function renderScoreStatsHTML(sim) {
   var st = computeScoreStats(sim);
-  if(!st.totalHoles) return '<p class="empty">'+(sim?'Inga simulatorrundor med hål-för-hål-scorekort ännu.':'Inga rundor med hål-för-hål-scorekort ännu.')+'</p>';
+  if(!st.totalHoles) return '<p class="empty">'+(statsModeIsSim(sim)?'Inga simulatorrundor med hål-för-hål-scorekort ännu.':statsModeIsCasual(sim)?'Inga avslutade sällskapsronder ännu.':'Inga rundor med hål-för-hål-scorekort ännu.')+'</p>';
   var pct = function(n, d){ return d ? (Math.round(n/d*1000)/10).toString().replace('.',',')+' %' : '–'; };
   var h = '<div class="card" style="padding:12px 16px;margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap">'+
     '<div><div style="font-size:11px;color:var(--text-3)">Rundor</div><div style="font-size:20px;font-weight:700">'+st.totalRounds+'</div></div>'+
     '<div><div style="font-size:11px;color:var(--text-3)">Spelade hål</div><div style="font-size:20px;font-weight:700">'+st.totalHoles+'</div></div>'+
     '<div><div style="font-size:11px;color:var(--text-3)">Spelare</div><div style="font-size:20px;font-weight:700">'+st.players.length+'</div></div>'+
-    '<div style="flex-basis:100%;font-size:11px;color:var(--text-3)">Bygger på godkända rundor med hål-för-hål-scorekort'+(sim?' (simulator)':' (riktig golf)')+'.</div>'+
+    '<div style="flex-basis:100%;font-size:11px;color:var(--text-3)">Bygger på godkända rundor med hål-för-hål-scorekort'+(statsModeIsSim(sim)?' (simulator)':statsModeIsCasual(sim)?' (sällskapsronder)':' (tourer)')+'.</div>'+
   '</div>';
-  if(!sim) h += buildPuttLeaderboardHTML(); // simulatorn registrerar inga puttar
+  if(!statsModeIsSim(sim)) h += buildPuttLeaderboardHTML(sim); // simulatorn registrerar inga puttar
   HOLE_CATEGORY_META.forEach(function(cat){
     var total = st.totals[cat.key] || 0;
     // Rankas på ANDEL av spelarens hål (inte antal), så den som spelat fler rundor
@@ -2626,14 +2693,15 @@ function renderScoreStatsHTML(sim) {
 function courseStatsModeChooserHTML() {
   var card = function(mode, icon, title, sub, color, bg){
     var on = _courseStatsMode === mode;
-    return '<button type="button" onclick="setCourseStatsMode(\''+mode+'\')" style="flex:1;min-width:0;text-align:left;cursor:pointer;border-radius:12px;padding:12px 14px;font:inherit;'+
+    return '<button type="button" onclick="setCourseStatsMode(\''+mode+'\')" style="min-width:0;text-align:left;cursor:pointer;border-radius:12px;padding:10px 10px;font:inherit;'+
       'border:2px solid '+(on?color:'var(--border)')+';background:'+(on?bg:'var(--surface)')+';color:var(--text)">'+
-      '<div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:'+(on?color:'var(--text)')+'"><i class="ti '+icon+'" style="font-size:20px"></i> '+title+(on?' <i class="ti ti-check" style="margin-left:auto"></i>':'')+'</div>'+
-      '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+sub+'</div>'+
+      '<div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;color:'+(on?color:'var(--text)')+'"><i class="ti '+icon+'" style="font-size:18px"></i> '+title+'</div>'+
+      '<div style="font-size:11px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+sub+'</div>'+
     '</button>';
   };
-  return '<div style="display:flex;gap:10px;margin-bottom:14px">'+
-    card('golf', 'ti-golf', 'Riktig golf', 'Rundor på banan', '#0F6E56', '#E1F5EE')+
+  return '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px">'+
+    card('golf', 'ti-trophy', 'Tour', 'Tourernas rundor', '#0F6E56', '#E1F5EE')+
+    card('casual', 'ti-users-group', 'Sällskap', 'Sällskapsronder', '#B45309', '#FEF3E2')+
     card('sim', 'ti-device-desktop', 'Simulator', 'Simulatorrundor', '#6D28D9', '#F1EBFD')+
   '</div>';
 }
@@ -2642,7 +2710,7 @@ function renderCourseStatsView() {
   var el = document.getElementById('course-stats-content');
   if(!el) return;
   if(_statsView === 'score' || _statsView === 'analys' || _statsView === 'h2h') {
-    var simSel = _courseStatsMode === 'sim';
+    var simSel = courseStatsModeKey();
     var body = _statsView === 'score' ? renderScoreStatsHTML(simSel) : _statsView === 'analys' ? renderAnalysisHTML(simSel) : renderH2HHTML(simSel);
     el.innerHTML = statsViewTabsHTML() + courseStatsModeChooserHTML() + body;
     return;
@@ -2654,8 +2722,8 @@ function renderCourseStatsView() {
   var courseMap = {};
   // Två separata databaser: riktig golf och simulator blandas aldrig. Vilken som
   // visas styrs av valet överst i vyn (_courseStatsMode).
-  var simMode = _courseStatsMode === 'sim';
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== simMode) return;
+  var simMode = courseStatsModeKey(); // false = tour, 'casual' = sällskap, true = simulator
+  statsTours(simMode).forEach(function(t){
     var players = getPlayersForTour(t);
     // Finaler räknas in som vanliga rundor (rått resultat, inte det justerade med
     // försprång) - de spelas ju på en riktig bana. Tidigare filtrerades de bort här,
@@ -2704,7 +2772,7 @@ function renderCourseStatsView() {
     '<option value="">Alla distrikt</option>'+
     districts.map(function(d){ return '<option value="'+esc(d)+'"'+(d===filterDistrict?' selected':'')+'>'+esc(d)+'</option>'; }).join('')+
   '</select>';
-  if(!simMode) { // karta/närhet/heatmaps gäller bara riktig golf
+  if(simMode === false) { // karta/närhet/heatmaps gäller bara tourernas riktiga golf
     filterHtml += '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Karta</button>';
     filterHtml += '<button class="btn btn-sm" onclick="openNearbyCourses()"><i class="ti ti-map-pin-search"></i> Nära mig</button>';
     filterHtml += '<button class="btn btn-sm" onclick="openGolfHeatmaps()"><i class="ti ti-chart-bar"></i> Heatmaps</button>';
@@ -2721,7 +2789,7 @@ function renderCourseStatsView() {
     if(bar && out && el.contains(bar) && el.contains(out) && bar.getAttribute('data-mode')===_courseStatsMode) { out.innerHTML = body; return; }
     el.innerHTML = filterHtml + '<div id="csf-results">' + body + '</div>';
   };
-  if(!courses.length) { setCourseStatsOutput('<p class="empty">'+(simMode?'Inga simulatorrundor ännu.':'Inga avslutade tävlingar ännu.')+'</p>'); return; }
+  if(!courses.length) { setCourseStatsOutput('<p class="empty">'+(simMode===true?'Inga simulatorrundor ännu.':simMode==='casual'?'Inga avslutade sällskapsronder ännu.':'Inga avslutade tävlingar ännu.')+'</p>'); return; }
 
   // Apply filters
   var filtered = courses.filter(function(c){
@@ -3297,6 +3365,7 @@ function getTour() {
 // Players for a tour = all users with access to it, sorted by username for stable indexing.
 // Admin accounts are excluded (they manage, they don't play in the OoM by default).
 function getPlayersForTour(t) {
+  if(t && t._casual) return t._players; // sällskapsrond (intern statistik-tour)
   if(!t.playerIndexMap) t.playerIndexMap = {};
   var accessUsers = (S.users||[]).filter(function(u){
     var wantsToPlay = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin'); // default: non-admins play, admins don't, unless explicitly set
@@ -6279,6 +6348,27 @@ var _homeFeedUnsub = null;
 // behöva vänta på ett nytt Firestore-anrop.
 var HOME_FEED_COLLAPSED_COUNT = 3;
 var _homeFeedItems = [];
+// Säsongsmästare (tourchampion) ska ALLTID ligga överst på The ÄGCC Wall och aldrig
+// knuffas ner av nyare inlägg. De hämtas därför i en egen fråga (inte bara bland de
+// 20 senaste) och fästs överst - senaste mästaren per tour, högst 3 st.
+var _homeFeedLatest = [], _homeChampItems = [], _homeChampUnsub = null;
+function subscribeHomeChampions(tourIds) {
+  if(_homeChampUnsub) { try { _homeChampUnsub(); } catch(e) {} _homeChampUnsub = null; }
+  _homeChampItems = [];
+  _homeChampUnsub = ACTIVITY_FEED_COL.where('category','==','tourchampion').onSnapshot(function(snap){
+    var all = snap.docs.map(function(doc){ var d = doc.data(); d._id = doc.id; return d; })
+      .filter(function(d){ return tourIds.indexOf(d.tourId) >= 0; })
+      .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+    var seen = {}, pinned = [];
+    all.forEach(function(d){ if(!seen[d.tourId] && pinned.length < 3) { seen[d.tourId] = true; d._pinned = true; pinned.push(d); } });
+    _homeChampItems = pinned;
+    renderHomeActivityFeed(homeFeedWithPinned());
+  }, function(err){ console.error('Säsongsmästare (fäst)', err); });
+}
+function homeFeedWithPinned() {
+  var ids = {}; _homeChampItems.forEach(function(d){ ids[d._id] = true; });
+  return _homeChampItems.concat((_homeFeedLatest||[]).filter(function(d){ return !ids[d._id]; }));
+}
 var _homeFeedExpanded = false;
 
 // Etiketter/färger för feed-texten, separata från liveScoreLabel (som är gjord
@@ -6295,13 +6385,15 @@ function subscribeHomeActivityFeed() {
   _homeFeedExpanded = false;
   var el = document.getElementById('home-activity-feed');
   if(!el || !currentUser) { if(el) el.innerHTML = ''; return; }
-  var tourIds = (currentUser.tourAccess||[]).slice(0, 10); // Firestore 'in' tillåter max 10
-  if(!tourIds.length) { el.innerHTML = ''; return; }
+  // Firestore 'in' tillåter max 10 värden: 9 tourer + sällskapsronder ('__casual')
+  var tourIds = (currentUser.tourAccess||[]).slice(0, 9).concat(['__casual']);
+  subscribeHomeChampions(tourIds);
   el.innerHTML = '<p style="text-align:center;color:var(--text-3);font-size:12px;padding:10px 0">Laddar aktivitetsflöde…</p>';
   _homeFeedUnsub = ACTIVITY_FEED_COL.where('tourId','in', tourIds).orderBy('createdAt','desc').limit(20)
     .onSnapshot(function(snap){
       var items = snap.docs.map(function(doc){ var d = doc.data(); d._id = doc.id; return d; });
-      renderHomeActivityFeed(items);
+      _homeFeedLatest = items;
+      renderHomeActivityFeed(homeFeedWithPinned());
     }, function(err){
       console.error('Aktivitetsfeed: lyssnarfel', err);
       var el2 = document.getElementById('home-activity-feed');
@@ -6347,7 +6439,8 @@ function renderHomeActivityFeed(items) {
   if(!el) return;
   if(!items.length) { el.innerHTML = ''; return; }
   _homeFeedItems = items;
-  var visibleItems = _homeFeedExpanded ? items : items.slice(0, HOME_FEED_COLLAPSED_COUNT);
+  var pinnedCount = items.filter(function(it){ return it._pinned; }).length;
+  var visibleItems = _homeFeedExpanded ? items : items.slice(0, HOME_FEED_COLLAPSED_COUNT + pinnedCount);
 
   var rows = visibleItems.map(function(it){
     // Hämta spelarens AKTUELLA profilbild (uppladdad i profilen). Tidigare skickades
@@ -6385,6 +6478,10 @@ function renderHomeActivityFeed(items) {
       lineHtml = sideBetEmoji(it.sideBetType)+'<b>'+esc(it.playerName)+'</b> '+actionText+courseText+', '+winText;
     } else if(it.category === 'chatpost') {
       lineHtml = '<b>'+esc(it.playerName)+'</b>'+(it.caption ? ': '+esc(it.caption) : ' delade en bild i chatten');
+    } else if(it.category === 'casualround') {
+      var sumTxt = (it.summary||[]).map(function(x){ return '<span style="white-space:nowrap">'+esc(String(x.name||'').split(' ')[0])+(x.guest?' <span style="font-size:10px;color:var(--text-3)">(gäst)</span>':'')+' <b style="color:#B45309">'+x.poang+' p</b></span>'; }).join(' · ');
+      lineHtml = '⛳ <b>'+esc(it.playerName)+'</b> spelade en sällskapsrond på <b>'+esc(it.course||it.eventName||'')+'</b>'+(it.sim?' (simulator)':'')+
+        (sumTxt ? '<div style="font-size:12px;margin-top:3px;color:var(--text-2)">'+sumTxt+'</div>' : '');
     } else {
       var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
@@ -6401,11 +6498,12 @@ function renderHomeActivityFeed(items) {
     } else if(it.category === 'chatpost' && it.img) {
       extraBanner += '<img src="'+esc(it.img)+'" onload="fitFeedImage(this)" onclick="openImageLightbox(\''+esc(it.img)+'\')" style="width:150px;height:150px;object-fit:cover;border-radius:8px;display:block;margin-top:6px;cursor:pointer" alt="">';
     }
-    return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start">'+
+    var pinStyle = it._pinned ? 'background:linear-gradient(90deg,#FFF6DD,transparent);margin:0 -16px;padding:10px 16px;' : 'padding:10px 0;';
+    return '<div style="display:flex;gap:10px;'+pinStyle+'border-bottom:1px solid var(--border);align-items:flex-start">'+
       avatar+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;color:var(--text)">'+lineHtml+'</div>'+
-        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+subtitleName+(subtitleName?' · ':'')+formatRelativeTime(it.createdAt)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">'+(it._pinned?'<span style="color:#B45309;font-weight:700"><i class="ti ti-pin"></i> Fäst</span> · ':'')+subtitleName+(subtitleName?' · ':'')+formatRelativeTime(it.createdAt)+'</div>'+
         extraBanner+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">'+
@@ -6417,7 +6515,7 @@ function renderHomeActivityFeed(items) {
   }).join('');
 
   var toggleBtn = '';
-  if(items.length > HOME_FEED_COLLAPSED_COUNT) {
+  if(items.length > HOME_FEED_COLLAPSED_COUNT + pinnedCount) {
     toggleBtn = _homeFeedExpanded
       ? '<button onclick="toggleHomeFeedExpanded()" style="background:none;border:none;cursor:pointer;color:var(--green-dark);font-weight:700;font-size:12px;padding:10px 0 0;width:100%;text-align:center">Visa färre</button>'
       : '<button onclick="toggleHomeFeedExpanded()" style="background:none;border:none;cursor:pointer;color:var(--green-dark);font-weight:700;font-size:12px;padding:10px 0 0;width:100%;text-align:center"><i class="ti ti-plus" style="font-size:12px"></i> Visa fler ('+(items.length-HOME_FEED_COLLAPSED_COUNT)+')</button>';
@@ -6438,7 +6536,7 @@ function renderHomeActivityFeed(items) {
 // att göra ett nytt Firestore-anrop.
 function toggleHomeFeedExpanded() {
   _homeFeedExpanded = !_homeFeedExpanded;
-  renderHomeActivityFeed(_homeFeedItems);
+  renderHomeActivityFeed(homeFeedWithPinned());
 }
 
 // Visar en enkel lista med vilka som gillat ett feed-inlägg - klickbar via
@@ -9030,7 +9128,7 @@ function computeCareerStats(username, sim) {
   var perTour = [];
   var totalWins = 0, totalPodiums = 0, totalEvents = 0, bestPosEver = null, totalPts = 0;
   var allSlagScores = [], allStabScores = [];
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return; // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
+  statsTours(sim).forEach(function(t){ // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username === username; });
     if(pi < 0) return; // spelaren har inte access till denna tour
@@ -9797,6 +9895,539 @@ var ACTIVITY_FEED_COL = db.collection('activityFeed');
 // Inloggningslogg för admin: vem loggade in, när, med vilken webbläsare/OS,
 // och ungefärlig plats (stad/land) via en gratis IP-baserad geolocation-tjänst.
 var LOGIN_LOG_COL = db.collection('loginLog');
+
+// ══ SÄLLSKAPSROND ════════════════════════════════════════════════════════════
+// Rundor utanför tourerna. Flöde: välj bana (eller skapa/komplettera banan med
+// scorekort + bild) -> ange SHCP -> välj spelare (från registret och/eller gäster)
+// -> för score hål för hål. Alla spelare från registret i ronden (och admin) kan
+// föra score för alla, live via Firestore. Färdiga ronder ger egen sällskaps-
+// statistik (se statsTours). Gäster sparas aldrig i statistiken.
+//   casualRounds/{id} -> { createdBy, createdAt, date, courseId, courseName, holePars,
+//     holeHcpIndex, sim, status:'active'|'finished', players:[{key, username|null,
+//     name, guest, shcp}], scores:{key:{hole:gross}}, putts:{key:{hole:n}}, finishedAt, sharedToWall }
+var CASUAL_COL = db.collection('casualRounds');
+var _casualAll = [], _casualUnsub = null;
+var _cw = null;        // guiden (ny rond)
+var _cr = { id:null, data:null, hole:1, unsub:null }; // öppen rond
+
+function subscribeCasualRounds() {
+  if(_casualUnsub || !currentUser) return;
+  _casualUnsub = CASUAL_COL.onSnapshot(function(snap){
+    var all = [];
+    snap.forEach(function(d){ var x = d.data(); x.id = d.id; all.push(x); });
+    _casualAll = all;
+    _casualRounds = all.filter(function(r){ return r.status === 'finished'; });
+    renderHomeCasualWidget();
+  }, function(err){ console.error('casualRounds', err); });
+}
+function casualIsParticipant(r, username) {
+  return !!r && (r.players||[]).some(function(p){ return !p.guest && p.username === username; });
+}
+function casualCanEdit(r) {
+  return !!r && !!currentUser && (isAdmin() || r.createdBy === currentUser.username || casualIsParticipant(r, currentUser.username));
+}
+function casualCourse(r) {
+  return { holePars: r.holePars || [], holeHcpIndex: r.holeHcpIndex || [] };
+}
+// Resultat för en spelare hittills i ronden
+function casualTotals(r, pl) {
+  var n = (r.holePars||[]).length, sc = (r.scores||{})[pl.key] || {}, pt = (r.putts||{})[pl.key] || {};
+  var t = { thru:0, brutto:0, parThru:0, recvThru:0, poang:0, putts:0, puttHoles:0 };
+  for(var h=1; h<=n; h++) {
+    var g = sc[h]; if(typeof g !== 'number' || g <= 0) continue;
+    var par = r.holePars[h-1], idx = (r.holeHcpIndex && r.holeHcpIndex[h-1]) || h;
+    var recv = computeHcpStrokesForHole(pl.shcp || 0, idx, n);
+    t.thru++; t.brutto += g; t.parThru += par; t.recvThru += recv;
+    t.poang += computeHoleStablefordPoints(g, par, recv);
+    if(typeof pt[h] === 'number') { t.putts += pt[h]; t.puttHoles++; }
+  }
+  t.nettoVsPar = t.brutto - t.parThru - t.recvThru;
+  t.complete = t.thru === n;
+  t.netto = t.complete ? t.brutto - Math.round(pl.shcp||0) : null;
+  return t;
+}
+
+// ── Startsidan ──────────────────────────────────────────────────────────────
+function renderHomeCasualWidget() {
+  var el = document.getElementById('home-casual-widget');
+  if(!el || !currentUser) return;
+  var mine = (_casualAll||[]).filter(function(r){ return r.status === 'active' && (r.createdBy === currentUser.username || casualIsParticipant(r, currentUser.username)); })
+    .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+  var h = '<div class="home-card" onclick="startCasualRoundWizard()" style="background:linear-gradient(135deg,#FFE3B3,#FFD08A);border:none;margin-bottom:12px;flex-direction:row;justify-content:flex-start;text-align:left;gap:14px;padding:1rem 1.2rem">'+
+    '<i class="ti ti-users-group" style="font-size:34px;color:#7A4100;flex-shrink:0" aria-hidden="true"></i>'+
+    '<div style="flex:1;min-width:0"><div class="home-card-label" style="color:#7A4100;margin:0">Sällskapsrond</div>'+
+    '<div class="home-card-sub" style="color:#8F5200">Spela en runda utanför tourerna och för score i appen</div></div>'+
+    '<i class="ti ti-chevron-right" style="font-size:22px;color:#7A4100"></i></div>';
+  mine.forEach(function(r){
+    var me = (r.players||[]).find(function(p){ return p.username === currentUser.username; }) || (r.players||[])[0];
+    var t = me ? casualTotals(r, me) : null;
+    h += '<div class="card" onclick="openCasualRound(\''+r.id+'\')" style="cursor:pointer;margin-bottom:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;border-color:#E0A030">'+
+      '<span style="width:10px;height:10px;border-radius:50%;background:#E24B4A;box-shadow:0 0 0 4px rgba(226,75,74,.18);flex-shrink:0"></span>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">Pågående sällskapsrond · '+esc(r.courseName||'')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-3)">'+(r.players||[]).length+' spelare'+(t?' · du har spelat '+t.thru+' av '+(r.holePars||[]).length+' hål':'')+'</div></div>'+
+      '<span class="btn btn-sm btn-primary">Fortsätt</span></div>';
+  });
+  el.innerHTML = h;
+}
+
+// ── Skärm ───────────────────────────────────────────────────────────────────
+function showCasualScreen() {
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'casual-screen' ? '' : 'none';
+  });
+  window.scrollTo(0, 0);
+}
+function leaveCasualScreen() {
+  if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
+  _cr.id = null; _cr.data = null;
+  showHomeScreen();
+}
+function casualStepHeader(step, title) {
+  var steps = ['Bana','SHCP','Spelare'];
+  return '<div style="display:flex;gap:6px;margin-bottom:12px">'+steps.map(function(s, i){
+      var on = i+1 === step, done = i+1 < step;
+      return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:8px;font-size:12px;font-weight:700;'+
+        (on?'background:#B45309;color:#fff':done?'background:#FEF3E2;color:#B45309':'background:var(--surface2);color:var(--text-3)')+'">'+(done?'✓ ':(i+1)+'. ')+s+'</div>';
+    }).join('')+'</div>'+
+    '<h3 style="margin:0 0 10px">'+title+'</h3>';
+}
+function setCasualTitle(t) { var el = document.getElementById('casual-title'); if(el) el.textContent = t; }
+
+// ── Steg 1: bana ────────────────────────────────────────────────────────────
+function startCasualRoundWizard() {
+  if(!currentUser) return;
+  var me = findUser(currentUser.username) || currentUser;
+  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, search:'',
+    players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
+  if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
+  showCasualScreen();
+  renderCasualWizard();
+}
+function casualCourseHasCard(c) {
+  var n = c && c.holePars ? c.holePars.length : 0;
+  return n > 0 && c.holeHcpIndex && c.holeHcpIndex.length === n && c.holeHcpIndex.every(function(x){ return x > 0; });
+}
+function renderCasualWizard() {
+  var el = document.getElementById('casual-content');
+  if(!el || !_cw) return;
+  setCasualTitle('Sällskapsrond');
+  var h = '';
+  if(_cw.step === 1) {
+    h += casualStepHeader(1, 'Välj bana');
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
+        '<label style="font-size:12px;color:var(--text-2)">Datum<br><input type="date" value="'+_cw.date+'" max="'+hcpTodayISO()+'" onchange="_cw.date=this.value" style="margin:2px 0 0;width:160px"></label>'+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:14px"><input type="checkbox" '+(_cw.sim?'checked':'')+' onchange="_cw.sim=this.checked" style="width:18px;height:18px;margin:0"> <i class="ti ti-device-desktop"></i> Simulatorrunda</label>'+
+      '</div></div>';
+    h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
+      '<input id="cw-search" type="text" placeholder="Sök bana, klubb eller ort..." value="'+esc(_cw.search)+'" oninput="_cw.search=this.value;renderCasualCourseList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0"></div>';
+    h += '<div id="cw-course-list"></div>';
+    el.innerHTML = h;
+    renderCasualCourseList();
+    return;
+  }
+  var c = courseDb.find(function(x){ return x.id === _cw.courseId; });
+  var courseCard = c ? '<div class="card" style="padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px">'+
+      (getCourseImage(c.name)?'<img src="'+getCourseImage(c.name)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(c.name)+'</div><div style="font-size:12px;color:var(--text-3)">'+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0)+' · '+hcpFmtDate(_cw.date)+(_cw.sim?' · simulator':'')+'</div></div>'+
+      '<button class="btn btn-sm" onclick="_cw.step=1;renderCasualWizard()">Byt</button></div>' : '';
+  if(_cw.step === 2) {
+    var me = _cw.players[0];
+    h += casualStepHeader(2, 'Ange ditt SHCP') + courseCard;
+    h += '<div class="card" style="padding:14px 16px;margin-bottom:12px">'+
+      '<label style="font-size:13px;font-weight:600">Ditt spelhandicap (SHCP) på '+esc(c?c.name:'banan')+'</label>'+
+      '<input id="cw-myshcp" type="number" step="1" min="-10" max="60" value="'+me.shcp+'" style="font-size:22px;font-weight:700;width:120px;margin:6px 0">'+
+      '<p style="font-size:12px;color:var(--text-3);margin:0">Ditt HCP är '+hcpFmt((findUser(currentUser.username)||{}).hcp)+'. SHCP hittar du i banans slopetabell (beror på tee och banans svårighet).</p></div>';
+    h += '<div style="display:flex;gap:8px"><button class="btn" onclick="_cw.step=1;renderCasualWizard()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
+      '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="casualSaveMyShcp()">Välj spelare <i class="ti ti-arrow-right"></i></button></div>';
+  } else if(_cw.step === 3) {
+    h += casualStepHeader(3, 'Välj spelare') + courseCard;
+    h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
+      '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">I bollen ('+_cw.players.length+')</div>'+
+      _cw.players.map(function(p, i){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">'+
+          '<i class="ti '+(p.guest?'ti-user-question':'ti-user')+'" style="font-size:18px;color:'+(p.guest?'var(--text-3)':'var(--green-dark)')+'"></i>'+
+          '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">'+esc(p.name)+(i===0?' <span style="font-size:11px;color:var(--text-3)">(du)</span>':'')+'</div>'+
+          '<div style="font-size:11px;color:var(--text-3)">'+(p.guest?'Gäst – sparas inte i statistiken':'Från registret')+'</div></div>'+
+          '<label style="font-size:11px;color:var(--text-3);text-align:center">SHCP<br><input type="number" step="1" value="'+p.shcp+'" onchange="_cw.players['+i+'].shcp=parseInt(this.value)||0" style="width:58px;margin:0;text-align:center;padding:4px"></label>'+
+          (i>0?'<button class="btn btn-sm" title="Ta bort" style="padding:4px 7px" onclick="_cw.players.splice('+i+',1);renderCasualWizard()"><i class="ti ti-x"></i></button>':'<span style="width:32px"></span>')+
+        '</div>';
+      }).join('')+'</div>';
+    if(_cw.players.length > 4) h += '<p style="font-size:12px;color:#B45309;margin:-4px 0 10px"><i class="ti ti-info-circle"></i> Fler än 4 spelare – kontrollera att det är okej på banan.</p>';
+    // registret
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
+      '<div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ti-address-book"></i> Lägg till från registret</div>'+
+      '<input id="cw-usersearch" type="text" placeholder="Sök spelare..." oninput="renderCasualUserList(this.value)" style="width:100%;box-sizing:border-box;margin:0 0 6px">'+
+      '<div id="cw-userlist"></div></div>';
+    // gäst
+    h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
+      '<div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ti-user-plus"></i> Lägg till gäst</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap"><input id="cw-guestname" type="text" placeholder="Namn" style="flex:1;min-width:140px;margin:0">'+
+      '<input id="cw-guestshcp" type="number" step="1" placeholder="SHCP" style="width:76px;margin:0">'+
+      '<button class="btn btn-sm" onclick="casualAddGuest()"><i class="ti ti-plus"></i> Lägg till</button></div>'+
+      '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Gäster syns i ronden men sparas aldrig i statistiken.</p></div>';
+    h += '<div style="display:flex;gap:8px"><button class="btn" onclick="_cw.step=2;renderCasualWizard()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
+      '<button class="btn btn-primary" style="flex:1;justify-content:center;padding:12px" onclick="createCasualRound()"><i class="ti ti-golf"></i> Starta ronden</button></div>';
+  }
+  el.innerHTML = h;
+  if(_cw.step === 3) renderCasualUserList('');
+}
+function renderCasualCourseList() {
+  var el = document.getElementById('cw-course-list');
+  if(!el) return;
+  var q = (_cw.search||'').trim().toLowerCase();
+  var list = (courseDb||[]).filter(function(c){
+    if(!q) return true;
+    return [c.name, c.klubb, c.kommun, c.district].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+  // Banor med komplett scorekort först, sedan namn
+  list.sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
+  var shown = list.slice(0, q ? 30 : 12);
+  var h = '<button class="btn" style="width:100%;justify-content:center;margin-bottom:10px;border-style:dashed" onclick="openCasualCourseForm(null)"><i class="ti ti-plus"></i> Hittar du inte banan? Skapa ny bana</button>';
+  if(!shown.length) h += '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
+  h += shown.map(function(c){
+    var ok = casualCourseHasCard(c), img = getCourseImage(c.name);
+    return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
+      (img?'<img src="'+img+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:52px;height:38px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="color:var(--text-3)"></i></div>')+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</div>'+
+      '<div style="font-size:12px;color:'+(ok?'var(--green-dark)':'#B45309')+'">'+(ok?'<i class="ti ti-check"></i> Scorekort · '+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0):'<i class="ti ti-alert-circle"></i> Scorekort saknas – tryck för att lägga in')+'</div></div>'+
+      '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
+  }).join('');
+  if(list.length > shown.length) h += '<p style="font-size:12px;color:var(--text-3);text-align:center">Visar '+shown.length+' av '+list.length+' banor – sök för att hitta fler.</p>';
+  el.innerHTML = h;
+}
+function casualPickCourse(id) { _cw.courseId = id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0); }
+function casualSaveMyShcp() {
+  var v = parseInt((document.getElementById('cw-myshcp')||{}).value);
+  if(isNaN(v)) { alert('Ange ditt SHCP.'); return; }
+  _cw.players[0].shcp = v; _cw.step = 3; renderCasualWizard(); window.scrollTo(0,0);
+}
+function renderCasualUserList(q) {
+  var el = document.getElementById('cw-userlist');
+  if(!el) return;
+  q = (q||'').trim().toLowerCase();
+  var inRound = {}; _cw.players.forEach(function(p){ if(p.username) inRound[p.username] = true; });
+  var users = (S.users||[]).filter(function(u){
+    if(!u || u.username === 'admin' || inRound[u.username]) return false;
+    return !q || (u.name||u.username).toLowerCase().indexOf(q) >= 0;
+  }).sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); }).slice(0, q ? 20 : 8);
+  el.innerHTML = users.length ? users.map(function(u){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'+
+      '<span style="flex:1;font-size:14px">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+'</span></span>'+
+      '<button class="btn btn-sm btn-primary" onclick="casualAddUser(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i></button></div>';
+  }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:4px 0 0">Inga fler spelare'+(q?' matchar':'')+'.</p>';
+}
+function casualAddUser(username) {
+  var u = findUser(username); if(!u) return;
+  _cw.players.push({ key:'u_'+u.username, username:u.username, name:u.name||u.username, guest:false, shcp: Math.round(u.hcp||0) });
+  renderCasualWizard();
+}
+function casualAddGuest() {
+  var name = ((document.getElementById('cw-guestname')||{}).value||'').trim();
+  var sh = parseInt((document.getElementById('cw-guestshcp')||{}).value);
+  if(!name) { alert('Skriv gästens namn.'); return; }
+  if(isNaN(sh)) { alert('Ange gästens SHCP (0 om okänt).'); return; }
+  _cw.players.push({ key:'g_'+uid(), username:null, name:name, guest:true, shcp:sh });
+  renderCasualWizard();
+}
+
+// ── Skapa / komplettera bana ────────────────────────────────────────────────
+var _ccf = null; // { id, imgData }
+function openCasualCourseForm(courseId) {
+  var c = courseId ? courseDb.find(function(x){ return x.id === courseId; }) : null;
+  _ccf = { id: courseId || null, imgData: null };
+  var n = c && c.holePars && c.holePars.length ? c.holePars.length : 18;
+  var img = c ? getCourseImage(c.name) : null;
+  var h = '<h3 style="margin-bottom:4px">'+(c?'Lägg in scorekort':'Skapa bana')+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Banan sparas i bandatabasen så att alla kan välja den nästa gång. Par och index för varje hål krävs.</p>'+
+    '<div class="field"><label>Bannamn *</label><input id="ccf-name" type="text" value="'+esc(c?c.name:(_cw?_cw.search:''))+'"'+(c?' disabled':'')+' placeholder="t.ex. Ågesta GK"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+      '<div class="field"><label>Antal hål</label><select id="ccf-holes" onchange="renderCasualHoleGrid()" style="margin:0"><option value="9"'+(n===9?' selected':'')+'>9 hål</option><option value="18"'+(n!==9?' selected':'')+'>18 hål</option></select></div>'+
+      '<div class="field"><label>Distrikt/ort</label><input id="ccf-district" type="text" value="'+esc(c&&c.district||'')+'" placeholder="t.ex. Stockholm"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div id="ccf-img-prev" style="margin-bottom:6px">'+(img?'<img src="'+img+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px">':'')+'</div>'+
+      '<input type="file" id="ccf-file" accept="image/*" style="display:none" onchange="casualCourseImage(this.files[0]);this.value=\'\'">'+
+      '<input type="file" id="ccf-cam" accept="image/*" capture="environment" style="display:none" onchange="casualCourseImage(this.files[0]);this.value=\'\'">'+
+      '<div style="display:flex;gap:6px"><button type="button" class="btn btn-sm" onclick="document.getElementById(\'ccf-file\').click()"><i class="ti ti-photo"></i> Välj bild</button>'+
+      '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'ccf-cam\').click()"><i class="ti ti-camera"></i> Ta foto</button></div></div>'+
+    '<div style="font-size:13px;font-weight:700;margin:4px 0 6px"><i class="ti ti-list-numbers"></i> Scorekort</div>'+
+    '<p style="font-size:11px;color:var(--text-3);margin:0 0 6px">Index = hålets svårighet (1 = svårast). Varje index 1–'+n+' får bara förekomma en gång.</p>'+
+    '<div id="ccf-grid"></div>'+
+    '<div id="ccf-total" style="font-size:12px;margin:6px 0 12px"></div>'+
+    '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveCasualCourse()"><i class="ti ti-check"></i> Spara bana</button></div>';
+  showModal(h, true);
+  renderCasualHoleGrid(c);
+}
+function renderCasualHoleGrid(c) {
+  var el = document.getElementById('ccf-grid'); if(!el) return;
+  var n = parseInt((document.getElementById('ccf-holes')||{}).value) || 18;
+  // behåll ifyllda värden vid byte av antal hål
+  var prevPar = Array.prototype.map.call(document.querySelectorAll('.ccf-par'), function(x){ return x.value; });
+  var prevIdx = Array.prototype.map.call(document.querySelectorAll('.ccf-idx'), function(x){ return x.value; });
+  if(c && c.holePars) { prevPar = c.holePars.map(String); prevIdx = (c.holeHcpIndex||[]).map(function(x){ return x ? String(x) : ''; }); }
+  var row = function(i){
+    var par = prevPar[i] || '4', idx = prevIdx[i] || '';
+    return '<div style="display:grid;grid-template-columns:34px 1fr 1fr;gap:6px;align-items:center;margin-bottom:4px">'+
+      '<span style="font-weight:700;font-size:13px;text-align:center">'+(i+1)+'</span>'+
+      '<select class="ccf-par" onchange="updateCasualCourseTotal()" style="margin:0;padding:6px">'+[3,4,5,6].map(function(p){ return '<option value="'+p+'"'+(String(p)===String(par)?' selected':'')+'>Par '+p+'</option>'; }).join('')+'</select>'+
+      '<input class="ccf-idx" type="number" min="1" max="'+n+'" value="'+idx+'" placeholder="Index" oninput="updateCasualCourseTotal()" style="margin:0;padding:6px;text-align:center"></div>';
+  };
+  var col = function(a, b){ var h=''; for(var i=a;i<b;i++) h += row(i); return h; };
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">'+
+    '<div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px">'+(n>9?'Ut (1–9)':'Hål')+'</div>'+col(0, Math.min(9,n))+'</div>'+
+    (n>9?'<div><div style="font-size:11px;color:var(--text-3);margin-bottom:4px">In (10–'+n+')</div>'+col(9, n)+'</div>':'')+'</div>';
+  updateCasualCourseTotal();
+}
+function readCasualHoleGrid() {
+  var pars = Array.prototype.map.call(document.querySelectorAll('.ccf-par'), function(x){ return parseInt(x.value)||4; });
+  var idx = Array.prototype.map.call(document.querySelectorAll('.ccf-idx'), function(x){ return parseInt(x.value)||0; });
+  return { pars: pars, idx: idx };
+}
+function updateCasualCourseTotal() {
+  var el = document.getElementById('ccf-total'); if(!el) return;
+  var g = readCasualHoleGrid(), n = g.pars.length;
+  var missing = g.idx.filter(function(x){ return !x; }).length;
+  var dup = g.idx.filter(function(x, i){ return x && g.idx.indexOf(x) !== i; });
+  var bad = g.idx.filter(function(x){ return x && (x < 1 || x > n); }).length;
+  el.innerHTML = '<strong>Par '+g.pars.reduce(function(a,b){return a+b;},0)+'</strong> · '+
+    (missing ? '<span style="color:#B45309">'+missing+' index saknas</span>' : dup.length ? '<span style="color:#A32D2D">Index '+dup.join(', ')+' förekommer flera gånger</span>' : bad ? '<span style="color:#A32D2D">Index måste vara 1–'+n+'</span>' : '<span style="color:var(--green-dark)"><i class="ti ti-check"></i> Scorekortet är komplett</span>');
+}
+function casualCourseImage(file) {
+  if(!file) return;
+  var prev = document.getElementById('ccf-img-prev');
+  if(prev) prev.innerHTML = '<p style="font-size:12px;color:var(--text-3);margin:0"><i class="ti ti-loader-2"></i> Förbereder bild...</p>';
+  compressImage(file, 1200, 800, 0.85, function(dataUrl){
+    _ccf.imgData = dataUrl;
+    var p2 = document.getElementById('ccf-img-prev');
+    if(p2) p2.innerHTML = '<img src="'+dataUrl+'" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px">';
+  });
+}
+function saveCasualCourse() {
+  var nameEl = document.getElementById('ccf-name');
+  var name = (nameEl ? nameEl.value : '').trim();
+  if(!name) { alert('Ange bannamn.'); return; }
+  var g = readCasualHoleGrid(), n = g.pars.length;
+  if(g.idx.some(function(x){ return !x || x < 1 || x > n; })) { alert('Fyll i index 1–'+n+' för alla hål.'); return; }
+  if(g.idx.some(function(x, i){ return g.idx.indexOf(x) !== i; })) { alert('Varje index får bara förekomma en gång.'); return; }
+  var district = ((document.getElementById('ccf-district')||{}).value||'').trim() || null;
+  var c;
+  if(_ccf.id) {
+    c = courseDb.find(function(x){ return x.id === _ccf.id; });
+    if(!c) return;
+    c.holes = n; c.holePars = g.pars; c.holeHcpIndex = g.idx; c.par = g.pars.reduce(function(a,b){return a+b;},0);
+    if(district && !c.district) c.district = district;
+  } else {
+    if(courseDb.find(function(x){ return x.name.toLowerCase() === name.toLowerCase(); })) { alert('Det finns redan en bana med det namnet – sök fram den i listan.'); return; }
+    c = { id: uid(), name: name, holes: n, par: g.pars.reduce(function(a,b){return a+b;},0), holePars: g.pars, holeHcpIndex: g.idx,
+      district: district, land: 'Sverige', createdBy: currentUser ? currentUser.username : null, createdAt: Date.now() };
+    courseDb.push(c);
+    courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+  }
+  saveCourseDb();
+  if(_ccf.imgData) saveCourseImage(c.name, _ccf.imgData, function(){});
+  closeModal();
+  if(_cw) { _cw.courseId = c.id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0); }
+}
+
+// ── Skapa ronden ────────────────────────────────────────────────────────────
+function createCasualRound() {
+  var c = courseDb.find(function(x){ return x.id === _cw.courseId; });
+  if(!c || !casualCourseHasCard(c)) { alert('Välj en bana med scorekort.'); return; }
+  var doc = {
+    createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(),
+    courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
+    sim: !!_cw.sim, status: 'active', players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
+    scores: {}, putts: {}
+  };
+  CASUAL_COL.add(doc).then(function(ref){ _cw = null; openCasualRound(ref.id); })
+    .catch(function(e){ alert('Kunde inte starta ronden: '+e.message); });
+}
+
+// ── Ronden: scoreföring ─────────────────────────────────────────────────────
+function openCasualRound(id) {
+  if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} }
+  _cr = { id: id, data: null, hole: null, unsub: null };
+  showCasualScreen();
+  setCasualTitle('Sällskapsrond');
+  var el = document.getElementById('casual-content');
+  if(el) el.innerHTML = '<p style="text-align:center;color:var(--text-3);padding:20px">Laddar ronden…</p>';
+  _cr.unsub = CASUAL_COL.doc(id).onSnapshot(function(d){
+    if(!d.exists) { if(el) el.innerHTML = '<p class="empty">Ronden finns inte längre.</p>'; return; }
+    _cr.data = d.data(); _cr.data.id = d.id;
+    if(_cr.hole == null) { // börja på första ospelade hålet
+      var n = (_cr.data.holePars||[]).length, first = 1;
+      for(var h=1; h<=n; h++) { var all = (_cr.data.players||[]).every(function(p){ return typeof ((_cr.data.scores||{})[p.key]||{})[h] === 'number'; }); if(!all) { first = h; break; } if(h === n) first = n; }
+      _cr.hole = first;
+    }
+    renderCasualRound();
+  }, function(e){ console.error(e); });
+}
+function casualGoHole(h) { _cr.hole = h; renderCasualRound(); }
+function casualSetScore(key, field, val) {
+  var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
+  var upd = {};
+  upd[field+'.'+key+'.'+_cr.hole] = (val == null) ? firebase.firestore.FieldValue.delete() : val;
+  upd.updatedAt = Date.now();
+  // optimistisk uppdatering
+  r[field] = r[field] || {}; r[field][key] = r[field][key] || {};
+  if(val == null) delete r[field][key][_cr.hole]; else r[field][key][_cr.hole] = val;
+  renderCasualRound();
+  CASUAL_COL.doc(r.id).update(upd).catch(function(e){ alert('Kunde inte spara: '+e.message); });
+}
+function casualStep(key, field, delta) {
+  var r = _cr.data; var cur = ((r[field]||{})[key]||{})[_cr.hole];
+  var par = r.holePars[_cr.hole-1];
+  var base = typeof cur === 'number' ? cur : (field === 'scores' ? par : 2);
+  var nv = typeof cur === 'number' ? cur + delta : base;
+  if(field === 'scores' && nv < 1) nv = 1;
+  if(field === 'putts' && nv < 0) nv = 0;
+  casualSetScore(key, field, nv);
+}
+function renderCasualRound() {
+  var el = document.getElementById('casual-content'); var r = _cr.data;
+  if(!el || !r) return;
+  var n = r.holePars.length, h = _cr.hole, par = r.holePars[h-1], idx = (r.holeHcpIndex && r.holeHcpIndex[h-1]) || h;
+  var edit = casualCanEdit(r) && r.status === 'active';
+  var finished = r.status === 'finished';
+  setCasualTitle(finished ? 'Sällskapsrond · klar' : 'Sällskapsrond');
+  var out = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
+    (getCourseImage(r.courseName)?'<img src="'+getCourseImage(r.courseName)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
+    '<div style="font-size:12px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare · par '+r.holePars.reduce(function(a,b){return a+b;},0)+(finished?' · <strong>Avslutad</strong>':'')+'</div></div></div>';
+  // Hålväljare
+  out += '<div style="display:flex;gap:4px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px">';
+  for(var k=1; k<=n; k++) {
+    var done = (r.players||[]).every(function(p){ return typeof ((r.scores||{})[p.key]||{})[k] === 'number'; });
+    out += '<button type="button" onclick="casualGoHole('+k+')" style="flex:0 0 auto;width:34px;height:34px;border-radius:50%;font:inherit;font-size:13px;font-weight:700;cursor:pointer;border:2px solid '+(k===h?'#B45309':done?'#1D9E75':'var(--border)')+';background:'+(k===h?'#B45309':done?'#E1F5EE':'var(--surface)')+';color:'+(k===h?'#fff':'var(--text)')+'">'+k+'</button>';
+  }
+  out += '</div>';
+  // Aktuellt hål
+  out += '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#FEF3E2;border-bottom:1px solid var(--border)">'+
+      '<div style="font-size:18px;font-weight:800;color:#7A4100">Hål '+h+'</div>'+
+      '<div style="font-size:13px;color:#7A4100"><strong>Par '+par+'</strong> · Index '+idx+'</div></div>';
+  (r.players||[]).forEach(function(p){
+    var g = ((r.scores||{})[p.key]||{})[h], pt = ((r.putts||{})[p.key]||{})[h];
+    var recv = computeHcpStrokesForHole(p.shcp||0, idx, n);
+    var diff = typeof g === 'number' ? g - par : null;
+    var col = diff == null ? 'var(--text-3)' : diff <= -2 ? '#BA7517' : diff === -1 ? '#1D9E75' : diff === 0 ? 'var(--text)' : diff === 1 ? '#D97706' : '#A32D2D';
+    var stepBtn = function(field, delta, icon){ return '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\''+field+'\','+delta+')" style="width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:18px;cursor:pointer;'+(edit?'':'opacity:.4')+'"><i class="ti '+icon+'"></i></button>'; };
+    out += '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+(p.guest?' <span style="font-size:10px;color:var(--text-3);font-weight:400">gäst</span>':'')+'</span>'+
+        '<span style="font-size:11px;color:var(--text-3)">SHCP '+p.shcp+(recv?' · '+'●'.repeat(Math.min(recv,3))+' '+recv+' slag':'')+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        stepBtn('scores',-1,'ti-minus')+
+        '<button type="button" '+(edit?'':'disabled ')+'onclick="'+(typeof g==='number'?'':'casualSetScore(\''+p.key+'\',\'scores\','+par+')')+'" style="flex:1;height:44px;border-radius:10px;border:2px solid '+(typeof g==='number'?col:'var(--border)')+';background:var(--surface);font:inherit;font-size:22px;font-weight:800;color:'+col+';cursor:pointer">'+(typeof g==='number'?g:'<span style="font-size:13px;font-weight:600">Tryck = par</span>')+'</button>'+
+        stepBtn('scores',1,'ti-plus')+
+        (r.sim ? '' : '<div style="display:flex;align-items:center;gap:4px;margin-left:4px"><span style="font-size:10px;color:var(--text-3);writing-mode:vertical-rl;transform:rotate(180deg)">puttar</span>'+
+          '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\'putts\',-1)" style="width:30px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer"><i class="ti ti-minus"></i></button>'+
+          '<span style="min-width:18px;text-align:center;font-weight:700">'+(typeof pt==='number'?pt:'–')+'</span>'+
+          '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\'putts\',1)" style="width:30px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer"><i class="ti ti-plus"></i></button></div>')+
+      '</div></div>';
+  });
+  out += '<div style="display:flex;gap:8px;padding:10px 14px">'+
+    '<button class="btn" '+(h<=1?'disabled ':'')+'onclick="casualGoHole('+(h-1)+')"><i class="ti ti-arrow-left"></i></button>'+
+    (h < n ? '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="casualGoHole('+(h+1)+')">Nästa hål <i class="ti ti-arrow-right"></i></button>'
+           : (edit ? '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="finishCasualRound()"><i class="ti ti-flag-check"></i> Avsluta ronden</button>' : '<span style="flex:1"></span>'))+
+  '</div></div>';
+  if(!edit && !finished) out += '<p style="font-size:12px;color:var(--text-3);margin:-4px 0 10px;text-align:center"><i class="ti ti-eye"></i> Du följer ronden live.</p>';
+  // Ställning
+  var rows = (r.players||[]).map(function(p){ return { p:p, t: casualTotals(r, p) }; })
+    .sort(function(a,b){ return (b.t.poang - a.t.poang) || (a.t.nettoVsPar - b.t.nettoVsPar); });
+  out += '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">'+
+    '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px"><i class="ti ti-list-numbers"></i> Ställning</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 38px 46px 46px 40px;gap:4px;padding:6px 14px;font-size:11px;color:var(--text-3)"><span>Spelare</span><span style="text-align:right">Hål</span><span style="text-align:right">Brutto</span><span style="text-align:right">+/- net</span><span style="text-align:right">Poäng</span></div>'+
+    rows.map(function(x, i){
+      var t = x.t;
+      return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 38px 46px 46px 40px;gap:4px;padding:8px 14px;border-top:1px solid var(--border);font-size:13px;align-items:center">'+
+        '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+(i+1)+'.</strong> '+esc(x.p.name)+'</span>'+
+        '<span style="text-align:right;color:var(--text-3)">'+t.thru+'</span>'+
+        '<span style="text-align:right">'+(t.thru?t.brutto:'–')+'</span>'+
+        '<span style="text-align:right;font-weight:700;color:'+(t.nettoVsPar<0?'#0F6E56':t.nettoVsPar>0?'#A32D2D':'var(--text)')+'">'+(t.thru?(t.nettoVsPar>0?'+':'')+t.nettoVsPar:'–')+'</span>'+
+        '<span style="text-align:right;font-weight:800;color:#B45309">'+(t.thru?t.poang:'–')+'</span></div>';
+    }).join('')+'</div>';
+  // Åtgärder
+  out += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'+
+    '<button class="btn btn-sm" onclick="showCasualScorecard()"><i class="ti ti-table"></i> Scorekort</button>'+
+    (finished && casualCanEdit(r) && !r.sharedToWall ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på The ÄGCC Wall</button>' : '')+
+    (finished && casualCanEdit(r) ? '<button class="btn btn-sm" onclick="reopenCasualRound()"><i class="ti ti-lock-open"></i> Öppna för ändring</button>' : '')+
+    ((isAdmin() || r.createdBy === (currentUser&&currentUser.username)) ? '<button class="btn btn-sm btn-danger" onclick="deleteCasualRound()"><i class="ti ti-trash"></i> Ta bort ronden</button>' : '')+
+  '</div>';
+  el.innerHTML = out;
+}
+function showCasualScorecard() {
+  var r = _cr.data; if(!r) return;
+  var n = r.holePars.length;
+  var head = '<tr><th style="padding:4px;text-align:left">Hål</th>'+r.holePars.map(function(_, i){ return '<th style="padding:4px">'+(i+1)+'</th>'; }).join('')+'<th style="padding:4px">Tot</th><th style="padding:4px">P</th></tr>';
+  var parRow = '<tr style="color:var(--text-3)"><td style="padding:4px">Par</td>'+r.holePars.map(function(p){ return '<td style="padding:4px;text-align:center">'+p+'</td>'; }).join('')+'<td style="padding:4px;text-align:center">'+r.holePars.reduce(function(a,b){return a+b;},0)+'</td><td></td></tr>';
+  var rows = (r.players||[]).map(function(p){
+    var sc = (r.scores||{})[p.key]||{}, t = casualTotals(r, p);
+    var cells = ''; for(var h=1; h<=n; h++) { var g = sc[h], d = typeof g==='number' ? g - r.holePars[h-1] : null;
+      cells += '<td style="padding:4px;text-align:center;font-weight:700;color:'+(d==null?'var(--text-3)':d<0?'#0F6E56':d>0?'#A32D2D':'var(--text)')+'">'+(typeof g==='number'?g:'·')+'</td>'; }
+    return '<tr style="border-top:1px solid var(--border)"><td style="padding:4px;white-space:nowrap">'+esc(p.name.split(' ')[0])+'</td>'+cells+'<td style="padding:4px;text-align:center;font-weight:800">'+(t.thru?t.brutto:'–')+'</td><td style="padding:4px;text-align:center;font-weight:800;color:#B45309">'+(t.thru?t.poang:'–')+'</td></tr>';
+  }).join('');
+  showModal('<h3 style="margin-bottom:8px">Scorekort · '+esc(r.courseName)+'</h3><div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:100%">'+head+parRow+rows+'</table></div>'+
+    '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>', true);
+}
+function finishCasualRound() {
+  var r = _cr.data; if(!r || !casualCanEdit(r)) return;
+  var incomplete = (r.players||[]).filter(function(p){ return !casualTotals(r, p).complete; });
+  var msg = 'Avsluta ronden?';
+  if(incomplete.length) msg += '\n\nObs! '+incomplete.map(function(p){ return p.name; }).join(', ')+' har inte alla hål ifyllda. Ofullständiga ronder räknas inte i statistiken.';
+  if(!confirm(msg)) return;
+  CASUAL_COL.doc(r.id).update({ status:'finished', finishedAt: Date.now(), finishedBy: currentUser.username }).then(function(){
+    if(confirm('Ronden är sparad! Vill du dela resultatet på The ÄGCC Wall?')) shareCasualRoundToWall();
+  }).catch(function(e){ alert('Kunde inte avsluta: '+e.message); });
+}
+function reopenCasualRound() {
+  var r = _cr.data; if(!r || !casualCanEdit(r)) return;
+  if(!confirm('Öppna ronden för ändring igen? Den räknas inte i statistiken förrän den avslutas på nytt.')) return;
+  CASUAL_COL.doc(r.id).update({ status:'active' }).catch(function(e){ alert(e.message); });
+}
+function deleteCasualRound() {
+  var r = _cr.data; if(!r) return;
+  if(!confirm('Ta bort ronden permanent? Den försvinner även ur statistiken.')) return;
+  var id = r.id;
+  if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
+  CASUAL_COL.doc(id).delete().then(function(){ leaveCasualScreen(); }).catch(function(e){ alert(e.message); });
+}
+function shareCasualRoundToWall() {
+  var r = _cr.data; if(!r || r.sharedToWall) return;
+  var me = findUser(currentUser.username) || currentUser;
+  var summary = (r.players||[]).map(function(p){ var t = casualTotals(r, p); return { name:p.name, guest:!!p.guest, poang:t.poang, brutto:t.brutto, netto:t.netto, thru:t.thru }; })
+    .sort(function(a,b){ return b.poang - a.poang; });
+  ACTIVITY_FEED_COL.add({
+    tourId: '__casual', tourName: 'Sällskapsrond', eventId: r.id, eventName: r.courseName,
+    playerUsername: currentUser.username, playerName: me.name || currentUser.username,
+    category: 'casualround', course: r.courseName, sim: !!r.sim, holes: r.holePars.length, summary: summary,
+    createdAt: Date.now(), likes: {}
+  }).then(function(){
+    CASUAL_COL.doc(r.id).update({ sharedToWall: true }).catch(function(){});
+    showPushToast('Delat på The ÄGCC Wall', r.courseName);
+  }).catch(function(e){ alert('Kunde inte dela: '+e.message); });
+}
+
+// ── Profil: spelarens sällskapsronder ───────────────────────────────────────
+function buildCasualRoundsListHTML(username) {
+  var list = (_casualRounds||[]).filter(function(r){ return casualIsParticipant(r, username); })
+    .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  if(!list.length) return '';
+  return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
+    '<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px"><i class="ti ti-users-group"></i> Sällskapsronder ('+list.length+')</div>'+
+    list.slice(0, 15).map(function(r){
+      var p = (r.players||[]).find(function(x){ return x.username === username; });
+      var t = casualTotals(r, p);
+      return '<div onclick="openCasualRound(\''+r.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">'+
+        '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.courseName)+(r.sim?' <span style="font-size:10px;color:#6D28D9">SIM</span>':'')+'</div><div style="font-size:11px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare</div></div>'+
+        '<span style="text-align:right;font-size:12px;color:var(--text-2)">'+(t.complete?t.brutto+' brutto':t.thru+' hål')+'</span>'+
+        '<span style="min-width:42px;text-align:right;font-weight:800;color:#B45309">'+t.poang+' p</span></div>';
+    }).join('')+'</div>';
+}
 
 // ══ PUSHNOTISER ══════════════════════════════════════════════════════════════
 // Klientdelen. Själva utskicken görs av Firebase Cloud Functions (mappen
@@ -12079,7 +12710,7 @@ function buildSideBetStatsHTML(stats, title) {
 function computePlayerHoleStats(username, sim) {
   var counts = emptyHoleCounts();
   var totalHolesPlayed = 0;
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t) !== !!sim) return; // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
+  statsTours(sim).forEach(function(t){ // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
@@ -12124,7 +12755,7 @@ function computePlayerHoleCategoryLeaders(categoryKey) {
 // Spelarens simulatorbanor: antal rundor och bästa netto per bana (bara simulatortourer).
 function computePlayerSimCourses(username) {
   var map = {};
-  (S.tours||[]).forEach(function(t){ if(!isSimTour(t)) return;
+  statsTours(true).forEach(function(t){
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
@@ -12164,7 +12795,7 @@ function buildSimCoursesHTML(username) {
 // ingen omritning behövs. Växlaren visas bara om spelaren har simulatorrundor.
 // Golf: karriär, hålstatistik, puttstatistik, golfkarta. Simulator: karriär,
 // hålstatistik och simulatorbanor (inga puttar och ingen karta i simulator).
-var _profileStatsMode = (function(){ try { return localStorage.getItem('profileStatsMode')==='sim' ? 'sim' : 'golf'; } catch(e){ return 'golf'; } })();
+var _profileStatsMode = (function(){ try { var v = localStorage.getItem('profileStatsMode'); return (v==='sim'||v==='casual') ? v : 'golf'; } catch(e){ return 'golf'; } })();
 var _profileStatsSeq = 0;
 function buildProfileStatsBlockHTML(username, name, defaultMode) {
   var golfHtml = buildCareerStatsHTML(username, false)+
@@ -12176,21 +12807,29 @@ function buildProfileStatsBlockHTML(username, name, defaultMode) {
     buildPlayerAnalysisHTML(username, true)+
     buildHoleStatsHTML(computePlayerHoleStats(username, true), 'Hålstatistik (simulator)')+
     buildSimCoursesHTML(username);
-  if(!simHtml) return golfHtml;
+  // Sällskapsronder: egen statistik, blandas aldrig med tourerna
+  var casualHtml = buildPlayerAnalysisHTML(username, 'casual')+
+    buildHoleStatsHTML(computePlayerHoleStats(username, 'casual'), 'Hålstatistik (sällskap)')+
+    buildPuttingStatsHTML(computePlayerPuttingStats(username, 'casual'))+
+    buildCasualRoundsListHTML(username);
+  if(!simHtml && !casualHtml) return golfHtml;
   var mode = defaultMode || _profileStatsMode;
-  if(!golfHtml) mode = 'sim';
+  if(mode === 'sim' && !simHtml) mode = 'golf';
+  if(mode === 'casual' && !casualHtml) mode = 'golf';
+  if(!golfHtml) mode = casualHtml ? 'casual' : 'sim';
   var id = 'pst'+(++_profileStatsSeq);
   var btn = function(m, icon, label, color){
     var on = mode===m;
-    return '<button type="button" class="pst-btn" data-m="'+m+'" data-c="'+color+'" onclick="setProfileStatsMode(\''+id+'\',\''+m+'\')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;'+
+    return '<button type="button" class="pst-btn" data-m="'+m+'" data-c="'+color+'" onclick="setProfileStatsMode(\''+id+'\',\''+m+'\')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;'+
       (on?'background:'+color+';color:#fff':'background:transparent;color:var(--text-2)')+'"><i class="ti '+icon+'"></i> '+label+'</button>';
   };
   return '<div id="'+id+'">'+
     '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:12px">'+
-      btn('golf','ti-golf','Riktig golf','#0F6E56')+btn('sim','ti-device-desktop','Simulator','#6D28D9')+
+      btn('golf','ti-trophy','Tour','#0F6E56')+(casualHtml?btn('casual','ti-users-group','Sällskap','#B45309'):'')+(simHtml?btn('sim','ti-device-desktop','Simulator','#6D28D9'):'')+
     '</div>'+
-    '<div class="pst-pane" data-m="golf"'+(mode==='golf'?'':' hidden')+'>'+(golfHtml||'<p class="empty">Inga golfrundor ännu.</p>')+'</div>'+
-    '<div class="pst-pane" data-m="sim"'+(mode==='sim'?'':' hidden')+'>'+simHtml+'</div>'+
+    '<div class="pst-pane" data-m="golf"'+(mode==='golf'?'':' hidden')+'>'+(golfHtml||'<p class="empty">Inga tourrundor ännu.</p>')+'</div>'+
+    (casualHtml?'<div class="pst-pane" data-m="casual"'+(mode==='casual'?'':' hidden')+'>'+casualHtml+'</div>':'')+
+    (simHtml?'<div class="pst-pane" data-m="sim"'+(mode==='sim'?'':' hidden')+'>'+simHtml+'</div>':'')+
   '</div>';
 }
 function setProfileStatsMode(id, m) {
@@ -12229,10 +12868,10 @@ function buildHoleStatsHTML(stats, title) {
 // bara ronder där puttar faktiskt fyllts i räknas med. Räknar in en godkänd rond
 // direkt (markör eller admin) - precis som hål-/banstatistiken - istället för att
 // vänta på att HELA deltävlingen stängs av admin.
-function computePlayerPuttingStats(username) {
+function computePlayerPuttingStats(username, mode) {
   var totalPutts = 0, totalHolesWithPutts = 0, roundsWithPutts = 0;
   var bestRoundAvg = null;
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  statsTours(mode || false).forEach(function(t){ // tour eller sällskap (simulator har inga puttar)
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
@@ -16004,6 +16643,245 @@ function simpleHash(str) {
   return 'h' + (h >>> 0).toString(36) + '_' + str.length;
 }
 
+// ══ MITT HCP ═════════════════════════════════════════════════════════════════
+// Varje HCP-ändring loggas i u.hcpHistory = [{ d:'YYYY-MM-DD', hcp:Number }]
+// (en post per dag - ändras HCP flera gånger samma dag skrivs dagens värde över).
+// Tidigare värden kan läggas in i efterhand (t.ex. från Min Golf).
+function hcpTodayISO() { var d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function hcpRound(v) { return Math.round(Number(v)*10)/10; }
+function recordHcpChange(u, val) {
+  if(!u || val == null || isNaN(val)) return;
+  val = hcpRound(val);
+  if(!Array.isArray(u.hcpHistory)) u.hcpHistory = [];
+  var today = hcpTodayISO();
+  // Första loggningen: spara utgångsvärdet också, så att första förändringen syns i grafen
+  if(!u.hcpHistory.length && u.hcp != null && !isNaN(u.hcp) && hcpRound(u.hcp) !== val) {
+    var startD = (u.hcpLastConfirmed || '').slice(0,10);
+    u.hcpHistory.push({ d: (startD && startD < today) ? startD : today, hcp: hcpRound(u.hcp) });
+  }
+  u.hcpHistory.sort(function(a,b){ return a.d.localeCompare(b.d); });
+  var last = u.hcpHistory[u.hcpHistory.length-1];
+  if(last && last.hcp === val) return;
+  if(last && last.d === today) { last.hcp = val; return; }
+  u.hcpHistory.push({ d: today, hcp: val });
+}
+function hcpSeries(u) {
+  var h = (Array.isArray(u.hcpHistory) ? u.hcpHistory : []).filter(function(x){ return x && x.d && x.hcp != null && !isNaN(x.hcp); })
+    .map(function(x){ return { d:x.d, hcp:hcpRound(x.hcp) }; }).sort(function(a,b){ return a.d.localeCompare(b.d); });
+  // Nuvarande HCP ska alltid vara sista punkten (t.ex. om det sattes innan loggningen fanns)
+  if(u.hcp != null && !isNaN(u.hcp) && (!h.length || h[h.length-1].hcp !== hcpRound(u.hcp))) h.push({ d: hcpTodayISO(), hcp: hcpRound(u.hcp), current: true });
+  return h;
+}
+// Värdet som gällde ett visst datum (senaste noteringen på eller före datumet)
+function hcpAt(series, iso) { var v = null; series.forEach(function(x){ if(x.d <= iso) v = x; }); return v; }
+function hcpIsoMinus(days) { var d = new Date(Date.now() - days*86400000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function hcpFmt(v) { return v == null ? '–' : hcpRound(v).toFixed(1).replace('.',','); }
+function hcpFmtDate(iso) { if(!iso) return ''; var d = new Date(iso+'T12:00:00'); return d.toLocaleDateString('sv-SE',{ day:'numeric', month:'short', year:'numeric' }); }
+
+var _myHcpUser = null; // admin kan titta på andra spelare
+function showMyHcp() {
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = id === 'my-hcp-screen' ? '' : 'none';
+  });
+  _myHcpUser = currentUser ? currentUser.username : null;
+  renderMyHcp();
+  window.scrollTo(0, 0);
+}
+function setMyHcpUser(un) { _myHcpUser = un; renderMyHcp(); }
+function canEditHcpOf(u) { return !!u && (isAdmin() || (currentUser && u.username === currentUser.username)); }
+
+function hcpTrendChip(diff, label) {
+  if(diff == null) return '<span style="font-size:12px;color:var(--text-3)">'+label+': –</span>';
+  var better = diff < -0.04, worse = diff > 0.04;
+  var c = better ? '#0F6E56' : worse ? '#A32D2D' : 'var(--text-2)';
+  var bg = better ? '#E1F5EE' : worse ? '#FCEBEB' : 'var(--surface2)';
+  var ic = better ? 'ti-trending-down' : worse ? 'ti-trending-up' : 'ti-arrow-right';
+  return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;color:'+c+';background:'+bg+'"><i class="ti '+ic+'" style="font-size:14px"></i> '+label+' '+(diff>0?'+':diff<0?'−':'±')+hcpFmt(Math.abs(diff))+'</span>';
+}
+
+function buildHcpChartSVG(series, fromIso, toIso, lo, hi) {
+  var W = 340, H = 190, L = 34, R = 10, T = 12, B = 28;
+  var t0 = new Date(fromIso+'T00:00:00').getTime(), t1 = new Date(toIso+'T23:59:59').getTime();
+  if(t1 <= t0) t1 = t0 + 86400000;
+  var vals = series.map(function(x){ return x.hcp; });
+  var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+  // Jämna steg på y-axeln (0,5 / 1 / 2 / 5) med lite luft ovan och under
+  var rawStep = Math.max(0.5, (mx - mn + 1) / 4);
+  var step = [0.5, 1, 2, 5, 10].find(function(x){ return x >= rawStep; }) || 10;
+  mn = Math.floor((mn - step*0.3) / step) * step; mx = Math.ceil((mx + step*0.3) / step) * step;
+  var nTicks = Math.round((mx - mn) / step);
+  var X = function(iso){ var t = new Date(iso+'T12:00:00').getTime(); return L + (Math.min(Math.max(t, t0), t1) - t0) / (t1 - t0) * (W - L - R); };
+  var Y = function(v){ return T + (v - mn) / ((mx - mn) || 1) * (H - T - B); }; // lägre HCP = högre upp (bättre)
+  var g = '';
+  for(var k = 0; k <= nTicks; k++) {
+    var v = mn + step * k, y = Y(v);
+    g += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="var(--border)" stroke-width="1"/>'+
+         '<text x="'+(L-6)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="var(--text-3)">'+hcpFmt(v)+'</text>';
+  }
+  // Månadsetiketter (ca 4 st)
+  var months = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+  for(var m = 0; m <= 3; m++) {
+    var tm = new Date(t0 + (t1 - t0) * m / 3);
+    var xm = L + (W - L - R) * m / 3;
+    g += '<text x="'+xm.toFixed(1)+'" y="'+(H-8)+'" text-anchor="'+(m===0?'start':m===3?'end':'middle')+'" font-size="10" fill="var(--text-3)">'+months[tm.getMonth()]+' -'+String(tm.getFullYear()).slice(2)+'</text>';
+  }
+  // Trappstegslinje: HCP gäller fram till nästa notering
+  var pts = [], d = '';
+  series.forEach(function(x, i){
+    var x1 = X(x.d), y1 = Y(x.hcp);
+    if(i === 0) d += 'M'+x1.toFixed(1)+' '+y1.toFixed(1);
+    else d += ' H'+x1.toFixed(1)+' V'+y1.toFixed(1);
+    pts.push([x1, y1, x]);
+  });
+  d += ' H'+(W-R);
+  var area = d + ' V'+(H-B)+' H'+pts[0][0].toFixed(1)+' Z';
+  var dots = pts.map(function(p){
+    var isLo = lo && p[2].d === lo.d && p[2].hcp === lo.hcp, isHi = hi && p[2].d === hi.d && p[2].hcp === hi.hcp;
+    var col = isLo ? '#1D9E75' : isHi ? '#E24B4A' : '#185FA5';
+    return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+(isLo||isHi?4.5:3)+'" fill="'+col+'" stroke="#fff" stroke-width="1.5"><title>'+hcpFmtDate(p[2].d)+': '+hcpFmt(p[2].hcp)+'</title></circle>';
+  }).join('');
+  var label = function(p, txt, col, below){
+    if(!p) return '';
+    var x = Math.min(Math.max(p[0], L+22), W-R-22), y = below ? p[1]+15 : p[1]-8;
+    return '<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="700" fill="'+col+'">'+txt+'</text>';
+  };
+  var pLo = lo ? pts.find(function(p){ return p[2].d === lo.d && p[2].hcp === lo.hcp; }) : null;
+  var pHi = hi ? pts.find(function(p){ return p[2].d === hi.d && p[2].hcp === hi.hcp; }) : null;
+  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;max-width:100%">'+
+    '<defs><linearGradient id="hcpFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#378ADD" stop-opacity=".22"/><stop offset="1" stop-color="#378ADD" stop-opacity="0"/></linearGradient></defs>'+
+    g+'<path d="'+area+'" fill="url(#hcpFill)"/>'+
+    '<path d="'+d+'" fill="none" stroke="#185FA5" stroke-width="2.2" stroke-linejoin="round"/>'+dots+
+    (pLo && pLo !== pHi ? label(pLo, 'Lägst '+hcpFmt(lo.hcp), '#0F6E56', false) : '')+
+    (pHi && pHi !== pLo ? label(pHi, 'Högst '+hcpFmt(hi.hcp), '#A32D2D', true) : '')+
+  '</svg>';
+}
+
+function renderMyHcp() {
+  var el = document.getElementById('my-hcp-content');
+  if(!el || !currentUser) return;
+  var u = findUser(_myHcpUser || currentUser.username) || findUser(currentUser.username);
+  if(!u) { el.innerHTML = '<p class="empty">Hittade ingen användare.</p>'; return; }
+  var series = hcpSeries(u);
+  var today = hcpTodayISO(), from24 = hcpIsoMinus(730);
+  var h = '';
+  if(isAdmin()) {
+    var us = (S.users||[]).filter(function(x){ return x.username !== 'admin'; }).slice().sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
+    h += '<div style="margin-bottom:12px"><select onchange="setMyHcpUser(this.value)" style="margin:0;width:100%;font-weight:600">'+
+      us.map(function(x){ return '<option value="'+esc(x.username)+'"'+(x.username===u.username?' selected':'')+'>'+esc(x.name||x.username)+(x.username===currentUser.username?' (du)':'')+'</option>'; }).join('')+'</select></div>';
+  }
+  if(!series.length) {
+    el.innerHTML = h + '<div class="card" style="padding:16px"><p style="margin:0;color:var(--text-2)">Inget HCP registrerat ännu.</p></div>' + buildHcpAddFormHTML(u);
+    return;
+  }
+  // Fönster: senaste 24 månaderna (med värdet som gällde vid fönstrets början)
+  var startPoint = hcpAt(series, from24);
+  var inWin = series.filter(function(x){ return x.d > from24; });
+  var winSeries = (startPoint ? [{ d: from24 < series[0].d ? series[0].d : from24, hcp: startPoint.hcp, carried: true }] : []).concat(inWin);
+  if(!winSeries.length) winSeries = series.slice(-1);
+  var fromIso = winSeries[0].d;
+  var lo = null, hi = null;
+  winSeries.forEach(function(x){ if(!lo || x.hcp < lo.hcp) lo = x; if(!hi || x.hcp > hi.hcp) hi = x; });
+  var cur = series[series.length-1].hcp;
+  var p3 = hcpAt(series, hcpIsoMinus(91)), p12 = hcpAt(series, hcpIsoMinus(365)), first = series[0];
+  var d3 = p3 && p3 !== series[series.length-1] ? cur - p3.hcp : (p3 ? 0 : null);
+  var d12 = p12 ? cur - p12.hcp : null;
+  var dAll = series.length > 1 ? cur - first.hcp : null;
+  var mainDiff = d12 != null ? d12 : dAll;
+  var better = mainDiff != null && mainDiff < -0.04, worse = mainDiff != null && mainDiff > 0.04;
+  var isMe = u.username === currentUser.username;
+
+  // Toppkort
+  h += '<div class="card" style="padding:16px;margin-bottom:12px">'+
+    '<div style="display:flex;align-items:center;gap:14px">'+
+      '<div style="width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:'+(better?'#E1F5EE':worse?'#FCEBEB':'var(--surface2)')+'">'+
+        '<i class="ti '+(better?'ti-trending-down':worse?'ti-trending-up':'ti-arrow-right')+'" style="font-size:34px;color:'+(better?'#0F6E56':worse?'#A32D2D':'var(--text-2)')+'"></i></div>'+
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text-3)">'+(isMe?'Ditt HCP':'HCP · '+esc(u.name||u.username))+'</div>'+
+        '<div style="font-size:36px;font-weight:800;line-height:1.05;color:var(--text)">'+hcpFmt(cur)+'</div>'+
+        '<div style="font-size:12px;font-weight:600;color:'+(better?'#0F6E56':worse?'#A32D2D':'var(--text-2)')+'">'+(mainDiff==null?'Ingen historik än':better?'Nedåtgående – bra jobbat!':worse?'Uppåtgående':'Stabilt')+'</div></div>'+
+      (canEditHcpOf(u) && isMe ? '<button class="btn btn-sm btn-primary" onclick="quickEditHcpFromHome()"><i class="ti ti-edit"></i> Uppdatera</button>' : '')+
+    '</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">'+hcpTrendChip(d3, '3 mån')+hcpTrendChip(d12, '12 mån')+(dAll!=null?hcpTrendChip(dAll, 'Sedan '+hcpFmtDate(first.d)):'')+'</div>'+
+  '</div>';
+
+  // Lägst/högst
+  var tile = function(lbl, val, sub, col, icon){ return '<div class="card" style="padding:12px 14px;margin:0;min-width:0"><div style="font-size:11px;color:var(--text-3)"><i class="ti '+icon+'" style="color:'+col+'"></i> '+lbl+'</div><div style="font-size:24px;font-weight:800;color:'+col+'">'+val+'</div><div style="font-size:11px;color:var(--text-3)">'+sub+'</div></div>'; };
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+    tile('Lägsta HCP · 24 mån', hcpFmt(lo.hcp), lo.carried ? 'gällde '+hcpFmtDate(from24) : hcpFmtDate(lo.d), '#0F6E56', 'ti-arrow-down-circle')+
+    tile('Högsta HCP · 24 mån', hcpFmt(hi.hcp), hi.carried ? 'gällde '+hcpFmtDate(from24) : hcpFmtDate(hi.d), '#A32D2D', 'ti-arrow-up-circle')+
+  '</div>';
+
+  // Graf
+  h += '<div class="card" style="padding:14px 12px 8px;margin-bottom:12px">'+
+    '<div style="font-weight:700;font-size:14px;margin:0 4px 2px"><i class="ti ti-chart-line" style="color:#185FA5"></i> Utveckling senaste 24 månaderna</div>'+
+    '<div style="font-size:11px;color:var(--text-3);margin:0 4px 6px">Lägre HCP = högre upp i grafen (bättre). '+series.length+(series.length===1?' notering':' noteringar')+'.</div>'+
+    (winSeries.length >= 1 ? buildHcpChartSVG(winSeries, fromIso, today, lo, hi) : '')+
+    (series.length < 2 ? '<p style="font-size:12px;color:var(--text-3);margin:6px 4px 4px">Grafen fylls på när HCP ändras. Lägg gärna in tidigare värden nedan (t.ex. från Min Golf) så syns trenden direkt.</p>' : '')+
+  '</div>';
+
+  // Historik
+  var rows = series.slice().reverse();
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
+    '<div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px"><i class="ti ti-history"></i> Historik</div>'+
+    rows.map(function(x, i){
+      var prev = rows[i+1];
+      var diff = prev ? x.hcp - prev.hcp : null;
+      var ic = diff == null ? '' : diff < 0 ? '<i class="ti ti-arrow-down" style="color:#0F6E56"></i>' : diff > 0 ? '<i class="ti ti-arrow-up" style="color:#A32D2D"></i>' : '<i class="ti ti-equal" style="color:var(--text-3)"></i>';
+      var idx = (u.hcpHistory||[]).findIndex(function(y){ return y.d === x.d && hcpRound(y.hcp) === x.hcp; });
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);font-size:13px">'+
+        '<span style="flex:1;color:var(--text-2)">'+hcpFmtDate(x.d)+(x.current?' <span style="font-size:11px;color:var(--text-3)">(nuvarande)</span>':'')+'</span>'+
+        '<span style="width:70px;text-align:right;font-size:12px;color:'+(diff<0?'#0F6E56':diff>0?'#A32D2D':'var(--text-3)')+'">'+ic+' '+(diff==null?'':(diff>0?'+':diff<0?'−':'±')+hcpFmt(Math.abs(diff)))+'</span>'+
+        '<span style="width:44px;text-align:right;font-weight:700">'+hcpFmt(x.hcp)+'</span>'+
+        (canEditHcpOf(u) && idx >= 0 && !x.current ? '<button class="btn btn-sm" title="Ta bort noteringen" style="padding:2px 6px" onclick="deleteHcpEntry(\''+esc(u.username)+'\','+idx+')"><i class="ti ti-trash"></i></button>' : '<span style="width:30px"></span>')+
+      '</div>';
+    }).join('')+
+  '</div>';
+  h += buildHcpAddFormHTML(u);
+  el.innerHTML = h;
+}
+
+function buildHcpAddFormHTML(u) {
+  if(!canEditHcpOf(u)) return '';
+  return '<div class="card" style="padding:14px 16px;margin-bottom:12px">'+
+    '<div style="font-weight:700;font-size:14px;margin-bottom:2px"><i class="ti ti-plus"></i> Lägg till tidigare värde</div>'+
+    '<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">T.ex. från Min Golf, så att grafen visar hela trenden. Är datumet det senaste blir värdet även ditt nuvarande HCP.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+      '<input type="date" id="hcp-add-date" max="'+hcpTodayISO()+'" style="margin:0;width:160px">'+
+      '<input type="number" step="0.1" id="hcp-add-val" placeholder="HCP" style="margin:0;width:90px">'+
+      '<button class="btn btn-primary btn-sm" onclick="addHcpHistoryEntry(\''+esc(u.username)+'\')"><i class="ti ti-check"></i> Spara</button>'+
+    '</div></div>';
+}
+function addHcpHistoryEntry(username) {
+  var u = findUser(username);
+  if(!canEditHcpOf(u)) return;
+  var d = (document.getElementById('hcp-add-date')||{}).value;
+  var v = parseFloat(String((document.getElementById('hcp-add-val')||{}).value||'').replace(',','.'));
+  if(!d) { alert('Välj ett datum.'); return; }
+  if(isNaN(v) || v < -10 || v > 54) { alert('Ange ett giltigt HCP (−10 till 54).'); return; }
+  if(d > hcpTodayISO()) { alert('Datumet kan inte vara i framtiden.'); return; }
+  if(!Array.isArray(u.hcpHistory)) u.hcpHistory = [];
+  // Utgångsvärdet (nuvarande HCP) sparas också om historiken var tom
+  if(!u.hcpHistory.length && u.hcp != null && !isNaN(u.hcp) && d < hcpTodayISO()) u.hcpHistory.push({ d: hcpTodayISO(), hcp: hcpRound(u.hcp) });
+  u.hcpHistory = u.hcpHistory.filter(function(x){ return x.d !== d; });
+  u.hcpHistory.push({ d: d, hcp: hcpRound(v) });
+  u.hcpHistory.sort(function(a,b){ return a.d.localeCompare(b.d); });
+  var last = u.hcpHistory[u.hcpHistory.length-1];
+  if(last.d === d) { u.hcp = hcpRound(v); if(currentUser && currentUser.username === u.username) currentUser.hcp = u.hcp; }
+  save();
+  renderMyHcp();
+}
+function deleteHcpEntry(username, idx) {
+  var u = findUser(username);
+  if(!canEditHcpOf(u) || !u.hcpHistory || !u.hcpHistory[idx]) return;
+  if(!confirm('Ta bort noteringen '+hcpFmt(u.hcpHistory[idx].hcp)+' ('+hcpFmtDate(u.hcpHistory[idx].d)+')?')) return;
+  u.hcpHistory.splice(idx, 1);
+  save();
+  renderMyHcp();
+}
+
 function getUsers() { return S.users || []; }
 function findUser(username) {
   return getUsers().find(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
@@ -16012,6 +16890,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (254)',
+    items: [
+      { type: 'new', text: 'Sällskapsrond! Ny knapp högst upp på startsidan för att spela en runda utanför tourerna och föra score i appen. 1) Välj bana – sök i bandatabasen, eller skapa en ny bana (eller komplettera en bana som saknar scorekort) med par och index för varje hål samt en bild du väljer eller fotar direkt. Banan sparas i bandatabasen. 2) Ange ditt SHCP. 3) Välj spelare från registret och/eller lägg till gäster med valfritt namn. Därefter förs score hål för hål med stora +/−-knappar (tryck = par), valfria puttar, och en live-ställning med brutto, netto mot par och poäng. Alla från registret i ronden kan föra score för alla, och andra kan följa live. När ronden avslutas kan den delas på The ÄGCC Wall. Ronden kan också markeras som simulatorrunda.' },
+      { type: 'new', text: 'Sällskapsronder får en egen statistik som aldrig blandas med tourerna: Statistik och spelarprofilen har nu tre lägen – Tour, Sällskap och Simulator. En sällskapsrond markerad som simulator hamnar i Simulator. Gäster sparas aldrig, och bara fullständigt ifyllda ronder räknas. Profilen visar även en lista över spelarens sällskapsronder.' },
+      { type: 'improved', text: 'Säsongsmästaren (👑) är nu alltid fäst högst upp på The ÄGCC Wall och knuffas aldrig ner av nyare inlägg – senaste mästaren per tour, märkt "Fäst".' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (253)',
+    items: [
+      { type: 'new', text: 'Ny ruta "Mitt HCP" på startsidan (bredvid Vinster & betting). Sidan visar ditt nuvarande HCP med en tydlig trendikon (pil nedåt i grönt = förbättring, uppåt i rött), förändringen senaste 3 och 12 månaderna, lägsta och högsta HCP de senaste 24 månaderna, en graf över utvecklingen med lägsta/högsta markerat, och hela historiken. Varje gång en spelare ändrar sitt HCP (från startsidan, vid inloggning, i Min profil eller via admin) sparas det automatiskt med datum. Tidigare värden kan läggas in i efterhand (t.ex. från Min Golf) så att trenden syns direkt. Admin kan välja vilken spelare som visas.' }
+    ]
+  },
   {
     date: '30 oktober 2026 (252)',
     items: [
@@ -18057,7 +18949,7 @@ function showIdeaWall() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
   });
@@ -18169,7 +19061,7 @@ function showHelp() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'help-screen' ? '' : 'none';
   });
@@ -18550,6 +19442,7 @@ function saveHcpUpdate() {
   if(isNaN(val)) { alert('Ange ett giltigt HCP-värde.'); return; }
   var u = findUser(currentUser.username); // se kommentar i selfRegisterTour om varför detta krävs
   if(!u) return;
+  recordHcpChange(u, val); // sparas i spelarens HCP-historik (Mitt HCP)
   u.hcp = val;
   u.hcpLastConfirmed = new Date().toISOString();
   currentUser = u;
@@ -18667,7 +19560,9 @@ function submitMyProfile() {
   u.golfId = golfId;
   var genderEl = document.querySelector('input[name="mp-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
-  u.hcp = parseFloat(document.getElementById('mp-hcp').value) || 0;
+  var newHcpMp = parseFloat(document.getElementById('mp-hcp').value) || 0;
+  recordHcpChange(u, newHcpMp); // sparas i spelarens HCP-historik (Mitt HCP)
+  u.hcp = newHcpMp;
 
   // Bilden laddas upp till Storage FÖRST (om en ny valts) - u.img sätts sedan
   // till URL:en som kommer tillbaka, inte till själva bilddatan.
@@ -19339,7 +20234,9 @@ function saveEditUser(i) {
   u.golfId = golfId;
   var genderEl = document.querySelector('input[name="u-gender"]:checked');
   u.gender = genderEl ? genderEl.value : 'man';
-  u.hcp = parseFloat(document.getElementById('u-hcp').value) || 0;
+  var newHcpU = parseFloat(document.getElementById('u-hcp').value) || 0;
+  recordHcpChange(u, newHcpU); // sparas i spelarens HCP-historik (Mitt HCP)
+  u.hcp = newHcpU;
   u.isPlayer = document.getElementById('u-isplayer').checked;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
   u.tourAccess = _pendingTourAccess.slice();
