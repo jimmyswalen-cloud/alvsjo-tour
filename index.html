@@ -2787,12 +2787,23 @@ function renderCourseStatsView() {
         var players = Object.values(c.players).map(function(p){
           var rs = p.rounds.filter(function(r){ return r[primary] != null; });
           var bestRound = rs.length ? rs.slice().sort(cmpRound)[0] : null;
+          // Saknas rankningsvärdet (t.ex. poängbogeyrond utan brutto/SHCP -> inget netto)
+          // visas ändå spelarens bästa runda på det som finns (poäng eller brutto), men
+          // utan placering - annars såg det ut som att spelaren saknade statistik helt.
+          var fallback = null;
+          if(!bestRound) {
+            var other = primary === 'netto' ? 'poang' : 'netto';
+            var ro = p.rounds.filter(function(r){ return r[other] != null && !(other==='poang' && r.poangEst); });
+            if(ro.length) fallback = ro.slice().sort(other==='poang' ? cmpPoang : cmpNetto)[0];
+            else { var rb = p.rounds.filter(function(r){ return r.brutto != null; }); if(rb.length) fallback = rb.slice().sort(cmpBrutto)[0]; }
+          }
           var avgN = mean(p.rounds.filter(function(r){ return r.netto != null; }), 'netto');
-          return { name:p.name, username:p.username, best:bestRound, avg:avgN, n:p.rounds.length };
+          return { name:p.name, username:p.username, best:bestRound, show: bestRound || fallback, partial: !bestRound && !!fallback, avg:avgN, n:p.rounds.length };
         }).sort(function(a,b){
           if(a.best && !b.best) return -1;
           if(!a.best && b.best) return 1;
           if(a.best && b.best) { var d = cmpRound(a.best, b.best); if(d) return d; }
+          if(a.partial && b.partial && a.show.poang != null && b.show.poang != null && a.show.poang !== b.show.poang) return b.show.poang - a.show.poang;
           return (a.name||'').localeCompare(b.name||'', 'sv');
         });
         var sameRank = function(x, y){ return x[primary]===y[primary] && shcpOrd(x)===shcpOrd(y); };
@@ -2812,9 +2823,10 @@ function renderCourseStatsView() {
           var pUser = (S.users||[]).find(function(u){return u.username===p.username;});
           var pImg = playerPhoto(p.username, pUser&&pUser.img);
           var pIni = ini(p.name);
-          var b = p.best;
+          var b = p.show;
           var subParts = [];
-          if(b) subParts.push('SHCP '+(b.shcp!=null?b.shcp:'?'));
+          if(p.partial) subParts.push('ej rankad · '+(b.netto==null?(b.shcp==null&&b.brutto==null?'brutto & SHCP saknas':(b.shcp==null?'SHCP saknas':'brutto saknas')):'poäng saknas'));
+          else if(b) subParts.push('SHCP '+(b.shcp!=null?b.shcp:'?'));
           if(p.n>1 && p.avg!=null) subParts.push('snitt '+p.avg);
           // Pokal vid namnet om spelaren håller något av banrekorden
           var holds = [recN, recB, recP].some(function(r){ return r && r.username===p.username; });
@@ -16000,6 +16012,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (252)',
+    items: [
+      { type: 'fixed', text: 'Banstatistikens spelarlista visade bara streck för spelare vars rundor saknar det värde listan rankas på - t.ex. en poängbogeyrond där bara poängen registrerats (inget brutto/SHCP, alltså inget netto). Nu visas spelarens bästa runda med de värden som finns (t.ex. poängen), utan placering och med en förklaring som "ej rankad · brutto & SHCP saknas".' }
+    ]
+  },
   {
     date: '30 oktober 2026 (251)',
     items: [
