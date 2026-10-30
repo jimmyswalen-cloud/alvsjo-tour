@@ -148,6 +148,70 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .home-divider{display:flex;align-items:center;gap:12px;margin:22px 2px 16px}
 .home-divider-line{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--border-strong) 20%,var(--border-strong) 80%,transparent)}
 .home-divider-label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px;white-space:nowrap}
+/* ── Utmaningar ── */
+.ch-ico{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.ch-top{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
+.ch-plus{width:46px;height:46px;border-radius:50%;border:none;background:#3E9157;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(62,145,87,.4)}
+.ch-tabs{display:flex;justify-content:center;gap:22px;margin:4px 0 14px;flex-wrap:wrap}
+.ch-tab{border:none;background:none;font:inherit;font-size:16px;font-weight:700;color:var(--text-3);padding:6px 2px;border-bottom:3px solid transparent;cursor:pointer}
+.ch-tab.on{color:#0B3D21;border-bottom-color:#3E9157}
+.ch-create{display:flex;align-items:center;gap:16px;padding:20px 18px;border-radius:18px;margin-bottom:14px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#050F0A 0%,#123A26 55%,#2C6A44 100%)}
+.ch-create-plus{width:52px;height:52px;border-radius:50%;background:#3E9157;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+.ch-card{position:relative;border-radius:16px;overflow:hidden;margin-bottom:12px;cursor:pointer;color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+.ch-card-bg{position:absolute;inset:0}
+.ch-card-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.45),rgba(0,0,0,.15))}
+.ch-card-body{position:relative;display:flex;align-items:center;gap:14px;padding:16px}
+.ch-card-title{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-card-sub{font-size:12px;opacity:.85;margin-top:2px}
+.ch-card-me{font-size:13px;margin-top:6px}
+.ch-invite{border-color:#F3D19E;background:#FFF8EC}
+.ch-hero{position:relative;height:150px;border-radius:0 0 18px 18px;margin:0 -16px}
+.ch-round-btn{position:absolute;top:12px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);color:#222}
+.ch-round-btn.static{position:static;background:var(--surface2);box-shadow:none}
+.ch-hero-ico{display:flex;justify-content:center;margin-top:-56px;position:relative}
+.ch-hero-ico .ch-ico{border:4px solid var(--surface)}
+.ch-mine{display:flex;margin:18px 0 6px;border-top:1px solid var(--border);padding-top:14px}
+.ch-mine-col{flex:1;text-align:center}
+.ch-mine-val{font-size:30px;font-weight:700;color:#0B3D21}
+.ch-mine-lbl{font-size:14px;color:var(--text-3)}
+.ch-bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:10px 18px 0}
+.ch-bar span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#E8891A,#3E9157)}
+.ch-prize{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;background:#E3F8E3;font-size:16px}
+.ch-details div{display:flex;align-items:center;gap:12px;padding:6px 2px;font-size:14.5px}
+.ch-details i{font-size:22px;color:var(--text-2);width:24px;text-align:center}
+.ch-board{background:#F3F0E1;border-radius:20px 20px 0 0;margin:22px -16px 0;padding:18px 16px 26px}
+.ch-row{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:14px;padding:10px 14px;margin-bottom:8px}
+.ch-row.me{background:#0E8A4C;color:#fff}
+.ch-rank{width:26px;text-align:center;font-weight:800;font-size:16px}
+.ch-val{font-weight:800;font-size:18px;white-space:nowrap}
+.ch-act{display:flex;align-items:center;gap:14px;background:var(--surface);border-radius:16px;padding:12px 14px;margin-bottom:10px;font-weight:600;font-size:16px;cursor:pointer;border:1px solid var(--border)}
+.ch-act-ic{width:44px;height:44px;border-radius:50%;background:#0E8A4C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+.ch-pill{font-size:11px;font-weight:800;letter-spacing:.04em;background:var(--surface2);border-radius:14px;padding:5px 10px;color:var(--text-2)}
+.ch-wrow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.ch-wrow:last-child{border-bottom:none}
+.ch-chip{display:inline-flex;align-items:center;gap:5px;background:var(--green-light);color:var(--green-dark);border-radius:14px;padding:4px 10px;font-size:12px;font-weight:600}
+.ch-chip i{cursor:pointer}
+.ch-hit{padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px}
+.chw-top{display:flex;align-items:center;gap:14px;margin-top:8px}
+.chw-prog{flex:1;height:6px;border-radius:4px;background:var(--border);overflow:hidden;margin:0 14px}
+.chw-prog span{display:block;height:100%;background:#0E8A4C;border-radius:4px;transition:width .25s}
+.chw-type{display:flex;align-items:center;gap:16px;background:var(--surface);border-radius:18px;padding:16px;margin-bottom:10px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.chw-card{border-radius:18px;padding:18px}
+.chw-radio{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;cursor:pointer;font-size:15px}
+.chw-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border-strong);flex-shrink:0;position:relative}
+.chw-dot.on{border-color:#0E8A4C}
+.chw-dot.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#0E8A4C}
+.chw-main{width:100%;justify-content:center;padding:15px;font-size:17px;font-weight:700;border-radius:14px;margin-top:8px}
+.chw-lbl{display:block;font-size:12px;color:var(--text-3);margin-bottom:6px}
+.chw-lbl input{margin-top:3px}
+.chw-cnt{text-align:right;font-size:12px;color:var(--text-3)}
+.chw-bgprev{height:220px;border-radius:16px;margin-bottom:14px}
+.chw-bgs{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px}
+.chw-bg{width:84px;height:84px;border-radius:14px;flex-shrink:0;cursor:pointer;border:3px solid transparent}
+.chw-bg.on{border-color:#0E8A4C}
+.chw-bg.cam{display:flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border);font-size:28px;color:#0E8A4C}
+.ch-done{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;border-radius:20px;color:#fff;background:linear-gradient(160deg,#1FA463,#0B6E3A)}
+.ch-done-ic{width:84px;height:84px;border-radius:50%;background:#F2F4F3;color:#0E8A4C;display:flex;align-items:center;justify-content:center;font-size:44px}
 /* ── "Hey Champ"-hälsning för regerande tourchampion ── */
 .champ-hello{position:relative;overflow:hidden;border-radius:14px;margin-bottom:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#3B2A05 0%,#7A5A0E 45%,#C99A2E 100%);color:#fff;box-shadow:0 6px 18px rgba(122,90,14,.28)}
 .champ-hello .ch-cup{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,#FFE9A8,#E2B13C 60%,#A9781A);box-shadow:0 0 0 3px rgba(255,233,168,.35);font-size:28px;color:#4A3305}
@@ -328,6 +392,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
   <div class="bs-head"><b>Mer</b></div>
   <div class="bs-grid">
     <button type="button" class="bs-it bs-wide" style="background:linear-gradient(135deg,#FFE3B3,#FFD08A);color:#7A4100" onclick="bsheetGo(startCasualRoundWizard)"><i class="ti ti-users-group"></i>Ny sällskapsrond</button>
+    <button type="button" class="bs-it bs-wide" style="background:linear-gradient(135deg,#0E5A3A,#2E8B57);color:#fff" onclick="bsheetGo(showChallenges)"><i class="ti ti-swords"></i>Utmaningar</button>
     <button type="button" class="bs-it" style="background:#FAC775;color:#633806" onclick="bsheetGo(showGlobalPlayers)"><i class="ti ti-users"></i>Spelare</button>
     <button type="button" class="bs-it" style="background:#BFE3D9;color:#0B4F3F" onclick="bsheetGo(showMyHcp)"><i class="ti ti-chart-line"></i>Mitt HCP</button>
     <button type="button" class="bs-it" style="background:#FFB870;color:#7A3D00" onclick="bsheetGo(showMyBetting)"><i class="ti ti-coin"></i>Vinster &amp; betting</button>
@@ -359,6 +424,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
+    <div id="home-challenge-widget"></div>
     <div id="home-activity-feed"></div>
     <!-- Tydlig avdelare mellan The ÄGCC Wall och menyknapparna -->
     <div class="home-divider" role="separator" aria-label="Meny">
@@ -449,6 +515,9 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
       <h2 style="margin:0;flex:1;text-align:center">Mitt HCP</h2>
     </div>
     <div id="my-hcp-content"></div>
+  </div>
+  <div id="challenge-screen" style="display:none">
+    <div id="challenge-content"></div>
   </div>
   <div id="course-stats-screen" style="display:none">
     <div class="tours-header">
@@ -1669,7 +1738,7 @@ function showHomeScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'home-screen-content' ? '' : 'none';
   });
@@ -1688,6 +1757,7 @@ function showHomeScreen() {
   try { if(_cr && _cr.unsub) { _cr.unsub(); _cr.unsub = null; _cr.id = null; } subscribeCasualRounds(); renderHomeCasualWidget(); } catch(e) { console.error('casual', e); }
   try { renderHomeBillingWidget(); } catch(e) {}
   try { renderHomeCourseReviewWidget(); } catch(e) {}
+  try { subscribeChallenges(); renderHomeChallengeWidget(); } catch(e) { console.error('challenges', e); }
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
   // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
@@ -1828,7 +1898,7 @@ function setupBottomNav() {
   // Håll aktiv flik i synk med vilken skärm som visas
   var t = null;
   var mo = new MutationObserver(function(){ if(t) return; t = setTimeout(function(){ t = null; try { syncBottomNav(); } catch(e) {} }, 30); });
-  ['oom-main','login-screen','tours-screen','app-screen','users-screen','home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['oom-main','challenge-screen','login-screen','tours-screen','app-screen','users-screen','home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id); if(el) mo.observe(el, { attributes: true, attributeFilter: ['style'] });
   });
   syncBottomNav();
@@ -1955,6 +2025,524 @@ function syncOomLandscape() { syncLandscape(); }
   if(window.screen && screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function(){ setTimeout(on, 100); });
 })();
 
+
+// ══ UTMANINGAR ═══════════════════════════════════════════════════════════════
+// Spelarskapade utmaningar över en period (t.ex. "Birdiejakten"). Räknar tour-
+// ronder (godkända) och sällskapsronder (avslutade) – inte simulator. Ronder inom
+// utmaningens period räknas, även om man gick med senare. Valfritt: bara vissa banor.
+//   challenges/{id} -> { type, scoring, parMode, hcp, pointsMode, goal, start, end,
+//     courses:[namn], name, desc, prize, bg:{tpl}|{img}, createdBy, createdAt,
+//     participants:[username], invited:[username], declined:[username], invitedBy:{u:inviter} }
+var CH_COL = db.collection('challenges');
+var _chAll = [], _chUnsub = null, _chView = { mode:'list', tab:'active', id:null, ptab:'in' };
+var _chw = null; // guiden
+var CH_TYPES = {
+  holes:   { title:'Flest spelade hål', short:'Spela så många hål som du kan under utmaningsperioden.', icon:'ti-flag-3', bg:'linear-gradient(135deg,#2E8B3E,#145A2A)', unit:'hål', goal:true },
+  courses: { title:'Flest spelade banor', short:'Spela på olika banor och se vem som samlar flest.', icon:'ti-map-pins', bg:'linear-gradient(135deg,#1F7A5C,#0B4B3A)', unit:'banor', goal:true },
+  pars:    { title:'Flest par', short:'Samla så många par som möjligt.', icon:null, txt:'PAR', bg:'linear-gradient(135deg,#1D6B3B,#0B3D21)', unit:'par', goal:true },
+  birdies: { title:'Flest birdies', short:'Samla birdies eller bättre. Poäng för varje birdie (eller bättre).', icon:'ti-feather', bg:'linear-gradient(135deg,#3FAE49,#13652B)', unit:'p', goal:true },
+  stroke:  { title:'Bästa resultat (slagspel)', short:'Vem får det lägsta slagspelsresultatet? Spela med eller utan handicap.', icon:'ti-target-arrow', bg:'linear-gradient(135deg,#2B4C9B,#14275C)', unit:'', goal:false },
+  points:  { title:'Flest poäng (poängbogey)', short:'Spela poängbogey. Bästa runda eller totalpoäng vinner.', icon:'ti-star', bg:'linear-gradient(135deg,#9BBF1E,#3E7A12)', unit:'p', goal:true }
+};
+var CH_BGS = {
+  blue:   'linear-gradient(135deg,#1B2A6B 0%,#1E6FAE 55%,#27C3E6 100%)',
+  forest: 'linear-gradient(135deg,#0B2E1F 0%,#0E5A3A 100%)',
+  green:  'linear-gradient(135deg,#0B7A3A 0%,#15C26A 100%)',
+  pink:   'linear-gradient(135deg,#9E1F62 0%,#D77BB0 100%)',
+  gold:   'linear-gradient(135deg,#6B4A0B 0%,#C99A2E 60%,#F2D27A 100%)',
+  sunset: 'linear-gradient(135deg,#7A1E2C 0%,#E2643A 60%,#F6B54A 100%)'
+};
+function chBgCss(c) {
+  if(c && c.bg && c.bg.img) return "url('"+c.bg.img+"') center/cover no-repeat";
+  return CH_BGS[(c && c.bg && c.bg.tpl) || 'forest'] || CH_BGS.forest;
+}
+function chIconHTML(type, size) {
+  var t = CH_TYPES[type] || CH_TYPES.holes; size = size || 44;
+  var inner = t.icon ? '<i class="ti '+t.icon+'" style="font-size:'+Math.round(size*0.52)+'px"></i>'
+    : '<b style="font-size:'+Math.round(size*0.3)+'px;letter-spacing:.02em;font-style:italic">'+t.txt+'</b>';
+  return '<span class="ch-ico" style="width:'+size+'px;height:'+size+'px;background:'+t.bg+'">'+inner+'</span>';
+}
+function chToday() { return hcpTodayISO(); }
+function chStatus(c) { var d = chToday(); return d > c.end ? 'ended' : d < c.start ? 'upcoming' : 'active'; }
+function chDaysLeft(c) { return Math.max(0, Math.round((new Date(c.end+'T12:00:00') - new Date(chToday()+'T12:00:00')) / 86400000)); }
+function chFmtDate(iso) { return iso || ''; }
+function chIsOrganizer(c) { return !!currentUser && (c.createdBy === currentUser.username || isAdmin()); }
+function chIsIn(c, u) { return (c.participants||[]).indexOf(u || (currentUser && currentUser.username)) >= 0; }
+function chIsInvited(c, u) { u = u || (currentUser && currentUser.username); return (c.invited||[]).indexOf(u) >= 0 && !chIsIn(c, u) && (c.declined||[]).indexOf(u) < 0; }
+function chName(u) { var x = findUser(u); return (x && (x.name || x.username)) || u; }
+function chAvatar(u, size) {
+  var x = findUser(u) || {}; size = size || 36;
+  var img = playerPhoto(u, x.img);
+  return img ? '<img src="'+img+'" alt="" style="width:'+size+'px;height:'+size+'px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+    : '<span style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:#e8f5e9;display:inline-flex;align-items:center;justify-content:center;font-size:'+Math.round(size*0.34)+'px;font-weight:700;color:var(--green-dark);flex-shrink:0">'+esc(ini(chName(u)))+'</span>';
+}
+function chRuleText(c) {
+  if(c.type === 'birdies') return c.scoring === 'single' ? 'Gör så många birdies eller bättre som möjligt. Varje birdie eller bättre ger 1 poäng.' : 'Gör så många birdies eller bättre som möjligt. Poäng: Birdie (1), Eagle (3), Hole-in-one (6), Albatross (10). Flest poäng vinner.';
+  if(c.type === 'pars') return c.parMode === 'orBetter' ? 'Samla så många hål som möjligt på par eller bättre. Flest vinner.' : 'Samla så många par som möjligt. Flest par vinner.';
+  if(c.type === 'holes') return 'Spela så många hål som möjligt under perioden. Flest spelade hål vinner.';
+  if(c.type === 'courses') return 'Spela på så många olika banor som möjligt under perioden. Flest banor vinner.';
+  if(c.type === 'stroke') return 'Lägsta slagspelsresultat på en rond vinner, räknat mot banans par ('+(c.hcp ? 'netto, med handicap' : 'brutto, utan handicap')+').';
+  if(c.type === 'points') return c.pointsMode === 'total' ? 'Spela poängbogey. Flest poäng totalt under perioden vinner.' : 'Spela poängbogey. Bästa enskilda runda vinner.';
+  return '';
+}
+function chCriterionText(c) {
+  return { holes:'Spelade hål', courses:'Olika banor', pars: c.parMode==='orBetter' ? 'Par eller bättre' : 'Samla par', birdies:'Samla birdies (eller bättre)',
+    stroke: c.hcp ? 'Bästa nettoresultat' : 'Bästa bruttoresultat', points: c.pointsMode==='total' ? 'Totalpoäng (poängbogey)' : 'Bästa runda (poängbogey)' }[c.type] || '';
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+function subscribeChallenges() {
+  if(_chUnsub || !currentUser) return;
+  _chUnsub = CH_COL.onSnapshot(function(snap){
+    var all = [];
+    snap.forEach(function(d){ var x = d.data(); x.id = d.id; if(!x.deleted) all.push(x); });
+    _chAll = all;
+    try { renderHomeChallengeWidget(); } catch(e) {}
+    var scr = document.getElementById('challenge-screen');
+    if(scr && scr.style.display !== 'none' && _chView.mode !== 'wizard') renderChallengeScreen();
+    chHandleHash();
+  }, function(err){ console.error('challenges', err); });
+}
+// Alla ronder som kan räknas (tour + sällskap, ej simulator)
+function chAllRounds() {
+  var out = [];
+  try { out = out.concat(collectAnalysisRounds('golf')); } catch(e) { console.error(e); }
+  try { out = out.concat(collectAnalysisRounds('casual')); } catch(e) { console.error(e); }
+  return out;
+}
+function chHolePoints(c, g, par) {
+  var d = g - par;
+  if(c.type === 'pars') return (c.parMode === 'orBetter' ? d <= 0 : d === 0) ? 1 : 0;
+  if(c.type === 'birdies') {
+    if(d > -1) return 0;
+    if(c.scoring === 'single') return 1;
+    if(d <= -3) return 10;      // albatross (även hole-in-one på par 4/5)
+    if(g === 1) return 6;       // hole-in-one
+    if(d === -2) return 3;      // eagle
+    return 1;                   // birdie
+  }
+  return 0;
+}
+// Ställningen: [{u, value, rounds, display, done}] sorterad, bäst först
+function chStandings(c, rounds) {
+  rounds = rounds || chAllRounds();
+  var courseSet = null;
+  if(c.courses && c.courses.length) { courseSet = {}; c.courses.forEach(function(n){ courseSet[normCourseName(n)] = true; }); }
+  var by = {};
+  (c.participants||[]).forEach(function(u){ by[u] = { u:u, value:null, rounds:0, set:{} }; });
+  rounds.forEach(function(r){
+    var s = by[r.username]; if(!s) return;
+    if(!r.date || r.date < c.start || r.date > c.end) return;
+    if(courseSet && !courseSet[normCourseName(r.course)]) return;
+    var v = null;
+    if(c.type === 'holes') v = r.holes ? r.holes.filter(function(g){ return g != null; }).length : (r.pars ? r.pars.length : 18);
+    else if(c.type === 'courses') { var k = normCourseName(r.course); if(k) s.set[k] = true; s.rounds++; s.value = Object.keys(s.set).length; return; }
+    else if(c.type === 'pars' || c.type === 'birdies') {
+      if(!r.holes || !r.pars) return;
+      v = 0; r.holes.forEach(function(g, i){ if(g != null && r.pars[i]) v += chHolePoints(c, g, r.pars[i]); });
+    } else if(c.type === 'stroke') {
+      var base = c.hcp ? r.netto : r.brutto;
+      if(base == null || !r.parTotal) return;
+      if(r.holes && !r.complete) return;
+      v = base - r.parTotal;
+      s.rounds++;
+      if(s.value == null || v < s.value) s.value = v;
+      return;
+    } else if(c.type === 'points') {
+      if(r.poang == null) return;
+      v = r.poang; s.rounds++;
+      if(c.pointsMode === 'total') s.value = (s.value || 0) + v; else if(s.value == null || v > s.value) s.value = v;
+      return;
+    }
+    if(v == null) return;
+    s.rounds++; s.value = (s.value || 0) + v;
+  });
+  var list = Object.keys(by).map(function(k){ return by[k]; });
+  var asc = c.type === 'stroke';
+  list.sort(function(a,b){
+    if(a.value == null && b.value == null) return chName(a.u).localeCompare(chName(b.u), 'sv');
+    if(a.value == null) return 1; if(b.value == null) return -1;
+    return asc ? a.value - b.value : b.value - a.value;
+  });
+  var rank = 0, prev = null;
+  list.forEach(function(s, i){
+    if(s.value == null) { s.rank = null; }
+    else { if(prev === null || s.value !== prev) rank = i + 1; prev = s.value; s.rank = rank; }
+    s.display = chValueText(c, s.value);
+    s.done = !!(c.goal && s.value != null && CH_TYPES[c.type].goal && s.value >= c.goal);
+  });
+  return list;
+}
+function chValueText(c, v) {
+  if(v == null) return '–';
+  if(c.type === 'stroke') return v === 0 ? 'E' : (v > 0 ? '+' + v : String(v));
+  return String(v);
+}
+
+// ── Skärm ────────────────────────────────────────────────────────────────────
+function showChallengeScreen(mode, id) {
+  document.getElementById('tours-screen').style.display = '';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('users-screen').style.display = 'none';
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(x){
+    var el = document.getElementById(x); if(el) el.style.display = x === 'challenge-screen' ? '' : 'none';
+  });
+  subscribeChallenges();
+  _chView.mode = mode || 'list'; if(id) _chView.id = id;
+  renderChallengeScreen();
+  window.scrollTo(0, 0);
+}
+function showChallenges() { showChallengeScreen('list'); }
+function openChallenge(id) { _chView.ptab = 'in'; showChallengeScreen('detail', id); }
+function renderChallengeScreen() {
+  var el = document.getElementById('challenge-content'); if(!el) return;
+  if(_chView.mode === 'wizard') { renderChallengeWizard(); return; }
+  if(_chView.mode === 'detail') { el.innerHTML = chDetailHTML(); return; }
+  if(_chView.mode === 'people') { el.innerHTML = chPeopleHTML(); return; }
+  el.innerHTML = chListHTML();
+}
+function chCardHTML(c, rounds) {
+  var me = currentUser.username, st = chStatus(c);
+  var stand = chIsIn(c) ? chStandings(c, rounds) : null;
+  var mine = stand ? stand.find(function(s){ return s.u === me; }) : null;
+  var right = st === 'ended' ? 'Avslutad ' + chFmtDate(c.end) : st === 'upcoming' ? 'Startar ' + chFmtDate(c.start) : chDaysLeft(c) + ' dagar kvar';
+  var leader = stand && stand[0] && stand[0].value != null ? stand[0] : null;
+  return '<div class="ch-card" onclick="openChallenge(\''+c.id+'\')">'+
+    '<div class="ch-card-bg" style="background:'+chBgCss(c)+'"></div>'+
+    '<div class="ch-card-body">'+chIconHTML(c.type, 46)+
+      '<div style="flex:1;min-width:0"><div class="ch-card-title">'+esc(c.name||CH_TYPES[c.type].title)+'</div>'+
+      '<div class="ch-card-sub">'+esc(CH_TYPES[c.type].title)+' · <i class="ti ti-users"></i> '+(c.participants||[]).length+' · '+right+'</div>'+
+      (mine ? '<div class="ch-card-me">Du: <b>'+mine.display+(c.goal && CH_TYPES[c.type].goal ? '/'+c.goal : '')+'</b>'+(mine.rank ? ' · plats '+mine.rank+' av '+stand.length : '')+(mine.done?' · <span style="color:#9BE7B5">✓ Mål nått</span>':'')+'</div>'
+        : leader ? '<div class="ch-card-me">Leder: '+esc(chName(leader.u).split(' ')[0])+' ('+leader.display+')</div>' : '')+
+      '</div><i class="ti ti-chevron-right" style="font-size:20px;opacity:.8"></i></div></div>';
+}
+function chListHTML() {
+  var me = currentUser.username, rounds = chAllRounds();
+  var mine = _chAll.filter(function(c){ return chIsIn(c); });
+  var active = mine.filter(function(c){ return chStatus(c) !== 'ended'; }).sort(function(a,b){ return (a.end||'').localeCompare(b.end||''); });
+  var ended = mine.filter(function(c){ return chStatus(c) === 'ended'; }).sort(function(a,b){ return (b.end||'').localeCompare(a.end||''); });
+  var invites = _chAll.filter(function(c){ return chIsInvited(c) && chStatus(c) !== 'ended'; });
+  var open = _chAll.filter(function(c){ return !chIsIn(c) && !chIsInvited(c) && chStatus(c) !== 'ended'; });
+  var tab = _chView.tab;
+  var h = '<div class="ch-top"><button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>'+
+    '<h2 style="margin:0;flex:1;text-align:center;letter-spacing:.04em">UTMANINGAR</h2>'+
+    '<button class="ch-plus" title="Ny utmaning" onclick="startChallengeWizard()"><i class="ti ti-plus"></i></button></div>';
+  invites.forEach(function(c){
+    h += '<div class="card ch-invite"><div style="display:flex;align-items:center;gap:12px">'+chIconHTML(c.type, 40)+
+      '<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.04em">Du är inbjuden</div>'+
+      '<div style="font-weight:700">'+esc(c.name)+'</div><div style="font-size:12px;color:var(--text-3)">av '+esc(chName((c.invitedBy||{})[me] || c.createdBy))+' · '+esc(CH_TYPES[c.type].title)+'</div></div></div>'+
+      '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button>'+
+      '<button class="btn btn-sm" onclick="openChallenge(\''+c.id+'\')">Visa</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med</button></div></div>';
+  });
+  var tabBtn = function(k, label, n){ return '<button class="ch-tab'+(tab===k?' on':'')+'" onclick="_chView.tab=\''+k+'\';renderChallengeScreen()">'+label+' ('+n+')</button>'; };
+  h += '<div class="ch-tabs">'+tabBtn('active','Aktiva',active.length)+tabBtn('open','Öppna',open.length)+tabBtn('ended','Avslutade',ended.length)+'</div>';
+  if(tab === 'active') {
+    h += '<div class="ch-create" onclick="startChallengeWizard()"><span class="ch-create-plus"><i class="ti ti-plus"></i></span>'+
+      '<div><div style="font-weight:800;font-size:16px">Skapa din egen utmaning</div><div style="font-size:13px;opacity:.85;margin-top:3px">Bjud in dina vänner, sätt upp reglerna och gör dina rundor mer spännande.</div></div></div>';
+    h += active.map(function(c){ return chCardHTML(c, rounds); }).join('');
+  } else if(tab === 'open') {
+    h += open.length ? '<p style="font-size:12px;color:var(--text-3);margin:0 2px 8px">Utmaningar som andra skapat – gå med när du vill.</p>' + open.map(function(c){ return chCardHTML(c, rounds); }).join('')
+      : '<p class="empty">Inga öppna utmaningar just nu.</p>';
+  } else {
+    h += ended.length ? ended.map(function(c){ return chCardHTML(c, rounds); }).join('') : '<p class="empty">Inga avslutade utmaningar än.</p>';
+  }
+  return h;
+}
+
+// ── Detaljsida ───────────────────────────────────────────────────────────────
+function chDetailHTML() {
+  var c = _chAll.find(function(x){ return x.id === _chView.id; });
+  if(!c) return '<div class="ch-top"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button></div><p class="empty">Utmaningen finns inte längre.</p>';
+  var me = currentUser.username, st = chStatus(c), stand = chStandings(c);
+  var mine = stand.find(function(s){ return s.u === me; });
+  var T = CH_TYPES[c.type];
+  var h = '<div class="ch-hero" style="background:'+chBgCss(c)+'">'+
+    '<button class="ch-round-btn" style="left:12px" onclick="showChallenges()" title="Tillbaka"><i class="ti ti-chevron-left"></i></button>'+
+    '<button class="ch-round-btn" style="right:58px" onclick="chShare(\''+c.id+'\')" title="Dela"><i class="ti ti-share"></i></button>'+
+    '<button class="ch-round-btn" style="right:12px" onclick="chMenu(\''+c.id+'\')" title="Mer"><i class="ti ti-dots"></i></button>'+
+    '</div><div class="ch-hero-ico">'+chIconHTML(c.type, 96)+'</div>';
+  h += '<div style="text-align:center;padding:0 6px"><h2 style="margin:6px 0 6px">'+esc(c.name)+'</h2>'+
+    '<p style="color:var(--text-2);font-size:14px;line-height:1.45;margin:0 0 12px">'+esc(chRuleText(c))+'</p>'+
+    '<div style="display:flex;justify-content:center;gap:22px;font-weight:700;font-size:15px;margin-bottom:14px">'+
+      '<span><i class="ti ti-users" style="color:var(--green)"></i> '+(c.participants||[]).length+'</span>'+
+      '<span><i class="ti ti-calendar-time" style="color:var(--green)"></i> '+(st==='ended' ? 'Avslutad' : st==='upcoming' ? 'Startar '+c.start : chDaysLeft(c)+' dagar kvar')+'</span></div></div>';
+  // Deltagare-kort
+  var avs = (c.participants||[]).slice(0, 6).map(function(u){ return '<span style="margin-right:-8px;border:2px solid var(--surface);border-radius:50%;display:inline-flex">'+chAvatar(u, 34)+'</span>'; }).join('');
+  var action = chIsIn(c) ? (st !== 'ended' ? '<button class="btn btn-primary" style="border-radius:22px;padding:9px 18px" onclick="chOpenPeople(\''+c.id+'\',\'invite\')"><i class="ti ti-user-plus"></i> Lägg till</button>' : '')
+    : (st !== 'ended' ? '<button class="btn btn-primary" style="border-radius:22px;padding:9px 18px" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med</button>' : '');
+  h += '<div class="card" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="chOpenPeople(\''+c.id+'\')">'+
+    '<div style="flex:1"><div style="display:flex;align-items:center;margin-bottom:6px">'+avs+((c.participants||[]).length>6?'<span style="margin-left:14px;font-size:12px;color:var(--text-3)">+'+((c.participants||[]).length-6)+'</span>':'')+'</div>'+
+    '<div style="font-weight:700">Deltagare</div></div><span onclick="event.stopPropagation()">'+action+'</span></div>';
+  if(chIsInvited(c)) h += '<div class="card" style="border-color:#F3D19E;background:#FFF8EC;display:flex;align-items:center;gap:10px"><i class="ti ti-mail-opened" style="font-size:22px;color:var(--gold)"></i><div style="flex:1;font-size:13px"><b>'+esc(chName((c.invitedBy||{})[me]||c.createdBy))+'</b> har bjudit in dig.</div><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button></div>';
+  // Mitt resultat
+  if(mine) {
+    var hasGoal = c.goal && T.goal, pct = hasGoal && mine.value != null ? Math.min(100, Math.round(mine.value / c.goal * 100)) : 0;
+    h += '<div class="ch-mine"><div class="ch-mine-col"><div class="ch-mine-val">'+mine.display+(hasGoal ? '<span style="color:var(--text-3);font-weight:600">/'+c.goal+'</span>' : '')+'</div><div class="ch-mine-lbl">'+(c.type==='stroke'?'Bästa rond':(T.unit==='p'?'Poäng':T.unit.charAt(0).toUpperCase()+T.unit.slice(1)))+'</div></div>'+
+      '<div class="ch-mine-col" style="border-left:1px solid var(--border)"><div class="ch-mine-val">'+(mine.rank || '–')+'</div><div class="ch-mine-lbl">Rankning</div></div></div>';
+    if(hasGoal) h += '<div class="ch-bar"><span style="width:'+Math.max(pct,2)+'%"></span></div>'+(mine.done ? '<p style="text-align:center;color:var(--green-dark);font-weight:700;font-size:13px;margin:6px 0 0">✓ Mål nått! Du kan fortfarande förbättra ditt resultat.</p>' : '');
+  }
+  if(c.prize) h += '<h3 style="margin:22px 2px 10px">Priser</h3><div class="ch-prize"><i class="ti ti-trophy" style="font-size:30px;color:var(--green-dark)"></i><span>'+esc(c.prize)+'</span></div>';
+  // Detaljer
+  h += '<h3 style="margin:22px 2px 10px">Detaljer</h3><div class="ch-details">'+
+    '<div><i class="ti ti-calendar"></i> '+c.start+' – '+c.end+'</div>'+
+    '<div><i class="ti ti-crown"></i> Organisatör: '+esc(chName(c.createdBy))+'</div>'+
+    '<div><i class="ti ti-target"></i> '+esc(chCriterionText(c))+(c.goal && T.goal ? ' · mål '+c.goal : '')+'</div>'+
+    '<div><i class="ti ti-flag"></i> '+(c.courses && c.courses.length ? '<a href="javascript:void(0)" onclick="chShowCourses(\''+c.id+'\')">Giltiga banor ('+c.courses.length+')</a>' : 'Alla banor')+'</div>'+
+    '<div><i class="ti ti-list-check"></i> Räknas: tourronder och sällskapsronder (ej simulator)</div></div>';
+  if(c.desc) h += '<p style="white-space:pre-wrap;font-size:14px;color:var(--text);margin:10px 2px 0">'+esc(c.desc)+'</p>';
+  // Ledartavla
+  h += '<div class="ch-board"><h3 style="text-align:center;margin:4px 0 12px;font-size:20px">Ledartavla</h3>';
+  h += stand.length ? stand.map(function(s){
+    var isMe = s.u === me;
+    var medal = s.rank === 1 ? '🥇' : s.rank === 2 ? '🥈' : s.rank === 3 ? '🥉' : (s.rank || '–');
+    return '<div class="ch-row'+(isMe?' me':'')+'"><span class="ch-rank">'+medal+'</span>'+chAvatar(s.u, 38)+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(chName(s.u))+'</div>'+
+      '<div style="font-size:11px;opacity:.75">'+s.rounds+' rond'+(s.rounds===1?'':'er')+(s.done?' · ✓ mål nått':'')+'</div></div>'+
+      '<span class="ch-val">'+s.display+'</span></div>';
+  }).join('') : '<p class="empty">Inga deltagare än.</p>';
+  h += '</div>';
+  return h;
+}
+function chShowCourses(id) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
+  showModal('<h3><i class="ti ti-flag"></i> Giltiga banor</h3><ul style="margin:0 0 14px;padding-left:18px;line-height:1.8">'+(c.courses||[]).map(function(n){ return '<li>'+esc(n)+'</li>'; }).join('')+'</ul><p style="font-size:12px;color:var(--text-3)">Ronder på andra banor räknas inte i den här utmaningen.</p><div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>');
+}
+function chMenu(id) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
+  var h = '<h3>'+esc(c.name)+'</h3><div style="display:flex;flex-direction:column;gap:8px">';
+  if(chIsOrganizer(c)) h += '<button class="btn" style="justify-content:flex-start" onclick="closeModal();startChallengeWizard(\''+id+'\')"><i class="ti ti-edit"></i> Redigera utmaning</button>';
+  h += '<button class="btn" style="justify-content:flex-start" onclick="closeModal();chShare(\''+id+'\')"><i class="ti ti-share"></i> Dela inbjudningslänk</button>';
+  if(chIsIn(c) && c.createdBy !== currentUser.username) h += '<button class="btn" style="justify-content:flex-start;color:var(--danger-text)" onclick="closeModal();chLeave(\''+id+'\')"><i class="ti ti-door-exit"></i> Lämna utmaningen</button>';
+  if(chIsOrganizer(c)) h += '<button class="btn" style="justify-content:flex-start;color:var(--danger-text)" onclick="closeModal();chDelete(\''+id+'\')"><i class="ti ti-trash"></i> Ta bort utmaningen</button>';
+  h += '<button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>';
+  showModal(h);
+}
+function chLink(id) { return location.origin + location.pathname + '#utmaning=' + id; }
+function chShare(id) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
+  var url = chLink(id), text = 'Häng med i utmaningen "' + c.name + '" i ÄGCC-appen!';
+  if(navigator.share) { navigator.share({ title: c.name, text: text, url: url }).catch(function(){}); return; }
+  var done = function(){ showModal('<h3>Länk kopierad</h3><p style="font-size:13px;word-break:break-all">'+esc(url)+'</p><div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>'); };
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(done, done); else done();
+}
+function chHandleHash() {
+  var m = /#utmaning=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+  if(!m || !currentUser) return;
+  var c = _chAll.find(function(x){ return x.id === m[1]; });
+  if(!c) return; // väntar på data
+  try { history.replaceState(null, '', location.pathname + location.search); } catch(e) { location.hash = ''; }
+  openChallenge(c.id);
+}
+window.addEventListener('hashchange', function(){ if(currentUser) { subscribeChallenges(); chHandleHash(); } });
+
+// ── Gå med / lämna / bjud in ─────────────────────────────────────────────────
+function chUpdate(id, fn) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return Promise.resolve();
+  var patch = fn(c) || {};
+  patch.updatedAt = Date.now(); patch.lastActor = currentUser.username;
+  return CH_COL.doc(id).update(patch).catch(function(e){ console.error(e); alert('Kunde inte spara just nu. Försök igen.'); });
+}
+function chJoin(id) {
+  var me = currentUser.username;
+  chUpdate(id, function(c){ return {
+    participants: Array.from(new Set((c.participants||[]).concat([me]))),
+    invited: (c.invited||[]).filter(function(u){ return u !== me; }),
+    declined: (c.declined||[]).filter(function(u){ return u !== me; })
+  }; }).then(function(){ openChallenge(id); });
+}
+function chDecline(id) {
+  var me = currentUser.username;
+  chUpdate(id, function(c){ return { declined: Array.from(new Set((c.declined||[]).concat([me]))), invited: (c.invited||[]).filter(function(u){ return u !== me; }) }; })
+    .then(function(){ if(_chView.mode === 'detail') showChallenges(); });
+}
+function chLeave(id) {
+  if(!confirm('Lämna utmaningen? Dina ronder räknas inte längre i ledartavlan.')) return;
+  var me = currentUser.username;
+  chUpdate(id, function(c){ return { participants: (c.participants||[]).filter(function(u){ return u !== me; }) }; }).then(showChallenges);
+}
+function chDelete(id) {
+  if(!confirm('Ta bort utmaningen för alla deltagare?')) return;
+  CH_COL.doc(id).update({ deleted: true, updatedAt: Date.now(), lastActor: currentUser.username }).then(showChallenges);
+}
+function chOpenPeople(id, sub) { _chView.id = id; _chView.ptab = sub === 'invite' ? 'invite' : 'in'; _chView.mode = 'people'; _chPeopleQ = ''; renderChallengeScreen(); window.scrollTo(0,0); }
+var _chPeopleQ = '';
+function chPeopleHTML() {
+  var c = _chAll.find(function(x){ return x.id === _chView.id; }); if(!c) return '';
+  var me = currentUser.username, tab = _chView.ptab, canInvite = chIsIn(c) || chIsOrganizer(c);
+  var h = '<div class="ch-top"><button class="btn btn-sm" onclick="_chView.mode=\'detail\';renderChallengeScreen()"><i class="ti ti-chevron-left"></i></button><h2 style="margin:0;flex:1;text-align:center">Deltagare</h2><span style="width:38px"></span></div>';
+  if(canInvite && chStatus(c) !== 'ended') h += '<div class="ch-act" onclick="_chView.ptab=\'invite\';renderChallengeScreen()"><span class="ch-act-ic"><i class="ti ti-user-plus"></i></span>Bjud in spelare</div>';
+  h += '<div class="ch-act" onclick="chShare(\''+c.id+'\')"><span class="ch-act-ic"><i class="ti ti-share"></i></span>Dela inbjudningslänk</div>';
+  var parts = c.participants||[], inv = (c.invited||[]).filter(function(u){ return parts.indexOf(u) < 0; });
+  var others = (S.users||[]).filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; });
+  var tb = function(k, l){ return '<button class="ch-tab'+(tab===k?' on':'')+'" onclick="_chView.ptab=\''+k+'\';renderChallengeScreen()">'+l+'</button>'; };
+  h += '<div class="card" style="padding:12px 14px"><div class="ch-tabs" style="justify-content:flex-start;margin-top:0">'+tb('in','Deltagare ('+parts.length+')')+tb('inv','Inbjudna ('+inv.length+')')+(canInvite?tb('invite','Övriga'):'')+'</div>';
+  var row = function(u, right){ var x = findUser(u)||{}; return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--border)">'+chAvatar(u, 44)+
+    '<div style="flex:1;min-width:0"><div style="font-weight:600">'+esc(chName(u))+'</div><div style="font-size:12px;color:var(--text-3)">HCP '+hcpFmt(x.hcp)+'</div></div>'+right+'</div>'; };
+  if(tab === 'in') h += parts.map(function(u){ return row(u, u === c.createdBy ? '<span class="ch-pill">ORGANISATÖR</span>' : (chIsOrganizer(c) && u !== me ? '<button class="btn btn-sm" title="Ta bort" onclick="chRemove(\''+c.id+'\',\''+esc(u)+'\')"><i class="ti ti-x"></i></button>' : '')); }).join('');
+  else if(tab === 'inv') h += inv.length ? inv.map(function(u){ return row(u, (c.declined||[]).indexOf(u)>=0 ? '<span class="ch-pill">TACKADE NEJ</span>' : '<span class="ch-pill">INBJUDEN</span>'); }).join('') : '<p style="font-size:13px;color:var(--text-3);margin:8px 0 0">Ingen inbjuden än.</p>';
+  else {
+    h += '<input type="text" placeholder="Sök spelare..." value="'+esc(_chPeopleQ)+'" oninput="_chPeopleQ=this.value;chRenderPeopleList()" style="margin:6px 0 4px">';
+    h += '<div id="ch-people-list">'+chPeopleListHTML(c, others)+'</div>';
+  }
+  return h + '</div>';
+}
+function chPeopleListHTML(c, others) {
+  var q = (_chPeopleQ||'').trim().toLowerCase();
+  var recent = q ? [] : casualRecentMates().filter(function(u){ return others.some(function(x){ return x.username === u; }); });
+  var list = others.filter(function(u){ return !q || (u.name||u.username).toLowerCase().indexOf(q) >= 0; })
+    .filter(function(u){ return recent.indexOf(u.username) < 0; })
+    .sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
+  var row = function(u){ return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border)">'+chAvatar(u, 40)+
+    '<div style="flex:1;min-width:0;font-weight:600">'+esc(chName(u))+'</div><button class="btn btn-primary btn-sm" onclick="chInvite(\''+c.id+'\',\''+esc(u)+'\')"><i class="ti ti-user-plus"></i> Bjud in</button></div>'; };
+  var h = '';
+  if(recent.length) h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:8px 0 2px"><i class="ti ti-history"></i> Senast spelat med</div>' + recent.map(row).join('') + '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:12px 0 2px">Alla spelare</div>';
+  h += list.map(function(u){ return row(u.username); }).join('') || '<p style="font-size:13px;color:var(--text-3);margin:8px 0 0">Inga fler spelare'+(q?' matchar':'')+'.</p>';
+  return h;
+}
+function chRenderPeopleList() {
+  var c = _chAll.find(function(x){ return x.id === _chView.id; }); var el = document.getElementById('ch-people-list'); if(!c || !el) return;
+  var parts = c.participants||[], inv = c.invited||[];
+  el.innerHTML = chPeopleListHTML(c, (S.users||[]).filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; }));
+}
+function chInvite(id, u) {
+  var me = currentUser.username;
+  chUpdate(id, function(c){ var by = Object.assign({}, c.invitedBy||{}); by[u] = me; return {
+    invited: Array.from(new Set((c.invited||[]).concat([u]))), declined: (c.declined||[]).filter(function(x){ return x !== u; }), invitedBy: by }; });
+}
+function chRemove(id, u) {
+  if(!confirm('Ta bort ' + chName(u) + ' från utmaningen?')) return;
+  chUpdate(id, function(c){ return { participants: (c.participants||[]).filter(function(x){ return x !== u; }) }; });
+}
+
+// ── Startsidan ───────────────────────────────────────────────────────────────
+function renderHomeChallengeWidget() {
+  var el = document.getElementById('home-challenge-widget'); if(!el || !currentUser) return;
+  var invites = _chAll.filter(function(c){ return chIsInvited(c) && chStatus(c) !== 'ended'; });
+  var mine = _chAll.filter(function(c){ return chIsIn(c) && chStatus(c) === 'active'; }).sort(function(a,b){ return (a.end||'').localeCompare(b.end||''); });
+  if(!invites.length && !mine.length) { el.innerHTML = ''; return; }
+  var rounds = mine.length ? chAllRounds() : [];
+  var h = '<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)">'+
+    '<b style="font-size:14px"><i class="ti ti-swords" style="color:var(--green)"></i> Mina utmaningar</b><a href="javascript:void(0)" onclick="showChallenges()" style="font-size:12px;color:var(--green-dark);font-weight:600">Visa alla</a></div>';
+  invites.forEach(function(c){
+    h += '<div class="ch-wrow" onclick="openChallenge(\''+c.id+'\')">'+chIconHTML(c.type, 34)+'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">'+esc(c.name)+'</div><div style="font-size:11px;color:var(--gold);font-weight:700">Du är inbjuden – tryck för att svara</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
+  });
+  mine.slice(0, 3).forEach(function(c){
+    var st = chStandings(c, rounds), m = st.find(function(s){ return s.u === currentUser.username; }) || {};
+    var goal = c.goal && CH_TYPES[c.type].goal;
+    h += '<div class="ch-wrow" onclick="openChallenge(\''+c.id+'\')">'+chIconHTML(c.type, 34)+'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name)+'</div>'+
+      '<div style="font-size:11px;color:var(--text-3)">'+chDaysLeft(c)+' dagar kvar'+(m.rank ? ' · plats '+m.rank+' av '+st.length : '')+'</div></div>'+
+      '<span style="font-weight:800;color:var(--green-dark);white-space:nowrap">'+(m.display||'–')+(goal?'<span style="color:var(--text-3);font-weight:600;font-size:12px">/'+c.goal+'</span>':'')+'</span></div>';
+  });
+  el.innerHTML = h + '</div>';
+}
+
+// ── Guiden (ny / redigera) ───────────────────────────────────────────────────
+function startChallengeWizard(editId) {
+  if(!currentUser) return;
+  var c = editId ? _chAll.find(function(x){ return x.id === editId; }) : null;
+  var today = chToday(), d = new Date(today+'T12:00:00'); d.setMonth(d.getMonth()+1);
+  var end = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  _chw = c ? JSON.parse(JSON.stringify(c)) : { type:null, scoring:'weighted', parMode:'exact', hcp:true, pointsMode:'best', goal:null, start:today, end:end, courses:[], name:'', desc:'', prize:'', bg:{ tpl:'blue' } };
+  _chw._step = c ? 2 : 1; _chw._editId = editId || null; _chw._courseQ = '';
+  showChallengeScreen('wizard');
+}
+function chwHeader(title) {
+  var pct = Math.round(_chw._step / 5 * 100);
+  return '<div class="chw-top"><button class="ch-round-btn static" onclick="chwBack()"><i class="ti ti-chevron-left"></i></button>'+
+    '<div class="chw-prog"><span style="width:'+pct+'%"></span></div>'+
+    '<button class="ch-round-btn static" onclick="chwClose()"><i class="ti ti-x"></i></button></div>'+
+    '<div style="color:#7FD4A8;font-weight:800;font-size:20px;margin:14px 2px 0">'+(_chw._editId?'Redigera utmaning':'Ny utmaning')+'</div><h2 style="font-size:28px;margin:0 2px 14px">'+title+'</h2>';
+}
+function chwBack() { if(_chw._step <= 1 || (_chw._editId && _chw._step <= 2)) { chwClose(); return; } _chw._step--; renderChallengeWizard(); window.scrollTo(0,0); }
+function chwClose() { var id = _chw && _chw._editId; _chw = null; if(id) openChallenge(id); else showChallenges(); }
+function chwNext() { _chw._step++; renderChallengeWizard(); window.scrollTo(0,0); }
+function renderChallengeWizard() {
+  var el = document.getElementById('challenge-content'); if(!el || !_chw) return;
+  var s = _chw._step, h = '';
+  if(s === 1) {
+    h += chwHeader('Välj typ');
+    Object.keys(CH_TYPES).forEach(function(k){ var t = CH_TYPES[k];
+      h += '<div class="chw-type" onclick="_chw.type=\''+k+'\';chwNext()">'+chIconHTML(k, 52)+'<div><div style="font-weight:800;font-size:16px">'+t.title+'</div><div style="font-size:13.5px;color:var(--text-2);margin-top:3px;line-height:1.35">'+t.short+'</div></div></div>';
+    });
+  } else if(s === 2) {
+    var t = CH_TYPES[_chw.type];
+    h += chwHeader('Ange mål') + '<div class="card chw-card">'+chIconHTML(_chw.type, 64)+
+      '<div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.06em;margin-top:12px">TYP AV UTMANING</div><div style="font-weight:800;font-size:20px;margin:2px 0 6px">'+t.title+'</div>'+
+      '<p style="font-size:14px;color:var(--text-2);line-height:1.45;margin:0 0 14px">'+esc(chRuleText(_chw))+'</p>';
+    var radio = function(field, val, label){ var on = _chw[field] === val; return '<label class="chw-radio" onclick="_chw.'+field+'='+JSON.stringify(val).replace(/"/g,'&quot;')+';renderChallengeWizard()"><span>'+label+'</span><span class="chw-dot'+(on?' on':'')+'"></span></label>'; };
+    if(_chw.type === 'birdies') h += radio('scoring','single','1 poäng för birdie eller bättre') + radio('scoring','weighted','Birdie (1p), Eagle (3p), HiO (6p), Albatross (10p)');
+    if(_chw.type === 'pars') h += radio('parMode','exact','Bara par räknas') + radio('parMode','orBetter','Par eller bättre räknas');
+    if(_chw.type === 'stroke') h += radio('hcp', true, 'Med handicap (netto)') + radio('hcp', false, 'Utan handicap (brutto)');
+    if(_chw.type === 'points') h += radio('pointsMode','best','Bästa runda vinner') + radio('pointsMode','total','Totalpoäng under perioden');
+    if(t.goal) h += '<div style="display:flex;align-items:center;gap:12px;margin-top:14px"><b style="flex:1">Mål ('+(t.unit==='p'?'Poäng':t.unit)+')</b>'+
+      '<input type="number" min="1" inputmode="numeric" value="'+(_chw.goal||'')+'" placeholder="Valfritt" oninput="_chw.goal=parseInt(this.value)||null" style="width:110px;text-align:center;font-size:20px;font-weight:700;color:var(--green-dark);margin:0"></div>'+
+      '<p style="font-size:12.5px;color:var(--text-3);margin:8px 0 0">Sätt ett mål som går att uppnå. När du når målet är utmaningen slutförd, men du kan fortfarande förbättra ditt resultat. Lämna tomt för inget mål.</p>';
+    h += '</div><button class="btn btn-primary chw-main" onclick="chwNext()">Välj</button>';
+  } else if(s === 3) {
+    h += chwHeader('När & Var') + '<div class="card chw-card"><b>Varaktighet</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 10px">Ange hur länge utmaningen ska vara aktiv.</p>'+
+      '<label class="chw-lbl">Startdatum<input type="date" value="'+_chw.start+'" onchange="_chw.start=this.value"></label>'+
+      '<label class="chw-lbl">Slutdatum<input type="date" value="'+_chw.end+'" onchange="_chw.end=this.value"></label></div>'+
+      '<div class="card chw-card"><b>Bana (valfritt)</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">Välj de banor där utmaningen kan spelas. Ronder på andra banor räknas inte. Inga valda = alla banor.</p>'+
+      (_chw.courses.length ? '<div style="font-weight:700;color:var(--green-dark);margin-bottom:6px">'+_chw.courses.length+' vald'+(_chw.courses.length===1?'':'a')+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+_chw.courses.map(function(n, i){ return '<span class="ch-chip">'+esc(n)+' <i class="ti ti-x" onclick="_chw.courses.splice('+i+',1);renderChallengeWizard()"></i></span>'; }).join('')+'</div>' : '')+
+      '<input type="text" placeholder="Sök bana att lägga till..." value="'+esc(_chw._courseQ)+'" oninput="_chw._courseQ=this.value;chwRenderCourseHits()" style="margin:0"><div id="chw-course-hits"></div></div>'+
+      '<button class="btn btn-primary chw-main" onclick="chwValidateDates()">Nästa</button>';
+  } else if(s === 4) {
+    h += chwHeader('Detaljer') + '<div class="card chw-card"><b>Namn och beskrivning</b>'+
+      '<input type="text" maxlength="60" placeholder="Utmaningens namn" value="'+esc(_chw.name)+'" oninput="_chw.name=this.value;document.getElementById(\'chw-n1\').textContent=this.value.length+\'/60\'" style="margin:10px 0 2px"><div class="chw-cnt" id="chw-n1">'+_chw.name.length+'/60</div>'+
+      '<textarea maxlength="600" rows="5" placeholder="Beskrivning (valfritt)" oninput="_chw.desc=this.value;document.getElementById(\'chw-n2\').textContent=this.value.length+\'/600\'" style="margin:6px 0 2px">'+esc(_chw.desc)+'</textarea><div class="chw-cnt" id="chw-n2">'+_chw.desc.length+'/600</div></div>'+
+      '<div class="card chw-card"><b>Priser (valfritt)</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">Låt deltagarna veta vad som står på spel.</p>'+
+      '<textarea maxlength="200" rows="3" placeholder="Beskrivning av priset, t.ex. Ära eller en middag" oninput="_chw.prize=this.value;document.getElementById(\'chw-n3\').textContent=this.value.length+\'/200\'" style="margin:0 0 2px">'+esc(_chw.prize)+'</textarea><div class="chw-cnt" id="chw-n3">'+_chw.prize.length+'/200</div></div>'+
+      '<button class="btn btn-primary chw-main" onclick="if(!(_chw.name||\'\').trim()){alert(\'Ge utmaningen ett namn.\');return;}chwNext()">Nästa</button>';
+  } else {
+    h += chwHeader('Välj bakgrund') + '<p style="color:var(--text-3);margin:0 2px 10px">Välj en mall eller ladda upp din egen</p>'+
+      '<div class="chw-bgprev" style="background:'+chBgCss(_chw)+'"></div><div class="chw-bgs">'+
+      '<label class="chw-bg cam"><i class="ti ti-camera"></i><input type="file" accept="image/*" style="display:none" onchange="chwPickImage(this.files[0])"></label>'+
+      Object.keys(CH_BGS).map(function(k){ var on = !_chw.bg.img && _chw.bg.tpl === k; return '<span class="chw-bg'+(on?' on':'')+'" style="background:'+CH_BGS[k]+'" onclick="_chw.bg={tpl:\''+k+'\'};renderChallengeWizard()"></span>'; }).join('')+'</div>'+
+      '<button class="btn btn-primary chw-main" id="chw-save" onclick="saveChallenge()">'+(_chw._editId?'Spara':'Klar')+'</button>';
+  }
+  el.innerHTML = h;
+  if(s === 3) chwRenderCourseHits();
+}
+function chwValidateDates() {
+  if(!_chw.start || !_chw.end) { alert('Välj start- och slutdatum.'); return; }
+  if(_chw.end < _chw.start) { alert('Slutdatum måste vara efter startdatum.'); return; }
+  chwNext();
+}
+function chwRenderCourseHits() {
+  var el = document.getElementById('chw-course-hits'); if(!el) return;
+  var q = (_chw._courseQ||'').trim().toLowerCase();
+  if(q.length < 2) { el.innerHTML = ''; return; }
+  var have = {}; _chw.courses.forEach(function(n){ have[normCourseName(n)] = true; });
+  var hits = (courseDb||[]).filter(function(c){ return !have[normCourseName(c.name)] && [c.name, c.klubb, c.kommun].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0; }).slice(0, 8);
+  el.innerHTML = hits.map(function(c){ return '<div class="ch-hit" onclick="_chw.courses.push('+JSON.stringify(c.name).replace(/"/g,'&quot;')+');_chw._courseQ=\'\';renderChallengeWizard()"><i class="ti ti-plus"></i> '+esc(c.name)+(c.kommun?' <span style="color:var(--text-3);font-size:12px">· '+esc(c.kommun)+'</span>':'')+'</div>'; }).join('') || '<p style="font-size:12px;color:var(--text-3);margin:6px 0 0">Ingen bana matchar.</p>';
+}
+function chwPickImage(file) {
+  if(!file) return;
+  compressImage(file, 1400, 900, 0.85, function(dataUrl){ _chw.bg = { img: dataUrl }; renderChallengeWizard(); });
+}
+function saveChallenge() {
+  var btn = document.getElementById('chw-save'); if(btn) { btn.disabled = true; btn.textContent = 'Sparar…'; }
+  var me = currentUser.username, id = _chw._editId || CH_COL.doc().id;
+  var doc = { type:_chw.type, scoring:_chw.scoring, parMode:_chw.parMode, hcp:!!_chw.hcp, pointsMode:_chw.pointsMode,
+    goal: CH_TYPES[_chw.type].goal ? (_chw.goal || null) : null, start:_chw.start, end:_chw.end, courses:_chw.courses.slice(),
+    name:(_chw.name||'').trim().slice(0,60), desc:(_chw.desc||'').trim().slice(0,600), prize:(_chw.prize||'').trim().slice(0,200),
+    updatedAt: Date.now(), lastActor: me };
+  var bgP = (_chw.bg && _chw.bg.img) ? uploadImageToStorage(_chw.bg.img, 'challenge-bg/'+id+'.jpg').then(function(url){ return url ? { img:url } : { tpl:'forest' }; }) : Promise.resolve({ tpl: (_chw.bg && _chw.bg.tpl) || 'forest' });
+  bgP.then(function(bg){
+    doc.bg = bg;
+    if(_chw._editId) return CH_COL.doc(id).update(doc);
+    doc.createdBy = me; doc.createdAt = Date.now(); doc.participants = [me]; doc.invited = []; doc.declined = []; doc.invitedBy = {};
+    return CH_COL.doc(id).set(doc);
+  }).then(function(){
+    var wasEdit = !!_chw._editId; _chw = null;
+    if(wasEdit) { openChallenge(id); return; }
+    var el = document.getElementById('challenge-content');
+    if(el) el.innerHTML = '<div class="ch-done"><span class="ch-done-ic"><i class="ti ti-check"></i></span><div style="font-size:24px;font-weight:800;margin-top:18px">Utmaning skapad</div></div>';
+    setTimeout(function(){ openChallenge(id); }, 1300);
+  }).catch(function(e){ console.error(e); alert('Kunde inte spara utmaningen. Försök igen.'); if(btn) { btn.disabled = false; btn.textContent = 'Klar'; } });
+}
+
 function updateSettingsCard() {
   var icon = document.getElementById('settings-card-icon');
   var label = document.getElementById('settings-card-label');
@@ -1977,7 +2565,7 @@ function showToursList() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
@@ -1991,7 +2579,7 @@ function showCourseStats() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-stats-screen' ? '' : 'none';
   });
@@ -2003,7 +2591,7 @@ function showTourSearch() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'tour-search-screen' ? '' : 'none';
   });
@@ -2015,7 +2603,7 @@ function showTourSearch() {
 }
 
 function showGlobalPlayers() {
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
   });
@@ -2027,7 +2615,7 @@ function showGlobalSettings() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
@@ -2044,7 +2632,7 @@ function showCourseDataPage() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'course-data-screen' ? '' : 'none';
   });
@@ -2067,7 +2655,7 @@ function showBrandLogosPage() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'brand-logos-screen' ? '' : 'none';
   });
@@ -10348,7 +10936,7 @@ function showCasualScreen() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'casual-screen' ? '' : 'none';
   });
@@ -17339,7 +17927,7 @@ function showMyHcp() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'my-hcp-screen' ? '' : 'none';
   });
@@ -17546,6 +18134,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (268)',
+    items: [
+      { type: 'new', text: 'Utmaningar! Skapa egna utmaningar och bjud in andra spelare: Flest spelade hål, Flest spelade banor, Flest par, Flest birdies (1 poäng per birdie, eller Birdie 1 · Eagle 3 · HiO 6 · Albatross 10), Bästa resultat (slagspel, med eller utan handicap) och Flest poäng (poängbogey – bästa runda eller totalpoäng). Välj mål, period, giltiga banor, beskrivning, pris och bakgrund (mall eller egen bild).' },
+      { type: 'new', text: 'Varje utmaning har en egen sida med ditt resultat mot målet, din placering, detaljer och en ledartavla. Tourronder och sällskapsronder inom perioden räknas automatiskt (inte simulator) – även ronder spelade innan man gick med.' },
+      { type: 'new', text: 'Bjud in spelare (de får en inbjudan i appen och en pushnotis) eller dela en inbjudningslänk. Alla utmaningar är öppna – andra spelare hittar dem under fliken "Öppna" och kan gå med själva. Utmaningar finns i Mer-arket, och dina aktiva utmaningar och inbjudningar syns på startsidan.' },
+    ]
+  },
   {
     date: '30 oktober 2026 (267)',
     items: [
@@ -19692,7 +20288,7 @@ function showIdeaWall() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
   });
@@ -19804,7 +20400,7 @@ function showHelp() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
-  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+  ['home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen','challenge-screen'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'help-screen' ? '' : 'none';
   });
@@ -20109,6 +20705,7 @@ function logout() {
   try { if(typeof unsubscribePushInbox === 'function') unsubscribePushInbox(); } catch(e) {}
   localStorage.removeItem('tourapp_session');
   try { sessionStorage.removeItem('champHelloShown'); } catch(e) {}
+  try { if(_chUnsub) { _chUnsub(); _chUnsub = null; } _chAll = []; } catch(e) {}
   window._champHelloShown = false;
   currentUser = null;
   activeTourId = null;
