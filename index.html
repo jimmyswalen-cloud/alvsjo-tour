@@ -257,6 +257,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
     <div id="home-push-banner"></div>
     <div id="home-billing-widget"></div>
+    <div id="home-course-review-widget"></div>
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
     <div id="home-sidebet-widget"></div>
@@ -856,6 +857,7 @@ function initFirebaseSync(onFirstLoad) {
   });
   COURSE_DB_REF.onSnapshot(function(doc) {
     courseDb = (doc.exists && doc.data() && doc.data().courses) ? doc.data().courses : [];
+    try { renderHomeCourseReviewWidget(); } catch(e) {}
     if(!courseDb.length && isAdmin()) seedCourseDb();
     if(!_bulkCoursesAutoImported) {
       _bulkCoursesAutoImported = true;
@@ -1578,6 +1580,7 @@ function showHomeScreen() {
   try { renderHomePushBanner(); } catch(e) {}
   try { if(_cr && _cr.unsub) { _cr.unsub(); _cr.unsub = null; _cr.id = null; } subscribeCasualRounds(); renderHomeCasualWidget(); } catch(e) { console.error('casual', e); }
   try { renderHomeBillingWidget(); } catch(e) {}
+  try { renderHomeCourseReviewWidget(); } catch(e) {}
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
   // ner i en användarlista efter "logga in som") - ser då ut som att man inte navigerat
@@ -10076,28 +10079,92 @@ function renderCasualWizard() {
   el.innerHTML = h;
   if(_cw.step === 3) renderCasualUserList('');
 }
+// Banvalet: utan sökord visas två flikar - "Nära mig" (de 5 närmaste banorna med
+// koordinater, via enhetens plats) och "Favoriter" (spelarens stjärnmärkta banor,
+// max 5, mest spelade först). Med sökord visas sökträffarna. Stjärnan på varje bana
+// lägger till/tar bort favorit (sparas på spelaren: u.favoriteCourses).
+var _cwTab = (function(){ try { return localStorage.getItem('casualCourseTab') === 'fav' ? 'fav' : 'near'; } catch(e){ return 'near'; } })();
+var _cwPos = null, _cwPosState = 'idle'; // idle | loading | ok | denied | unsupported
+function casualFavIds() { var u = currentUser ? findUser(currentUser.username) : null; return (u && Array.isArray(u.favoriteCourses)) ? u.favoriteCourses : []; }
+function toggleCasualFavorite(id, ev) {
+  if(ev) ev.stopPropagation();
+  var u = currentUser ? findUser(currentUser.username) : null; if(!u) return;
+  if(!Array.isArray(u.favoriteCourses)) u.favoriteCourses = [];
+  var i = u.favoriteCourses.indexOf(id);
+  if(i >= 0) u.favoriteCourses.splice(i, 1); else u.favoriteCourses.push(id);
+  save();
+  renderCasualCourseList();
+}
+function setCasualCourseTab(t) {
+  _cwTab = t === 'fav' ? 'fav' : 'near';
+  try { localStorage.setItem('casualCourseTab', _cwTab); } catch(e) {}
+  renderCasualCourseList();
+}
+function casualRequestPos() {
+  if(!navigator.geolocation) { _cwPosState = 'unsupported'; renderCasualCourseList(); return; }
+  _cwPosState = 'loading'; renderCasualCourseList();
+  navigator.geolocation.getCurrentPosition(function(pos){
+    _cwPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; _cwPosState = 'ok'; renderCasualCourseList();
+  }, function(){ _cwPosState = 'denied'; renderCasualCourseList(); }, { timeout: 10000, maximumAge: 300000 });
+}
+function casualCourseRowHTML(c, extra) {
+  var ok = casualCourseHasCard(c), img = getCourseImage(c.name), fav = casualFavIds().indexOf(c.id) >= 0;
+  return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
+    (img?'<img src="'+img+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:52px;height:38px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="color:var(--text-3)"></i></div>')+
+    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</div>'+
+    '<div style="font-size:12px;color:'+(ok?'var(--green-dark)':'#B45309')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(extra?'<span style="color:var(--text-2);font-weight:600">'+extra+'</span> · ':'')+(ok?'<i class="ti ti-check"></i> Scorekort · '+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0):'<i class="ti ti-alert-circle"></i> Scorekort saknas – tryck för att lägga in')+'</div></div>'+
+    '<button type="button" title="'+(fav?'Ta bort favorit':'Lägg till som favorit')+'" onclick="toggleCasualFavorite(\''+c.id+'\', event)" style="border:none;background:transparent;cursor:pointer;padding:6px;font-size:20px;color:'+(fav?'#E0A030':'var(--text-3)')+'"><i class="ti '+(fav?'ti-star-filled':'ti-star')+'"></i></button>'+
+  '</div>';
+}
 function renderCasualCourseList() {
   var el = document.getElementById('cw-course-list');
   if(!el) return;
   var q = (_cw.search||'').trim().toLowerCase();
-  var list = (courseDb||[]).filter(function(c){
-    if(!q) return true;
-    return [c.name, c.klubb, c.kommun, c.district].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0;
-  });
-  // Banor med komplett scorekort först, sedan namn
-  list.sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
-  var shown = list.slice(0, q ? 30 : 12);
   var h = '<button class="btn" style="width:100%;justify-content:center;margin-bottom:10px;border-style:dashed" onclick="openCasualCourseForm(null)"><i class="ti ti-plus"></i> Hittar du inte banan? Skapa ny bana</button>';
-  if(!shown.length) h += '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
-  h += shown.map(function(c){
-    var ok = casualCourseHasCard(c), img = getCourseImage(c.name);
-    return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
-      (img?'<img src="'+img+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:52px;height:38px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="color:var(--text-3)"></i></div>')+
-      '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</div>'+
-      '<div style="font-size:12px;color:'+(ok?'var(--green-dark)':'#B45309')+'">'+(ok?'<i class="ti ti-check"></i> Scorekort · '+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0):'<i class="ti ti-alert-circle"></i> Scorekort saknas – tryck för att lägga in')+'</div></div>'+
-      '<i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
-  }).join('');
-  if(list.length > shown.length) h += '<p style="font-size:12px;color:var(--text-3);text-align:center">Visar '+shown.length+' av '+list.length+' banor – sök för att hitta fler.</p>';
+  if(q) {
+    // Sökträffar - banor med komplett scorekort först
+    var list = (courseDb||[]).filter(function(c){ return [c.name, c.klubb, c.kommun, c.district].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0; })
+      .sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
+    var shown = list.slice(0, 30);
+    h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+'</div>';
+    h += shown.length ? shown.map(function(c){ return casualCourseRowHTML(c); }).join('') : '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
+    el.innerHTML = h;
+    return;
+  }
+  var favIds = casualFavIds();
+  var tab = function(t, icon, label, n){
+    var on = _cwTab === t;
+    return '<button type="button" onclick="setCasualCourseTab(\''+t+'\')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 8px;border-radius:8px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:none;'+
+      (on?'background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)':'background:transparent;color:var(--text-2)')+'"><i class="ti '+icon+'"></i> '+label+(n!=null?' <span style="font-size:11px;color:var(--text-3)">('+n+')</span>':'')+'</button>';
+  };
+  h += '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px">'+
+    tab('near','ti-map-pin','Nära mig')+tab('fav','ti-star','Favoriter', favIds.length)+'</div>';
+  if(_cwTab === 'near') {
+    if(_cwPosState === 'idle') { casualRequestPos(); return; }
+    if(_cwPosState === 'loading') { h += '<p style="text-align:center;color:var(--text-3);font-size:13px;padding:14px 0"><i class="ti ti-loader-2"></i> Hämtar din position…</p>'; el.innerHTML = h; return; }
+    if(_cwPosState !== 'ok') {
+      h += '<div class="card" style="padding:12px 14px;font-size:13px;color:var(--text-2)"><i class="ti ti-map-pin-off"></i> '+(_cwPosState==='unsupported'?'Enheten stöder inte platsdelning.':'Kunde inte hämta din position. Tillåt platsdelning för appen i telefonens inställningar.')+
+        ' Sök på banans namn ovan, eller välj bland dina favoriter.<div style="margin-top:8px"><button class="btn btn-sm" onclick="casualRequestPos()"><i class="ti ti-refresh"></i> Försök igen</button></div></div>';
+      el.innerHTML = h; return;
+    }
+    var near = (courseDb||[]).filter(function(c){ return c.lat != null && c.lng != null && !isNaN(c.lat) && !isNaN(c.lng); })
+      .map(function(c){ return { c:c, km: haversineKm(_cwPos.lat, _cwPos.lng, Number(c.lat), Number(c.lng)) }; })
+      .sort(function(a,b){ return a.km - b.km; }).slice(0, 5);
+    h += near.length ? near.map(function(x){ return casualCourseRowHTML(x.c, (x.km < 10 ? x.km.toFixed(1).replace('.',',') : Math.round(x.km))+' km'); }).join('')
+      : '<p class="empty">Inga banor med koordinater hittades.</p>';
+    h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">De 5 närmaste banorna. Sök ovan för att hitta andra.</p>';
+  } else {
+    // Favoriter: mest spelade (sällskapsronder) först, sedan namn. Max 5 visas.
+    var played = {};
+    (_casualAll||[]).forEach(function(r){ if(r.courseId && casualIsParticipant(r, currentUser.username)) played[r.courseId] = (played[r.courseId]||0) + 1; });
+    var favs = favIds.map(function(id){ return (courseDb||[]).find(function(c){ return c.id === id; }); }).filter(Boolean)
+      .sort(function(a,b){ return ((played[b.id]||0) - (played[a.id]||0)) || a.name.localeCompare(b.name,'sv'); });
+    if(!favs.length) h += '<div class="card" style="padding:14px;font-size:13px;color:var(--text-2);text-align:center"><i class="ti ti-star" style="font-size:22px;color:#E0A030"></i><br>Inga favoriter än. Tryck på stjärnan vid en bana för att spara den här.</div>';
+    else {
+      h += favs.slice(0, 5).map(function(c){ return casualCourseRowHTML(c, played[c.id] ? played[c.id]+' rond'+(played[c.id]===1?'':'er') : null); }).join('');
+      if(favs.length > 5) h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">Visar 5 av '+favs.length+' favoriter (mest spelade först). Sök för att hitta övriga.</p>';
+    }
+  }
   el.innerHTML = h;
 }
 function casualPickCourse(id) { _cw.courseId = id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0); }
@@ -10137,6 +10204,108 @@ function casualAddGuest() {
 
 // ── Skapa / komplettera bana ────────────────────────────────────────────────
 var _ccf = null; // { id, imgData }
+
+// ── Dubblettskydd för banor ─────────────────────────────────────────────────
+// Normaliserar ett bannamn så att t.ex. "Ågesta GK", "Ågesta Golfklubb" och
+// "agesta golf club" blir samma: små bokstäver, utan accenter/å-ä-ö-prickar,
+// utan vanliga ord som golfklubb/GK/GC/golf/club/country/bana och utan skiljetecken.
+function normCourseName(n) {
+  var x = String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  x = x.replace(/golf\s*&\s*country\s*club|golf\s*och\s*country\s*club|golf\s*&\s*country|golfklubb(en)?|golfbana(n)?|golfbanor|golf\s*club|country\s*club|golfclub|\bgcc\b|\bgk\b|\bgc\b|\bgolf\b|\bclub\b|\bcountry\b|\bbana(n)?\b/g, ' ');
+  return x.replace(/[^a-z0-9]+/g, '');
+}
+function levenshtein(a, b) {
+  if(a === b) return 0; if(!a.length) return b.length; if(!b.length) return a.length;
+  var prev = [], cur = [], i, j;
+  for(j=0;j<=b.length;j++) prev[j] = j;
+  for(i=1;i<=a.length;i++) { cur = [i]; for(j=1;j<=b.length;j++) cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev = cur; }
+  return prev[b.length];
+}
+// Banor i databasen som sannolikt är samma bana som "name" (högst 5)
+function findSimilarCourses(name, exceptId) {
+  var nn = normCourseName(name);
+  if(nn.length < 3) return [];
+  return (courseDb||[]).filter(function(c){ return c.id !== exceptId; }).map(function(c){
+    var cn = normCourseName(c.name), kn = normCourseName(c.klubb);
+    var score = 0;
+    if(cn === nn || (kn && kn === nn)) score = 3;
+    else if((cn.length >= 4 && nn.length >= 4) && (cn.indexOf(nn) >= 0 || nn.indexOf(cn) >= 0)) score = 2;
+    else if(Math.min(cn.length, nn.length) >= 5 && levenshtein(cn, nn) <= (Math.max(cn.length, nn.length) >= 10 ? 2 : 1)) score = 1;
+    return { c:c, score:score };
+  }).filter(function(x){ return x.score > 0; }).sort(function(a,b){ return b.score - a.score; }).slice(0, 5).map(function(x){ return x.c; });
+}
+function renderCasualDupHint() {
+  var el = document.getElementById('ccf-duphint'); if(!el || (_ccf && _ccf.id)) return;
+  var name = ((document.getElementById('ccf-name')||{}).value||'').trim();
+  var sim = name ? findSimilarCourses(name) : [];
+  el.innerHTML = sim.length ? '<div style="background:#FEF3E2;border:1px solid #F5C77A;border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;color:#7A4100">'+
+    '<i class="ti ti-alert-triangle"></i> <strong>Finns banan redan?</strong> Liknande banor i databasen:'+
+    sim.map(function(c){ return '<div style="display:flex;align-items:center;gap:6px;margin-top:5px"><span style="flex:1">'+esc(c.name)+(casualCourseHasCard(c)?' <span style="color:var(--green-dark)">✓ scorekort</span>':'')+'</span>'+
+      '<button type="button" class="btn btn-sm" onclick="useExistingCasualCourse(\''+c.id+'\')">Använd den</button></div>'; }).join('')+'</div>' : '';
+}
+function useExistingCasualCourse(id) {
+  var c = courseDb.find(function(x){ return x.id === id; }); if(!c) return;
+  closeModal();
+  if(casualCourseHasCard(c)) casualPickCourse(id); else openCasualCourseForm(id);
+}
+// Meddelar alla admins i appen (popup i inkorgen) - och via servern även som pushnotis.
+function notifyAdminsCourseReview(c) {
+  var admins = (S.users||[]).filter(function(u){ return u.role === 'admin'; }).map(function(u){ return u.username; });
+  var who = (findUser(currentUser.username)||currentUser).name || currentUser.username;
+  var body = who+' skapade "'+c.name+'" trots liknande: '+((c.review&&c.review.similarNames)||[]).join(', ')+'. Motivering: '+((c.review&&c.review.reason)||'');
+  admins.forEach(function(a){
+    if(a === currentUser.username) return;
+    PUSH_INBOX_COL.add({ username:a, title:'🏌️ Ny bana att granska: '+c.name, body: body.slice(0, 300), link:'', category:'todo', createdAt: Date.now(), dismissed:false }).catch(function(){});
+  });
+  db.collection('courseReviews').add({ courseId:c.id, courseName:c.name, createdBy: currentUser.username, reason: (c.review&&c.review.reason)||'', similarNames: (c.review&&c.review.similarNames)||[], createdAt: Date.now() }).catch(function(){});
+}
+
+// ── Admin: banor att granska ────────────────────────────────────────────────
+function renderHomeCourseReviewWidget() {
+  var el = document.getElementById('home-course-review-widget'); if(!el) return;
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  var list = (courseDb||[]).filter(function(c){ return c.needsReview; });
+  if(!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:#E0A030;background:#FFFBF2">'+
+    '<div style="font-size:13px;font-weight:700;color:#7A4100;margin-bottom:6px"><i class="ti ti-flag-question"></i> Banor att granska ('+list.length+')</div>'+
+    list.map(function(c){
+      var r = c.review || {};
+      var by = r.createdBy ? ((findUser(r.createdBy)||{}).name || r.createdBy) : '?';
+      return '<div style="border-top:1px solid #F5DDB0;padding:8px 0;font-size:13px">'+
+        '<div style="font-weight:700">'+esc(c.name)+'</div>'+
+        '<div style="font-size:12px;color:var(--text-2)">Skapad av '+esc(by)+(r.createdAt?' · '+new Date(r.createdAt).toLocaleDateString('sv-SE'):'')+(r.similarNames&&r.similarNames.length?' · liknar: <strong>'+esc(r.similarNames.join(', '))+'</strong>':'')+'</div>'+
+        (r.reason?'<div style="font-size:12px;background:#fff;border-radius:6px;padding:6px 8px;margin-top:4px;font-style:italic">"'+esc(r.reason)+'"</div>':'')+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
+          '<button class="btn btn-sm btn-primary" onclick="reviewCourseKeep(\''+c.id+'\')"><i class="ti ti-check"></i> Behåll</button>'+
+          '<button class="btn btn-sm" onclick="reviewCourseRename(\''+c.id+'\')"><i class="ti ti-edit"></i> Byt namn</button>'+
+          '<button class="btn btn-sm btn-danger" onclick="reviewCourseDelete(\''+c.id+'\')"><i class="ti ti-trash"></i> Ta bort</button>'+
+        '</div></div>';
+    }).join('')+'</div>';
+}
+function reviewCourseKeep(id) {
+  var c = courseDb.find(function(x){ return x.id === id; }); if(!c || !isAdmin()) return;
+  delete c.needsReview; c.reviewedBy = currentUser.username; c.reviewedAt = Date.now();
+  saveCourseDb(); renderHomeCourseReviewWidget();
+}
+function reviewCourseRename(id) {
+  var c = courseDb.find(function(x){ return x.id === id; }); if(!c || !isAdmin()) return;
+  var nn = prompt('Nytt namn för banan:', c.name); if(!nn) return; nn = nn.trim();
+  if(!nn || nn === c.name) return;
+  if(courseDb.some(function(x){ return x.id !== id && x.name.toLowerCase() === nn.toLowerCase(); })) { alert('Det namnet finns redan.'); return; }
+  var old = c.name; c.name = nn;
+  // Följ med i pågående/avslutade sällskapsronder som använder banan
+  (_casualAll||[]).forEach(function(r){ if(r.courseId === id && r.courseName === old) CASUAL_COL.doc(r.id).update({ courseName: nn }).catch(function(){}); });
+  courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
+  saveCourseDb(); renderHomeCourseReviewWidget();
+}
+function reviewCourseDelete(id) {
+  var c = courseDb.find(function(x){ return x.id === id; }); if(!c || !isAdmin()) return;
+  var used = (_casualAll||[]).filter(function(r){ return r.courseId === id; }).length;
+  var usedTour = (S.tours||[]).some(function(t){ return (t.events||[]).some(function(e){ return (e.course||'').trim().toLowerCase() === c.name.toLowerCase(); }); });
+  if(!confirm('Ta bort banan "'+c.name+'" ur bandatabasen?'+(used||usedTour?'\n\nObs! Banan används i '+(used?used+' sällskapsrond(er)':'')+(used&&usedTour?' och ':'')+(usedTour?'tourtävlingar':'')+'. Ronderna finns kvar men tappar kopplingen till banans scorekort.':''))) return;
+  courseDb = courseDb.filter(function(x){ return x.id !== id; });
+  saveCourseDb(); renderHomeCourseReviewWidget();
+}
 function openCasualCourseForm(courseId) {
   var c = courseId ? courseDb.find(function(x){ return x.id === courseId; }) : null;
   _ccf = { id: courseId || null, imgData: null };
@@ -10144,7 +10313,7 @@ function openCasualCourseForm(courseId) {
   var img = c ? getCourseImage(c.name) : null;
   var h = '<h3 style="margin-bottom:4px">'+(c?'Lägg in scorekort':'Skapa bana')+'</h3>'+
     '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Banan sparas i bandatabasen så att alla kan välja den nästa gång. Par och index för varje hål krävs.</p>'+
-    '<div class="field"><label>Bannamn *</label><input id="ccf-name" type="text" value="'+esc(c?c.name:(_cw?_cw.search:''))+'"'+(c?' disabled':'')+' placeholder="t.ex. Ågesta GK"></div>'+
+    '<div class="field"><label>Bannamn *</label><input id="ccf-name" type="text" value="'+esc(c?c.name:(_cw?_cw.search:''))+'"'+(c?' disabled':'')+' placeholder="t.ex. Ågesta GK" oninput="renderCasualDupHint()"><div id="ccf-duphint"></div></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
       '<div class="field"><label>Antal hål</label><select id="ccf-holes" onchange="renderCasualHoleGrid()" style="margin:0"><option value="9"'+(n===9?' selected':'')+'>9 hål</option><option value="18"'+(n!==9?' selected':'')+'>18 hål</option></select></div>'+
       '<div class="field"><label>Distrikt/ort</label><input id="ccf-district" type="text" value="'+esc(c&&c.district||'')+'" placeholder="t.ex. Stockholm"></div>'+
@@ -10158,10 +10327,12 @@ function openCasualCourseForm(courseId) {
     '<p style="font-size:11px;color:var(--text-3);margin:0 0 6px">Index = hålets svårighet (1 = svårast). Varje index 1–'+n+' får bara förekomma en gång.</p>'+
     '<div id="ccf-grid"></div>'+
     '<div id="ccf-total" style="font-size:12px;margin:6px 0 12px"></div>'+
+    '<div id="ccf-dup-section"></div>'+
     '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button>'+
-    '<button class="btn btn-primary" onclick="saveCasualCourse()"><i class="ti ti-check"></i> Spara bana</button></div>';
+    '<button class="btn btn-primary" id="ccf-save-btn" onclick="saveCasualCourse()"><i class="ti ti-check"></i> Spara bana</button></div>';
   showModal(h, true);
   renderCasualHoleGrid(c);
+  if(!c) renderCasualDupHint();
 }
 function renderCasualHoleGrid(c) {
   var el = document.getElementById('ccf-grid'); if(!el) return;
@@ -10216,20 +10387,52 @@ function saveCasualCourse() {
   if(g.idx.some(function(x, i){ return g.idx.indexOf(x) !== i; })) { alert('Varje index får bara förekomma en gång.'); return; }
   var district = ((document.getElementById('ccf-district')||{}).value||'').trim() || null;
   var c;
+  var review = null;
   if(_ccf.id) {
     c = courseDb.find(function(x){ return x.id === _ccf.id; });
     if(!c) return;
+    // En befintlig bana med scorekort skrivs aldrig över av en spelare (bara admin)
+    if(casualCourseHasCard(c) && !isAdmin()) { alert('Banan har redan ett scorekort och kan inte ändras här. Kontakta admin om något är fel.'); return; }
     c.holes = n; c.holePars = g.pars; c.holeHcpIndex = g.idx; c.par = g.pars.reduce(function(a,b){return a+b;},0);
     if(district && !c.district) c.district = district;
   } else {
-    if(courseDb.find(function(x){ return x.name.toLowerCase() === name.toLowerCase(); })) { alert('Det finns redan en bana med det namnet – sök fram den i listan.'); return; }
-    c = { id: uid(), name: name, holes: n, par: g.pars.reduce(function(a,b){return a+b;},0), holePars: g.pars, holeHcpIndex: g.idx,
+    // Dubblettskydd: liknande banor -> varning + obligatorisk motivering
+    var similar = findSimilarCourses(name);
+    if(similar.length) {
+      var sec = document.getElementById('ccf-dup-section');
+      var reasonEl = document.getElementById('ccf-reason');
+      if(!reasonEl) {
+        sec.innerHTML = '<div style="background:#FCEBEB;border:1px solid #F0B4B4;border-radius:10px;padding:12px 14px;margin-bottom:12px">'+
+          '<div style="font-weight:800;color:#A32D2D;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> Du försöker skapa en bana som redan kan finnas</div>'+
+          '<div style="font-size:12px;color:var(--text-2);margin-bottom:6px">Liknande banor i databasen:</div>'+
+          similar.map(function(x){ return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:13px"><span style="flex:1"><strong>'+esc(x.name)+'</strong>'+(casualCourseHasCard(x)?' <span style="color:var(--green-dark);font-size:11px">✓ scorekort</span>':' <span style="color:#B45309;font-size:11px">saknar scorekort</span>')+'</span>'+
+            '<button type="button" class="btn btn-sm btn-primary" onclick="useExistingCasualCourse(\''+x.id+'\')">Använd den</button></div>'; }).join('')+
+          '<label style="display:block;font-size:12px;font-weight:700;margin-top:10px">Varför vill du ändå lägga till banan? <span style="color:#A32D2D">*</span></label>'+
+          '<textarea id="ccf-reason" rows="3" placeholder="T.ex. Det är banans andra 18-hålsslinga (Norra), inte samma som den befintliga." style="width:100%;box-sizing:border-box;margin:4px 0 4px"></textarea>'+
+          '<div style="font-size:11px;color:var(--text-3)">Banan skapas direkt så att du kan spela, men admin får en notis och granskar senare om den ska vara kvar.</div></div>';
+        var btn = document.getElementById('ccf-save-btn'); if(btn) btn.innerHTML = '<i class="ti ti-check"></i> Skapa ändå';
+        sec.scrollIntoView({ behavior:'smooth', block:'center' });
+        return;
+      }
+      var reason = (reasonEl.value||'').trim();
+      if(reason.length < 10) { alert('Skriv en motivering (minst 10 tecken) till varför banan ska läggas till.'); reasonEl.focus(); return; }
+      review = { reason: reason, similarIds: similar.map(function(x){ return x.id; }), similarNames: similar.map(function(x){ return x.name; }), createdBy: currentUser ? currentUser.username : null, createdAt: Date.now() };
+    }
+    // Samma namn får aldrig förekomma två gånger - då får den nya banan ett tillägg, t.ex. "(2)",
+    // så att den befintliga banan (och dess bild/statistik, som hänger på namnet) aldrig skrivs över.
+    var finalName = name, k = 2;
+    while(courseDb.some(function(x){ return x.name.toLowerCase() === finalName.toLowerCase(); })) { finalName = name+' ('+k+')'; k++; }
+    if(finalName !== name) alert('Det finns redan en bana som heter "'+name+'". Den nya banan sparas som "'+finalName+'" så att den befintliga inte skrivs över. Admin kan byta namn senare.');
+    c = { id: uid(), name: finalName, holes: n, par: g.pars.reduce(function(a,b){return a+b;},0), holePars: g.pars, holeHcpIndex: g.idx,
       district: district, land: 'Sverige', createdBy: currentUser ? currentUser.username : null, createdAt: Date.now() };
+    if(review) { c.needsReview = true; c.review = review; }
     courseDb.push(c);
     courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
   }
   saveCourseDb();
-  if(_ccf.imgData) saveCourseImage(c.name, _ccf.imgData, function(){});
+  if(review) notifyAdminsCourseReview(c);
+  // Bild: en befintlig banbild skrivs aldrig över av en spelare
+  if(_ccf.imgData && (isAdmin() || !getCourseImage(c.name))) saveCourseImage(c.name, _ccf.imgData, function(){});
   closeModal();
   if(_cw) { _cw.courseId = c.id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0); }
 }
@@ -16890,6 +17093,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (256)',
+    items: [
+      { type: 'new', text: 'Dubblettskydd för banor: när man skapar en bana i Sällskapsrond letar appen efter liknande banor redan medan man skriver namnet (t.ex. "Ågesta GK", "Ågesta Golfklubb" och "Agesta golf club" räknas som samma) och föreslår "Använd den". Försöker man ändå spara visas varningen "Du försöker skapa en bana som redan kan finnas" och man måste skriva en motivering. Banan skapas så att man kan spela direkt, men märks för granskning och alla admins får en notis.' },
+      { type: 'new', text: 'Admin: rutan "Banor att granska" på startsidan visar nya banor som liknar befintliga, med vem som skapade dem, vilka banor de liknar och motiveringen – med knapparna Behåll, Byt namn och Ta bort.' },
+      { type: 'fixed', text: 'En befintlig bana skrivs aldrig över: har den redan scorekort kan bara admin ändra det, en befintlig banbild ersätts aldrig av en spelares bild, och får en ny bana exakt samma namn som en befintlig sparas den med ett tillägg som "(2)".' }
+    ]
+  },
+  {
+    date: '30 oktober 2026 (255)',
+    items: [
+      { type: 'new', text: 'Banvalet i Sällskapsrond har två flikar: "Nära mig" visar de 5 närmaste banorna med avstånd (via telefonens plats), och "Favoriter" visar dina stjärnmärkta banor (max 5, mest spelade först). Tryck på stjärnan vid en bana för att lägga till eller ta bort den som favorit. Skriver du i sökfältet visas sökträffarna i stället.' }
+    ]
+  },
   {
     date: '30 oktober 2026 (254)',
     items: [
