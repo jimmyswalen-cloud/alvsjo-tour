@@ -148,9 +148,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 @keyframes champShine{to{left:130%}}
 @keyframes champPop{0%{transform:scale(.3) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
 /* ── Bottenmeny (fast menyrad längst ner) + "Mer"-ark ── */
-#bnav{position:fixed;left:0;right:0;bottom:0;z-index:150;background:rgba(255,255,255,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:none;justify-content:space-around;align-items:flex-end;padding:6px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.06)}
+#bnav{position:fixed;left:0;right:0;bottom:0;z-index:150;background:rgba(255,255,255,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:none;justify-content:space-around;align-items:flex-end;padding:6px 4px max(20px, calc(10px + env(safe-area-inset-bottom)));box-shadow:0 -4px 18px rgba(0,0,0,.06)}
 body.has-bnav #bnav{display:flex}
-body.has-bnav{padding-bottom:calc(84px + env(safe-area-inset-bottom));--bnav-h:70px}
+body.has-bnav{padding-bottom:calc(98px + env(safe-area-inset-bottom));--bnav-h:84px}
 body.has-bnav.kb-open #bnav{display:none}
 #bnav button{flex:1;min-width:0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;font-size:10.5px;font-weight:600;color:#7a827d;padding:4px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #bnav button i{font-size:23px;line-height:1}
@@ -281,9 +281,9 @@ body.has-bnav.kb-open #bnav{display:none}
 <!-- Bottenmeny: alltid synlig när man är inloggad (döljs när tangentbordet är uppe) -->
 <nav id="bnav" aria-label="Huvudmeny">
   <button type="button" data-k="hem" onclick="bnavGo('hem')"><i class="ti ti-home"></i>Hem</button>
-  <button type="button" data-k="tour" onclick="bnavGo('tour')"><i class="ti ti-trophy"></i>Tourer</button>
+  <button type="button" data-k="tour" onclick="bnavGo('tour')"><i class="ti ti-trophy"></i>Tour</button>
   <button type="button" class="bn-main" data-k="rond" onclick="bnavGo('rond')"><span class="bn-c"><i class="ti ti-golf"></i></span>Ny rond</button>
-  <button type="button" data-k="stat" onclick="bnavGo('stat')"><i class="ti ti-chart-bar"></i>Statistik</button>
+  <button type="button" data-k="stat" onclick="bnavGo('stat')"><i class="ti ti-chart-bar"></i>Stats</button>
   <button type="button" data-k="mer" onclick="bnavGo('mer')"><i class="ti ti-menu-2"></i>Mer</button>
 </nav>
 <div id="bsheet-bg" onclick="closeBottomSheet()"></div>
@@ -17344,6 +17344,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '30 oktober 2026 (262)',
+    items: [
+      { type: 'improved', text: 'Menyraden längst ner har fått mer luft mot skärmkanten så att ikonerna och texterna inte hamnar tajt mot botten (och iPhones hemstreck) på mobilen. Kortare etiketter: "Tour" och "Stats".' },
+    ]
+  },
+  {
     date: '30 oktober 2026 (261)',
     items: [
       { type: 'new', text: '"Hey Champ!" – regerande tourchampion välkomnas med en guldfärgad hälsning överst på startsidan när hen loggar in (med en liten glans-animation första gången). Gäller tourer med final: mästaren är vinnaren av den senast avgjorda finalen, och titeln går automatiskt vidare när nästa final avgörs.' },
@@ -17352,7 +17358,7 @@ var RELEASE_NOTES = [
   {
     date: '30 oktober 2026 (260)',
     items: [
-      { type: 'new', text: 'Ny menyrad längst ner på skärmen som alltid syns när man är inloggad: Hem, Tourer, Ny rond (sällskapsrond, den orange mittknappen), Statistik och Mer. Inget mer scrollande ner till menyknapparna – allt nås med ett tumtryck var man än är i appen.' },
+      { type: 'new', text: 'Ny menyrad längst ner på skärmen som alltid syns när man är inloggad: Hem, Tour, Ny rond (sällskapsrond, den orange mittknappen), Stats och Mer. Inget mer scrollande ner till menyknapparna – allt nås med ett tumtryck var man än är i appen.' },
       { type: 'new', text: '"Mer" öppnar ett ark nerifrån med Spelare, Mitt HCP, Vinster & betting, Idéer & nyheter, Inställningar (Min profil för spelare) och Hjälp & tips. Stäng genom att dra ner arket, trycka utanför eller trycka på Mer igen.' },
       { type: 'improved', text: 'Fliken för den sida man är på lyser grön i menyraden. Menyraden döljs medan tangentbordet är uppe så att den inte skymmer inmatning, och notis-popupen hamnar ovanför menyraden.' },
     ]
