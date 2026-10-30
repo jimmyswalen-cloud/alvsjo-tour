@@ -148,70 +148,99 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .home-divider{display:flex;align-items:center;gap:12px;margin:22px 2px 16px}
 .home-divider-line{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--border-strong) 20%,var(--border-strong) 80%,transparent)}
 .home-divider-label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px;white-space:nowrap}
-/* ── Utmaningar ── */
-.ch-ico{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.18)}
-.ch-top{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
-.ch-plus{width:46px;height:46px;border-radius:50%;border:none;background:#3E9157;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(62,145,87,.4)}
-.ch-tabs{display:flex;justify-content:center;gap:22px;margin:4px 0 14px;flex-wrap:wrap}
-.ch-tab{border:none;background:none;font:inherit;font-size:16px;font-weight:700;color:var(--text-3);padding:6px 2px;border-bottom:3px solid transparent;cursor:pointer}
-.ch-tab.on{color:#0B3D21;border-bottom-color:#3E9157}
-.ch-create{display:flex;align-items:center;gap:16px;padding:20px 18px;border-radius:18px;margin-bottom:14px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#050F0A 0%,#123A26 55%,#2C6A44 100%)}
-.ch-create-plus{width:52px;height:52px;border-radius:50%;background:#3E9157;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
-.ch-card{position:relative;border-radius:16px;overflow:hidden;margin-bottom:12px;cursor:pointer;color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.12)}
-.ch-card-bg{position:absolute;inset:0}
-.ch-card-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.45),rgba(0,0,0,.15))}
-.ch-card-body{position:relative;display:flex;align-items:center;gap:14px;padding:16px}
-.ch-card-title{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ch-card-sub{font-size:12px;opacity:.85;margin-top:2px}
-.ch-card-me{font-size:13px;margin-top:6px}
+/* ── Utmaningar (ÄGCC-stil: samma kort, färger och ikonrutor som startsidan) ── */
+.ch-ico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.ch-eyebrow{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+.ch-seg{display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.ch-seg-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 4px;border:none;border-radius:8px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--text-2);cursor:pointer}
+.ch-seg-btn span{font-size:11px;color:var(--text-3);background:var(--surface);border-radius:10px;padding:0 6px}
+.ch-seg-btn.on{background:var(--surface);color:var(--green-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.ch-seg-btn.on span{background:var(--green-light);color:var(--green-dark)}
+.ch-card{padding:0;overflow:hidden;cursor:pointer;transition:transform .1s}
+.ch-card:active{transform:scale(.99)}
+.ch-card-strip{height:10px}
+.ch-card-body{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.ch-card-title{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-card-sub{font-size:12px;color:var(--text-3)}
+.ch-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--text-2);margin-top:5px}
+.ch-meta i{font-size:13px}
+.ch-card-score{text-align:right;flex-shrink:0}
+.ch-big{font-size:22px;font-weight:800;color:var(--green-dark);line-height:1}
+.ch-small{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap}
+.ch-bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden;margin-top:10px}
+.ch-bar.thin{height:4px;border-radius:0;margin:0}
+.ch-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--green),var(--green-dark))}
 .ch-invite{border-color:#F3D19E;background:#FFF8EC}
-.ch-hero{position:relative;height:150px;border-radius:0 0 18px 18px;margin:0 -16px}
-.ch-round-btn{position:absolute;top:12px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);color:#222}
-.ch-round-btn.static{position:static;background:var(--surface2);box-shadow:none}
-.ch-hero-ico{display:flex;justify-content:center;margin-top:-56px;position:relative}
-.ch-hero-ico .ch-ico{border:4px solid var(--surface)}
-.ch-mine{display:flex;margin:18px 0 6px;border-top:1px solid var(--border);padding-top:14px}
-.ch-mine-col{flex:1;text-align:center}
-.ch-mine-val{font-size:30px;font-weight:700;color:#0B3D21}
-.ch-mine-lbl{font-size:14px;color:var(--text-3)}
-.ch-bar{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:10px 18px 0}
-.ch-bar span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#E8891A,#3E9157)}
-.ch-prize{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;background:#E3F8E3;font-size:16px}
-.ch-details div{display:flex;align-items:center;gap:12px;padding:6px 2px;font-size:14.5px}
-.ch-details i{font-size:22px;color:var(--text-2);width:24px;text-align:center}
-.ch-board{background:#F3F0E1;border-radius:20px 20px 0 0;margin:22px -16px 0;padding:18px 16px 26px}
-.ch-row{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:14px;padding:10px 14px;margin-bottom:8px}
-.ch-row.me{background:#0E8A4C;color:#fff}
-.ch-rank{width:26px;text-align:center;font-weight:800;font-size:16px}
-.ch-val{font-weight:800;font-size:18px;white-space:nowrap}
-.ch-act{display:flex;align-items:center;gap:14px;background:var(--surface);border-radius:16px;padding:12px 14px;margin-bottom:10px;font-weight:600;font-size:16px;cursor:pointer;border:1px solid var(--border)}
-.ch-act-ic{width:44px;height:44px;border-radius:50%;background:#0E8A4C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
-.ch-pill{font-size:11px;font-weight:800;letter-spacing:.04em;background:var(--surface2);border-radius:14px;padding:5px 10px;color:var(--text-2)}
+.ch-create{display:flex;align-items:center;gap:12px;padding:14px;border:2px dashed var(--border-strong);border-radius:12px;cursor:pointer;margin-bottom:12px;background:var(--surface)}
+.ch-create-ic{width:44px;height:44px;border-radius:12px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.ch-hero{position:relative;border-radius:14px;overflow:hidden;min-height:132px;display:flex;align-items:flex-end;box-shadow:0 3px 14px rgba(0,0,0,.12)}
+.ch-hero-in{display:flex;align-items:center;gap:14px;padding:16px;width:100%;background:linear-gradient(0deg,rgba(0,0,0,.45),rgba(0,0,0,0));color:#fff}
+.ch-hero-in .ch-ico{box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.ch-hero-eye{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.85}
+.ch-hero-title{font-size:22px;font-weight:800;line-height:1.15;text-shadow:0 2px 8px rgba(0,0,0,.3);overflow-wrap:anywhere}
+.ch-hero-meta{display:flex;gap:14px;font-size:12px;margin-top:4px;opacity:.95}
+.ch-mine-row{display:flex;margin-top:8px}
+.ch-stat{flex:1;text-align:center;border-left:1px solid var(--border)}
+.ch-stat:first-child{border-left:none}
+.ch-stat-v{font-size:26px;font-weight:800;color:var(--green-dark);line-height:1.1}
+.ch-stat-v small{font-size:14px;color:var(--text-3);font-weight:600}
+.ch-stat-l{font-size:12px;color:var(--text-3);margin-top:2px}
+.ch-board-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px}
+.ch-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.ch-row:last-child{border-bottom:none}
+.ch-row.me{background:var(--green-light)}
+.ch-pos{width:26px;height:26px;border-radius:50%;background:var(--surface2);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.ch-pos.p1{background:#F6D77A;color:#6B4A0B}
+.ch-pos.p2{background:#DADDE1;color:#3F4650}
+.ch-pos.p3{background:#E7B489;color:#6B3A12}
+.ch-val{font-weight:800;font-size:17px;color:var(--green-dark);white-space:nowrap}
+.ch-val small{font-size:11px;color:var(--text-3);font-weight:600}
+.ch-prize{display:flex;align-items:center;gap:14px;background:var(--gold-light);border-color:#F3D19E}
+.ch-prize-ic{width:44px;height:44px;border-radius:12px;background:#fff;color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ch-details div{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:14px}
+.ch-details i{font-size:18px;color:var(--green-dark);width:22px;text-align:center}
+.ch-act{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-weight:600;font-size:15px;cursor:pointer}
+.ch-act-ic{width:42px;height:42px;border-radius:12px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
+.ch-pill{font-size:10px;font-weight:800;letter-spacing:.05em;background:var(--gold-light);color:var(--gold);border-radius:12px;padding:4px 9px}
+.ch-tabs{display:flex;gap:18px;margin:4px 0 10px;flex-wrap:wrap}
+.ch-tab{border:none;background:none;font:inherit;font-size:14px;font-weight:700;color:var(--text-3);padding:5px 1px;border-bottom:2px solid transparent;cursor:pointer}
+.ch-tab.on{color:var(--green-dark);border-bottom-color:var(--green)}
 .ch-wrow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer}
 .ch-wrow:last-child{border-bottom:none}
 .ch-chip{display:inline-flex;align-items:center;gap:5px;background:var(--green-light);color:var(--green-dark);border-radius:14px;padding:4px 10px;font-size:12px;font-weight:600}
 .ch-chip i{cursor:pointer}
 .ch-hit{padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px}
-.chw-top{display:flex;align-items:center;gap:14px;margin-top:8px}
-.chw-prog{flex:1;height:6px;border-radius:4px;background:var(--border);overflow:hidden;margin:0 14px}
-.chw-prog span{display:block;height:100%;background:#0E8A4C;border-radius:4px;transition:width .25s}
-.chw-type{display:flex;align-items:center;gap:16px;background:var(--surface);border-radius:18px;padding:16px;margin-bottom:10px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.06)}
-.chw-card{border-radius:18px;padding:18px}
-.chw-radio{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;cursor:pointer;font-size:15px}
-.chw-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border-strong);flex-shrink:0;position:relative}
-.chw-dot.on{border-color:#0E8A4C}
-.chw-dot.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#0E8A4C}
-.chw-main{width:100%;justify-content:center;padding:15px;font-size:17px;font-weight:700;border-radius:14px;margin-top:8px}
+.chw-type{display:flex;align-items:center;gap:14px;padding:12px 14px;cursor:pointer;margin-bottom:8px}
+.chw-card{padding:16px}
+.chw-radio{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px}
+.chw-radio:has(.chw-dot.on){border-color:var(--green);background:var(--green-light)}
+.chw-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border-strong);flex-shrink:0;position:relative;background:var(--surface)}
+.chw-dot.on{border-color:var(--green-dark)}
+.chw-dot.on::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--green-dark)}
+.chw-main{width:100%;justify-content:center;padding:13px;font-size:15px;font-weight:700;margin-top:4px}
 .chw-lbl{display:block;font-size:12px;color:var(--text-3);margin-bottom:6px}
 .chw-lbl input{margin-top:3px}
-.chw-cnt{text-align:right;font-size:12px;color:var(--text-3)}
-.chw-bgprev{height:220px;border-radius:16px;margin-bottom:14px}
-.chw-bgs{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px}
-.chw-bg{width:84px;height:84px;border-radius:14px;flex-shrink:0;cursor:pointer;border:3px solid transparent}
-.chw-bg.on{border-color:#0E8A4C}
-.chw-bg.cam{display:flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border);font-size:28px;color:#0E8A4C}
-.ch-done{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;border-radius:20px;color:#fff;background:linear-gradient(160deg,#1FA463,#0B6E3A)}
-.ch-done-ic{width:84px;height:84px;border-radius:50%;background:#F2F4F3;color:#0E8A4C;display:flex;align-items:center;justify-content:center;font-size:44px}
+.chw-cnt{text-align:right;font-size:11px;color:var(--text-3)}
+.chw-bgprev{height:170px;border-radius:14px;margin-bottom:12px;display:flex;align-items:flex-end;overflow:hidden}
+.chw-bgs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.chw-bg{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.chw-bg>span{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1;border-radius:12px;border:3px solid transparent;box-sizing:border-box}
+.chw-bg.on>span{border-color:var(--green-dark)}
+.chw-bg em{font-style:normal;font-size:11px;color:var(--text-2);text-align:center}
+.chw-bg.cam>span{background:var(--surface);border:1px dashed var(--border-strong);font-size:24px;color:var(--green-dark)}
+.ch-done{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:45vh;text-align:center}
+.ch-done-ic{width:84px;height:84px;border-radius:24px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:44px;animation:champPop .7s cubic-bezier(.2,1.6,.4,1) both}
+/* Eclectic-scorekort */
+.ecl-t{border-collapse:collapse;width:100%;font-size:12px;text-align:center}
+.ecl-t th,.ecl-t td{padding:4px 3px;border-bottom:1px solid var(--border);min-width:24px}
+.ecl-t .ecl-h th{background:var(--surface2);font-weight:700;color:var(--text-2)}
+.ecl-t span,.ecl-legend span{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 3px;font-weight:700}
+.ecl-e{background:#F6D77A;border-radius:50%;color:#6B4A0B;box-shadow:0 0 0 2px #F6D77A,0 0 0 3px #B88A1E}
+.ecl-b{border:2px solid #C0392B;border-radius:50%;color:#C0392B}
+.ecl-p{color:var(--text)}
+.ecl-bo{border:2px solid #7A8794;color:#3F4650}
+.ecl-d{border:3px double #7A8794;color:#3F4650}
+.ecl-legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:11px;color:var(--text-3);margin-top:8px}
 /* ── "Hey Champ"-hälsning för regerande tourchampion ── */
 .champ-hello{position:relative;overflow:hidden;border-radius:14px;margin-bottom:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#3B2A05 0%,#7A5A0E 45%,#C99A2E 100%);color:#fff;box-shadow:0 6px 18px rgba(122,90,14,.28)}
 .champ-hello .ch-cup{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 30%,#FFE9A8,#E2B13C 60%,#A9781A);box-shadow:0 0 0 3px rgba(255,233,168,.35);font-size:28px;color:#4A3305}
@@ -1613,6 +1642,22 @@ function buildMyBettingTabHTML() {
     h += '<div style="margin-bottom:6px"></div>';
   }
 
+  // Vinster från utmaningar (avslutade utmaningar som spelats om pengar)
+  var chRows = []; try { chRows = chEarningsByUser().rows.filter(function(r){ return currentUser && r.u === currentUser.username; }); } catch(e) {}
+  if(chRows.length) {
+    var chTot = chRows.reduce(function(a, r){ return a + r.amount; }, 0);
+    h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">Vinster från utmaningar</div>'+
+      '<div style="background:var(--gold-light);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:600;color:var(--gold)">Totalt</span><span style="font-size:18px;font-weight:800;color:var(--gold)">'+chTot+' kr</span></div>'+
+      chRows.map(function(r){ return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();openChallenge(\''+r.id+'\')"><span style="font-size:13px"><i class="ti ti-swords" style="color:var(--green)"></i> '+esc(r.name)+'</span><span style="font-size:13px;font-weight:700;color:var(--green-dark);white-space:nowrap">'+r.amount+' kr</span></div>'; }).join('')+'<div style="margin-bottom:6px"></div>';
+  }
+  // Aktiva utmaningar med insats
+  try {
+    var chAct = (_chAll||[]).filter(function(c){ return chHasMoney(c) && chIsIn(c) && chStatus(c) !== 'ended'; });
+    if(chAct.length) h += '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px">Pågående utmaningar om pengar</div>'+
+      chAct.map(function(c){ var paid = c.money.paid && c.money.paid[currentUser.username];
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;cursor:pointer" onclick="closeModal();openChallenge(\''+c.id+'\')"><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+esc(c.name)+'</div><div style="font-size:11px;color:var(--text-3)">Pott '+chPot(c)+' kr · slutar '+c.end+'</div></div>'+
+          '<span style="font-size:11px;padding:3px 9px;border-radius:20px;flex-shrink:0;background:'+(paid?'#E1F5EE':'#FCEBEB')+';color:'+(paid?'#0F6E56':'#A32D2D')+'">'+(paid?'Betalt':'Ej betalt')+' · '+c.money.stake+' kr</span></div>'; }).join('');
+  } catch(e) {}
   var statsHtml = buildSideBetStatsHTML(stats, 'Din sammanfattning – side bets');
   h += statsHtml || '<p style="font-size:13px;color:var(--text-3);margin-bottom:16px">Du har inte deltagit i några side bets ännu.</p>';
 
@@ -1671,10 +1716,13 @@ function computeEarningsLeaderboard() {
       if(p && p.username && amt > 0) entry(p).tourWon += amt;
     });
   });
+  var chE = {}; try { chE = chEarningsByUser().by; } catch(e) {}
+  Object.keys(chE).forEach(function(u){ if(!byUser[u]) { var uu = findUser(u); byUser[u] = { username:u, name:(uu && uu.name) || u, tourWon:0, betWon:0 }; } });
   var rows = Object.keys(byUser).map(function(u){
     var r = byUser[u];
     r.betWon = computePlayerSideBetStats(u).totalWon || 0;
-    r.total = r.tourWon + r.betWon;
+    r.chWon = chE[u] || 0;
+    r.total = r.tourWon + r.betWon + r.chWon;
     return r;
   }).filter(function(r){ return r.total > 0; });
   rows.sort(function(a,b){ return b.total - a.total || (a.name||'').localeCompare(b.name||'', 'sv'); });
@@ -1688,7 +1736,7 @@ function computeEarningsLeaderboard() {
 function buildEarningsLeaderboardTabHTML() {
   var rows = computeEarningsLeaderboard();
   var me = currentUser ? currentUser.username : '';
-  var h = '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">Totala inkomster = vinster från tourer + vinster från side bets, över alla tourer (vanlig golf och simulatorgolf).</p>';
+  var h = '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">Totala inkomster = vinster från tourer + side bets + utmaningar, över alla tourer (vanlig golf och simulatorgolf).</p>';
   if(!rows.length) {
     return h + '<p style="font-size:13px;color:var(--text-3);margin-bottom:10px">Inga inkomster att visa ännu.</p>';
   }
@@ -1700,7 +1748,7 @@ function buildEarningsLeaderboardTabHTML() {
   var cp = 'padding:9px 6px;';
   h += '<div style="overflow-x:auto"><table class="hist-table"><thead><tr>'+
     '<th style="'+cp+'width:28px;text-align:center">#</th><th style="'+cp+'">Spelare</th>'+
-    '<th style="'+cp+'text-align:right">Tour</th><th style="'+cp+'text-align:right">Bets</th><th style="'+cp+'text-align:right">Totalt</th>'+
+    '<th style="'+cp+'text-align:right">Tour</th><th style="'+cp+'text-align:right">Bets</th><th style="'+cp+'text-align:right">Utm.</th><th style="'+cp+'text-align:right">Totalt</th>'+
     '</tr></thead><tbody>';
   rows.forEach(function(r){
     var isMe = r.username === me;
@@ -1710,11 +1758,12 @@ function buildEarningsLeaderboardTabHTML() {
       '<td style="'+cp+(isMe?'font-weight:700':'')+'">'+esc(r.name)+(isMe?' <span style="font-size:11px;color:var(--text-3);font-weight:400">(du)</span>':'')+'</td>'+
       '<td style="'+cp+'text-align:right;color:var(--text-2);white-space:nowrap">'+r.tourWon+'&nbsp;kr</td>'+
       '<td style="'+cp+'text-align:right;color:var(--text-2);white-space:nowrap">'+r.betWon+'&nbsp;kr</td>'+
+      '<td style="'+cp+'text-align:right;color:var(--text-2);white-space:nowrap">'+(r.chWon||0)+'&nbsp;kr</td>'+
       '<td style="'+cp+'text-align:right;font-weight:800;color:var(--green-dark);white-space:nowrap">'+r.total+'&nbsp;kr</td>'+
     '</tr>';
   });
   h += '</tbody></table></div>';
-  h += '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Tour = prispott/tourvinster från avslutade tourer. Bets = vunna side bets. Insatser räknas inte av.</p>';
+  h += '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Tour = prispott/tourvinster från avslutade tourer. Bets = vunna side bets. Utm. = vunna pengar i avslutade utmaningar. Insatser räknas inte av.</p>';
   return h;
 }
 
@@ -2037,30 +2086,34 @@ var CH_COL = db.collection('challenges');
 var _chAll = [], _chUnsub = null, _chView = { mode:'list', tab:'active', id:null, ptab:'in' };
 var _chw = null; // guiden
 var CH_TYPES = {
-  holes:   { title:'Flest spelade hål', short:'Spela så många hål som du kan under utmaningsperioden.', icon:'ti-flag-3', bg:'linear-gradient(135deg,#2E8B3E,#145A2A)', unit:'hål', goal:true },
-  courses: { title:'Flest spelade banor', short:'Spela på olika banor och se vem som samlar flest.', icon:'ti-map-pins', bg:'linear-gradient(135deg,#1F7A5C,#0B4B3A)', unit:'banor', goal:true },
-  pars:    { title:'Flest par', short:'Samla så många par som möjligt.', icon:null, txt:'PAR', bg:'linear-gradient(135deg,#1D6B3B,#0B3D21)', unit:'par', goal:true },
-  birdies: { title:'Flest birdies', short:'Samla birdies eller bättre. Poäng för varje birdie (eller bättre).', icon:'ti-feather', bg:'linear-gradient(135deg,#3FAE49,#13652B)', unit:'p', goal:true },
-  stroke:  { title:'Bästa resultat (slagspel)', short:'Vem får det lägsta slagspelsresultatet? Spela med eller utan handicap.', icon:'ti-target-arrow', bg:'linear-gradient(135deg,#2B4C9B,#14275C)', unit:'', goal:false },
-  points:  { title:'Flest poäng (poängbogey)', short:'Spela poängbogey. Bästa runda eller totalpoäng vinner.', icon:'ti-star', bg:'linear-gradient(135deg,#9BBF1E,#3E7A12)', unit:'p', goal:true }
+  holes:   { title:'Flest spelade hål', short:'Spela så många hål som du kan under utmaningsperioden.', icon:'ti-flag-3', fg:'#085041', bg:'#9FE1CB', unit:'hål', goal:true },
+  courses: { title:'Flest spelade banor', short:'Spela på olika banor och se vem som samlar flest.', icon:'ti-map-2', fg:'#0C447C', bg:'#B5D4F4', unit:'banor', goal:true },
+  pars:    { title:'Flest par', short:'Samla så många par som möjligt.', icon:null, txt:'PAR', fg:'#633806', bg:'#FAC775', unit:'par', goal:true },
+  birdies: { title:'Flest birdies', short:'Samla birdies eller bättre. Poäng för varje birdie (eller bättre).', icon:'ti-feather', fg:'#0B4F3F', bg:'#BFE3D9', unit:'p', goal:true },
+  stroke:  { title:'Bästa resultat (slagspel)', short:'Vem får det lägsta slagspelsresultatet? Spela med eller utan handicap.', icon:'ti-target-arrow', fg:'#444441', bg:'#D3D1C7', unit:'', goal:false },
+  points:  { title:'Flest poäng (poängbogey)', short:'Spela poängbogey. Bästa runda eller totalpoäng vinner.', icon:'ti-star', fg:'#5B2C8C', bg:'#E5D4F5', unit:'p', goal:true },
+  eclectic:{ title:'Eclectic', short:'En bana, flera rundor. Bästa resultatet på varje hål sparas – bästa ihopsatta scorekortet vinner.', icon:'ti-table', fg:'#8A3B12', bg:'#FFD7C2', unit:'p', goal:false }
 };
+// Bakgrunder med golfkänsla: alla mallar får ränder som en nyklippt fairway
 var CH_BGS = {
-  blue:   'linear-gradient(135deg,#1B2A6B 0%,#1E6FAE 55%,#27C3E6 100%)',
-  forest: 'linear-gradient(135deg,#0B2E1F 0%,#0E5A3A 100%)',
-  green:  'linear-gradient(135deg,#0B7A3A 0%,#15C26A 100%)',
-  pink:   'linear-gradient(135deg,#9E1F62 0%,#D77BB0 100%)',
-  gold:   'linear-gradient(135deg,#6B4A0B 0%,#C99A2E 60%,#F2D27A 100%)',
-  sunset: 'linear-gradient(135deg,#7A1E2C 0%,#E2643A 60%,#F6B54A 100%)'
+  fairway: { name:'Fairway',     g:'linear-gradient(160deg,#1C6B3A 0%,#2E8B4E 55%,#57A867 100%)' },
+  green:   { name:'Green',       g:'linear-gradient(160deg,#0E4D35 0%,#16704C 60%,#1D9E75 100%)' },
+  bunker:  { name:'Bunker',      g:'linear-gradient(160deg,#B08A4A 0%,#D9BC84 60%,#EFDDB3 100%)' },
+  water:   { name:'Vattenhinder',g:'linear-gradient(160deg,#0F3B5C 0%,#1F6F96 60%,#4FB2C9 100%)' },
+  sunset:  { name:'Kvällsrunda', g:'linear-gradient(160deg,#3B1F4A 0%,#B4553A 60%,#E9A04A 100%)' },
+  night:   { name:'Klubbhuset',  g:'linear-gradient(160deg,#0A1A13 0%,#1A2E22 60%,#3A5A44 100%)' }
 };
+var CH_STRIPES = 'repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 26px,rgba(255,255,255,0) 26px 52px)';
 function chBgCss(c) {
-  if(c && c.bg && c.bg.img) return "url('"+c.bg.img+"') center/cover no-repeat";
-  return CH_BGS[(c && c.bg && c.bg.tpl) || 'forest'] || CH_BGS.forest;
+  if(c && c.bg && c.bg.img) return "linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.35)),url('"+c.bg.img+"') center/cover no-repeat";
+  var t = CH_BGS[(c && c.bg && c.bg.tpl)] || CH_BGS.fairway;
+  return CH_STRIPES + ',' + t.g;
 }
 function chIconHTML(type, size) {
   var t = CH_TYPES[type] || CH_TYPES.holes; size = size || 44;
-  var inner = t.icon ? '<i class="ti '+t.icon+'" style="font-size:'+Math.round(size*0.52)+'px"></i>'
-    : '<b style="font-size:'+Math.round(size*0.3)+'px;letter-spacing:.02em;font-style:italic">'+t.txt+'</b>';
-  return '<span class="ch-ico" style="width:'+size+'px;height:'+size+'px;background:'+t.bg+'">'+inner+'</span>';
+  var inner = t.icon ? '<i class="ti '+t.icon+'" style="font-size:'+Math.round(size*0.5)+'px"></i>'
+    : '<b style="font-size:'+Math.round(size*0.3)+'px;letter-spacing:.04em">'+t.txt+'</b>';
+  return '<span class="ch-ico" style="width:'+size+'px;height:'+size+'px;border-radius:'+Math.round(size*0.28)+'px;background:'+t.bg+';color:'+t.fg+'">'+inner+'</span>';
 }
 function chToday() { return hcpTodayISO(); }
 function chStatus(c) { var d = chToday(); return d > c.end ? 'ended' : d < c.start ? 'upcoming' : 'active'; }
@@ -2083,11 +2136,13 @@ function chRuleText(c) {
   if(c.type === 'courses') return 'Spela på så många olika banor som möjligt under perioden. Flest banor vinner.';
   if(c.type === 'stroke') return 'Lägsta slagspelsresultat på en rond vinner, räknat mot banans par ('+(c.hcp ? 'netto, med handicap' : 'brutto, utan handicap')+').';
   if(c.type === 'points') return c.pointsMode === 'total' ? 'Spela poängbogey. Flest poäng totalt under perioden vinner.' : 'Spela poängbogey. Bästa enskilda runda vinner.';
+  if(c.type === 'eclectic') return 'Spela samma bana flera gånger'+(c.maxRounds ? ' (max '+c.maxRounds+' rundor räknas)' : '')+'. För varje hål sparas ditt bästa resultat och tillsammans blir de ditt eclectic-scorekort. '+(c.eclMode === 'netto' ? 'Lägst nettoresultat mot par vinner (alla hål måste vara spelade).' : 'Flest poäng (poängbogey) vinner.');
   return '';
 }
 function chCriterionText(c) {
   return { holes:'Spelade hål', courses:'Olika banor', pars: c.parMode==='orBetter' ? 'Par eller bättre' : 'Samla par', birdies:'Samla birdies (eller bättre)',
-    stroke: c.hcp ? 'Bästa nettoresultat' : 'Bästa bruttoresultat', points: c.pointsMode==='total' ? 'Totalpoäng (poängbogey)' : 'Bästa runda (poängbogey)' }[c.type] || '';
+    stroke: c.hcp ? 'Bästa nettoresultat' : 'Bästa bruttoresultat', points: c.pointsMode==='total' ? 'Totalpoäng (poängbogey)' : 'Bästa runda (poängbogey)',
+    eclectic: 'Eclectic – ' + (c.eclMode==='netto' ? 'netto' : 'poängbogey') + (c.maxRounds ? ', max '+c.maxRounds+' rundor' : '') }[c.type] || '';
 }
 
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -2130,6 +2185,7 @@ function chStandings(c, rounds) {
   if(c.courses && c.courses.length) { courseSet = {}; c.courses.forEach(function(n){ courseSet[normCourseName(n)] = true; }); }
   var by = {};
   (c.participants||[]).forEach(function(u){ by[u] = { u:u, value:null, rounds:0, set:{} }; });
+  if(c.type === 'eclectic') return chEclecticStandings(c, rounds, by, courseSet);
   rounds.forEach(function(r){
     var s = by[r.username]; if(!s) return;
     if(!r.date || r.date < c.start || r.date > c.end) return;
@@ -2173,6 +2229,154 @@ function chStandings(c, rounds) {
   });
   return list;
 }
+// Eclectic: bästa resultat per hål över (max N) rundor på banan. Netto per hål =
+// brutto minus erhållna slag den rundan (rundans SHCP), poäng = poängbogey per hål.
+function chEclecticStandings(c, rounds, by, courseSet) {
+  var max = c.maxRounds || 0, netto = c.eclMode === 'netto';
+  rounds.forEach(function(r){
+    var s = by[r.username]; if(!s) return;
+    if(!r.date || r.date < c.start || r.date > c.end) return;
+    if(courseSet && !courseSet[normCourseName(r.course)]) return;
+    if(!r.holes || !r.pars || !r.holes.some(function(g){ return g != null; })) return;
+    if(max && s.rounds >= max) return;
+    s.rounds++;
+    var n = r.pars.length;
+    if(!s.ecl) s.ecl = { pars: r.pars.slice(), holes: r.pars.map(function(){ return null; }) };
+    r.holes.forEach(function(g, i){
+      if(g == null || !r.pars[i] || i >= s.ecl.holes.length) return;
+      var recv = computeHcpStrokesForHole(r.shcp || 0, (r.hcpIdx && r.hcpIdx[i]) || (i+1), n);
+      var net = g - recv, pts = computeHoleStablefordPoints(g, r.pars[i], recv);
+      var cur = s.ecl.holes[i];
+      var better = !cur || (netto ? (net < cur.net || (net === cur.net && pts > cur.pts)) : (pts > cur.pts || (pts === cur.pts && net < cur.net)));
+      if(better) s.ecl.holes[i] = { g: g, net: net, pts: pts, recv: recv, date: r.date };
+    });
+  });
+  var list = Object.keys(by).map(function(k){ return by[k]; });
+  list.forEach(function(s){
+    if(!s.ecl) return;
+    var cov = s.ecl.holes.filter(Boolean);
+    s.covered = cov.length; s.total = s.ecl.holes.length;
+    s.pts = cov.reduce(function(a, h){ return a + h.pts; }, 0);
+    var parSum = 0; s.ecl.holes.forEach(function(h, i){ if(h) parSum += s.ecl.pars[i]; });
+    s.netVsPar = cov.reduce(function(a, h){ return a + h.net; }, 0) - parSum;
+    s.value = netto ? (s.covered === s.total ? s.netVsPar : null) : s.pts;
+  });
+  list.sort(function(a,b){
+    var av = a.value, bv = b.value;
+    if(av == null && bv == null) return ((b.covered||0) - (a.covered||0)) || chName(a.u).localeCompare(chName(b.u), 'sv');
+    if(av == null) return 1; if(bv == null) return -1;
+    return netto ? av - bv : bv - av;
+  });
+  var rank = 0, prev = null;
+  list.forEach(function(s, i){
+    if(s.value == null) s.rank = null;
+    else { if(prev === null || s.value !== prev) rank = i + 1; prev = s.value; s.rank = rank; }
+    s.display = s.value != null ? (netto ? (s.value === 0 ? 'E' : s.value > 0 ? '+'+s.value : String(s.value)) : String(s.value))
+      : (s.ecl ? s.covered + '/' + s.total + ' hål' : '–');
+    s.done = false;
+  });
+  return list;
+}
+// Eclectic-scorekortet (bästa per hål) som tabell
+function chEclecticCardHTML(c, s) {
+  if(!s || !s.ecl) return '<p style="font-size:13px;color:var(--text-3);margin:6px 0 0">Inga rundor med hål-för-hål-score på banan än.</p>';
+  var netto = c.eclMode === 'netto', H = s.ecl.holes, P = s.ecl.pars;
+  var cell = function(h, par){
+    if(!h) return '<td class="ecl-c">·</td>';
+    var d = h.g - par, cls = d <= -2 ? 'ecl-e' : d === -1 ? 'ecl-b' : d === 0 ? 'ecl-p' : d === 1 ? 'ecl-bo' : 'ecl-d';
+    return '<td class="ecl-c"><span class="'+cls+'">'+h.g+'</span></td>';
+  };
+  var half = function(from, to, label){
+    var hs = '', ps = '', gs = '', xs = '', parT = 0, gT = 0, xT = 0;
+    for(var i = from; i < to && i < H.length; i++) {
+      hs += '<th>'+(i+1)+'</th>'; ps += '<td>'+P[i]+'</td>'; gs += cell(H[i], P[i]); parT += P[i];
+      if(H[i]) { gT += H[i].g; xT += netto ? H[i].net : H[i].pts; }
+      xs += '<td style="color:var(--text-2)">'+(H[i] ? (netto ? H[i].net : H[i].pts) : '·')+'</td>';
+    }
+    return '<tr class="ecl-h"><th style="text-align:left">Hål</th>'+hs+'<th>'+label+'</th></tr>'+
+      '<tr><td style="text-align:left;color:var(--text-3)">Par</td>'+ps+'<td>'+parT+'</td></tr>'+
+      '<tr><td style="text-align:left;font-weight:700">Bästa</td>'+gs+'<td style="font-weight:700">'+gT+'</td></tr>'+
+      '<tr><td style="text-align:left;color:var(--text-3)">'+(netto?'Netto':'Poäng')+'</td>'+xs+'<td style="font-weight:700">'+xT+'</td></tr>';
+  };
+  var n = H.length;
+  var t = '<div style="overflow-x:auto"><table class="ecl-t">'+half(0, Math.min(9, n), n > 9 ? 'Ut' : 'Tot')+'</table></div>';
+  if(n > 9) t += '<div style="overflow-x:auto;margin-top:8px"><table class="ecl-t">'+half(9, n, 'In')+'</table></div>';
+  t += '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:13px;margin-top:10px">'+
+    '<span><b>'+s.covered+'/'+s.total+'</b> hål spelade · <b>'+s.rounds+'</b>'+(c.maxRounds?'/'+c.maxRounds:'')+' rundor</span>'+
+    '<span>Poäng <b>'+s.pts+'</b> · Netto mot par <b>'+(s.netVsPar === 0 ? 'E' : s.netVsPar > 0 ? '+'+s.netVsPar : s.netVsPar)+'</b>'+(s.covered < s.total ? ' <span style="color:var(--text-3)">(spelade hål)</span>' : '')+'</span></div>'+
+    '<div class="ecl-legend"><span class="ecl-e">E</span> eagle+ <span class="ecl-b">B</span> birdie <span class="ecl-p">P</span> par <span class="ecl-bo">+1</span> bogey</div>';
+  return t;
+}
+function chShowEclectic(id, u) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
+  var s = chStandings(c).find(function(x){ return x.u === u; });
+  showModal('<h3><i class="ti ti-table"></i> '+esc(chName(u))+' – eclectic</h3>'+chEclecticCardHTML(c, s)+'<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>', true);
+}
+// ── Pengar: insats per deltagare, potten delas ut efter slutplacering ────────
+var CH_SPLITS = { all:{ label:'Vinnaren tar allt', p:[100] }, '70-30':{ label:'1:a 70 % · 2:a 30 %', p:[70,30] }, '60-30-10':{ label:'1:a 60 % · 2:a 30 % · 3:a 10 %', p:[60,30,10] } };
+function chHasMoney(c) { return !!(c && c.money && c.money.on && c.money.stake > 0); }
+function chPot(c) { return chHasMoney(c) ? (c.participants||[]).length * c.money.stake : 0; }
+// Utdelning enligt placering. Delad placering: platsernas andelar slås ihop och delas lika.
+function chPayouts(c, stand) {
+  var out = {}; if(!chHasMoney(c)) return out;
+  stand = stand || chStandings(c);
+  var pot = chPot(c), pct = (CH_SPLITS[c.money.split] || CH_SPLITS.all).p.slice();
+  var ranked = stand.filter(function(s){ return s.rank != null; });
+  // Fler platser än deltagare med resultat: lägg överblivna andelar på de som finns
+  if(ranked.length && ranked.length < pct.length) { var extra = pct.splice(ranked.length).reduce(function(a,b){ return a+b; },0); pct[0] += extra; }
+  var i = 0;
+  while(i < ranked.length && i < pct.length) {
+    var r = ranked[i].rank, group = ranked.filter(function(s){ return s.rank === r; });
+    var share = 0; for(var k = i; k < i + group.length && k < pct.length; k++) share += pct[k];
+    var each = Math.floor(pot * share / 100 / group.length);
+    group.forEach(function(s){ out[s.u] = (out[s.u] || 0) + each; });
+    i += group.length;
+  }
+  var paidOut = Object.keys(out).reduce(function(a,u){ return a + out[u]; }, 0);
+  if(ranked.length && pot - paidOut > 0 && paidOut > 0) out[ranked[0].u] += pot - paidOut; // öresavrundning till vinnaren
+  return out;
+}
+// Vunna pengar per spelare från AVSLUTADE utmaningar (används i Vinster & betting)
+function chEarningsByUser() {
+  var by = {}, rows = [];
+  var rounds = null;
+  (_chAll||[]).forEach(function(c){
+    if(!chHasMoney(c) || chStatus(c) !== 'ended') return;
+    if(!rounds) rounds = chAllRounds();
+    var pay = chPayouts(c, chStandings(c, rounds));
+    Object.keys(pay).forEach(function(u){ if(pay[u] > 0) { by[u] = (by[u] || 0) + pay[u]; rows.push({ u:u, id:c.id, name:c.name, amount:pay[u], end:c.end }); } });
+  });
+  return { by: by, rows: rows };
+}
+function chToggleMoneyPaid(id, u) {
+  chUpdate(id, function(c){ var m = Object.assign({}, c.money || {}); var paid = Object.assign({}, m.paid || {}); if(paid[u]) delete paid[u]; else paid[u] = true; m.paid = paid; return { money: m }; })
+    .then(function(){ chOpenMoneyPaid(id); });
+}
+function chOpenMoneyPaid(id) {
+  var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
+  var paid = (c.money && c.money.paid) || {};
+  var h = '<h3><i class="ti ti-cash" style="color:var(--gold)"></i> Insatser – '+esc(c.name)+'</h3><p style="font-size:13px;color:var(--text-2);margin:0 0 10px">'+c.money.stake+' kr per deltagare. Tryck för att markera betalt.</p>';
+  h += (c.participants||[]).map(function(u){ var ok = !!paid[u];
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'+chAvatar(u, 32)+'<span style="flex:1;font-weight:600">'+esc(chName(u))+'</span>'+
+      '<button class="btn btn-sm" style="'+(ok?'background:#1D9E75;border-color:#1D9E75;color:#fff':'')+'" onclick="chToggleMoneyPaid(\''+c.id+'\',\''+esc(u)+'\')"><i class="ti '+(ok?'ti-check':'ti-clock')+'"></i> '+(ok?'Betalt':'Ej betalt')+'</button></div>';
+  }).join('');
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" onclick="closeModal()">Klar</button></div>';
+  if(document.getElementById('modal-mc')) updateModalContent(h); else showModal(h);
+}
+function chMoneyCardHTML(c, stand) {
+  if(!chHasMoney(c)) return '';
+  var pot = chPot(c), sp = CH_SPLITS[c.money.split] || CH_SPLITS.all, ended = chStatus(c) === 'ended';
+  var pay = chPayouts(c, stand), paid = (c.money && c.money.paid) || {}, paidN = (c.participants||[]).filter(function(u){ return paid[u]; }).length;
+  var h = '<div class="card ch-prize" style="display:block"><div style="display:flex;align-items:center;gap:14px"><span class="ch-prize-ic"><i class="ti ti-coins"></i></span>'+
+    '<div style="flex:1"><div class="ch-eyebrow" style="color:var(--gold)">Potten</div><div style="font-weight:800;font-size:22px;color:var(--gold)">'+pot+' kr</div>'+
+    '<div style="font-size:12px;color:var(--text-2)">'+(c.participants||[]).length+' × '+c.money.stake+' kr · '+sp.label+'</div></div></div>';
+  var users = Object.keys(pay).filter(function(u){ return pay[u] > 0; }).sort(function(a,b){ return pay[b] - pay[a]; });
+  if(users.length) h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #F3D19E"><div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">'+(ended?'Utdelning':'Om utmaningen slutade nu')+'</div>'+
+    users.map(function(u){ return '<div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0"><span>'+esc(chName(u))+'</span><b style="white-space:nowrap">'+pay[u]+'&nbsp;kr</b></div>'; }).join('')+'</div>';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--text-2)"><span><i class="ti ti-cash"></i> '+paidN+' av '+(c.participants||[]).length+' har betalat</span>'+
+    (chIsOrganizer(c) ? '<button class="btn btn-sm" onclick="chOpenMoneyPaid(\''+c.id+'\')">Markera betalningar</button>' : (paid[currentUser.username] ? '<span style="color:var(--green-dark);font-weight:700">✓ Du har betalat</span>' : (chIsIn(c) ? '<span style="color:#A32D2D;font-weight:700">Din insats: '+c.money.stake+' kr</span>' : '')))+'</div></div>';
+  return h;
+}
 function chValueText(c, v) {
   if(v == null) return '–';
   if(c.type === 'stroke') return v === 0 ? 'E' : (v > 0 ? '+' + v : String(v));
@@ -2202,106 +2406,106 @@ function renderChallengeScreen() {
   el.innerHTML = chListHTML();
 }
 function chCardHTML(c, rounds) {
-  var me = currentUser.username, st = chStatus(c);
-  var stand = chIsIn(c) ? chStandings(c, rounds) : null;
-  var mine = stand ? stand.find(function(s){ return s.u === me; }) : null;
-  var right = st === 'ended' ? 'Avslutad ' + chFmtDate(c.end) : st === 'upcoming' ? 'Startar ' + chFmtDate(c.start) : chDaysLeft(c) + ' dagar kvar';
-  var leader = stand && stand[0] && stand[0].value != null ? stand[0] : null;
-  return '<div class="ch-card" onclick="openChallenge(\''+c.id+'\')">'+
-    '<div class="ch-card-bg" style="background:'+chBgCss(c)+'"></div>'+
-    '<div class="ch-card-body">'+chIconHTML(c.type, 46)+
-      '<div style="flex:1;min-width:0"><div class="ch-card-title">'+esc(c.name||CH_TYPES[c.type].title)+'</div>'+
-      '<div class="ch-card-sub">'+esc(CH_TYPES[c.type].title)+' · <i class="ti ti-users"></i> '+(c.participants||[]).length+' · '+right+'</div>'+
-      (mine ? '<div class="ch-card-me">Du: <b>'+mine.display+(c.goal && CH_TYPES[c.type].goal ? '/'+c.goal : '')+'</b>'+(mine.rank ? ' · plats '+mine.rank+' av '+stand.length : '')+(mine.done?' · <span style="color:#9BE7B5">✓ Mål nått</span>':'')+'</div>'
-        : leader ? '<div class="ch-card-me">Leder: '+esc(chName(leader.u).split(' ')[0])+' ('+leader.display+')</div>' : '')+
-      '</div><i class="ti ti-chevron-right" style="font-size:20px;opacity:.8"></i></div></div>';
+  var me = currentUser.username, st = chStatus(c), T = CH_TYPES[c.type];
+  var stand = chStandings(c, rounds);
+  var mine = chIsIn(c) ? stand.find(function(s){ return s.u === me; }) : null;
+  var when = st === 'ended' ? 'Avslutad '+c.end : st === 'upcoming' ? 'Startar '+c.start : chDaysLeft(c)+' dagar kvar';
+  var leader = stand[0] && stand[0].value != null ? stand[0] : null;
+  var goal = c.goal && T.goal, pct = goal && mine && mine.value != null ? Math.min(100, Math.round(mine.value / c.goal * 100)) : 0;
+  return '<div class="card ch-card" onclick="openChallenge(\''+c.id+'\')">'+
+    '<div class="ch-card-strip" style="background:'+chBgCss(c)+'"></div>'+
+    '<div class="ch-card-body">'+chIconHTML(c.type, 48)+
+      '<div style="flex:1;min-width:0"><div class="ch-card-title">'+esc(c.name||T.title)+'</div>'+
+      '<div class="ch-card-sub">'+esc(T.title)+'</div>'+
+      '<div class="ch-meta"><span><i class="ti ti-users"></i> '+(c.participants||[]).length+'</span><span><i class="ti ti-calendar-time"></i> '+when+'</span>'+
+        (leader ? '<span><i class="ti ti-crown" style="color:var(--gold)"></i> '+esc(chName(leader.u).split(' ')[0])+' '+leader.display+'</span>' : '')+
+        (chHasMoney(c) ? '<span style="color:var(--gold);font-weight:700"><i class="ti ti-coins"></i> '+chPot(c)+' kr</span>' : '')+'</div></div>'+
+      (mine ? '<div class="ch-card-score"><div class="ch-big">'+mine.display+'</div><div class="ch-small">'+(mine.rank ? mine.rank+':a av '+stand.length : 'ingen rond än')+'</div></div>' : '<i class="ti ti-chevron-right" style="font-size:20px;color:var(--text-3)"></i>')+
+    '</div>'+(goal && mine ? '<div class="ch-bar thin"><span style="width:'+Math.max(pct,2)+'%"></span></div>' : '')+'</div>';
 }
 function chListHTML() {
-  var me = currentUser.username, rounds = chAllRounds();
+  var rounds = chAllRounds();
   var mine = _chAll.filter(function(c){ return chIsIn(c); });
   var active = mine.filter(function(c){ return chStatus(c) !== 'ended'; }).sort(function(a,b){ return (a.end||'').localeCompare(b.end||''); });
   var ended = mine.filter(function(c){ return chStatus(c) === 'ended'; }).sort(function(a,b){ return (b.end||'').localeCompare(a.end||''); });
   var invites = _chAll.filter(function(c){ return chIsInvited(c) && chStatus(c) !== 'ended'; });
   var open = _chAll.filter(function(c){ return !chIsIn(c) && !chIsInvited(c) && chStatus(c) !== 'ended'; });
   var tab = _chView.tab;
-  var h = '<div class="ch-top"><button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>'+
-    '<h2 style="margin:0;flex:1;text-align:center;letter-spacing:.04em">UTMANINGAR</h2>'+
-    '<button class="ch-plus" title="Ny utmaning" onclick="startChallengeWizard()"><i class="ti ti-plus"></i></button></div>';
+  var h = '<div class="tours-header"><button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>'+
+    '<h2 style="margin:0;flex:1;text-align:center">Utmaningar</h2>'+
+    '<button class="btn btn-primary btn-sm" onclick="startChallengeWizard()"><i class="ti ti-plus"></i> Ny</button></div>';
   invites.forEach(function(c){
-    h += '<div class="card ch-invite"><div style="display:flex;align-items:center;gap:12px">'+chIconHTML(c.type, 40)+
-      '<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.04em">Du är inbjuden</div>'+
-      '<div style="font-weight:700">'+esc(c.name)+'</div><div style="font-size:12px;color:var(--text-3)">av '+esc(chName((c.invitedBy||{})[me] || c.createdBy))+' · '+esc(CH_TYPES[c.type].title)+'</div></div></div>'+
+    var me = currentUser.username;
+    h += '<div class="card ch-invite"><div style="display:flex;align-items:center;gap:12px">'+chIconHTML(c.type, 42)+
+      '<div style="flex:1;min-width:0"><div class="ch-eyebrow" style="color:var(--gold)"><i class="ti ti-mail-opened"></i> Inbjudan</div>'+
+      '<div style="font-weight:700">'+esc(c.name)+'</div><div style="font-size:12px;color:var(--text-2)">från '+esc(chName((c.invitedBy||{})[me] || c.createdBy))+' · '+esc(CH_TYPES[c.type].title)+'</div></div></div>'+
       '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button>'+
       '<button class="btn btn-sm" onclick="openChallenge(\''+c.id+'\')">Visa</button>'+
       '<button class="btn btn-primary btn-sm" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med</button></div></div>';
   });
-  var tabBtn = function(k, label, n){ return '<button class="ch-tab'+(tab===k?' on':'')+'" onclick="_chView.tab=\''+k+'\';renderChallengeScreen()">'+label+' ('+n+')</button>'; };
-  h += '<div class="ch-tabs">'+tabBtn('active','Aktiva',active.length)+tabBtn('open','Öppna',open.length)+tabBtn('ended','Avslutade',ended.length)+'</div>';
+  var seg = function(k, icon, label, n){ return '<button class="ch-seg-btn'+(tab===k?' on':'')+'" onclick="_chView.tab=\''+k+'\';renderChallengeScreen()"><i class="ti '+icon+'"></i> '+label+' <span>'+n+'</span></button>'; };
+  h += '<div class="ch-seg">'+seg('active','ti-flame','Mina',active.length)+seg('open','ti-door-enter','Öppna',open.length)+seg('ended','ti-archive','Avslutade',ended.length)+'</div>';
   if(tab === 'active') {
-    h += '<div class="ch-create" onclick="startChallengeWizard()"><span class="ch-create-plus"><i class="ti ti-plus"></i></span>'+
-      '<div><div style="font-weight:800;font-size:16px">Skapa din egen utmaning</div><div style="font-size:13px;opacity:.85;margin-top:3px">Bjud in dina vänner, sätt upp reglerna och gör dina rundor mer spännande.</div></div></div>';
     h += active.map(function(c){ return chCardHTML(c, rounds); }).join('');
+    h += '<div class="ch-create" onclick="startChallengeWizard()"><span class="ch-create-ic"><i class="ti ti-swords"></i></span>'+
+      '<div style="flex:1"><div style="font-weight:700;font-size:15px">Utmana gänget</div><div style="font-size:12.5px;color:var(--text-2);margin-top:2px">Sätt reglerna, välj period och bjud in – ronderna räknas automatiskt.</div></div><i class="ti ti-plus" style="font-size:20px;color:var(--green-dark)"></i></div>';
   } else if(tab === 'open') {
-    h += open.length ? '<p style="font-size:12px;color:var(--text-3);margin:0 2px 8px">Utmaningar som andra skapat – gå med när du vill.</p>' + open.map(function(c){ return chCardHTML(c, rounds); }).join('')
+    h += open.length ? '<p style="font-size:12px;color:var(--text-3);margin:0 2px 8px">Utmaningar som andra skapat – hoppa in när du vill.</p>' + open.map(function(c){ return chCardHTML(c, rounds); }).join('')
       : '<p class="empty">Inga öppna utmaningar just nu.</p>';
   } else {
     h += ended.length ? ended.map(function(c){ return chCardHTML(c, rounds); }).join('') : '<p class="empty">Inga avslutade utmaningar än.</p>';
   }
   return h;
 }
-
 // ── Detaljsida ───────────────────────────────────────────────────────────────
 function chDetailHTML() {
   var c = _chAll.find(function(x){ return x.id === _chView.id; });
-  if(!c) return '<div class="ch-top"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button></div><p class="empty">Utmaningen finns inte längre.</p>';
-  var me = currentUser.username, st = chStatus(c), stand = chStandings(c);
+  if(!c) return '<div class="tours-header"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button></div><p class="empty">Utmaningen finns inte längre.</p>';
+  var me = currentUser.username, st = chStatus(c), stand = chStandings(c), T = CH_TYPES[c.type];
   var mine = stand.find(function(s){ return s.u === me; });
-  var T = CH_TYPES[c.type];
-  var h = '<div class="ch-hero" style="background:'+chBgCss(c)+'">'+
-    '<button class="ch-round-btn" style="left:12px" onclick="showChallenges()" title="Tillbaka"><i class="ti ti-chevron-left"></i></button>'+
-    '<button class="ch-round-btn" style="right:58px" onclick="chShare(\''+c.id+'\')" title="Dela"><i class="ti ti-share"></i></button>'+
-    '<button class="ch-round-btn" style="right:12px" onclick="chMenu(\''+c.id+'\')" title="Mer"><i class="ti ti-dots"></i></button>'+
-    '</div><div class="ch-hero-ico">'+chIconHTML(c.type, 96)+'</div>';
-  h += '<div style="text-align:center;padding:0 6px"><h2 style="margin:6px 0 6px">'+esc(c.name)+'</h2>'+
-    '<p style="color:var(--text-2);font-size:14px;line-height:1.45;margin:0 0 12px">'+esc(chRuleText(c))+'</p>'+
-    '<div style="display:flex;justify-content:center;gap:22px;font-weight:700;font-size:15px;margin-bottom:14px">'+
-      '<span><i class="ti ti-users" style="color:var(--green)"></i> '+(c.participants||[]).length+'</span>'+
-      '<span><i class="ti ti-calendar-time" style="color:var(--green)"></i> '+(st==='ended' ? 'Avslutad' : st==='upcoming' ? 'Startar '+c.start : chDaysLeft(c)+' dagar kvar')+'</span></div></div>';
-  // Deltagare-kort
-  var avs = (c.participants||[]).slice(0, 6).map(function(u){ return '<span style="margin-right:-8px;border:2px solid var(--surface);border-radius:50%;display:inline-flex">'+chAvatar(u, 34)+'</span>'; }).join('');
-  var action = chIsIn(c) ? (st !== 'ended' ? '<button class="btn btn-primary" style="border-radius:22px;padding:9px 18px" onclick="chOpenPeople(\''+c.id+'\',\'invite\')"><i class="ti ti-user-plus"></i> Lägg till</button>' : '')
-    : (st !== 'ended' ? '<button class="btn btn-primary" style="border-radius:22px;padding:9px 18px" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med</button>' : '');
-  h += '<div class="card" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="chOpenPeople(\''+c.id+'\')">'+
-    '<div style="flex:1"><div style="display:flex;align-items:center;margin-bottom:6px">'+avs+((c.participants||[]).length>6?'<span style="margin-left:14px;font-size:12px;color:var(--text-3)">+'+((c.participants||[]).length-6)+'</span>':'')+'</div>'+
-    '<div style="font-weight:700">Deltagare</div></div><span onclick="event.stopPropagation()">'+action+'</span></div>';
-  if(chIsInvited(c)) h += '<div class="card" style="border-color:#F3D19E;background:#FFF8EC;display:flex;align-items:center;gap:10px"><i class="ti ti-mail-opened" style="font-size:22px;color:var(--gold)"></i><div style="flex:1;font-size:13px"><b>'+esc(chName((c.invitedBy||{})[me]||c.createdBy))+'</b> har bjudit in dig.</div><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button></div>';
-  // Mitt resultat
+  var when = st==='ended' ? 'Avslutad' : st==='upcoming' ? 'Startar '+c.start : chDaysLeft(c)+' dagar kvar';
+  var h = '<div class="tours-header"><button class="btn btn-sm" onclick="showChallenges()"><i class="ti ti-arrow-left"></i> Utmaningar</button><span style="flex:1"></span>'+
+    '<button class="btn btn-sm" onclick="chShare(\''+c.id+'\')" title="Dela"><i class="ti ti-share"></i></button>'+
+    '<button class="btn btn-sm" onclick="chMenu(\''+c.id+'\')" title="Mer"><i class="ti ti-dots"></i></button></div>';
+  h += '<div class="ch-hero" style="background:'+chBgCss(c)+'"><div class="ch-hero-in">'+chIconHTML(c.type, 58)+
+    '<div style="min-width:0"><div class="ch-hero-eye">Utmaning · '+esc(T.title)+'</div><div class="ch-hero-title">'+esc(c.name)+'</div>'+
+    '<div class="ch-hero-meta"><span><i class="ti ti-users"></i> '+(c.participants||[]).length+' deltagare</span><span><i class="ti ti-calendar-time"></i> '+when+'</span></div></div></div></div>';
+  h += '<p style="color:var(--text-2);font-size:14px;line-height:1.5;margin:12px 2px 12px">'+esc(chRuleText(c))+'</p>';
+  if(chIsInvited(c)) h += '<div class="card ch-invite" style="display:flex;align-items:center;gap:10px"><i class="ti ti-mail-opened" style="font-size:22px;color:var(--gold)"></i><div style="flex:1;font-size:13px"><b>'+esc(chName((c.invitedBy||{})[me]||c.createdBy))+'</b> har bjudit in dig.</div><button class="btn btn-sm" onclick="chDecline(\''+c.id+'\')">Nej tack</button><button class="btn btn-primary btn-sm" onclick="chJoin(\''+c.id+'\')">Gå med</button></div>';
+  // Ditt läge
   if(mine) {
     var hasGoal = c.goal && T.goal, pct = hasGoal && mine.value != null ? Math.min(100, Math.round(mine.value / c.goal * 100)) : 0;
-    h += '<div class="ch-mine"><div class="ch-mine-col"><div class="ch-mine-val">'+mine.display+(hasGoal ? '<span style="color:var(--text-3);font-weight:600">/'+c.goal+'</span>' : '')+'</div><div class="ch-mine-lbl">'+(c.type==='stroke'?'Bästa rond':(T.unit==='p'?'Poäng':T.unit.charAt(0).toUpperCase()+T.unit.slice(1)))+'</div></div>'+
-      '<div class="ch-mine-col" style="border-left:1px solid var(--border)"><div class="ch-mine-val">'+(mine.rank || '–')+'</div><div class="ch-mine-lbl">Rankning</div></div></div>';
-    if(hasGoal) h += '<div class="ch-bar"><span style="width:'+Math.max(pct,2)+'%"></span></div>'+(mine.done ? '<p style="text-align:center;color:var(--green-dark);font-weight:700;font-size:13px;margin:6px 0 0">✓ Mål nått! Du kan fortfarande förbättra ditt resultat.</p>' : '');
+    var lbl = c.type==='stroke' ? 'Bästa rond mot par' : (c.type==='eclectic' && c.eclMode==='netto') ? 'Netto mot par' : (T.unit==='p' ? 'Poäng' : T.unit.charAt(0).toUpperCase()+T.unit.slice(1));
+    h += '<div class="card ch-mine"><div class="ch-eyebrow">Ditt läge</div><div class="ch-mine-row">'+
+      '<div class="ch-stat"><div class="ch-stat-v">'+mine.display+(hasGoal?'<small>/'+c.goal+'</small>':'')+'</div><div class="ch-stat-l">'+lbl+'</div></div>'+
+      '<div class="ch-stat"><div class="ch-stat-v">'+(mine.rank ? mine.rank+'<small>/'+stand.length+'</small>' : '–')+'</div><div class="ch-stat-l">Placering</div></div>'+
+      '<div class="ch-stat"><div class="ch-stat-v">'+mine.rounds+'</div><div class="ch-stat-l">Ronder</div></div></div>'+
+      (hasGoal ? '<div class="ch-bar"><span style="width:'+Math.max(pct,2)+'%"></span></div><div style="font-size:12px;color:'+(mine.done?'var(--green-dark)':'var(--text-3)')+';margin-top:6px;font-weight:'+(mine.done?700:400)+'">'+(mine.done ? '✓ Mål nått! Du kan fortfarande förbättra ditt resultat.' : pct+' % av målet')+'</div>' : '')+'</div>';
+  } else if(st !== 'ended') {
+    h += '<button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-bottom:12px" onclick="chJoin(\''+c.id+'\')"><i class="ti ti-check"></i> Gå med i utmaningen</button>';
   }
-  if(c.prize) h += '<h3 style="margin:22px 2px 10px">Priser</h3><div class="ch-prize"><i class="ti ti-trophy" style="font-size:30px;color:var(--green-dark)"></i><span>'+esc(c.prize)+'</span></div>';
-  // Detaljer
-  h += '<h3 style="margin:22px 2px 10px">Detaljer</h3><div class="ch-details">'+
+  if(c.type === 'eclectic' && mine) h += '<div class="card"><div class="ch-eyebrow" style="margin-bottom:8px">Ditt eclectic-scorekort · '+esc((c.courses||[])[0]||'')+'</div>'+chEclecticCardHTML(c, mine)+'</div>';
+  // Ledartavla (i appens OoM-stil)
+  h += '<div class="card" style="padding:0;overflow:hidden"><div class="ch-board-head"><b><i class="ti ti-list-numbers"></i> Ledartavla</b>'+
+    (chIsIn(c) && st !== 'ended' ? '<button class="btn btn-sm" onclick="chOpenPeople(\''+c.id+'\',\'invite\')"><i class="ti ti-user-plus"></i> Bjud in</button>' : '<button class="btn btn-sm" onclick="chOpenPeople(\''+c.id+'\')"><i class="ti ti-users"></i> Deltagare</button>')+'</div>';
+  h += stand.length ? stand.map(function(s){
+    var isMe = s.u === me, r = s.rank;
+    var badge = r ? '<span class="ch-pos'+(r<=3?' p'+r:'')+'">'+r+'</span>' : '<span class="ch-pos">–</span>';
+    return '<div class="ch-row'+(isMe?' me':'')+'"'+(c.type==='eclectic' ? ' style="cursor:pointer" onclick="chShowEclectic(\''+c.id+'\',\''+esc(s.u)+'\')"' : '')+'>'+badge+chAvatar(s.u, 36)+
+      '<div style="flex:1;min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(chName(s.u))+(isMe?' <span style="font-size:11px;color:var(--text-3)">(du)</span>':'')+'</div>'+
+      '<div style="font-size:11px;color:var(--text-3)">'+s.rounds+' rond'+(s.rounds===1?'':'er')+(s.done?' · <span style="color:var(--green-dark);font-weight:700">✓ mål</span>':'')+'</div></div>'+
+      '<span class="ch-val">'+s.display+(T.unit && s.value!=null && c.type!=='stroke' && !(c.type==='eclectic' && c.eclMode==='netto')?' <small>'+T.unit+'</small>':'')+'</span>'+(c.type==='eclectic'?'<i class="ti ti-chevron-right" style="color:var(--text-3)"></i>':'')+'</div>';
+  }).join('') : '<p class="empty">Inga deltagare än.</p>';
+  h += '</div>';
+  h += chMoneyCardHTML(c, stand);
+  if(c.prize) h += '<div class="card ch-prize"><span class="ch-prize-ic"><i class="ti ti-trophy"></i></span><div><div class="ch-eyebrow" style="color:var(--gold)">'+(chHasMoney(c)?'Övrigt pris':'Det här står på spel')+'</div><div style="font-weight:700;font-size:15px">'+esc(c.prize)+'</div></div></div>';
+  h += '<div class="card ch-details"><div class="ch-eyebrow" style="margin-bottom:4px">Detaljer</div>'+
     '<div><i class="ti ti-calendar"></i> '+c.start+' – '+c.end+'</div>'+
     '<div><i class="ti ti-crown"></i> Organisatör: '+esc(chName(c.createdBy))+'</div>'+
     '<div><i class="ti ti-target"></i> '+esc(chCriterionText(c))+(c.goal && T.goal ? ' · mål '+c.goal : '')+'</div>'+
     '<div><i class="ti ti-flag"></i> '+(c.courses && c.courses.length ? '<a href="javascript:void(0)" onclick="chShowCourses(\''+c.id+'\')">Giltiga banor ('+c.courses.length+')</a>' : 'Alla banor')+'</div>'+
-    '<div><i class="ti ti-list-check"></i> Räknas: tourronder och sällskapsronder (ej simulator)</div></div>';
-  if(c.desc) h += '<p style="white-space:pre-wrap;font-size:14px;color:var(--text);margin:10px 2px 0">'+esc(c.desc)+'</p>';
-  // Ledartavla
-  h += '<div class="ch-board"><h3 style="text-align:center;margin:4px 0 12px;font-size:20px">Ledartavla</h3>';
-  h += stand.length ? stand.map(function(s){
-    var isMe = s.u === me;
-    var medal = s.rank === 1 ? '🥇' : s.rank === 2 ? '🥈' : s.rank === 3 ? '🥉' : (s.rank || '–');
-    return '<div class="ch-row'+(isMe?' me':'')+'"><span class="ch-rank">'+medal+'</span>'+chAvatar(s.u, 38)+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(chName(s.u))+'</div>'+
-      '<div style="font-size:11px;opacity:.75">'+s.rounds+' rond'+(s.rounds===1?'':'er')+(s.done?' · ✓ mål nått':'')+'</div></div>'+
-      '<span class="ch-val">'+s.display+'</span></div>';
-  }).join('') : '<p class="empty">Inga deltagare än.</p>';
-  h += '</div>';
+    '<div><i class="ti ti-list-check"></i> Tourronder och sällskapsronder räknas (ej simulator)</div>'+
+    (c.desc ? '<p style="white-space:pre-wrap;font-size:14px;color:var(--text);margin:10px 0 0;padding-top:10px;border-top:1px solid var(--border)">'+esc(c.desc)+'</p>' : '')+'</div>';
   return h;
 }
 function chShowCourses(id) {
@@ -2345,6 +2549,8 @@ function chUpdate(id, fn) {
 }
 function chJoin(id) {
   var me = currentUser.username;
+  var cc = _chAll.find(function(x){ return x.id === id; });
+  if(cc && chHasMoney(cc) && !confirm('Den här utmaningen spelas om pengar: insatsen är ' + cc.money.stake + ' kr per deltagare.\n\nGå med?')) return;
   chUpdate(id, function(c){ return {
     participants: Array.from(new Set((c.participants||[]).concat([me]))),
     invited: (c.invited||[]).filter(function(u){ return u !== me; }),
@@ -2370,9 +2576,9 @@ var _chPeopleQ = '';
 function chPeopleHTML() {
   var c = _chAll.find(function(x){ return x.id === _chView.id; }); if(!c) return '';
   var me = currentUser.username, tab = _chView.ptab, canInvite = chIsIn(c) || chIsOrganizer(c);
-  var h = '<div class="ch-top"><button class="btn btn-sm" onclick="_chView.mode=\'detail\';renderChallengeScreen()"><i class="ti ti-chevron-left"></i></button><h2 style="margin:0;flex:1;text-align:center">Deltagare</h2><span style="width:38px"></span></div>';
-  if(canInvite && chStatus(c) !== 'ended') h += '<div class="ch-act" onclick="_chView.ptab=\'invite\';renderChallengeScreen()"><span class="ch-act-ic"><i class="ti ti-user-plus"></i></span>Bjud in spelare</div>';
-  h += '<div class="ch-act" onclick="chShare(\''+c.id+'\')"><span class="ch-act-ic"><i class="ti ti-share"></i></span>Dela inbjudningslänk</div>';
+  var h = '<div class="tours-header"><button class="btn btn-sm" onclick="_chView.mode=\'detail\';renderChallengeScreen()"><i class="ti ti-arrow-left"></i> Tillbaka</button><h2 style="margin:0;flex:1;text-align:center">Deltagare</h2><span style="width:70px"></span></div>';
+  if(canInvite && chStatus(c) !== 'ended') h += '<div class="ch-act" onclick="_chView.ptab=\'invite\';renderChallengeScreen()"><span class="ch-act-ic"><i class="ti ti-user-plus"></i></span><div style="flex:1">Bjud in spelare<div style="font-size:12px;font-weight:400;color:var(--text-3)">De får en inbjudan i appen och en notis</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
+  h += '<div class="ch-act" onclick="chShare(\''+c.id+'\')"><span class="ch-act-ic" style="background:var(--gold-light);color:var(--gold)"><i class="ti ti-link"></i></span><div style="flex:1">Dela inbjudningslänk<div style="font-size:12px;font-weight:400;color:var(--text-3)">Skicka i gruppchatten</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
   var parts = c.participants||[], inv = (c.invited||[]).filter(function(u){ return parts.indexOf(u) < 0; });
   var others = (S.users||[]).filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; });
   var tb = function(k, l){ return '<button class="ch-tab'+(tab===k?' on':'')+'" onclick="_chView.ptab=\''+k+'\';renderChallengeScreen()">'+l+'</button>'; };
@@ -2443,16 +2649,19 @@ function startChallengeWizard(editId) {
   var c = editId ? _chAll.find(function(x){ return x.id === editId; }) : null;
   var today = chToday(), d = new Date(today+'T12:00:00'); d.setMonth(d.getMonth()+1);
   var end = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  _chw = c ? JSON.parse(JSON.stringify(c)) : { type:null, scoring:'weighted', parMode:'exact', hcp:true, pointsMode:'best', goal:null, start:today, end:end, courses:[], name:'', desc:'', prize:'', bg:{ tpl:'blue' } };
+  _chw = c ? JSON.parse(JSON.stringify(c)) : { type:null, scoring:'weighted', parMode:'exact', hcp:true, pointsMode:'best', eclMode:'points', maxRounds:null, money:{ on:false, stake:100, split:'all' }, goal:null, start:today, end:end, courses:[], name:'', desc:'', prize:'', bg:{ tpl:'fairway' } };
   _chw._step = c ? 2 : 1; _chw._editId = editId || null; _chw._courseQ = '';
   showChallengeScreen('wizard');
 }
 function chwHeader(title) {
-  var pct = Math.round(_chw._step / 5 * 100);
-  return '<div class="chw-top"><button class="ch-round-btn static" onclick="chwBack()"><i class="ti ti-chevron-left"></i></button>'+
-    '<div class="chw-prog"><span style="width:'+pct+'%"></span></div>'+
-    '<button class="ch-round-btn static" onclick="chwClose()"><i class="ti ti-x"></i></button></div>'+
-    '<div style="color:#7FD4A8;font-weight:800;font-size:20px;margin:14px 2px 0">'+(_chw._editId?'Redigera utmaning':'Ny utmaning')+'</div><h2 style="font-size:28px;margin:0 2px 14px">'+title+'</h2>';
+  var steps = ['Typ','Mål','Period','Detaljer','Bild'], cur = _chw._step;
+  return '<div class="tours-header"><button class="btn btn-sm" onclick="chwBack()"><i class="ti ti-arrow-left"></i> '+(cur<=1 || (_chw._editId && cur<=2) ? 'Avbryt' : 'Tillbaka')+'</button>'+
+    '<h2 style="margin:0;flex:1;text-align:center">'+(_chw._editId?'Redigera utmaning':'Ny utmaning')+'</h2><button class="btn btn-sm" onclick="chwClose()" title="Stäng"><i class="ti ti-x"></i></button></div>'+
+    '<div style="display:flex;gap:5px;margin-bottom:12px">'+steps.map(function(s, i){
+      var on = i+1 === cur, done = i+1 < cur;
+      return '<div style="flex:1;text-align:center;padding:6px 2px;border-radius:8px;font-size:11px;font-weight:700;'+
+        (on?'background:var(--green-dark);color:#fff':done?'background:var(--green-light);color:var(--green-dark)':'background:var(--surface2);color:var(--text-3)')+'">'+(done?'✓ ':(i+1)+'. ')+s+'</div>';
+    }).join('')+'</div><h3 style="margin:0 2px 12px;font-size:18px">'+title+'</h3>';
 }
 function chwBack() { if(_chw._step <= 1 || (_chw._editId && _chw._step <= 2)) { chwClose(); return; } _chw._step--; renderChallengeWizard(); window.scrollTo(0,0); }
 function chwClose() { var id = _chw && _chw._editId; _chw = null; if(id) openChallenge(id); else showChallenges(); }
@@ -2461,51 +2670,72 @@ function renderChallengeWizard() {
   var el = document.getElementById('challenge-content'); if(!el || !_chw) return;
   var s = _chw._step, h = '';
   if(s === 1) {
-    h += chwHeader('Välj typ');
+    h += chwHeader('Vad ska ni tävla om?');
     Object.keys(CH_TYPES).forEach(function(k){ var t = CH_TYPES[k];
-      h += '<div class="chw-type" onclick="_chw.type=\''+k+'\';chwNext()">'+chIconHTML(k, 52)+'<div><div style="font-weight:800;font-size:16px">'+t.title+'</div><div style="font-size:13.5px;color:var(--text-2);margin-top:3px;line-height:1.35">'+t.short+'</div></div></div>';
+      h += '<div class="card chw-type" onclick="_chw.type=\''+k+'\';chwNext()">'+chIconHTML(k, 46)+'<div style="flex:1"><div style="font-weight:700;font-size:15px">'+t.title+'</div><div style="font-size:13px;color:var(--text-2);margin-top:2px;line-height:1.35">'+t.short+'</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
     });
   } else if(s === 2) {
     var t = CH_TYPES[_chw.type];
-    h += chwHeader('Ange mål') + '<div class="card chw-card">'+chIconHTML(_chw.type, 64)+
-      '<div style="font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.06em;margin-top:12px">TYP AV UTMANING</div><div style="font-weight:800;font-size:20px;margin:2px 0 6px">'+t.title+'</div>'+
+    h += chwHeader('Regler och mål') + '<div class="card chw-card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">'+chIconHTML(_chw.type, 48)+
+      '<div><div class="ch-eyebrow">Typ av utmaning</div><div style="font-weight:700;font-size:17px">'+t.title+'</div></div></div>'+
       '<p style="font-size:14px;color:var(--text-2);line-height:1.45;margin:0 0 14px">'+esc(chRuleText(_chw))+'</p>';
     var radio = function(field, val, label){ var on = _chw[field] === val; return '<label class="chw-radio" onclick="_chw.'+field+'='+JSON.stringify(val).replace(/"/g,'&quot;')+';renderChallengeWizard()"><span>'+label+'</span><span class="chw-dot'+(on?' on':'')+'"></span></label>'; };
     if(_chw.type === 'birdies') h += radio('scoring','single','1 poäng för birdie eller bättre') + radio('scoring','weighted','Birdie (1p), Eagle (3p), HiO (6p), Albatross (10p)');
     if(_chw.type === 'pars') h += radio('parMode','exact','Bara par räknas') + radio('parMode','orBetter','Par eller bättre räknas');
     if(_chw.type === 'stroke') h += radio('hcp', true, 'Med handicap (netto)') + radio('hcp', false, 'Utan handicap (brutto)');
     if(_chw.type === 'points') h += radio('pointsMode','best','Bästa runda vinner') + radio('pointsMode','total','Totalpoäng under perioden');
+    if(_chw.type === 'eclectic') h += radio('eclMode','points','Poängbogey – flest poäng vinner') + radio('eclMode','netto','Netto – lägst nettoresultat mot par vinner')+
+      '<div style="display:flex;align-items:center;gap:12px;margin-top:14px"><b style="flex:1">Antal rundor som räknas</b>'+
+      '<input type="number" min="1" max="50" inputmode="numeric" value="'+(_chw.maxRounds||'')+'" placeholder="Alla" oninput="_chw.maxRounds=parseInt(this.value)||null" style="width:110px;text-align:center;font-size:20px;font-weight:700;color:var(--green-dark);margin:0"></div>'+
+      '<p style="font-size:12.5px;color:var(--text-3);margin:8px 0 0">T.ex. 10: de tio första rundorna på banan under perioden räknas. Lämna tomt så räknas alla. Banan väljer du i nästa steg.</p>';
     if(t.goal) h += '<div style="display:flex;align-items:center;gap:12px;margin-top:14px"><b style="flex:1">Mål ('+(t.unit==='p'?'Poäng':t.unit)+')</b>'+
       '<input type="number" min="1" inputmode="numeric" value="'+(_chw.goal||'')+'" placeholder="Valfritt" oninput="_chw.goal=parseInt(this.value)||null" style="width:110px;text-align:center;font-size:20px;font-weight:700;color:var(--green-dark);margin:0"></div>'+
       '<p style="font-size:12.5px;color:var(--text-3);margin:8px 0 0">Sätt ett mål som går att uppnå. När du når målet är utmaningen slutförd, men du kan fortfarande förbättra ditt resultat. Lämna tomt för inget mål.</p>';
     h += '</div><button class="btn btn-primary chw-main" onclick="chwNext()">Välj</button>';
   } else if(s === 3) {
-    h += chwHeader('När & Var') + '<div class="card chw-card"><b>Varaktighet</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 10px">Ange hur länge utmaningen ska vara aktiv.</p>'+
+    h += chwHeader('När och var spelas den?') + '<div class="card chw-card"><b>Varaktighet</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 10px">Ange hur länge utmaningen ska vara aktiv.</p>'+
       '<label class="chw-lbl">Startdatum<input type="date" value="'+_chw.start+'" onchange="_chw.start=this.value"></label>'+
       '<label class="chw-lbl">Slutdatum<input type="date" value="'+_chw.end+'" onchange="_chw.end=this.value"></label></div>'+
-      '<div class="card chw-card"><b>Bana (valfritt)</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">Välj de banor där utmaningen kan spelas. Ronder på andra banor räknas inte. Inga valda = alla banor.</p>'+
+      '<div class="card chw-card"><b>'+(_chw.type==='eclectic'?'Bana':'Bana (valfritt)')+'</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">'+(_chw.type==='eclectic'?'Välj banan som eclectic-rundorna spelas på. Banan behöver ha scorekort (par och index) i bandatabasen.':'Välj de banor där utmaningen kan spelas. Ronder på andra banor räknas inte. Inga valda = alla banor.')+'</p>'+
       (_chw.courses.length ? '<div style="font-weight:700;color:var(--green-dark);margin-bottom:6px">'+_chw.courses.length+' vald'+(_chw.courses.length===1?'':'a')+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+_chw.courses.map(function(n, i){ return '<span class="ch-chip">'+esc(n)+' <i class="ti ti-x" onclick="_chw.courses.splice('+i+',1);renderChallengeWizard()"></i></span>'; }).join('')+'</div>' : '')+
       '<input type="text" placeholder="Sök bana att lägga till..." value="'+esc(_chw._courseQ)+'" oninput="_chw._courseQ=this.value;chwRenderCourseHits()" style="margin:0"><div id="chw-course-hits"></div></div>'+
       '<button class="btn btn-primary chw-main" onclick="chwValidateDates()">Nästa</button>';
   } else if(s === 4) {
-    h += chwHeader('Detaljer') + '<div class="card chw-card"><b>Namn och beskrivning</b>'+
+    h += chwHeader('Namn, beskrivning och pris') + '<div class="card chw-card"><b>Namn och beskrivning</b>'+
       '<input type="text" maxlength="60" placeholder="Utmaningens namn" value="'+esc(_chw.name)+'" oninput="_chw.name=this.value;document.getElementById(\'chw-n1\').textContent=this.value.length+\'/60\'" style="margin:10px 0 2px"><div class="chw-cnt" id="chw-n1">'+_chw.name.length+'/60</div>'+
       '<textarea maxlength="600" rows="5" placeholder="Beskrivning (valfritt)" oninput="_chw.desc=this.value;document.getElementById(\'chw-n2\').textContent=this.value.length+\'/600\'" style="margin:6px 0 2px">'+esc(_chw.desc)+'</textarea><div class="chw-cnt" id="chw-n2">'+_chw.desc.length+'/600</div></div>'+
-      '<div class="card chw-card"><b>Priser (valfritt)</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">Låt deltagarna veta vad som står på spel.</p>'+
+      chwMoneyHTML()+
+      '<div class="card chw-card"><b>'+(_chw.money && _chw.money.on ? 'Övrigt pris (valfritt)' : 'Priser (valfritt)')+'</b><p style="font-size:13px;color:var(--text-3);margin:4px 0 8px">Låt deltagarna veta vad som står på spel.</p>'+
       '<textarea maxlength="200" rows="3" placeholder="Beskrivning av priset, t.ex. Ära eller en middag" oninput="_chw.prize=this.value;document.getElementById(\'chw-n3\').textContent=this.value.length+\'/200\'" style="margin:0 0 2px">'+esc(_chw.prize)+'</textarea><div class="chw-cnt" id="chw-n3">'+_chw.prize.length+'/200</div></div>'+
-      '<button class="btn btn-primary chw-main" onclick="if(!(_chw.name||\'\').trim()){alert(\'Ge utmaningen ett namn.\');return;}chwNext()">Nästa</button>';
+      '<button class="btn btn-primary chw-main" onclick="if(!(_chw.name||\'\').trim()){alert(\'Ge utmaningen ett namn.\');return;}if(_chw.money&&_chw.money.on&&!(_chw.money.stake>0)){alert(\'Ange insats i kronor.\');return;}chwNext()">Nästa</button>';
   } else {
-    h += chwHeader('Välj bakgrund') + '<p style="color:var(--text-3);margin:0 2px 10px">Välj en mall eller ladda upp din egen</p>'+
-      '<div class="chw-bgprev" style="background:'+chBgCss(_chw)+'"></div><div class="chw-bgs">'+
-      '<label class="chw-bg cam"><i class="ti ti-camera"></i><input type="file" accept="image/*" style="display:none" onchange="chwPickImage(this.files[0])"></label>'+
-      Object.keys(CH_BGS).map(function(k){ var on = !_chw.bg.img && _chw.bg.tpl === k; return '<span class="chw-bg'+(on?' on':'')+'" style="background:'+CH_BGS[k]+'" onclick="_chw.bg={tpl:\''+k+'\'};renderChallengeWizard()"></span>'; }).join('')+'</div>'+
+    h += chwHeader('Välj bakgrund') + '<p style="color:var(--text-3);font-size:13px;margin:-6px 2px 10px">Välj en mall med golfkänsla eller ladda upp en egen bild – till exempel från banan.</p>'+
+      '<div class="chw-bgprev" style="background:'+chBgCss(_chw)+'"><div class="ch-hero-in">'+chIconHTML(_chw.type, 52)+'<div><div class="ch-hero-eye">Utmaning · '+esc(CH_TYPES[_chw.type].title)+'</div><div class="ch-hero-title">'+esc(_chw.name||'Din utmaning')+'</div></div></div></div><div class="chw-bgs">'+
+      '<label class="chw-bg cam"><span><i class="ti ti-camera"></i></span><em>Egen bild</em><input type="file" accept="image/*" style="display:none" onchange="chwPickImage(this.files[0])"></label>'+
+      Object.keys(CH_BGS).map(function(k){ var on = !_chw.bg.img && _chw.bg.tpl === k; return '<span class="chw-bg'+(on?' on':'')+'" onclick="_chw.bg={tpl:\''+k+'\'};renderChallengeWizard()"><span style="background:'+chBgCss({bg:{tpl:k}})+'"></span><em>'+CH_BGS[k].name+'</em></span>'; }).join('')+'</div>'+
       '<button class="btn btn-primary chw-main" id="chw-save" onclick="saveChallenge()">'+(_chw._editId?'Spara':'Klar')+'</button>';
   }
   el.innerHTML = h;
   if(s === 3) chwRenderCourseHits();
 }
+function chwMoneyHTML() {
+  if(!_chw.money) _chw.money = { on:false, stake:100, split:'all' };
+  var m = _chw.money;
+  var h = '<div class="card chw-card"><label style="display:flex;align-items:center;gap:12px;cursor:pointer"><span class="ch-prize-ic" style="background:var(--gold-light);width:40px;height:40px;font-size:20px"><i class="ti ti-coins"></i></span>'+
+    '<span style="flex:1"><b>Spela om pengar</b><div style="font-size:12px;color:var(--text-3)">Insats per deltagare – potten delas ut efter slutplacering och räknas in i Vinster &amp; betting.</div></span>'+
+    '<input type="checkbox" '+(m.on?'checked':'')+' onchange="_chw.money.on=this.checked;renderChallengeWizard()" style="width:22px;height:22px;margin:0"></label>';
+  if(m.on) {
+    h += '<div style="display:flex;align-items:center;gap:12px;margin-top:14px"><b style="flex:1">Insats per deltagare</b>'+
+      '<input type="number" min="1" step="10" inputmode="numeric" value="'+(m.stake||'')+'" oninput="_chw.money.stake=parseInt(this.value)||0" style="width:100px;text-align:right;font-size:18px;font-weight:700;margin:0"><span style="font-weight:700">kr</span></div>'+
+      '<div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin:14px 0 6px">Fördelning av potten</div>'+
+      Object.keys(CH_SPLITS).map(function(k){ var on = m.split === k; return '<label class="chw-radio" onclick="_chw.money.split=\''+k+'\';renderChallengeWizard()"><span>'+CH_SPLITS[k].label+'</span><span class="chw-dot'+(on?' on':'')+'"></span></label>'; }).join('')+
+      '<p style="font-size:12px;color:var(--text-3);margin:6px 0 0">Delad placering: platsernas andelar slås ihop och delas lika. Organisatören kan bocka av vem som betalat.</p>';
+  }
+  return h + '</div>';
+}
 function chwValidateDates() {
   if(!_chw.start || !_chw.end) { alert('Välj start- och slutdatum.'); return; }
+  if(_chw.type === 'eclectic' && _chw.courses.length !== 1) { alert('En eclectic spelas på en bana – välj exakt en bana.'); return; }
   if(_chw.end < _chw.start) { alert('Slutdatum måste vara efter startdatum.'); return; }
   chwNext();
 }
@@ -2524,11 +2754,12 @@ function chwPickImage(file) {
 function saveChallenge() {
   var btn = document.getElementById('chw-save'); if(btn) { btn.disabled = true; btn.textContent = 'Sparar…'; }
   var me = currentUser.username, id = _chw._editId || CH_COL.doc().id;
-  var doc = { type:_chw.type, scoring:_chw.scoring, parMode:_chw.parMode, hcp:!!_chw.hcp, pointsMode:_chw.pointsMode,
+  var doc = { type:_chw.type, scoring:_chw.scoring, parMode:_chw.parMode, hcp:!!_chw.hcp, pointsMode:_chw.pointsMode, eclMode:_chw.eclMode || 'points', maxRounds: _chw.type === 'eclectic' ? (_chw.maxRounds || null) : null,
+    money: (_chw.money && _chw.money.on && _chw.money.stake > 0) ? { on:true, stake:_chw.money.stake, split:_chw.money.split || 'all', paid:(_chw.money.paid || {}) } : { on:false },
     goal: CH_TYPES[_chw.type].goal ? (_chw.goal || null) : null, start:_chw.start, end:_chw.end, courses:_chw.courses.slice(),
     name:(_chw.name||'').trim().slice(0,60), desc:(_chw.desc||'').trim().slice(0,600), prize:(_chw.prize||'').trim().slice(0,200),
     updatedAt: Date.now(), lastActor: me };
-  var bgP = (_chw.bg && _chw.bg.img) ? uploadImageToStorage(_chw.bg.img, 'challenge-bg/'+id+'.jpg').then(function(url){ return url ? { img:url } : { tpl:'forest' }; }) : Promise.resolve({ tpl: (_chw.bg && _chw.bg.tpl) || 'forest' });
+  var bgP = (_chw.bg && _chw.bg.img) ? uploadImageToStorage(_chw.bg.img, 'challenge-bg/'+id+'.jpg').then(function(url){ return url ? { img:url } : { tpl:'fairway' }; }) : Promise.resolve({ tpl: (_chw.bg && _chw.bg.tpl) || 'fairway' });
   bgP.then(function(bg){
     doc.bg = bg;
     if(_chw._editId) return CH_COL.doc(id).update(doc);
@@ -2538,7 +2769,7 @@ function saveChallenge() {
     var wasEdit = !!_chw._editId; _chw = null;
     if(wasEdit) { openChallenge(id); return; }
     var el = document.getElementById('challenge-content');
-    if(el) el.innerHTML = '<div class="ch-done"><span class="ch-done-ic"><i class="ti ti-check"></i></span><div style="font-size:24px;font-weight:800;margin-top:18px">Utmaning skapad</div></div>';
+    if(el) el.innerHTML = '<div class="card ch-done"><span class="ch-done-ic"><i class="ti ti-golf"></i></span><div style="font-size:22px;font-weight:800;margin-top:14px">Utmaningen är igång!</div><div style="font-size:13px;color:var(--text-2);margin-top:4px">Bjud in gänget så börjar jakten.</div></div>';
     setTimeout(function(){ openChallenge(id); }, 1300);
   }).catch(function(e){ console.error(e); alert('Kunde inte spara utmaningen. Försök igen.'); if(btn) { btn.disabled = false; btn.textContent = 'Klar'; } });
 }
@@ -18134,6 +18365,26 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (271)',
+    items: [
+      { type: 'new', text: 'Utmaningar om pengar: slå på "Spela om pengar" när du skapar en utmaning, ange insats per deltagare och hur potten fördelas (vinnaren tar allt, 70/30 eller 60/30/10). Potten och fördelningen visas på utmaningen – även "om den slutade nu" medan den pågår – och vid delad placering delas andelarna lika. Den som går med ser insatsen innan hen bekräftar.' },
+      { type: 'new', text: 'Organisatören kan bocka av vem som betalat sin insats. När utmaningen är avslutad räknas vinsterna automatiskt in i Vinster & betting: egen rad under "Mina vinster" och en ny kolumn "Utm." i topplistan.' },
+    ]
+  },
+  {
+    date: '30 oktober 2026 (270)',
+    items: [
+      { type: 'new', text: 'Ny utmaningstyp: Eclectic. Välj en bana och hur många rundor som räknas (t.ex. 10). För varje hål sparas spelarens bästa resultat och tillsammans blir det ett eclectic-scorekort. Välj om vinnaren avgörs på poängbogey (flest poäng) eller netto (lägst mot par, alla hål måste vara spelade). Netto och poäng per hål räknas med den rundans SHCP.' },
+      { type: 'new', text: 'Utmaningssidan för en eclectic visar ditt ihopsatta scorekort hål för hål (birdies och eagles markerade), och man kan trycka på en spelare i ledartavlan för att se hens kort.' },
+    ]
+  },
+  {
+    date: '30 oktober 2026 (269)',
+    items: [
+      { type: 'improved', text: 'Utmaningar har fått en egen ÄGCC-design: ikonrutor i startsidans färger, kort i appens stil med din poäng och placering direkt i listan, en ledartavla som ser ut som OoM med guld-, silver- och bronsplaceringar, och nya bakgrunder med golfkänsla (Fairway, Green, Bunker, Vattenhinder, Kvällsrunda och Klubbhuset – alla med ränder som en nyklippt fairway).' },
+    ]
+  },
   {
     date: '30 oktober 2026 (268)',
     items: [
