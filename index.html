@@ -137,6 +137,30 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .home-divider{display:flex;align-items:center;gap:12px;margin:22px 2px 16px}
 .home-divider-line{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--border-strong) 20%,var(--border-strong) 80%,transparent)}
 .home-divider-label{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:5px;white-space:nowrap}
+/* ── Bottenmeny (fast menyrad längst ner) + "Mer"-ark ── */
+#bnav{position:fixed;left:0;right:0;bottom:0;z-index:150;background:rgba(255,255,255,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:none;justify-content:space-around;align-items:flex-end;padding:6px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.06)}
+body.has-bnav #bnav{display:flex}
+body.has-bnav{padding-bottom:calc(84px + env(safe-area-inset-bottom));--bnav-h:70px}
+body.has-bnav.kb-open #bnav{display:none}
+#bnav button{flex:1;min-width:0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;font-size:10.5px;font-weight:600;color:#7a827d;padding:4px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#bnav button i{font-size:23px;line-height:1}
+#bnav button.on{color:var(--green,#0F6E56)}
+#bnav .bn-main{position:relative;top:-14px;color:#8F5200}
+#bnav .bn-main .bn-c{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#E8891A);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(232,137,26,.45);border:4px solid var(--surface);color:#fff}
+#bnav .bn-main .bn-c i{font-size:27px}
+#bnav .bn-main.on .bn-c{box-shadow:0 0 0 3px rgba(232,137,26,.3),0 6px 16px rgba(232,137,26,.45)}
+#bsheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:180;opacity:0;transition:opacity .2s;pointer-events:none}
+#bsheet-bg.open{opacity:1;pointer-events:auto}
+#bsheet{position:fixed;left:0;right:0;bottom:0;z-index:190;background:var(--surface);border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s ease;box-shadow:0 -8px 30px rgba(0,0,0,.18);max-width:640px;margin:0 auto;visibility:hidden}
+#bsheet.open{transform:none;visibility:visible}
+#bsheet.dragging{transition:none}
+#bsheet .bs-grab{padding:6px 0 12px;cursor:grab;touch-action:none}
+#bsheet .bs-grab span{display:block;width:40px;height:5px;border-radius:3px;background:#d5dad7;margin:0 auto}
+#bsheet .bs-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}
+#bsheet .bs-head b{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3)}
+#bsheet .bs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+#bsheet .bs-it{border:none;border-radius:14px;padding:16px 6px 14px;display:flex;flex-direction:column;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:700;text-align:center;cursor:pointer;line-height:1.2;min-height:86px;justify-content:center}
+#bsheet .bs-it i{font-size:28px}
 .home-wall-end{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px -16px -14px;padding:9px 16px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 12px 12px;font-size:11px;color:var(--text-3)}
 .hist-table{width:100%;border-collapse:collapse;font-size:13px}
 .hist-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2)}
@@ -242,6 +266,28 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><span>Byt lösenord</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><span>Logga ut</span></span>
   </span>
+</div>
+
+<!-- Bottenmeny: alltid synlig när man är inloggad (döljs när tangentbordet är uppe) -->
+<nav id="bnav" aria-label="Huvudmeny">
+  <button type="button" data-k="hem" onclick="bnavGo('hem')"><i class="ti ti-home"></i>Hem</button>
+  <button type="button" data-k="tour" onclick="bnavGo('tour')"><i class="ti ti-trophy"></i>Tourer</button>
+  <button type="button" class="bn-main" data-k="rond" onclick="bnavGo('rond')"><span class="bn-c"><i class="ti ti-golf"></i></span>Ny rond</button>
+  <button type="button" data-k="stat" onclick="bnavGo('stat')"><i class="ti ti-chart-bar"></i>Statistik</button>
+  <button type="button" data-k="mer" onclick="bnavGo('mer')"><i class="ti ti-menu-2"></i>Mer</button>
+</nav>
+<div id="bsheet-bg" onclick="closeBottomSheet()"></div>
+<div id="bsheet" role="dialog" aria-label="Mer">
+  <div class="bs-grab" id="bsheet-grab"><span></span></div>
+  <div class="bs-head"><b>Mer</b></div>
+  <div class="bs-grid">
+    <button type="button" class="bs-it" style="background:#FAC775;color:#633806" onclick="bsheetGo(showGlobalPlayers)"><i class="ti ti-users"></i>Spelare</button>
+    <button type="button" class="bs-it" style="background:#BFE3D9;color:#0B4F3F" onclick="bsheetGo(showMyHcp)"><i class="ti ti-chart-line"></i>Mitt HCP</button>
+    <button type="button" class="bs-it" style="background:#FFB870;color:#7A3D00" onclick="bsheetGo(showMyBetting)"><i class="ti ti-coin"></i>Vinster &amp; betting</button>
+    <button type="button" class="bs-it" style="background:#E5D4F5;color:#5B2C8C" onclick="bsheetGo(showIdeaWall)"><i class="ti ti-bulb"></i>Idéer &amp; nyheter</button>
+    <button type="button" class="bs-it" style="background:#D3D1C7;color:#444441" onclick="bsheetGo(showGlobalSettings)"><i class="ti ti-settings" id="bsheet-settings-icon"></i><span id="bsheet-settings-label">Inställningar</span></button>
+    <button type="button" class="bs-it" style="background:#1E3A5F;color:#fff" onclick="bsheetGo(showHelp)"><i class="ti ti-help-circle"></i>Hjälp &amp; tips</button>
+  </div>
 </div>
 
 <div id="users-screen" style="display:none">
@@ -1597,6 +1643,102 @@ function showHomeScreen() {
   // hem alls. enterTour()/showView() gör redan samma sak vid navigering.
   window.scrollTo(0, 0);
 }
+
+
+// ══ BOTTENMENY ══════════════════════════════════════════════════════════════
+// Fast menyrad längst ner: Hem · Tourer · Ny rond (sällskapsrond) · Statistik · Mer.
+// "Mer" öppnar ett ark med resten av menyn (stängs med tryck utanför eller genom
+// att dra ner det). Aktiv flik räknas fram från vilken skärm som syns, så alla
+// befintliga vägar in i en vy (knappar, länkar, notiser) markerar rätt flik.
+function bnavActiveKey() {
+  function vis(id){ var el = document.getElementById(id); return !!el && el.style.display !== 'none' && el.offsetParent !== null; }
+  if(vis('app-screen')) return 'tour';
+  if(vis('home-screen-content')) return 'hem';
+  if(vis('tours-list-screen') || vis('tour-search-screen')) return 'tour';
+  if(vis('course-stats-screen')) return 'stat';
+  if(vis('casual-screen')) return 'rond';
+  return 'mer';
+}
+function syncBottomNav() {
+  var loginEl = document.getElementById('login-screen');
+  var loggedIn = !!currentUser && !(loginEl && loginEl.style.display !== 'none');
+  document.body.classList.toggle('has-bnav', loggedIn);
+  if(!loggedIn) { closeBottomSheet(); return; }
+  var k = bnavActiveKey();
+  var sheetOpen = document.getElementById('bsheet').classList.contains('open');
+  document.querySelectorAll('#bnav button').forEach(function(b){
+    b.classList.toggle('on', sheetOpen ? b.dataset.k === 'mer' : b.dataset.k === k);
+  });
+  var lbl = document.getElementById('bsheet-settings-label'), ic = document.getElementById('bsheet-settings-icon');
+  if(lbl && ic) { var adm = isAdmin(); lbl.textContent = adm ? 'Inställningar' : 'Min profil'; ic.className = 'ti ' + (adm ? 'ti-settings' : 'ti-user-circle'); }
+}
+function bnavGo(k) {
+  if(k !== 'mer') closeBottomSheet();
+  try { closeModal(); } catch(e) {}
+  if(k === 'hem') showHomeScreen();
+  else if(k === 'tour') showToursList();
+  else if(k === 'stat') showCourseStats();
+  else if(k === 'rond') startCasualRoundWizard();
+  else if(k === 'mer') { if(document.getElementById('bsheet').classList.contains('open')) closeBottomSheet(); else openBottomSheet(); }
+  syncBottomNav();
+}
+function openBottomSheet() {
+  var sh = document.getElementById('bsheet');
+  sh.style.transform = '';
+  sh.classList.add('open');
+  document.getElementById('bsheet-bg').classList.add('open');
+  syncBottomNav();
+}
+function closeBottomSheet() {
+  var sh = document.getElementById('bsheet'), bg = document.getElementById('bsheet-bg');
+  if(!sh) return;
+  sh.classList.remove('open', 'dragging');
+  sh.style.transform = '';
+  if(bg) bg.classList.remove('open');
+}
+function bsheetGo(fn) {
+  closeBottomSheet();
+  if(typeof fn === 'function') fn();
+  syncBottomNav();
+}
+function setupBottomNav() {
+  var sh = document.getElementById('bsheet');
+  if(!sh || sh._bnavInit) return;
+  sh._bnavInit = true;
+  // Dra ner arket för att stänga (följer fingret, stänger vid > 70 px)
+  var y0 = null, dy = 0;
+  function start(e){ y0 = (e.touches ? e.touches[0] : e).clientY; dy = 0; sh.classList.add('dragging'); }
+  function move(e){ if(y0 === null) return; dy = Math.max(0, (e.touches ? e.touches[0] : e).clientY - y0); sh.style.transform = 'translateY('+dy+'px)'; if(dy > 4 && e.cancelable) e.preventDefault(); }
+  function end(){ if(y0 === null) return; y0 = null; sh.classList.remove('dragging'); if(dy > 70) closeBottomSheet(); else sh.style.transform = ''; syncBottomNav(); }
+  sh.addEventListener('touchstart', start, { passive: true });
+  sh.addEventListener('touchmove', move, { passive: false });
+  sh.addEventListener('touchend', end);
+  sh.addEventListener('touchcancel', end);
+  // Klick direkt efter ett drag ska inte öppna en ruta
+  sh.addEventListener('click', function(e){ if(dy > 8) { e.stopPropagation(); e.preventDefault(); dy = 0; } }, true);
+  var grab = document.getElementById('bsheet-grab');
+  grab.addEventListener('mousedown', function(e){ start(e);
+    function mm(ev){ move(ev); } function mu(){ document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); end(); }
+    document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu); });
+  // Escape stänger arket
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeBottomSheet(); });
+  // Dölj menyraden när tangentbordet är uppe (mobil), så den inte hamnar över inmatningen
+  var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  function isTextField(el){ if(!el) return false; var t = el.tagName; if(t === 'TEXTAREA' || el.isContentEditable) return true; if(t === 'SELECT') return false;
+    return t === 'INPUT' && ['button','checkbox','radio','range','color','file','submit','reset','image'].indexOf((el.type||'').toLowerCase()) < 0; }
+  if(coarse) {
+    document.addEventListener('focusin', function(e){ if(isTextField(e.target)) document.body.classList.add('kb-open'); });
+    document.addEventListener('focusout', function(){ setTimeout(function(){ if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open'); }, 60); });
+  }
+  // Håll aktiv flik i synk med vilken skärm som visas
+  var t = null;
+  var mo = new MutationObserver(function(){ if(t) return; t = setTimeout(function(){ t = null; try { syncBottomNav(); } catch(e) {} }, 30); });
+  ['login-screen','tours-screen','app-screen','users-screen','home-screen-content','tours-list-screen','tour-search-screen','course-stats-screen','global-settings-screen','course-data-screen','brand-logos-screen','idea-wall-screen','help-screen','my-hcp-screen','casual-screen'].forEach(function(id){
+    var el = document.getElementById(id); if(el) mo.observe(el, { attributes: true, attributeFilter: ['style'] });
+  });
+  syncBottomNav();
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupBottomNav); else setupBottomNav();
 
 function updateSettingsCard() {
   var icon = document.getElementById('settings-card-icon');
@@ -11065,7 +11207,7 @@ function renderPushInbox() {
     '</div>';
   };
   var more = items.length - shown.length;
-  el.innerHTML = '<div style="position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9000;width:min(calc(100vw - 32px),340px)">'+
+  el.innerHTML = '<div style="position:fixed;right:16px;bottom:calc(16px + var(--bnav-h, 0px) + env(safe-area-inset-bottom));z-index:9000;width:min(calc(100vw - 32px),340px)">'+
     (items.length > 1 ? '<div style="display:flex;justify-content:flex-end;gap:6px">'+
       '<button type="button" onclick="togglePushInboxExpanded()" style="border:1px solid var(--border);background:var(--surface);border-radius:20px;padding:4px 10px;font:inherit;font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)">'+(_pushInboxExpanded?'Visa färre':'<i class="ti ti-bell"></i> '+items.length+' notiser')+'</button>'+
       '<button type="button" onclick="dismissAllPushInbox()" style="border:1px solid var(--border);background:var(--surface);border-radius:20px;padding:4px 10px;font:inherit;font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)">Rensa alla</button>'+
@@ -17147,6 +17289,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '30 oktober 2026 (260)',
+    items: [
+      { type: 'new', text: 'Ny menyrad längst ner på skärmen som alltid syns när man är inloggad: Hem, Tourer, Ny rond (sällskapsrond, den orange mittknappen), Statistik och Mer. Inget mer scrollande ner till menyknapparna – allt nås med ett tumtryck var man än är i appen.' },
+      { type: 'new', text: '"Mer" öppnar ett ark nerifrån med Spelare, Mitt HCP, Vinster & betting, Idéer & nyheter, Inställningar (Min profil för spelare) och Hjälp & tips. Stäng genom att dra ner arket, trycka utanför eller trycka på Mer igen.' },
+      { type: 'improved', text: 'Fliken för den sida man är på lyser grön i menyraden. Menyraden döljs medan tangentbordet är uppe så att den inte skymmer inmatning, och notis-popupen hamnar ovanför menyraden.' },
+    ]
+  },
   {
     date: '30 oktober 2026 (259)',
     items: [
