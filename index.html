@@ -235,6 +235,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .ch-sl{font-size:11px;color:var(--text-3)}
 .ch-dl{display:flex;align-items:center;gap:8px;padding:3px 0}
 .ch-dl i{font-size:15px;color:var(--text-3);width:18px;text-align:center}
+.tm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tm-cell{display:flex;flex-direction:column;background:#F4F3FE;border-radius:8px;padding:6px 9px}
+.tm-l{font-size:11px;color:var(--text-3)}
+.tm-l i{color:#534AB7}
+.tm-v{font-size:14px;font-weight:700;color:var(--text)}
 /* Eclectic-scorekort */
 .ecl-t{border-collapse:collapse;width:100%;font-size:12px;text-align:center}
 .ecl-t th,.ecl-t td{padding:4px 3px;border-bottom:1px solid var(--border);min-width:24px}
@@ -1049,6 +1054,7 @@ function initFirebaseSync(onFirstLoad) {
       refreshCurrentView();
       try { renderHomeChampGreeting(); } catch(e) {}
       try { renderBnavMain(); } catch(e) {}
+      try { seedTrackmanForIndoorTour(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -2789,6 +2795,87 @@ function saveChallenge() {
     if(el) el.innerHTML = '<div class="card ch-done"><span class="ch-done-ic"><i class="ti ti-golf"></i></span><div style="font-size:22px;font-weight:800;margin-top:14px">Utmaningen är igång!</div><div style="font-size:13px;color:var(--text-2);margin-top:4px">Bjud in gänget så börjar jakten.</div></div>';
     setTimeout(function(){ openChallenge(id); }, 1300);
   }).catch(function(e){ console.error(e); alert('Kunde inte spara utmaningen. Försök igen.'); if(btn) { btn.disabled = false; btn.textContent = 'Klar'; } });
+}
+
+
+// ══ TRACKMAN-INSTÄLLNINGAR (simulatortourer) ═════════════════════════════════
+// t.trackman = { pins, mulligans, putting, fairway, wind, stimp, greenFirmness, notes }
+// Visas överst på Tävlingar-fliken för simulatortourer. Admin redigerar via kortet,
+// och kan ställa in dem redan när touren skapas (guiden, steg 1).
+var TM_FIELDS = [
+  { k:'pins',          label:'Pins',           icon:'ti-flag',          opts:['Easy','Medium','Hard','Tournament'] },
+  { k:'mulligans',     label:'Mulligans',      icon:'ti-reload',        opts:['Nej','Ja – 1 per rond','Ja – 1 per nio hål','Ja – obegränsat'] },
+  { k:'putting',       label:'Puttning',       icon:'ti-circle-dot',    opts:['Auto Two Putt 2,4 m','Auto Two Putt','Gimme 1 m','Gimme 2,4 m','Putta allt'], free:true },
+  { k:'fairway',       label:'Fairway',        icon:'ti-road',          opts:['Soft','Medium','Firm','Very firm'] },
+  { k:'greenFirmness', label:'Green firmness', icon:'ti-circle-half-2', opts:['Soft','Medium','Firm','Very firm'] },
+  { k:'stimp',         label:'Stimp',          icon:'ti-gauge',         opts:['7','8','9','10','11','12','13'], free:true },
+  { k:'wind',          label:'Vind',           icon:'ti-wind',          opts:['Off','Calm','Light','Moderate','Strong'] }
+];
+function tourGameFormLabel(t) {
+  var types = {}; (t.events||[]).forEach(function(e){ types[e.type === 'stableford' ? 'Poängbogey' : 'Slag'] = true; });
+  return Object.keys(types).join(' / ') || '–';
+}
+function trackmanCardHTML(t) {
+  if(!isSimTour(t)) return '';
+  var tm = t.trackman || {};
+  var cells = [{ label:'Spelform', icon:'ti-scoreboard', v: tourGameFormLabel(t) }].concat(TM_FIELDS.map(function(f){ return { label:f.label, icon:f.icon, v: tm[f.k] }; }));
+  var any = TM_FIELDS.some(function(f){ return tm[f.k]; });
+  return '<div class="card" style="margin-bottom:16px;padding:12px 14px;border-color:#D9D6FB">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700;font-size:14px;color:#534AB7"><i class="ti ti-device-desktop"></i> Trackman-inställningar</span>'+
+      (isAdmin() ? '<button class="btn btn-sm" onclick="openTrackmanSettings(\''+t.id+'\')"><i class="ti ti-edit"></i> '+(any?'Ändra':'Ställ in')+'</button>' : '')+'</div>'+
+    (any ? '<div class="tm-grid">'+cells.map(function(c){ return '<div class="tm-cell"><span class="tm-l"><i class="ti '+c.icon+'"></i> '+c.label+'</span><span class="tm-v">'+esc(c.v || '–')+'</span></div>'; }).join('')+'</div>'
+      : '<p style="font-size:12px;color:var(--text-3);margin:0">Inga inställningar angivna än.'+(isAdmin()?' Tryck på Ställ in.':'')+'</p>')+
+    (tm.notes ? '<p style="font-size:12px;color:var(--text-2);margin:8px 0 0;white-space:pre-wrap">'+esc(tm.notes)+'</p>' : '')+
+    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Ställ in simulatorn så här innan du spelar, så spelar alla på samma villkor.</p></div>';
+}
+function trackmanFormHTML(prefix, tm) {
+  tm = tm || {};
+  return TM_FIELDS.map(function(f){
+    var v = tm[f.k] || '';
+    var inOpts = !v || f.opts.indexOf(v) >= 0;
+    var sel = '<select id="'+prefix+f.k+'" style="margin:0"'+(f.free?' onchange="var o=document.getElementById(\''+prefix+f.k+'-other\');if(o)o.style.display=this.value===\'__other\'?\'\':\'none\'"':'')+'>'+
+      '<option value="">– Ej angivet –</option>'+f.opts.map(function(o){ return '<option'+(o===v?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
+      (f.free ? '<option value="__other"'+(!inOpts?' selected':'')+'>Annat…</option>' : '')+'</select>';
+    var other = f.free ? '<input type="text" id="'+prefix+f.k+'-other" placeholder="Skriv eget värde" value="'+(!inOpts?esc(v):'')+'" style="margin:6px 0 0;'+(inOpts?'display:none':'')+'">' : '';
+    return '<div class="field" style="margin-bottom:8px"><label><i class="ti '+f.icon+'"></i> '+f.label+'</label>'+sel+other+'</div>';
+  }).join('') + '<div class="field"><label><i class="ti ti-notes"></i> Övrigt (valfritt)</label><textarea id="'+prefix+'notes" rows="2" placeholder="T.ex. tee, höjd över havet, väder">'+esc(tm.notes||'')+'</textarea></div>';
+}
+function readTrackmanForm(prefix) {
+  var out = {};
+  TM_FIELDS.forEach(function(f){
+    var el = document.getElementById(prefix+f.k); if(!el) return;
+    var v = el.value;
+    if(v === '__other') { var o = document.getElementById(prefix+f.k+'-other'); v = o ? o.value.trim() : ''; }
+    if(v) out[f.k] = v;
+  });
+  var n = document.getElementById(prefix+'notes'); if(n && n.value.trim()) out.notes = n.value.trim();
+  return out;
+}
+function openTrackmanSettings(tourId) {
+  var t = (S.tours||[]).find(function(x){ return x.id === tourId; }); if(!t || !isAdmin()) return;
+  showModal('<h3><i class="ti ti-device-desktop" style="color:#534AB7"></i> Trackman-inställningar</h3>'+
+    '<p style="font-size:12px;color:var(--text-2);margin:-4px 0 12px">Gäller alla deltävlingar i '+esc(t.name)+'. Spelform ('+esc(tourGameFormLabel(t))+') styrs av deltävlingarna.</p>'+
+    trackmanFormHTML('tm-', t.trackman)+
+    '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="saveTrackmanSettings(\''+t.id+'\')"><i class="ti ti-device-floppy"></i> Spara</button></div>', false);
+}
+function saveTrackmanSettings(tourId) {
+  var t = (S.tours||[]).find(function(x){ return x.id === tourId; }); if(!t) return;
+  t.trackman = readTrackmanForm('tm-');
+  save(); closeModal();
+  try { if(activeTourId === tourId) renderEvents(); } catch(e) {}
+}
+// Engångsinläggning av inställningarna för den befintliga inomhustouren (Älvsjö IGL)
+// – görs av admin vid inloggning om touren ännu saknar Trackman-inställningar.
+function seedTrackmanForIndoorTour() {
+  if(!currentUser || !isAdmin()) return;
+  var sims = (S.tours||[]).filter(function(t){ return isSimTour(t) && !t.trackman; });
+  var target = sims.filter(function(t){ return /igl|indoor/i.test(t.name||''); });
+  if(!target.length && sims.length === 1 && (S.tours||[]).filter(isSimTour).length === 1) target = sims;
+  if(!target.length) return;
+  target.forEach(function(t){
+    t.trackman = { pins:'Easy', mulligans:'Nej', putting:'Auto Two Putt 2,4 m', fairway:'Medium', wind:'Calm', stimp:'9', greenFirmness:'Soft' };
+  });
+  save();
 }
 
 function updateSettingsCard() {
@@ -5607,7 +5694,8 @@ function wizStep1() {
   h += '</div>';
   h += '<hr class="divider">';
   h += '<div class="field" style="background:#EEEDFE;border-radius:10px;padding:10px 12px">';
-  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600;color:#534AB7"><input type="checkbox" id="w-sim" '+(wiz.simulator?'checked':'')+' style="width:auto;margin:0"> <i class="ti ti-device-gamepad-2"></i> Simulatorgolf</label>';
+  h += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600;color:#534AB7"><input type="checkbox" id="w-sim" '+(wiz.simulator?'checked':'')+' onchange="var w=document.getElementById(\'w-tm-wrap\');if(w)w.style.display=this.checked?\'\':\'none\'" style="width:auto;margin:0"> <i class="ti ti-device-gamepad-2"></i> Simulatorgolf</label>';
+  h += '<div id="w-tm-wrap" style="'+(wiz.simulator?'':'display:none;')+'margin:10px 0 0 26px"><div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:6px"><i class="ti ti-device-desktop"></i> Trackman-inställningar</div>'+trackmanFormHTML('w-tm-', wiz.trackman)+'</div>';
   h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">För tourer som spelas i golfsimulator. Tourens ställning, leaderboard och SHCP fungerar som vanligt, men inga puttar registreras och inga rundor räknas in i spelarnas profilstatistik &ndash; så att simulator och riktig golf inte blandas. Går inte att ändra efter att touren skapats.</p>';
   h += '</div>';
   h += '<div class="field"><label>Antal deltävlingar (ej finaler)</label><input id="w-numev" type="number" min="0" value="'+wiz.numEvents+'"></div>';
@@ -5656,6 +5744,7 @@ function wizSaveStep1Fields() {
   var nf = document.getElementById('w-numfin');
   var sm = document.getElementById('w-sim');
   if(sm) wiz.simulator = !!sm.checked;
+  if(document.getElementById('w-tm-pins')) wiz.trackman = readTrackmanForm('w-tm-');
   if(n) wiz.name = n.value;
   if(s) wiz.season = s.value;
   if(ne) wiz.numEvents = parseInt(ne.value)||0;
@@ -5813,6 +5902,7 @@ function wizToStep2() {
   wiz.season = document.getElementById('w-season').value.trim();
   var simEl = document.getElementById('w-sim');
   wiz.simulator = !!(simEl && simEl.checked);
+  if(document.getElementById('w-tm-pins')) wiz.trackman = wiz.simulator ? readTrackmanForm('w-tm-') : null;
   wiz.numEvents = Math.max(0, parseInt(document.getElementById('w-numev').value)||0);
   wiz.numFinals = Math.max(0, parseInt(document.getElementById('w-numfin').value)||0);
   if(wiz.numEvents + wiz.numFinals === 0) { alert('Lägg till minst en deltävling eller final.'); return; }
@@ -6146,6 +6236,7 @@ function wizFinish() {
     var tour = {
       id: tourId, name: wiz.name, season: wiz.season, img: tourImgUrl,
       simulator: !!wiz.simulator,
+      trackman: (wiz.simulator && wiz.trackman && Object.keys(wiz.trackman).length) ? wiz.trackman : null,
       locked: true,
       players: [],
       events: events,
@@ -6326,7 +6417,7 @@ function renderEvents() {
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
   var top3Html = buildTop3HTML(t, false);
   var liveStandingsHtml = '<div id="tour-live-standings"></div>';
-  if(!t.events.length){el.innerHTML=liveStandingsHtml+top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';subscribeTourLiveStandings(t);return;}
+  if(!t.events.length){el.innerHTML=liveStandingsHtml+top3Html+trackmanCardHTML(t)+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';subscribeTourLiveStandings(t);return;}
 
   // Säsongsberättelse (tourens egen "story", motsvarande deltävlingarnas story fast för hela touren)
   var tourConcluded = isTourConcluded(t);
@@ -6390,7 +6481,7 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = liveStandingsHtml + top3Html + storyBanner + feeCard + titleBlock + html;
+  el.innerHTML = liveStandingsHtml + top3Html + storyBanner + trackmanCardHTML(t) + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
   refreshMissingResultsWarnings();
 }
@@ -18383,6 +18474,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '1 november 2026 (275)',
+    items: [
+      { type: 'new', text: 'Trackman-inställningar för simulatortourer: överst på Tävlingar-fliken visas hur simulatorn ska vara inställd – spelform, pins, mulligans, puttning, fairway, green firmness, stimp och vind – så att alla spelar på samma villkor. Admin kan ändra dem direkt på kortet, och de kan ställas in redan när en ny simulatortour skapas.' },
+      { type: 'improved', text: 'Älvsjö IGL har fått sina inställningar: Slag, Pins Easy, Mulligans Nej, Puttning Auto Two Putt 2,4 m, Fairway Medium, Green firmness Soft, Stimp 9 och Vind Calm.' },
+    ]
+  },
+  {
     date: '30 oktober 2026 (274)',
     items: [
       { type: 'new', text: 'Tourens regler finns nu i appen! Knappen heter "Regler, hjälp & tips" och första avsnittet är "Tourens regler" – markör, spelperiod och ordinarie speldatum, både som text och som bild (tryck för att förstora).' },
@@ -21028,6 +21126,7 @@ function afterLogin() {
     document.getElementById('nav-users-btn').style.display = 'flex';
   }
   showHomeScreen();
+  try { seedTrackmanForIndoorTour(); } catch(e) { console.error('trackman', e); }
   renderImpersonationBanner();
   setTimeout(function(){ if(typeof initPushAfterLogin==='function') initPushAfterLogin(); }, 1500);
   if(!currentUser.golfId || currentUser.golfId.length !== 10) {
