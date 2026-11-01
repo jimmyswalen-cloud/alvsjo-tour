@@ -2803,14 +2803,21 @@ function saveChallenge() {
 // Visas överst på Tävlingar-fliken för simulatortourer. Admin redigerar via kortet,
 // och kan ställa in dem redan när touren skapas (guiden, steg 1).
 var TM_FIELDS = [
-  { k:'pins',          label:'Pins',           icon:'ti-flag',          opts:['Easy','Medium','Hard','Tournament'] },
-  { k:'mulligans',     label:'Mulligans',      icon:'ti-reload',        opts:['Nej','Ja – 1 per rond','Ja – 1 per nio hål','Ja – obegränsat'] },
-  { k:'putting',       label:'Puttning',       icon:'ti-circle-dot',    opts:['Auto Two Putt 2,4 m','Auto Two Putt','Gimme 1 m','Gimme 2,4 m','Putta allt'], free:true },
-  { k:'fairway',       label:'Fairway',        icon:'ti-road',          opts:['Soft','Medium','Firm','Very firm'] },
-  { k:'greenFirmness', label:'Green firmness', icon:'ti-circle-half-2', opts:['Soft','Medium','Firm','Very firm'] },
-  { k:'stimp',         label:'Stimp',          icon:'ti-gauge',         opts:['7','8','9','10','11','12','13'], free:true },
-  { k:'wind',          label:'Vind',           icon:'ti-wind',          opts:['Off','Calm','Light','Moderate','Strong'] }
+  // Samma namn, ordning och val som i Trackmans inställningsmeny (Game + Course)
+  { k:'gameType',      label:'Game type',       icon:'ti-scoreboard',    opts:['Individual – Stroke (Net)','Individual – Stroke (Gross)','Individual – Stableford (Net)','Individual – Stableford (Gross)'], free:true },
+  { k:'holes',         label:'Holes',           icon:'ti-flag-3',        opts:['All','Front 9','Back 9'], free:true },
+  { k:'pins',          label:'Pins',            icon:'ti-flag',          opts:['Easy','Medium','Hard','Tournament'], free:true },
+  { k:'mulligans',     label:'Mulligans',       icon:'ti-reload',        opts:['No','Yes'] },
+  { k:'putting',       label:'Putting',         icon:'ti-circle-dot',    opts:['Auto – Two putt','Auto – One putt','Manual'], free:true },
+  { k:'puttingOrder',  label:'Putting order',   icon:'ti-arrows-sort',   opts:['Standard','Closest first','Farthest first'], free:true },
+  { k:'gimme',         label:'Gimme distance',  icon:'ti-ruler-measure', opts:['Off','0,5 m','1 m','1,5 m','2 m','2,4 m','3 m'], free:true },
+  { k:'warmup',        label:'First tee warm-up', icon:'ti-flame',       opts:['On','Off'] },
+  { k:'wind',          label:'Wind',            icon:'ti-wind',          opts:['Off','Calm','Breezy','Strong Breeze','Variable','Gusty','Windy','Stormy'] },
+  { k:'fairway',       label:'Fairway firmness', icon:'ti-road',         opts:['Soft','Medium','Firm','Very firm'], free:true },
+  { k:'greenFirmness', label:'Green firmness',  icon:'ti-circle-half-2', opts:['Soft','Medium','Firm','Very firm'], free:true },
+  { k:'stimp',         label:'Green stimp',     icon:'ti-gauge',         opts:['8 (2,4 m)','9 (2,7 m)','10 (3,0 m)','11 (3,4 m)','12 (3,7 m)','13 (4,0 m)'], free:true }
 ];
+var TM_IGL = { gameType:'Individual – Stroke (Net)', holes:'All', pins:'Easy', mulligans:'No', putting:'Auto – Two putt', puttingOrder:'Standard', gimme:'2,4 m', warmup:'On', wind:'Calm', fairway:'Medium', greenFirmness:'Soft', stimp:'9 (2,7 m)', v:2 };
 function tourGameFormLabel(t) {
   var types = {}; (t.events||[]).forEach(function(e){ types[e.type === 'stableford' ? 'Poängbogey' : 'Slag'] = true; });
   return Object.keys(types).join(' / ') || '–';
@@ -2818,7 +2825,7 @@ function tourGameFormLabel(t) {
 function trackmanCardHTML(t) {
   if(!isSimTour(t)) return '';
   var tm = t.trackman || {};
-  var cells = [{ label:'Spelform', icon:'ti-scoreboard', v: tourGameFormLabel(t) }].concat(TM_FIELDS.map(function(f){ return { label:f.label, icon:f.icon, v: tm[f.k] }; }));
+  var cells = TM_FIELDS.map(function(f){ return { label:f.label, icon:f.icon, v: tm[f.k] || (f.k==='gameType' && TM_FIELDS.some(function(x){ return tm[x.k]; }) ? 'Spelform: '+tourGameFormLabel(t) : '') }; });
   var any = TM_FIELDS.some(function(f){ return tm[f.k]; });
   return '<div class="card" style="margin-bottom:16px;padding:12px 14px;border-color:#D9D6FB">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700;font-size:14px;color:#534AB7"><i class="ti ti-device-desktop"></i> Trackman-inställningar</span>'+
@@ -2826,7 +2833,7 @@ function trackmanCardHTML(t) {
     (any ? '<div class="tm-grid">'+cells.map(function(c){ return '<div class="tm-cell"><span class="tm-l"><i class="ti '+c.icon+'"></i> '+c.label+'</span><span class="tm-v">'+esc(c.v || '–')+'</span></div>'; }).join('')+'</div>'
       : '<p style="font-size:12px;color:var(--text-3);margin:0">Inga inställningar angivna än.'+(isAdmin()?' Tryck på Ställ in.':'')+'</p>')+
     (tm.notes ? '<p style="font-size:12px;color:var(--text-2);margin:8px 0 0;white-space:pre-wrap">'+esc(tm.notes)+'</p>' : '')+
-    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Ställ in simulatorn så här innan du spelar, så spelar alla på samma villkor.</p></div>';
+    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Ställ in simulatorn så här under Settings → Game och Course innan du spelar – samma namn som i Trackman – så spelar alla på samma villkor.</p></div>';
 }
 function trackmanFormHTML(prefix, tm) {
   tm = tm || {};
@@ -2854,13 +2861,13 @@ function readTrackmanForm(prefix) {
 function openTrackmanSettings(tourId) {
   var t = (S.tours||[]).find(function(x){ return x.id === tourId; }); if(!t || !isAdmin()) return;
   showModal('<h3><i class="ti ti-device-desktop" style="color:#534AB7"></i> Trackman-inställningar</h3>'+
-    '<p style="font-size:12px;color:var(--text-2);margin:-4px 0 12px">Gäller alla deltävlingar i '+esc(t.name)+'. Spelform ('+esc(tourGameFormLabel(t))+') styrs av deltävlingarna.</p>'+
+    '<p style="font-size:12px;color:var(--text-2);margin:-4px 0 12px">Gäller alla deltävlingar i '+esc(t.name)+'. Namnen är desamma som i Trackmans meny (Settings → Game/Course). Tourens poängräkning styrs fortfarande av deltävlingarna ('+esc(tourGameFormLabel(t))+').</p>'+
     trackmanFormHTML('tm-', t.trackman)+
     '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="saveTrackmanSettings(\''+t.id+'\')"><i class="ti ti-device-floppy"></i> Spara</button></div>', false);
 }
 function saveTrackmanSettings(tourId) {
   var t = (S.tours||[]).find(function(x){ return x.id === tourId; }); if(!t) return;
-  t.trackman = readTrackmanForm('tm-');
+  t.trackman = readTrackmanForm('tm-'); t.trackman.v = 2;
   save(); closeModal();
   try { if(activeTourId === tourId) renderEvents(); } catch(e) {}
 }
@@ -2868,12 +2875,16 @@ function saveTrackmanSettings(tourId) {
 // – görs av admin vid inloggning om touren ännu saknar Trackman-inställningar.
 function seedTrackmanForIndoorTour() {
   if(!currentUser || !isAdmin()) return;
+  // Uppgradera den första versionen (#275) av inläggningen till Trackmans exakta namn
+  var upgraded = false;
+  (S.tours||[]).forEach(function(t){ if(isSimTour(t) && t.trackman && !t.trackman.v && t.trackman.putting === 'Auto Two Putt 2,4 m') { t.trackman = Object.assign({}, TM_IGL); upgraded = true; } });
+  if(upgraded) save();
   var sims = (S.tours||[]).filter(function(t){ return isSimTour(t) && !t.trackman; });
   var target = sims.filter(function(t){ return /igl|indoor/i.test(t.name||''); });
   if(!target.length && sims.length === 1 && (S.tours||[]).filter(isSimTour).length === 1) target = sims;
   if(!target.length) return;
   target.forEach(function(t){
-    t.trackman = { pins:'Easy', mulligans:'Nej', putting:'Auto Two Putt 2,4 m', fairway:'Medium', wind:'Calm', stimp:'9', greenFirmness:'Soft' };
+    t.trackman = Object.assign({}, TM_IGL);
   });
   save();
 }
@@ -18476,8 +18487,8 @@ var RELEASE_NOTES = [
   {
     date: '1 november 2026 (275)',
     items: [
-      { type: 'new', text: 'Trackman-inställningar för simulatortourer: överst på Tävlingar-fliken visas hur simulatorn ska vara inställd – spelform, pins, mulligans, puttning, fairway, green firmness, stimp och vind – så att alla spelar på samma villkor. Admin kan ändra dem direkt på kortet, och de kan ställas in redan när en ny simulatortour skapas.' },
-      { type: 'improved', text: 'Älvsjö IGL har fått sina inställningar: Slag, Pins Easy, Mulligans Nej, Puttning Auto Two Putt 2,4 m, Fairway Medium, Green firmness Soft, Stimp 9 och Vind Calm.' },
+      { type: 'new', text: 'Trackman-inställningar för simulatortourer: överst på Tävlingar-fliken visas hur simulatorn ska vara inställd – game type, holes, pins, mulligans, putting, putting order, gimme distance, first tee warm-up, wind, fairway/green firmness och green stimp – så att alla spelar på samma villkor. Admin kan ändra dem direkt på kortet, och de kan ställas in redan när en ny simulatortour skapas.' },
+      { type: 'improved', text: 'Älvsjö IGL har fått sina inställningar med samma namn som i Trackman: Game type Individual – Stroke (Net), Holes All, Pins Easy, Mulligans No, Putting Auto – Two putt, Putting order Standard, Gimme distance 2,4 m, First tee warm-up On, Wind Calm, Fairway firmness Medium, Green firmness Soft och Green stimp 9 (2,7 m).' },
     ]
   },
   {
