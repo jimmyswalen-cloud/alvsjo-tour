@@ -2822,18 +2822,30 @@ function tourGameFormLabel(t) {
   var types = {}; (t.events||[]).forEach(function(e){ types[e.type === 'stableford' ? 'Poängbogey' : 'Slag'] = true; });
   return Object.keys(types).join(' / ') || '–';
 }
+var _tmOpen = {};
+function toggleTrackmanCard(id) { _tmOpen[id] = !_tmOpen[id]; try { renderEvents(); } catch(e) {} }
 function trackmanCardHTML(t) {
   if(!isSimTour(t)) return '';
-  var tm = t.trackman || {};
-  var cells = TM_FIELDS.map(function(f){ return { label:f.label, icon:f.icon, v: tm[f.k] || (f.k==='gameType' && TM_FIELDS.some(function(x){ return tm[x.k]; }) ? 'Spelform: '+tourGameFormLabel(t) : '') }; });
+  var tm = t.trackman || {}, open = !!_tmOpen[t.id];
   var any = TM_FIELDS.some(function(f){ return tm[f.k]; });
-  return '<div class="card" style="margin-bottom:16px;padding:12px 14px;border-color:#D9D6FB">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700;font-size:14px;color:#534AB7"><i class="ti ti-device-desktop"></i> Trackman-inställningar</span>'+
-      (isAdmin() ? '<button class="btn btn-sm" onclick="openTrackmanSettings(\''+t.id+'\')"><i class="ti ti-edit"></i> '+(any?'Ändra':'Ställ in')+'</button>' : '')+'</div>'+
-    (any ? '<div class="tm-grid">'+cells.map(function(c){ return '<div class="tm-cell"><span class="tm-l"><i class="ti '+c.icon+'"></i> '+c.label+'</span><span class="tm-v">'+esc(c.v || '–')+'</span></div>'; }).join('')+'</div>'
-      : '<p style="font-size:12px;color:var(--text-3);margin:0">Inga inställningar angivna än.'+(isAdmin()?' Tryck på Ställ in.':'')+'</p>')+
-    (tm.notes ? '<p style="font-size:12px;color:var(--text-2);margin:8px 0 0;white-space:pre-wrap">'+esc(tm.notes)+'</p>' : '')+
-    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Ställ in simulatorn så här under Settings → Game och Course innan du spelar – samma namn som i Trackman – så spelar alla på samma villkor.</p></div>';
+  var short = function(v){ return String(v||'').replace(/\s*\(.*\)$/,''); };
+  var summary = [tm.pins && 'Pins '+tm.pins, tm.stimp && 'Stimp '+short(tm.stimp), tm.wind && 'Wind '+tm.wind, tm.gimme && 'Gimme '+tm.gimme].filter(Boolean).join(' · ');
+  var h = '<div class="card" style="margin-bottom:16px;padding:10px 14px;border-color:#D9D6FB">'+
+    '<div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleTrackmanCard(\''+t.id+'\')">'+
+      '<i class="ti ti-device-desktop" style="color:#534AB7;font-size:18px;flex-shrink:0"></i>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:#534AB7">Trackman-inställningar</div>'+
+      (!open ? '<div style="font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(any ? esc(summary || 'Visa inställningar') : 'Inga inställningar angivna än')+'</div>' : '')+'</div>'+
+      '<i class="ti ti-chevron-down" style="color:var(--text-3);transition:transform .15s;'+(open?'transform:rotate(180deg)':'')+'"></i></div>';
+  if(open) {
+    var cells = TM_FIELDS.map(function(f){ return { label:f.label, icon:f.icon, v: tm[f.k] || (f.k==='gameType' && any ? 'Spelform: '+tourGameFormLabel(t) : '') }; });
+    h += '<div style="margin-top:10px">'+
+      (any ? '<div class="tm-grid">'+cells.map(function(c){ return '<div class="tm-cell"><span class="tm-l"><i class="ti '+c.icon+'"></i> '+c.label+'</span><span class="tm-v">'+esc(c.v || '–')+'</span></div>'; }).join('')+'</div>'
+        : '<p style="font-size:12px;color:var(--text-3);margin:0">Inga inställningar angivna än.</p>')+
+      (tm.notes ? '<p style="font-size:12px;color:var(--text-2);margin:8px 0 0;white-space:pre-wrap">'+esc(tm.notes)+'</p>' : '')+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px"><span style="font-size:11px;color:var(--text-3)">Ställ in under Settings → Game och Course i Trackman innan du spelar.</span>'+
+      (isAdmin() ? '<button class="btn btn-sm" style="flex-shrink:0" onclick="openTrackmanSettings(\''+t.id+'\')"><i class="ti ti-edit"></i> '+(any?'Ändra':'Ställ in')+'</button>' : '')+'</div></div>';
+  }
+  return h + '</div>';
 }
 function trackmanFormHTML(prefix, tm) {
   tm = tm || {};
@@ -18487,7 +18499,7 @@ var RELEASE_NOTES = [
   {
     date: '1 november 2026 (275)',
     items: [
-      { type: 'new', text: 'Trackman-inställningar för simulatortourer: överst på Tävlingar-fliken visas hur simulatorn ska vara inställd – game type, holes, pins, mulligans, putting, putting order, gimme distance, first tee warm-up, wind, fairway/green firmness och green stimp – så att alla spelar på samma villkor. Admin kan ändra dem direkt på kortet, och de kan ställas in redan när en ny simulatortour skapas.' },
+      { type: 'new', text: 'Trackman-inställningar för simulatortourer: överst på Tävlingar-fliken visas hur simulatorn ska vara inställd – game type, holes, pins, mulligans, putting, putting order, gimme distance, first tee warm-up, wind, fairway/green firmness och green stimp – så att alla spelar på samma villkor. Kortet är hopfällt till en rad (t.ex. Pins Easy · Stimp 9 · Wind Calm · Gimme 2,4 m) och fälls ut vid tryck. Admin kan ändra inställningarna direkt på kortet, och de kan ställas in redan när en ny simulatortour skapas.' },
       { type: 'improved', text: 'Älvsjö IGL har fått sina inställningar med samma namn som i Trackman: Game type Individual – Stroke (Net), Holes All, Pins Easy, Mulligans No, Putting Auto – Two putt, Putting order Standard, Gimme distance 2,4 m, First tee warm-up On, Wind Calm, Fairway firmness Medium, Green firmness Soft och Green stimp 9 (2,7 m).' },
     ]
   },
