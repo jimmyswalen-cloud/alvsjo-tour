@@ -240,6 +240,14 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .tm-l{font-size:11px;color:var(--text-3)}
 .tm-l i{color:#534AB7}
 .tm-v{font-size:14px;font-weight:700;color:var(--text)}
+.cf-head{font-size:13px;font-weight:800;color:var(--text);margin:4px 2px 8px;text-transform:uppercase;letter-spacing:.04em}
+.cf-cat{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:8px 2px 6px}
+.cf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.cf-tile{background:var(--surface);border:2px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cf-tile i{font-size:24px;color:#B45309}
+.cf-tile.on{border-color:#B45309;background:#FEF3E2}
+.cf-t{font-size:13px;font-weight:700;line-height:1.15}
+.cf-s{font-size:11px;color:var(--text-3)}
 /* Eclectic-scorekort */
 .ecl-t{border-collapse:collapse;width:100%;font-size:12px;text-align:center}
 .ecl-t th,.ecl-t td{padding:4px 3px;border-bottom:1px solid var(--border);min-width:24px}
@@ -1388,6 +1396,7 @@ function statsTours(mode) {
   var out = [];
   if(!casual) (S.tours||[]).forEach(function(t){ if(isSimTour(t) === sim) out.push(t); });
   if(casual || sim) (_casualRounds||[]).forEach(function(r){
+    if(r.roundType === 'practice') return; // träningsronder räknas aldrig i statistiken
     if(!!r.sim !== sim) return;
     var t = casualRoundToTour(r); if(t) out.push(t);
   });
@@ -4028,6 +4037,7 @@ function renderCourseStatsView() {
   if(_statsView === 'score' || _statsView === 'analys' || _statsView === 'h2h') {
     var simSel = courseStatsModeKey();
     var body = _statsView === 'score' ? renderScoreStatsHTML(simSel) : _statsView === 'analys' ? renderAnalysisHTML(simSel) : renderH2HHTML(simSel);
+    if(_statsView === 'score' && statsModeIsCasual(simSel)) { try { body += casualContestStatsHTML(); } catch(e) {} }
     el.innerHTML = statsViewTabsHTML() + courseStatsModeChooserHTML() + body;
     return;
   }
@@ -7802,7 +7812,8 @@ function renderHomeActivityFeed(items) {
     } else if(it.category === 'casualround') {
       var sumTxt = (it.summary||[]).map(function(x){ return '<span style="white-space:nowrap">'+esc(String(x.name||'').split(' ')[0])+(x.guest?' <span style="font-size:10px;color:var(--text-3)">(gäst)</span>':'')+' <b style="color:#B45309">'+x.poang+' p</b></span>'; }).join(' · ');
       lineHtml = '⛳ <b>'+esc(it.playerName)+'</b> spelade en sällskapsrond på <b>'+esc(it.course||it.eventName||'')+'</b>'+(it.sim?' (simulator)':'')+
-        (sumTxt ? '<div style="font-size:12px;margin-top:3px;color:var(--text-2)">'+sumTxt+'</div>' : '');
+        (sumTxt ? '<div style="font-size:12px;margin-top:3px;color:var(--text-2)">'+sumTxt+'</div>' : '')+
+        (it.resultLine ? '<div style="font-size:12px;margin-top:3px;color:#B45309">'+esc(it.resultLine)+'</div>' : '');
     } else {
       var meta = ACTIVITY_FEED_CATEGORY_META[it.category] || { text: 'gjorde ett bra resultat', color: 'var(--text-2)', bg: 'var(--surface2)' };
       lineHtml = '<b>'+esc(it.playerName)+'</b> <span style="background:'+meta.bg+';color:'+meta.color+';font-weight:700;padding:1px 7px;border-radius:10px;font-size:12px">'+meta.text+'</span> på hål '+it.hole+' <span style="color:var(--text-3)">(par '+it.par+')</span>';
@@ -11283,6 +11294,7 @@ function renderHomeCasualWidget() {
     '<i class="ti ti-chevron-right" style="font-size:22px;color:#7A4100"></i></div>';
   mine.forEach(function(r){
     var me = (r.players||[]).find(function(p){ return p.username === currentUser.username; }) || (r.players||[])[0];
+    if(me && cfIsTeamScore(r)) { var tm = cfTeamOf(r, me.key); if(tm) me = { key: tm.key, shcp: tm.shcp }; }
     var t = me ? casualTotals(r, me) : null;
     h += '<div class="card" onclick="openCasualRound(\''+r.id+'\')" style="cursor:pointer;margin-bottom:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;border-color:#E0A030">'+
       '<span style="width:10px;height:10px;border-radius:50%;background:#E24B4A;box-shadow:0 0 0 4px rgba(226,75,74,.18);flex-shrink:0"></span>'+
@@ -11310,7 +11322,7 @@ function leaveCasualScreen() {
   showHomeScreen();
 }
 function casualStepHeader(step, title) {
-  var steps = ['Bana','SHCP','Spelare'];
+  var steps = ['Bana','Spelform','Spelare','SHCP'];
   return '<div style="display:flex;gap:6px;margin-bottom:12px">'+steps.map(function(s, i){
       var on = i+1 === step, done = i+1 < step;
       return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:8px;font-size:12px;font-weight:700;'+
@@ -11326,7 +11338,8 @@ function startCasualRoundWizard() {
   var me = findUser(currentUser.username) || currentUser;
   _cwTab = 'fav'; // börja alltid på Favoriter
   _cwUserLimit = 8;
-  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, search:'',
+  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', search:'',
+    format:{ primary:'stableford', secondary:null }, contests:[], teamOf:{}, teamShcp:{}, teamSize:2,
     players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
   if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
   showCasualScreen();
@@ -11346,7 +11359,6 @@ function renderCasualWizard() {
     h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
         '<label style="font-size:12px;color:var(--text-2)">Datum<br><input type="date" value="'+_cw.date+'" max="'+hcpTodayISO()+'" onchange="_cw.date=this.value;renderCasualCourseList()" style="margin:2px 0 0;width:160px"></label>'+
-        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:14px"><input type="checkbox" '+(_cw.sim?'checked':'')+' onchange="_cw.sim=this.checked" style="width:18px;height:18px;margin:0"> <i class="ti ti-device-desktop"></i> Simulatorrunda</label>'+
       '</div></div>';
     h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
       '<input id="cw-search" type="text" placeholder="Sök bana, klubb eller ort..." value="'+esc(_cw.search)+'" oninput="_cw.search=this.value;renderCasualCourseList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0"></div>';
@@ -11361,16 +11373,11 @@ function renderCasualWizard() {
       '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(c.name)+'</div><div style="font-size:12px;color:var(--text-3)">'+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0)+' · '+hcpFmtDate(_cw.date)+(_cw.sim?' · simulator':'')+'</div></div>'+
       '<button class="btn btn-sm" onclick="_cw.step=1;renderCasualWizard()">Byt</button></div>' : '';
   if(_cw.step === 2) {
-    var me = _cw.players[0];
-    h += casualStepHeader(2, 'Ange ditt SHCP') + courseCard;
-    h += '<div class="card" style="padding:14px 16px;margin-bottom:12px">'+
-      '<label style="font-size:13px;font-weight:600">Ditt spelhandicap (SHCP) på '+esc(c?c.name:'banan')+'</label>'+
-      '<input id="cw-myshcp" type="number" step="1" min="-10" max="60" value="'+me.shcp+'" style="font-size:22px;font-weight:700;width:120px;margin:6px 0">'+
-      '<p style="font-size:12px;color:var(--text-3);margin:0">Ditt HCP är '+hcpFmt((findUser(currentUser.username)||{}).hcp)+'. SHCP hittar du i banans slopetabell (beror på tee och banans svårighet).</p></div>';
+    h += casualStepHeader(2, 'Välj spelform') + courseCard + cwStep2HTML(c);
     h += '<div style="display:flex;gap:8px"><button class="btn" onclick="_cw.step=1;renderCasualWizard()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
-      '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="casualSaveMyShcp()">Välj spelare <i class="ti ti-arrow-right"></i></button></div>';
+      '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="_cw.step=3;renderCasualWizard();window.scrollTo(0,0)">Spelare <i class="ti ti-arrow-right"></i></button></div>';
   } else if(_cw.step === 3) {
-    h += casualStepHeader(3, 'Välj spelare') + courseCard;
+    h += casualStepHeader(3, 'Välj spelare') + courseCard + '<div style="font-size:12px;color:var(--text-2);margin:-4px 0 10px"><i class="ti '+CF[_cw.format.primary].icon+'"></i> '+esc(cfLabel(_cw.format.primary))+(_cw.format.secondary?' + '+esc(cfLabel(_cw.format.secondary)):'')+'</div>';
     h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
       '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">I bollen ('+_cw.players.length+')</div>'+
       _cw.players.map(function(p, i){
@@ -11378,7 +11385,6 @@ function renderCasualWizard() {
           '<i class="ti '+(p.guest?'ti-user-question':'ti-user')+'" style="font-size:18px;color:'+(p.guest?'var(--text-3)':'var(--green-dark)')+'"></i>'+
           '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">'+esc(p.name)+(i===0?' <span style="font-size:11px;color:var(--text-3)">(du)</span>':'')+'</div>'+
           '<div style="font-size:11px;color:var(--text-3)">'+(p.guest?'Gäst – sparas inte i statistiken':'Från registret')+'</div></div>'+
-          '<label style="font-size:11px;color:var(--text-3);text-align:center">SHCP<br><input type="number" step="1" value="'+p.shcp+'" onchange="_cw.players['+i+'].shcp=parseInt(this.value)||0" style="width:58px;margin:0;text-align:center;padding:4px"></label>'+
           (i>0?'<button class="btn btn-sm" title="Ta bort" style="padding:4px 7px" onclick="_cw.players.splice('+i+',1);renderCasualWizard()"><i class="ti ti-x"></i></button>':'<span style="width:32px"></span>')+
         '</div>';
       }).join('')+'</div>';
@@ -11396,7 +11402,13 @@ function renderCasualWizard() {
       '<button class="btn btn-sm" onclick="casualAddGuest()"><i class="ti ti-plus"></i> Lägg till</button></div>'+
       '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Gäster syns i ronden men sparas aldrig i statistiken.</p></div>';
     h += '<div style="display:flex;gap:8px"><button class="btn" onclick="_cw.step=2;renderCasualWizard()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
-      '<button class="btn btn-primary" style="flex:1;justify-content:center;padding:12px" onclick="createCasualRound()"><i class="ti ti-golf"></i> Starta ronden</button></div>';
+      '<button class="btn btn-primary" style="flex:1;justify-content:center;padding:12px" onclick="_cw.step=4;renderCasualWizard();window.scrollTo(0,0)">SHCP'+(CF[_cw.format.primary].pairs||CF[_cw.format.primary].teamScore?' &amp; lag':'')+' <i class="ti ti-arrow-right"></i></button></div>';
+  } else if(_cw.step === 4) {
+    cwEnsureTeams();
+    h += casualStepHeader(4, 'SHCP'+(CF[_cw.format.primary].pairs||CF[_cw.format.primary].teamScore?' och lag':'')) + courseCard + cwStep4HTML();
+    var probs = cwFormatProblem();
+    h += '<div style="display:flex;gap:8px"><button class="btn" onclick="_cw.step=3;renderCasualWizard()"><i class="ti ti-arrow-left"></i> Tillbaka</button>'+
+      '<button class="btn btn-primary" style="flex:1;justify-content:center;padding:12px" '+(probs.length?'disabled ':'')+'onclick="createCasualRound()"><i class="ti ti-golf"></i> Starta ronden</button></div>';
   }
   el.innerHTML = h;
   if(_cw.step === 3) renderCasualUserList('');
@@ -11847,9 +11859,15 @@ function createCasualRound() {
   var doc = {
     createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(),
     courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
-    sim: !!_cw.sim, status: 'active', players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
-    scores: {}, putts: {}
+    sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active', players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
+    scores: {}, putts: {},
+    format: { primary: _cw.format.primary, secondary: _cw.format.secondary || null },
+    contests: (_cw.contests||[]).map(function(c){ return { id:c.id, type:c.type, hole:c.hole }; }), contestWin: {}, wolf: {}
   };
+  if(cwFormatProblem().length) { alert(cwFormatProblem().join('\n')); return; }
+  cwEnsureTeams();
+  doc.teams = cwBuildTeams().map(function(t){ return { key:t.key, name:t.name, members:t.members, shcp: t.shcp }; });
+  if(doc.format.secondary === 'wolf') doc.wolfOrder = _cw.players.map(function(p){ return p.key; });
   CASUAL_COL.add(doc).then(function(ref){ _cw = null; openCasualRound(ref.id); })
     .catch(function(e){ alert('Kunde inte starta ronden: '+e.message); });
 }
@@ -11867,7 +11885,8 @@ function openCasualRound(id) {
     _cr.data = d.data(); _cr.data.id = d.id;
     if(_cr.hole == null) { // börja på första ospelade hålet
       var n = (_cr.data.holePars||[]).length, first = 1;
-      for(var h=1; h<=n; h++) { var all = (_cr.data.players||[]).every(function(p){ return typeof ((_cr.data.scores||{})[p.key]||{})[h] === 'number'; }); if(!all) { first = h; break; } if(h === n) first = n; }
+      var units0 = cfUnits(_cr.data);
+      for(var h=1; h<=n; h++) { var all = units0.every(function(p){ return typeof ((_cr.data.scores||{})[p.key]||{})[h] === 'number'; }); if(!all) { first = h; break; } if(h === n) first = n; }
       _cr.hole = first;
     }
     renderCasualRound();
@@ -11894,6 +11913,73 @@ function casualStep(key, field, delta) {
   if(field === 'putts' && nv < 0) nv = 0;
   casualSetScore(key, field, nv);
 }
+
+// ── Sifferväljare (samma som tourens livescoring) ───────────────────────────
+// Tryck på spelarens scoreruta: steg 1 välj slag 1–10 (färg och etikett Birdie/Par/
+// Bogey …), steg 2 puttar 0–8 (frivilligt, hoppas över i simulator och lagformer).
+var _cpk = null;
+function casualOpenPicker(key) {
+  var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
+  _cpk = key; casualRenderPicker(false);
+}
+function casualRenderPicker(update) {
+  var r = _cr.data, h = _cr.hole, par = r.holePars[h-1], key = _cpk;
+  var cur = ((r.scores||{})[key]||{})[h];
+  var btns = '';
+  for(var n=1; n<=10; n++) {
+    var lbl = liveScoreLabel(n, par), cat = liveScoreCellStyle(n, par), on = cur === n;
+    btns += '<button onclick="casualPickScore('+n+')" style="padding:16px 0;border-radius:10px;border:'+(on?'3px solid #123A4D':'2px solid rgba(0,0,0,.12)')+';'+(cat || 'background:#fff;color:var(--text)')+';font-size:22px;font-weight:800;cursor:pointer">'+n+
+      (lbl?'<div style="font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.85">'+lbl+'</div>':'<div style="font-size:9px">&nbsp;</div>')+'</button>';
+  }
+  var html = '<div style="text-align:center;margin-bottom:12px"><div style="font-size:13px;color:var(--text-3)">Hål '+h+' · Par '+par+(cfIsTeamScore(r)||r.sim?'':' · Steg 1/2')+'</div>'+
+    '<div style="font-weight:800;font-size:22px">'+esc(cfName(r, key))+'</div><div style="font-size:13px;color:var(--text-2);margin-top:2px">Hur många slag?</div></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:9px;color:var(--text-3);margin-bottom:10px;justify-content:center">'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#E5484D;border-radius:2px;margin-right:3px"></span>Birdie</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#F7C948;border-radius:2px;margin-right:3px"></span>Eagle/Albatross/HIO</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#AEE3F5;border-radius:2px;margin-right:3px"></span>Bogey</span>'+
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#1E4E8C;border-radius:2px;margin-right:3px"></span>Dubbelbogey+</span></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
+    '<div style="display:flex;gap:8px"><button class="btn" style="flex:1;justify-content:center" onclick="closeModal()">Avbryt</button>'+
+    (typeof cur === 'number' ? '<button onclick="casualClearScore()" style="flex:1;padding:10px 0;border-radius:8px;background:#fdecec;color:#B42318;border:none;font-size:14px;font-weight:600"><i class="ti ti-backspace"></i> Radera</button>' : '')+'</div>';
+  if(update && document.getElementById('modal-mc')) updateModalContent(html); else showModal(html);
+}
+function casualPickScore(n) {
+  var r = _cr.data, key = _cpk;
+  casualSetScore(key, 'scores', n);
+  if(r.sim || cfIsTeamScore(r)) { closeModal(); cfWolfPrompt(); return; }
+  var h = _cr.hole, cur = ((r.putts||{})[key]||{})[h], btns = '';
+  for(var k=0; k<=8; k++) btns += '<button onclick="casualPickPutt('+k+')" style="padding:16px 0;border-radius:10px;border:2px solid '+(cur===k?'var(--green-dark)':'var(--border)')+';background:'+(cur===k?'var(--surface2)':'#fff')+';font-size:20px;font-weight:800;color:var(--text);cursor:pointer">'+k+'</button>';
+  updateModalContent('<div style="text-align:center;margin-bottom:16px"><div style="font-size:13px;color:var(--text-3)">Hål '+h+' · Slag: '+n+' · Steg 2/2</div>'+
+    '<div style="font-weight:800;font-size:22px">'+esc(cfName(r, key))+'</div><div style="font-size:13px;color:var(--text-2);margin-top:2px">Hur många puttar? (frivilligt)</div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+btns+'</div>'+
+    '<button onclick="casualSkipPutt()" style="width:100%;padding:12px 0;border-radius:8px;background:var(--surface2);color:var(--text-2);border:none;font-size:14px;font-weight:600">Hoppa över</button>');
+}
+function casualPickPutt(n) { casualSetScore(_cpk, 'putts', n); closeModal(); cfWolfPrompt(); }
+function casualSkipPutt() { closeModal(); cfWolfPrompt(); }
+function casualClearScore() { casualSetScore(_cpk, 'scores', null); var r = _cr.data; if(((r.putts||{})[_cpk]||{})[_cr.hole] != null) casualSetScore(_cpk, 'putts', null); closeModal(); }
+
+// Wolf-valet efter score: när alla fyra har fått slag på hålet och Wolfens val saknas
+// visas en fråga direkt (och innan man går till nästa hål).
+function cfWolfMissing(r, h) {
+  if(!r || casualFormat(r).secondary !== 'wolf' || (r.players||[]).length !== 4) return false;
+  if((r.wolf||{})[h]) return false;
+  return (r.players||[]).every(function(p){ return typeof ((r.scores||{})[p.key]||{})[h] === 'number'; });
+}
+function cfWolfPrompt(nextHole) {
+  var r = _cr.data, h = _cr.hole; if(!cfWolfMissing(r, h) || !casualCanEdit(r) || r.status !== 'active') return false;
+  var wolf = cfWolfOf(r, h);
+  var b = function(val, label, extra){ return '<button class="btn" style="justify-content:center;padding:12px;'+(extra||'')+'" onclick="casualSetWolf('+h+',\''+val+'\');closeModal();'+(nextHole?'casualGoHole('+nextHole+')':'')+'">'+label+'</button>'; };
+  var html = '<div style="text-align:center;margin-bottom:12px"><div style="font-size:13px;color:var(--text-3)">Hål '+h+' · Wolf-sidospel</div>'+
+    '<div style="font-weight:800;font-size:20px"><i class="ti ti-paw" style="color:#6D28D9"></i> '+esc(cfName(r, wolf))+' är Wolf</div>'+
+    '<div style="font-size:13px;color:var(--text-2);margin-top:2px">Vem valde Wolfen på det här hålet?</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'+
+      (r.players||[]).filter(function(p){ return p.key !== wolf; }).map(function(p){ return b(p.key, esc(cfShort(r, p.key))); }).join('')+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+b('lone','🐺 Ensam Wolf')+b('blind','🙈 Blind Wolf')+'</div>'+
+    '<button class="btn" style="width:100%;justify-content:center;color:var(--text-3)" onclick="closeModal();'+(nextHole?'casualGoHole('+nextHole+')':'')+'">Senare</button>';
+  if(document.getElementById('modal-mc')) updateModalContent(html); else showModal(html);
+  return true;
+}
+function casualNextHole(nh) { if(!cfWolfPrompt(nh)) casualGoHole(nh); }
 function renderCasualRound() {
   var el = document.getElementById('casual-content'); var r = _cr.data;
   if(!el || !r) return;
@@ -11904,11 +11990,12 @@ function renderCasualRound() {
   var out = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
     (getCourseImage(r.courseName)?'<img src="'+getCourseImage(r.courseName)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
     '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
-    '<div style="font-size:12px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare · par '+r.holePars.reduce(function(a,b){return a+b;},0)+(finished?' · <strong>Avslutad</strong>':'')+'</div></div></div>';
+    '<div style="font-size:12px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare · par '+r.holePars.reduce(function(a,b){return a+b;},0)+(finished?' · <strong>Avslutad</strong>':'')+'</div>'+
+    (!casualFormat(r).legacy ? '<div style="font-size:12px;color:#B45309;font-weight:600;margin-top:2px"><i class="ti '+CF[casualFormat(r).primary].icon+'"></i> '+esc(cfLabel(casualFormat(r).primary))+(casualFormat(r).secondary?' <span style="color:#6D28D9">+ '+esc(cfLabel(casualFormat(r).secondary))+'</span>':'')+(r.roundType==='practice'?' · <span style="color:var(--text-3)">Träning</span>':'')+'</div>' : '')+'</div></div>';
   // Hålväljare
   out += '<div style="display:flex;gap:4px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px">';
   for(var k=1; k<=n; k++) {
-    var done = (r.players||[]).every(function(p){ return typeof ((r.scores||{})[p.key]||{})[k] === 'number'; });
+    var done = cfUnits(r).every(function(p){ return typeof ((r.scores||{})[p.key]||{})[k] === 'number'; });
     out += '<button type="button" onclick="casualGoHole('+k+')" style="flex:0 0 auto;width:34px;height:34px;border-radius:50%;font:inherit;font-size:13px;font-weight:700;cursor:pointer;border:2px solid '+(k===h?'#B45309':done?'#1D9E75':'var(--border)')+';background:'+(k===h?'#B45309':done?'#E1F5EE':'var(--surface)')+';color:'+(k===h?'#fff':'var(--text)')+'">'+k+'</button>';
   }
   out += '</div>';
@@ -11917,35 +12004,48 @@ function renderCasualRound() {
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#FEF3E2;border-bottom:1px solid var(--border)">'+
       '<div style="font-size:18px;font-weight:800;color:#7A4100">Hål '+h+'</div>'+
       '<div style="font-size:13px;color:#7A4100"><strong>Par '+par+'</strong> · Index '+idx+'</div></div>';
-  (r.players||[]).forEach(function(p){
+  // Wolf: valet görs direkt i scoreinmatningen för hålet
+  var fmtH = casualFormat(r);
+  if(fmtH.secondary === 'wolf' && (r.players||[]).length === 4) out += cfWolfCardHTML(r, h, edit, true);
+  var teamScore = cfIsTeamScore(r);
+  cfUnits(r).forEach(function(p){
     var g = ((r.scores||{})[p.key]||{})[h], pt = ((r.putts||{})[p.key]||{})[h];
     var recv = computeHcpStrokesForHole(p.shcp||0, idx, n);
     var diff = typeof g === 'number' ? g - par : null;
     var col = diff == null ? 'var(--text-3)' : diff <= -2 ? '#BA7517' : diff === -1 ? '#1D9E75' : diff === 0 ? 'var(--text)' : diff === 1 ? '#D97706' : '#A32D2D';
     var stepBtn = function(field, delta, icon){ return '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\''+field+'\','+delta+')" style="width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:18px;cursor:pointer;'+(edit?'':'opacity:.4')+'"><i class="ti '+icon+'"></i></button>'; };
     out += '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+(p.guest?' <span style="font-size:10px;color:var(--text-3);font-weight:400">gäst</span>':'')+'</span>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+(teamScore&&p.team?' <span style="font-size:11px;color:var(--text-3);font-weight:400">'+esc(p.team.members.map(function(k){ return cfShort(r,k); }).join(' & '))+'</span>':'')+(p.guest?' <span style="font-size:10px;color:var(--text-3);font-weight:400">gäst</span>':'')+'</span>'+
         '<span style="font-size:11px;color:var(--text-3)">SHCP '+p.shcp+(recv?' · '+'●'.repeat(Math.min(recv,3))+' '+recv+' slag':'')+'</span></div>'+
       '<div style="display:flex;align-items:center;gap:8px">'+
         stepBtn('scores',-1,'ti-minus')+
-        '<button type="button" '+(edit?'':'disabled ')+'onclick="'+(typeof g==='number'?'':'casualSetScore(\''+p.key+'\',\'scores\','+par+')')+'" style="flex:1;height:44px;border-radius:10px;border:2px solid '+(typeof g==='number'?col:'var(--border)')+';background:var(--surface);font:inherit;font-size:22px;font-weight:800;color:'+col+';cursor:pointer">'+(typeof g==='number'?g:'<span style="font-size:13px;font-weight:600">Tryck = par</span>')+'</button>'+
+        '<button type="button" '+(edit?'':'disabled ')+'onclick="casualOpenPicker(\''+p.key+'\')" style="flex:1;height:44px;border-radius:10px;border:2px solid '+(typeof g==='number'?col:'var(--border)')+';'+(typeof g==='number' && liveScoreCellStyle(g, par) ? liveScoreCellStyle(g, par) : 'background:var(--surface);color:'+col)+';font:inherit;font-size:22px;font-weight:800;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1">'+(typeof g==='number'?g+(liveScoreLabel(g, par)?'<span style="font-size:8px;font-weight:700;letter-spacing:.4px;opacity:.85;margin-top:2px">'+liveScoreLabel(g, par)+'</span>':''):'<span style="font-size:13px;font-weight:600">Tryck för slag</span>')+'</button>'+
         stepBtn('scores',1,'ti-plus')+
-        (r.sim ? '' : '<div style="display:flex;align-items:center;gap:4px;margin-left:4px"><span style="font-size:10px;color:var(--text-3);writing-mode:vertical-rl;transform:rotate(180deg)">puttar</span>'+
+        (r.sim || teamScore ? '' : '<div style="display:flex;align-items:center;gap:4px;margin-left:4px"><span style="font-size:10px;color:var(--text-3);writing-mode:vertical-rl;transform:rotate(180deg)">puttar</span>'+
           '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\'putts\',-1)" style="width:30px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer"><i class="ti ti-minus"></i></button>'+
           '<span style="min-width:18px;text-align:center;font-weight:700">'+(typeof pt==='number'?pt:'–')+'</span>'+
           '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\'putts\',1)" style="width:30px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer"><i class="ti ti-plus"></i></button></div>')+
       '</div></div>';
   });
+  out += cfContestCardsHTML(r, h, edit, true);
   out += '<div style="display:flex;gap:8px;padding:10px 14px">'+
     '<button class="btn" '+(h<=1?'disabled ':'')+'onclick="casualGoHole('+(h-1)+')"><i class="ti ti-arrow-left"></i></button>'+
-    (h < n ? '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="casualGoHole('+(h+1)+')">Nästa hål <i class="ti ti-arrow-right"></i></button>'
+    (h < n ? '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="casualNextHole('+(h+1)+')">Nästa hål <i class="ti ti-arrow-right"></i></button>'
            : (edit ? '<button class="btn btn-primary" style="flex:1;justify-content:center" onclick="finishCasualRound()"><i class="ti ti-flag-check"></i> Avsluta ronden</button>' : '<span style="flex:1"></span>'))+
   '</div></div>';
   if(!edit && !finished) out += '<p style="font-size:12px;color:var(--text-3);margin:-4px 0 10px;text-align:center"><i class="ti ti-eye"></i> Du följer ronden live.</p>';
-  // Ställning
-  var rows = (r.players||[]).map(function(p){ return { p:p, t: casualTotals(r, p) }; })
+  // Wolf och sidotävlingar på det här hålet
+  var fmt = casualFormat(r);
+  // Ställning per spelform (nya ronder) – äldre ronder behåller den gamla tabellen
+  if(!fmt.legacy) {
+    out += cfBoardHTML(cfResults(r, fmt.primary), 'Primärt');
+    if(fmt.secondary) out += cfBoardHTML(cfResults(r, fmt.secondary), 'Sidospel');
+  }
+  out += cfContestSummaryHTML(r);
+  var rows = fmt.legacy ? (r.players||[]).map(function(p){ return { p:p, t: casualTotals(r, p) }; }) : [];
+  if(fmt.legacy) rows = rows
     .sort(function(a,b){ return (b.t.poang - a.t.poang) || (a.t.nettoVsPar - b.t.nettoVsPar); });
-  out += '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">'+
+  if(fmt.legacy) out += '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden">'+
     '<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px"><i class="ti ti-list-numbers"></i> Ställning</div>'+
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) 38px 46px 46px 40px;gap:4px;padding:6px 14px;font-size:11px;color:var(--text-3)"><span>Spelare</span><span style="text-align:right">Hål</span><span style="text-align:right">Brutto</span><span style="text-align:right">+/- net</span><span style="text-align:right">Poäng</span></div>'+
     rows.map(function(x, i){
@@ -11971,7 +12071,7 @@ function showCasualScorecard() {
   var n = r.holePars.length;
   var head = '<tr><th style="padding:4px;text-align:left">Hål</th>'+r.holePars.map(function(_, i){ return '<th style="padding:4px">'+(i+1)+'</th>'; }).join('')+'<th style="padding:4px">Tot</th><th style="padding:4px">P</th></tr>';
   var parRow = '<tr style="color:var(--text-3)"><td style="padding:4px">Par</td>'+r.holePars.map(function(p){ return '<td style="padding:4px;text-align:center">'+p+'</td>'; }).join('')+'<td style="padding:4px;text-align:center">'+r.holePars.reduce(function(a,b){return a+b;},0)+'</td><td></td></tr>';
-  var rows = (r.players||[]).map(function(p){
+  var rows = cfUnits(r).map(function(p){
     var sc = (r.scores||{})[p.key]||{}, t = casualTotals(r, p);
     var cells = ''; for(var h=1; h<=n; h++) { var g = sc[h], d = typeof g==='number' ? g - r.holePars[h-1] : null;
       cells += '<td style="padding:4px;text-align:center;font-weight:700;color:'+(d==null?'var(--text-3)':d<0?'#0F6E56':d>0?'#A32D2D':'var(--text)')+'">'+(typeof g==='number'?g:'·')+'</td>'; }
@@ -11982,7 +12082,8 @@ function showCasualScorecard() {
 }
 function finishCasualRound() {
   var r = _cr.data; if(!r || !casualCanEdit(r)) return;
-  var incomplete = (r.players||[]).filter(function(p){ return !casualTotals(r, p).complete; });
+  if(cfWolfPrompt()) return;
+  var incomplete = cfUnits(r).filter(function(p){ return !casualTotals(r, p).complete; });
   var msg = 'Avsluta ronden?';
   if(incomplete.length) msg += '\n\nObs! '+incomplete.map(function(p){ return p.name; }).join(', ')+' har inte alla hål ifyllda. Ofullständiga ronder räknas inte i statistiken.';
   if(!confirm(msg)) return;
@@ -12007,7 +12108,18 @@ function shareCasualRoundToWall() {
   var me = findUser(currentUser.username) || currentUser;
   var summary = (r.players||[]).map(function(p){ var t = casualTotals(r, p); return { name:p.name, guest:!!p.guest, poang:t.poang, brutto:t.brutto, netto:t.netto, thru:t.thru }; })
     .sort(function(a,b){ return b.poang - a.poang; });
+  var fmtS = casualFormat(r), resLine = '';
+  if(!fmtS.legacy) {
+    var pr = cfResults(r, fmtS.primary);
+    if(pr) {
+      resLine = cfLabel(fmtS.primary) + ': ' + (pr.status && /vann|Delad/.test(pr.status) ? pr.status : (pr.rows[0] ? pr.rows[0].name + ' ' + pr.rows[0].main : ''));
+      if(cfIsTeamScore(r) || CF[fmtS.primary].pairs) summary = [];
+    }
+    if(fmtS.secondary) { var sr = cfResults(r, fmtS.secondary); if(sr && sr.rows[0]) resLine += ' · ' + cfLabel(fmtS.secondary) + ': ' + sr.rows[0].name + ' ' + sr.rows[0].main; }
+    (r.contests||[]).forEach(function(c){ var w = (r.contestWin||{})[c.id]; if(w) resLine += ' · ' + (CONTEST_META[c.type]||{}).label + ' hål ' + c.hole + ': ' + cfShort(r, w); });
+  }
   ACTIVITY_FEED_COL.add({
+    resultLine: resLine, formatLabel: fmtS.legacy ? null : cfLabel(fmtS.primary),
     tourId: '__casual', tourName: 'Sällskapsrond', eventId: r.id, eventName: r.courseName,
     playerUsername: currentUser.username, playerName: me.name || currentUser.username,
     category: 'casualround', course: r.courseName, sim: !!r.sim, holes: r.holePars.length, summary: summary,
@@ -12033,6 +12145,387 @@ function buildCasualRoundsListHTML(username) {
         '<span style="text-align:right;font-size:12px;color:var(--text-2)">'+(t.complete?t.brutto+' brutto':t.thru+' hål')+'</span>'+
         '<span style="min-width:42px;text-align:right;font-weight:800;color:#B45309">'+t.poang+' p</span></div>';
     }).join('')+'</div>';
+}
+
+
+// ══ SPELFORMER, LAG, SIDOTÄVLINGAR OCH WOLF I SÄLLSKAPSROND ══════════════════
+// Ronden får ett primärt spel och (valfritt) ett sidospel. Alla spelformer räknas
+// på samma inslagna slag och samma SHCP – bara poängräkningen skiljer. Lagformer
+// med ett lagscore (scramble, foursome, greensome) förs per lag (scores[lag.key]).
+//   r.format = { primary, secondary }   r.roundType = 'casual'|'practice'|'sim'
+//   r.teams = [{ key, name, members:[spelarnycklar], shcp }]
+//   r.contests = [{ id, type:'ctp'|'ld', hole }]   r.contestWin = { id: spelarnyckel }
+//   r.wolf = { [hål]: 'lone'|'blind'|partnernyckel }   r.wolfOrder = [4 spelarnycklar]
+// Sidotävlingar (närmast hål, längsta drive) är helt skilda från tourens side bets:
+// inga pengar, ingen koppling till Vinster & betting.
+var CF = {
+  stroke_net:     { cat:'ind',  title:'Slagspel',        sub:'Netto',      icon:'ti-golf' },
+  stroke_gross:   { cat:'ind',  title:'Slagspel',        sub:'Brutto',     icon:'ti-golf' },
+  stableford:     { cat:'ind',  title:'Poängbogey',      sub:'',           icon:'ti-star' },
+  match:          { cat:'ind',  title:'Matchspel',       sub:'1 mot 1',    icon:'ti-swords', players:2 },
+  skins:          { cat:'ind',  title:'Skins',           sub:'Netto',      icon:'ti-coins', min:2 },
+  bb_stroke:      { cat:'pair', title:'Bästboll',        sub:'Slagspel',   icon:'ti-flame', pairs:true },
+  bb_stableford:  { cat:'pair', title:'Bästboll',        sub:'Poängbogey', icon:'ti-flame', pairs:true },
+  bb_match:       { cat:'pair', title:'Bästboll',        sub:'Matchspel',  icon:'ti-swords', pairs:true, players:4 },
+  lowscratch:     { cat:'pair', title:'Low Scratch/Net', sub:'Slagspel',   icon:'ti-heart-handshake', pairs:true },
+  scramble:       { cat:'team', title:'Scramble',        sub:'Slagspel',   icon:'ti-users-group', teamScore:true },
+  scramble_match: { cat:'team', title:'Scramble',        sub:'Matchspel',  icon:'ti-users-group', teamScore:true, teams2:true },
+  foursome:       { cat:'team', title:'Foursome',        sub:'Matchspel',  icon:'ti-arrows-exchange', teamScore:true, players:4 },
+  greensome:      { cat:'team', title:'Greensome',       sub:'Matchspel',  icon:'ti-arrows-shuffle', teamScore:true, players:4 },
+  wolf:           { cat:'side', title:'Wolf',            sub:'',           icon:'ti-paw', players:4, sideOnly:true }
+};
+var CF_CATS = [ { k:'ind', label:'Individuellt', icon:'ti-user' }, { k:'pair', label:'Par / bästboll', icon:'ti-users' }, { k:'team', label:'Lag med ett lagscore', icon:'ti-users-group' } ];
+var CF_SECONDARY = ['stableford','stroke_net','stroke_gross','skins','match','wolf'];
+var CF_INFO = {
+  stroke_net: 'Alla slag räknas. Lägst nettoresultat (brutto minus erhållna slag) mot par vinner.',
+  stroke_gross: 'Alla slag räknas utan handicap. Lägst bruttoresultat vinner.',
+  stableford: 'Poäng per hål efter nettoresultat: dubbelbogey eller sämre 0, bogey 1, par 2, birdie 3 osv. Flest poäng vinner.',
+  match: 'Två spelare möts hål för hål på netto. Spelaren med högst SHCP får skillnaden i slag på de svåraste hålen. Flest vunna hål vinner (t.ex. 3&2).',
+  skins: 'Varje hål är värt en skin. Lägst unika nettoscore vinner hålet. Delat hål – skinnet följer med till nästa hål.',
+  bb_stroke: 'Lag om två. Lagets bästa nettoscore per hål räknas. Lägst summa vinner.',
+  bb_stableford: 'Lag om två. Lagets bästa poäng per hål räknas. Flest poäng vinner.',
+  bb_match: 'Två lag om två möts hål för hål med lagets bästa nettoscore.',
+  lowscratch: 'Lag om två. Per hål räknas lagets bästa brutto plus lagets bästa netto. Lägst summa vinner.',
+  scramble: 'Alla i laget slår, laget väljer bästa bollen och alla spelar därifrån. Ett score per lag och hål, räknat med lagets SHCP.',
+  scramble_match: 'Scramble där två lag möts hål för hål med lagets SHCP.',
+  foursome: 'Två lag om två slår varannat slag med en boll (spelare 1 slår ut på udda hål, spelare 2 på jämna). Matchspel med lag-SHCP.',
+  greensome: 'Båda i laget slår ut, laget väljer bästa utslaget och slår sedan varannat slag. Matchspel med lag-SHCP.',
+  wolf: 'Sidospel för exakt fyra spelare. Wolf roterar varje hål och väljer partner – eller spelar ensam. Poäng per hål efter bästa nettoscore.'
+};
+// Wolf-poäng (kan ändras senare om vi vill köra andra varianter)
+var WOLF_PTS = { teamWin:2, oppWin:3, loneWin:4, loneLoseEach:1, blindWin:6, blindLoseEach:2 };
+
+function cfLabel(k) { var f = CF[k]; return f ? f.title + (f.sub ? ' · ' + f.sub : '') : ''; }
+function casualFormat(r) { return (r && r.format && CF[r.format.primary]) ? r.format : { primary:'stableford', secondary:null, legacy:true }; }
+function cfVsPar(v) { return v == null ? '–' : v === 0 ? 'E' : v > 0 ? '+' + v : String(v); }
+function cfIsTeamScore(r) { var f = CF[casualFormat(r).primary]; return !!(f && f.teamScore); }
+function cfTeamOf(r, key) { return (r.teams||[]).find(function(t){ return (t.members||[]).indexOf(key) >= 0; }) || null; }
+function cfName(r, key) { var p = (r.players||[]).find(function(x){ return x.key === key; }); return p ? p.name : ((r.teams||[]).find(function(t){ return t.key === key; })||{}).name || '?'; }
+function cfFirst(n) { return String(n||'').split(' ')[0]; }
+// Kort namn: förnamn, plus efternamnets initial om två i ronden har samma förnamn
+function cfShort(r, key) {
+  var name = cfName(r, key), f = cfFirst(name);
+  var dup = (r.players||[]).filter(function(p){ return cfFirst(p.name) === f; }).length > 1;
+  var parts = String(name).split(' ');
+  return dup && parts.length > 1 ? f + ' ' + parts[parts.length-1].charAt(0) + '.' : f;
+}
+
+// Hålvärden för en spelare eller ett lag (score-nyckel + SHCP)
+function cfHole(r, key, shcp, h, strokesOverride) {
+  var g = ((r.scores||{})[key]||{})[h];
+  if(typeof g !== 'number' || g <= 0) return null;
+  var n = r.holePars.length, par = r.holePars[h-1], idx = (r.holeHcpIndex && r.holeHcpIndex[h-1]) || h;
+  var recv = strokesOverride != null ? strokesOverride : computeHcpStrokesForHole(shcp || 0, idx, n);
+  return { g:g, par:par, recv:recv, net:g - recv, pts:computeHoleStablefordPoints(g, par, recv), idx:idx };
+}
+function cfUnits(r) {
+  if(cfIsTeamScore(r)) return (r.teams||[]).map(function(t){ return { key:t.key, name:t.name, shcp:t.shcp||0, team:t }; });
+  return (r.players||[]).map(function(p){ return { key:p.key, name:p.name, shcp:p.shcp||0, player:p }; });
+}
+
+// ── Resultat per spelform ──────────────────────────────────────────────────
+// Returnerar { title, rows:[{name, main, sub, lead}], status }
+function cfResults(r, fk) {
+  var n = r.holePars.length, f = CF[fk]; if(!f) return null;
+  var out = { key:fk, title:cfLabel(fk), rows:[], status:'' };
+  if(fk === 'stroke_net' || fk === 'stroke_gross' || fk === 'stableford' || fk === 'scramble') {
+    var units = cfUnits(r);
+    if(fk === 'scramble') units = (r.teams||[]).map(function(t){ return { key:t.key, name:t.name, shcp:t.shcp||0 }; });
+    var rows = units.map(function(u){
+      var thru = 0, g = 0, net = 0, par = 0, pts = 0;
+      for(var h=1; h<=n; h++) { var x = cfHole(r, u.key, u.shcp, h); if(!x) continue; thru++; g += x.g; net += x.net; par += x.par; pts += x.pts; }
+      var val = fk === 'stableford' ? pts : fk === 'stroke_gross' ? g - par : net - par;
+      return { name:u.name, thru:thru, val: thru ? val : null, main: thru ? (fk === 'stableford' ? pts + ' p' : cfVsPar(val)) : '–',
+        sub: thru ? (thru === n ? 'Klar' : thru + ' hål') + ' · brutto ' + g + (fk === 'stableford' ? '' : ' · netto ' + net) : 'Inte startat' };
+    });
+    rows.sort(function(a,b){ if(a.val == null) return 1; if(b.val == null) return -1; return fk === 'stableford' ? b.val - a.val : a.val - b.val; });
+    out.rows = rows; return out;
+  }
+  if(fk === 'skins') {
+    var ps = r.players||[], won = {}, carry = 0, decided = 0;
+    ps.forEach(function(p){ won[p.key] = 0; });
+    for(var h=1; h<=n; h++) {
+      var xs = ps.map(function(p){ return { p:p, x:cfHole(r, p.key, p.shcp, h) }; });
+      if(xs.some(function(o){ return !o.x; })) break;
+      var best = Math.min.apply(null, xs.map(function(o){ return o.x.net; }));
+      var w = xs.filter(function(o){ return o.x.net === best; });
+      decided = h;
+      if(w.length === 1) { won[w[0].p.key] += 1 + carry; carry = 0; } else carry++;
+    }
+    out.rows = ps.map(function(p){ return { name:p.name, val:won[p.key], main: won[p.key] + ' skin' + (won[p.key]===1?'':'s'), sub:'' }; }).sort(function(a,b){ return b.val - a.val; });
+    out.status = decided ? 'Efter hål ' + decided + (carry ? ' · ' + carry + ' skin' + (carry===1?'':'s') + ' i potten' : '') : 'Inga avgjorda hål än';
+    return out;
+  }
+  // Matchformer
+  var sides = null;
+  if(fk === 'match') { var a = (r.players||[])[0], b = (r.players||[])[1]; if(!a || !b) return out; sides = [{ name:a.name, keys:[a.key], shcp:[a.shcp] }, { name:b.name, keys:[b.key], shcp:[b.shcp] }]; }
+  else if(fk === 'bb_match') { var T = r.teams||[]; if(T.length < 2) return out; sides = T.slice(0,2).map(function(t){ return { name:t.name, keys:t.members.slice(), shcp:t.members.map(function(k){ return ((r.players||[]).find(function(p){ return p.key === k; })||{}).shcp || 0; }) }; }); }
+  else if(fk === 'scramble_match' || fk === 'foursome' || fk === 'greensome') { var T2 = r.teams||[]; if(T2.length < 2) return out; sides = T2.slice(0,2).map(function(t){ return { name:t.name, keys:[t.key], shcp:[t.shcp||0] }; }); }
+  if(sides) {
+    // Matchspel: den med lägst SHCP spelar på 0, övriga får skillnaden i slag
+    var all = sides[0].shcp.concat(sides[1].shcp), low = Math.min.apply(null, all);
+    var up = 0, played = 0, result = '';
+    var holeNet = function(s, h){ var best = null; s.keys.forEach(function(k, i){ var idx = (r.holeHcpIndex && r.holeHcpIndex[h-1]) || h; var x = cfHole(r, k, 0, h, computeHcpStrokesForHole(s.shcp[i] - low, idx, n)); if(x && (best == null || x.net < best)) best = x.net; }); return best; };
+    for(var h2=1; h2<=n; h2++) {
+      var na = holeNet(sides[0], h2), nb = holeNet(sides[1], h2);
+      if(na == null || nb == null) break;
+      played = h2; if(na < nb) up++; else if(nb < na) up--;
+      var left = n - h2;
+      if(Math.abs(up) > left) { result = (up > 0 ? sides[0].name : sides[1].name) + ' vann ' + Math.abs(up) + (left ? '&' + left : ' up'); break; }
+    }
+    if(!result && played === n) result = up === 0 ? 'Delad match (AS)' : (up > 0 ? sides[0].name : sides[1].name) + ' vann ' + Math.abs(up) + ' up';
+    if(!result) result = played ? (up === 0 ? 'Lika (AS)' : (up > 0 ? sides[0].name : sides[1].name) + ' ' + Math.abs(up) + ' up') + ' efter ' + played + ' hål' : 'Matchen har inte startat';
+    out.rows = sides.map(function(s, i){ var lead = (i === 0 ? up : -up); return { name:s.name, val:lead, main: lead > 0 ? lead + ' up' : lead === 0 ? 'AS' : '', sub: s.keys.length > 1 || (r.teams && fk !== 'match') ? '' : 'SHCP ' + s.shcp[0] }; });
+    out.status = result;
+    return out;
+  }
+  if(fk === 'bb_stroke' || fk === 'bb_stableford' || fk === 'lowscratch') {
+    out.rows = (r.teams||[]).map(function(t){
+      var mem = t.members.map(function(k){ return (r.players||[]).find(function(p){ return p.key === k; }); }).filter(Boolean);
+      var tot = 0, par = 0, thru = 0;
+      for(var h=1; h<=n; h++) {
+        var xs = mem.map(function(p){ return cfHole(r, p.key, p.shcp, h); }).filter(Boolean);
+        if(!xs.length) continue;
+        thru++; par += r.holePars[h-1];
+        if(fk === 'bb_stableford') tot += Math.max.apply(null, xs.map(function(x){ return x.pts; }));
+        else if(fk === 'bb_stroke') tot += Math.min.apply(null, xs.map(function(x){ return x.net; }));
+        else tot += Math.min.apply(null, xs.map(function(x){ return x.g; })) + Math.min.apply(null, xs.map(function(x){ return x.net; }));
+      }
+      var val = !thru ? null : fk === 'bb_stableford' ? tot : fk === 'bb_stroke' ? tot - par : tot - 2 * par;
+      return { name:t.name, val:val, main: val == null ? '–' : fk === 'bb_stableford' ? val + ' p' : cfVsPar(val), sub: mem.map(function(p){ return cfShort(r, p.key); }).join(' & ') + (thru ? ' · ' + thru + ' hål' : '') };
+    });
+    out.rows.sort(function(a,b){ if(a.val == null) return 1; if(b.val == null) return -1; return fk === 'bb_stableford' ? b.val - a.val : a.val - b.val; });
+    return out;
+  }
+  if(fk === 'wolf') return cfWolfResults(r);
+  return out;
+}
+
+// ── Wolf ─────────────────────────────────────────────────────────────────────
+function cfWolfOrder(r) { var o = (r.wolfOrder && r.wolfOrder.length === 4) ? r.wolfOrder : (r.players||[]).slice(0,4).map(function(p){ return p.key; }); return o; }
+function cfWolfOf(r, h) { var o = cfWolfOrder(r); return o[(h-1) % 4]; }
+function cfWolfHole(r, h) {
+  var wolf = cfWolfOf(r, h), choice = (r.wolf||{})[h];
+  var ps = r.players||[], nets = {};
+  for(var i=0;i<ps.length;i++) { var x = cfHole(r, ps[i].key, ps[i].shcp, h); if(!x) return { wolf:wolf, choice:choice, pending:true }; nets[ps[i].key] = x.net; }
+  if(!choice) return { wolf:wolf, choice:null, pending:true, needChoice:true };
+  var lone = choice === 'lone' || choice === 'blind';
+  var side = lone ? [wolf] : [wolf, choice];
+  var others = ps.map(function(p){ return p.key; }).filter(function(k){ return side.indexOf(k) < 0; });
+  var bs = Math.min.apply(null, side.map(function(k){ return nets[k]; })), bo = Math.min.apply(null, others.map(function(k){ return nets[k]; }));
+  var pts = {}; ps.forEach(function(p){ pts[p.key] = 0; });
+  var res = bs < bo ? 'side' : bo < bs ? 'others' : 'tie';
+  if(res === 'side') side.forEach(function(k){ pts[k] = lone ? (choice === 'blind' ? WOLF_PTS.blindWin : WOLF_PTS.loneWin) : WOLF_PTS.teamWin; });
+  if(res === 'others') others.forEach(function(k){ pts[k] = lone ? (choice === 'blind' ? WOLF_PTS.blindLoseEach : WOLF_PTS.loneLoseEach) : WOLF_PTS.oppWin; });
+  return { wolf:wolf, choice:choice, side:side, others:others, res:res, pts:pts };
+}
+function cfWolfResults(r) {
+  var n = r.holePars.length, tot = {}, last = 0;
+  (r.players||[]).forEach(function(p){ tot[p.key] = 0; });
+  for(var h=1; h<=n; h++) { var x = cfWolfHole(r, h); if(x.pending) continue; last = h; Object.keys(x.pts).forEach(function(k){ tot[k] += x.pts[k]; }); }
+  var rows = (r.players||[]).map(function(p){ return { name:p.name, val:tot[p.key], main: tot[p.key] + ' p', sub: '' }; }).sort(function(a,b){ return b.val - a.val; });
+  return { key:'wolf', title:'Wolf', rows:rows, status: last ? 'Avgjorda hål t.o.m. hål ' + last : 'Inga avgjorda hål än' };
+}
+function casualSetWolf(h, val) {
+  var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
+  r.wolf = r.wolf || {}; if(val) r.wolf[h] = val; else delete r.wolf[h];
+  var upd = { updatedAt: Date.now() }; upd['wolf.' + h] = val ? val : firebase.firestore.FieldValue.delete();
+  renderCasualRound();
+  CASUAL_COL.doc(r.id).update(upd).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
+}
+function cfWolfCardHTML(r, h, edit, inline) {
+  var x = cfWolfHole(r, h), wolf = x.wolf, choice = (r.wolf||{})[h];
+  var btn = function(val, label){ var on = choice === val; return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" '+(edit?'':'disabled ')+'onclick="casualSetWolf('+h+',\''+(on?'':val)+'\')">'+label+'</button>'; };
+  var h2 = (inline ? '<div style="padding:10px 14px;background:#F6F2FE;border-bottom:1px solid var(--border)">' : '<div class="card" style="padding:10px 14px;margin-bottom:10px;border-color:#C9B8EE">')+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="ti ti-paw" style="color:#6D28D9;font-size:18px"></i>'+
+    '<b style="flex:1">'+esc(cfName(r, wolf))+' är Wolf</b><span style="font-size:11px;color:var(--text-3)">Wolf-sidospel</span></div>'+
+    '<div style="font-size:12px;color:var(--text-2);margin-bottom:6px">Välj partner eller spela ensam:</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+
+    (r.players||[]).filter(function(p){ return p.key !== wolf; }).map(function(p){ return btn(p.key, esc(cfShort(r, p.key))); }).join('')+
+    btn('lone', '🐺 Ensam Wolf') + btn('blind', '🙈 Blind Wolf') + '</div>';
+  if(!x.pending) h2 += '<div style="font-size:12px;margin-top:8px;color:'+(x.res==='tie'?'var(--text-2)':'var(--green-dark)')+';font-weight:600">'+
+    (x.res === 'tie' ? 'Delat hål – inga poäng' : (x.res === 'side' ? (x.side.length === 1 ? esc(cfShort(r, wolf)) + ' vann ensam' : esc(cfShort(r, x.side[0])) + ' & ' + esc(cfShort(r, x.side[1])) + ' vann') : 'Motståndarna vann') +
+    ': ' + Object.keys(x.pts).filter(function(k){ return x.pts[k]; }).map(function(k){ return esc(cfShort(r, k)) + ' +' + x.pts[k]; }).join(', '))+'</div>';
+  else if(x.needChoice) h2 += '<div style="font-size:12px;color:#B45309;margin-top:6px;font-weight:700"><i class="ti ti-alert-circle"></i> Välj ovan vad Wolfen valde – annars räknas inte hålet i Wolf.</div>';
+  return h2 + '</div>';
+}
+
+// ── Sidotävlingar på hålet ─────────────────────────────────────────────────
+function casualSetContest(id, key) {
+  var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
+  r.contestWin = r.contestWin || {}; if(key) r.contestWin[id] = key; else delete r.contestWin[id];
+  var upd = { updatedAt: Date.now() }; upd['contestWin.' + id] = key ? key : firebase.firestore.FieldValue.delete();
+  renderCasualRound();
+  CASUAL_COL.doc(r.id).update(upd).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
+}
+var CONTEST_META = { ctp:{ label:'Närmast hål', icon:'ti-target' }, ld:{ label:'Längsta drive', icon:'ti-arrow-big-right-lines' } };
+function cfContestCardsHTML(r, h, edit, inline) {
+  return (r.contests||[]).filter(function(c){ return c.hole === h; }).map(function(c){
+    var m = CONTEST_META[c.type] || CONTEST_META.ctp, cur = (r.contestWin||{})[c.id];
+    return (inline ? '<div style="padding:10px 14px;background:#FFF8EC;border-bottom:1px solid var(--border)">' : '<div class="card" style="padding:10px 14px;margin-bottom:10px;border-color:#F3D19E;background:#FFF8EC">')+'<div style="font-weight:700;margin-bottom:6px"><i class="ti '+m.icon+'" style="color:var(--gold)"></i> '+m.label+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px">'+(r.players||[]).map(function(p){ var on = cur === p.key;
+        return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" '+(edit?'':'disabled ')+'onclick="casualSetContest(\''+c.id+'\',\''+(on?'':p.key)+'\')">'+(on?'🏆 ':'')+esc(cfShort(r, p.key))+'</button>'; }).join('')+'</div></div>';
+  }).join('');
+}
+function cfContestSummaryHTML(r) {
+  if(!(r.contests||[]).length) return '';
+  return '<div class="card" style="padding:10px 14px;margin-bottom:10px"><div style="font-weight:700;font-size:14px;margin-bottom:6px"><i class="ti ti-target" style="color:var(--gold)"></i> Sidotävlingar</div>'+
+    r.contests.map(function(c){ var m = CONTEST_META[c.type] || CONTEST_META.ctp, w = (r.contestWin||{})[c.id];
+      return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>'+m.label+' · hål '+c.hole+'</span><b>'+(w ? '🏆 '+esc(cfName(r, w)) : '<span style="color:var(--text-3);font-weight:400">ej avgjord</span>')+'</b></div>'; }).join('')+
+    '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Sällskapets egna tävlingar – inga side bets och ingen koppling till Vinster &amp; betting.</div></div>';
+}
+// Statistik: vinster i sidotävlingar (bara avslutade sällskapsronder, ej träning)
+function casualContestStatsHTML() {
+  var by = {};
+  (_casualRounds||[]).forEach(function(r){
+    if(r.roundType === 'practice') return;
+    Object.keys(r.contestWin||{}).forEach(function(id){
+      var c = (r.contests||[]).find(function(x){ return x.id === id; }); if(!c) return;
+      var p = (r.players||[]).find(function(x){ return x.key === r.contestWin[id]; }); if(!p || p.guest || !p.username) return;
+      var e = by[p.username] = by[p.username] || { u:p.username, name:p.name, ctp:0, ld:0 };
+      e[c.type === 'ld' ? 'ld' : 'ctp']++;
+    });
+  });
+  var rows = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a,b){ return (b.ctp + b.ld) - (a.ctp + a.ld) || b.ctp - a.ctp; });
+  var h = '<div class="card" style="padding:12px 14px;margin-top:12px"><div style="font-weight:700;font-size:14px;margin-bottom:6px"><i class="ti ti-target" style="color:var(--gold)"></i> Sidotävlingar i sällskapsronder</div>';
+  if(!rows.length) return h + '<p style="font-size:13px;color:var(--text-3);margin:0">Inga avgjorda sidotävlingar än.</p></div>';
+  h += '<div style="display:grid;grid-template-columns:minmax(0,1fr) 70px 70px;gap:4px;font-size:11px;color:var(--text-3);padding:4px 0"><span>Spelare</span><span style="text-align:right">Närmast hål</span><span style="text-align:right">Längsta drive</span></div>'+
+    rows.map(function(x){ return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 70px 70px;gap:4px;font-size:13px;padding:6px 0;border-top:1px solid var(--border)"><span>'+esc(x.name)+'</span><b style="text-align:right">'+x.ctp+'</b><b style="text-align:right">'+x.ld+'</b></div>'; }).join('');
+  return h + '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Räknas separat från tourens side bets.</p></div>';
+}
+
+// ── Leaderboards på rondsidan ───────────────────────────────────────────────
+function cfBoardHTML(res, tag) {
+  if(!res) return '';
+  return '<div class="card" style="padding:0;margin-bottom:10px;overflow:hidden"><div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'+
+    '<span class="badge" style="background:'+(tag==='Primärt'?'#FEF3E2;color:#B45309':'#F1EBFD;color:#6D28D9')+'">'+tag+'</span><b style="font-size:14px;flex:1">'+esc(res.title)+'</b>'+
+    '<i class="ti ti-info-circle" style="color:var(--text-3);cursor:pointer" onclick="cfShowInfo(\''+res.key+'\')"></i></div>'+
+    (res.status ? '<div style="padding:6px 14px;font-size:12px;font-weight:700;color:var(--green-dark);background:var(--green-light)">'+esc(res.status)+'</div>' : '')+
+    res.rows.map(function(x, i){ return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border);font-size:13px">'+
+      '<span style="width:20px;font-weight:700;color:var(--text-3)">'+(i+1)+'</span><div style="flex:1;min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.name)+'</div>'+(x.sub?'<div style="font-size:11px;color:var(--text-3)">'+esc(x.sub)+'</div>':'')+'</div>'+
+      '<b style="font-size:15px;color:#B45309;white-space:nowrap">'+esc(x.main||'')+'</b></div>'; }).join('')+'</div>';
+}
+function cfShowInfo(k) { showModal('<h3><i class="ti '+(CF[k]||{}).icon+'"></i> '+esc(cfLabel(k))+'</h3><p style="font-size:14px;line-height:1.5;color:var(--text-2)">'+esc(CF_INFO[k]||'')+'</p>'+(k==='wolf'?'<p style="font-size:13px;color:var(--text-2)">Poäng: Wolf + partner vinner '+WOLF_PTS.teamWin+' p var · motståndarna vinner '+WOLF_PTS.oppWin+' p var · Ensam Wolf vinner '+WOLF_PTS.loneWin+' p (förlorar: '+WOLF_PTS.loneLoseEach+' p till var och en av de andra) · Blind Wolf vinner '+WOLF_PTS.blindWin+' p (förlorar: '+WOLF_PTS.blindLoseEach+' p var). Delat hål ger inga poäng.</p>':'')+'<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>'); }
+
+// ── Guiden: steg 2 (spelform) och steg 4 (SHCP & lag) ───────────────────────
+function cwFormatCard(k, sel) {
+  var f = CF[k], on = sel === k;
+  return '<div class="cf-tile'+(on?' on':'')+'" onclick="cwSetPrimary(\''+k+'\')"><i class="ti '+f.icon+'"></i><div class="cf-t">'+f.title+'</div>'+(f.sub?'<div class="cf-s">'+f.sub+'</div>':'')+'</div>';
+}
+function cwSetPrimary(k) {
+  _cw.format.primary = k;
+  if(_cw.format.secondary === k || (CF[k].teamScore && _cw.format.secondary)) _cw.format.secondary = null;
+  renderCasualWizard();
+}
+function cwStep2HTML(c) {
+  var fm = _cw.format, h = '';
+  h += '<div class="card" style="padding:12px 14px;margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Rondtyp</div><div style="display:flex;gap:6px">'+
+    [['casual','ti-users-group','Sällskap'],['practice','ti-run','Träning'],['sim','ti-device-desktop','Simulator']].map(function(x){ var on = _cw.roundType === x[0];
+      return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" style="flex:1;justify-content:center" onclick="_cw.roundType=\''+x[0]+'\';_cw.sim=(\''+x[0]+'\'===\'sim\');renderCasualWizard()"><i class="ti '+x[1]+'"></i> '+x[2]+'</button>'; }).join('')+'</div>'+
+    '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">'+(_cw.roundType==='practice'?'Träningsronder sparas men räknas inte i någon statistik.':_cw.roundType==='sim'?'Simulatorronder räknas i simulatorstatistiken.':'Räknas i sällskapsstatistiken.')+'</p></div>';
+  h += '<div class="cf-head"><i class="ti ti-trophy"></i> Primärt spel</div>';
+  CF_CATS.forEach(function(cat){
+    h += '<div class="cf-cat"><i class="ti '+cat.icon+'"></i> '+cat.label+'</div><div class="cf-grid">'+Object.keys(CF).filter(function(k){ return CF[k].cat === cat.k; }).map(function(k){ return cwFormatCard(k, fm.primary); }).join('')+'</div>';
+  });
+  h += '<p style="font-size:12px;color:var(--text-2);background:var(--surface2);border-radius:8px;padding:8px 10px;margin:4px 0 14px"><i class="ti ti-info-circle"></i> '+esc(CF_INFO[fm.primary]||'')+'</p>';
+  // Sidospel
+  h += '<div class="cf-head"><i class="ti ti-plus"></i> Sidospel (valfritt)</div>';
+  if(CF[fm.primary].teamScore) h += '<p style="font-size:12px;color:var(--text-3);margin:0 0 12px">Sidospel kräver att alla spelar egen boll och går därför inte att kombinera med '+esc(cfLabel(fm.primary))+'.</p>';
+  else {
+    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"><button type="button" class="btn btn-sm'+(!fm.secondary?' btn-primary':'')+'" onclick="_cw.format.secondary=null;renderCasualWizard()">Inget</button>'+
+      CF_SECONDARY.filter(function(k){ return k !== fm.primary; }).map(function(k){ var on = fm.secondary === k;
+        return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" onclick="_cw.format.secondary=\''+k+'\';renderCasualWizard()"><i class="ti '+CF[k].icon+'"></i> '+cfLabel(k)+'</button>'; }).join('')+'</div>';
+    if(fm.secondary) h += '<p style="font-size:12px;color:var(--text-2);margin:0 0 12px">'+esc(CF_INFO[fm.secondary]||'')+(fm.secondary==='wolf'||fm.secondary==='match'?' <b>Kräver exakt '+CF[fm.secondary].players+' spelare.</b>':'')+'</p>';
+  }
+  // Tävlingar
+  var n = c ? c.holePars.length : 18;
+  h += '<div class="cf-head"><i class="ti ti-target"></i> Tävlingar (valfritt)</div><div class="card" style="padding:10px 14px;margin-bottom:12px">'+
+    (_cw.contests.length ? _cw.contests.map(function(ct, i){ var m = CONTEST_META[ct.type];
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)"><i class="ti '+m.icon+'" style="color:var(--gold)"></i><span style="flex:1;font-size:13px">'+m.label+'</span>'+
+        '<select style="width:auto;margin:0;padding:4px 8px" onchange="_cw.contests['+i+'].hole=parseInt(this.value)">'+(c?c.holePars:[]).map(function(par, j){ return '<option value="'+(j+1)+'"'+(ct.hole===j+1?' selected':'')+'>Hål '+(j+1)+' (par '+par+')</option>'; }).join('')+'</select>'+
+        '<button type="button" class="btn btn-sm" style="padding:3px 7px" onclick="_cw.contests.splice('+i+',1);renderCasualWizard()"><i class="ti ti-x"></i></button></div>'; }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Lägg till närmast hål och längsta drive på valfria hål. Vinnaren markeras under ronden.</p>')+
+    '<div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn btn-sm" onclick="cwAddContest(\'ctp\')"><i class="ti ti-target"></i> Närmast hål</button><button type="button" class="btn btn-sm" onclick="cwAddContest(\'ld\')"><i class="ti ti-arrow-big-right-lines"></i> Längsta drive</button></div></div>';
+  return h;
+}
+function cwAddContest(type) {
+  var c = courseDb.find(function(x){ return x.id === _cw.courseId; }); var pars = c ? c.holePars : [];
+  var used = _cw.contests.filter(function(x){ return x.type === type; }).map(function(x){ return x.hole; });
+  var cand = pars.map(function(p, i){ return { h:i+1, p:p }; }).filter(function(x){ return used.indexOf(x.h) < 0 && (type === 'ctp' ? x.p === 3 : x.p >= 4); });
+  _cw.contests.push({ id:'c' + uid(), type:type, hole: cand.length ? cand[0].h : 1 });
+  renderCasualWizard();
+}
+// Validering av antal spelare mot spelformerna
+function cwFormatProblem() {
+  var n = _cw.players.length, fm = _cw.format, msgs = [];
+  [fm.primary, fm.secondary].filter(Boolean).forEach(function(k){
+    var f = CF[k];
+    if(f.players && n !== f.players) msgs.push(cfLabel(k) + ' kräver exakt ' + f.players + ' spelare (nu ' + n + ').');
+    if(f.min && n < f.min) msgs.push(cfLabel(k) + ' kräver minst ' + f.min + ' spelare.');
+    if(f.pairs && n % 2) msgs.push(cfLabel(k) + ' spelas i lag om två – antalet spelare måste vara jämnt.');
+    if(f.pairs && n < 4 && k !== 'bb_stroke' && k !== 'bb_stableford' && k !== 'lowscratch') msgs.push(cfLabel(k) + ' kräver fyra spelare.');
+    if(f.teamScore && n < 2) msgs.push(cfLabel(k) + ' kräver minst två spelare.');
+  });
+  return msgs;
+}
+// Standardlag och lag-SHCP
+function cwEnsureTeams() {
+  var fm = _cw.format, f = CF[fm.primary], n = _cw.players.length;
+  if(!(f.pairs || f.teamScore)) { _cw.teams = []; return; }
+  var size = f.pairs || fm.primary === 'foursome' || fm.primary === 'greensome' ? 2 : (_cw.teamSize || (n >= 4 ? 2 : n));
+  var numTeams = f.teams2 ? 2 : Math.max(1, Math.ceil(n / size));
+  if(!_cw.teamOf) _cw.teamOf = {};
+  _cw.players.forEach(function(p, i){ if(_cw.teamOf[p.key] == null || _cw.teamOf[p.key] >= numTeams) _cw.teamOf[p.key] = Math.min(numTeams - 1, Math.floor(i / size)); });
+  _cw.numTeams = numTeams;
+}
+function cwTeamDefaultShcp(fk, shcps) {
+  var s = shcps.slice().sort(function(a,b){ return a - b; });
+  if(!s.length) return 0;
+  if(fk === 'foursome') return Math.round((s[0] + (s[1]||0)) * 0.5);
+  if(fk === 'greensome') return Math.round(s[0] * 0.6 + (s[1]||0) * 0.4);
+  if(s.length === 1) return s[0];
+  if(s.length === 2) return Math.round(s[0] * 0.35 + s[1] * 0.15);
+  if(s.length === 3) return Math.round(s[0] * 0.3 + s[1] * 0.2 + s[2] * 0.1);
+  return Math.round(s[0] * 0.25 + s[1] * 0.2 + s[2] * 0.15 + s[3] * 0.1);
+}
+function cwBuildTeams() {
+  var fm = _cw.format, f = CF[fm.primary];
+  if(!(f.pairs || f.teamScore)) return [];
+  var teams = [];
+  for(var i=0; i<_cw.numTeams; i++) {
+    var mem = _cw.players.filter(function(p){ return _cw.teamOf[p.key] === i; });
+    var key = 'team_' + (i+1);
+    var def = cwTeamDefaultShcp(fm.primary, mem.map(function(p){ return p.shcp || 0; }));
+    var sh = (_cw.teamShcp && _cw.teamShcp[key] != null) ? _cw.teamShcp[key] : def;
+    teams.push({ key:key, name:'Lag ' + (i+1), members: mem.map(function(p){ return p.key; }), shcp: f.teamScore ? sh : null, defShcp:def });
+  }
+  return teams;
+}
+function cwStep4HTML() {
+  var fm = _cw.format, f = CF[fm.primary], h = '';
+  h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Spelhandicap (SHCP) per spelare</div>'+
+    _cw.players.map(function(p, i){ var u = p.username ? findUser(p.username) : null;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">'+
+        '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">'+esc(p.name)+(i===0?' <span style="font-size:11px;color:var(--text-3)">(du)</span>':'')+'</div><div style="font-size:11px;color:var(--text-3)">'+(p.guest?'Gäst':'HCP '+hcpFmt(u&&u.hcp))+'</div></div>'+
+        (f.pairs || f.teamScore ? '<select style="width:auto;margin:0;padding:5px 6px" onchange="_cw.teamOf[\''+p.key+'\']=parseInt(this.value);renderCasualWizard()">'+Array.apply(null, Array(_cw.numTeams)).map(function(_, t){ return '<option value="'+t+'"'+(_cw.teamOf[p.key]===t?' selected':'')+'>Lag '+(t+1)+'</option>'; }).join('')+'</select>' : '')+
+        '<input type="number" step="1" value="'+p.shcp+'" onchange="_cw.players['+i+'].shcp=parseInt(this.value)||0;renderCasualWizard()" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px"></div>';
+    }).join('')+'<p style="font-size:11px;color:var(--text-3);margin:8px 14px">SHCP hittar du i banans slopetabell (beror på tee och banans svårighet).</p></div>';
+  if(f.teamScore && !CF[fm.primary].players && !CF[fm.primary].teams2) h += '<div class="card" style="padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><span style="flex:1;font-size:13px;font-weight:600">Spelare per lag</span>'+
+    [2,3,4].map(function(s){ return '<button type="button" class="btn btn-sm'+((_cw.teamSize||2)===s?' btn-primary':'')+'" onclick="_cw.teamSize='+s+';_cw.teamOf={};renderCasualWizard()">'+s+'</button>'; }).join('')+'</div>';
+  if(f.teamScore) {
+    var teams = cwBuildTeams();
+    h += '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Lag-SHCP</div>'+
+      teams.map(function(t){ return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)"><div style="flex:1;min-width:0"><div style="font-weight:600">'+t.name+'</div><div style="font-size:11px;color:var(--text-3)">'+(t.members.map(function(k){ return cfFirst(cfName({players:_cw.players}, k)); }).join(' & ')||'Inga spelare')+' · förslag '+t.defShcp+'</div></div>'+
+        '<input type="number" step="1" value="'+t.shcp+'" onchange="_cw.teamShcp=_cw.teamShcp||{};_cw.teamShcp[\''+t.key+'\']=parseInt(this.value)||0" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px"></div>'; }).join('')+
+      '<p style="font-size:11px;color:var(--text-3);margin:8px 14px">Förslaget följer vanliga riktlinjer (t.ex. 2-mannascramble 35 % + 15 %, foursome 50 % av summan, greensome 60 % + 40 %). Ändra fritt.</p></div>';
+  }
+  if(fm.secondary === 'wolf' && _cw.players.length === 4) {
+    h += '<div class="card" style="padding:10px 14px;margin-bottom:12px"><div style="font-weight:700;font-size:13px;margin-bottom:6px"><i class="ti ti-paw" style="color:#6D28D9"></i> Wolf-ordning</div>'+
+      _cw.players.map(function(p, i){ return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px"><b style="width:18px">'+(i+1)+'.</b><span style="flex:1">'+esc(p.name)+'</span><span style="font-size:11px;color:var(--text-3)">Wolf på hål '+[i+1, i+5, i+9, i+13, i+17].filter(function(x){ return x <= 18; }).join(', ')+'</span>'+
+        (i>0?'<button type="button" class="btn btn-sm" style="padding:2px 7px" onclick="var a=_cw.players;var t=a['+i+'];a['+i+']=a['+(i-1)+'];a['+(i-1)+']=t;renderCasualWizard()"><i class="ti ti-arrow-up"></i></button>':'')+'</div>'; }).join('')+
+      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Spelare 1 är Wolf på hål 1, spelare 2 på hål 2 osv. Ändra ordningen med pilarna.</p></div>';
+  }
+  var probs = cwFormatProblem();
+  if(probs.length) h += '<div class="card" style="padding:10px 14px;margin-bottom:12px;border-color:#F3D19E;background:#FFF8EC;font-size:13px;color:#7A4100">'+probs.map(function(m){ return '<div><i class="ti ti-alert-triangle"></i> '+esc(m)+'</div>'; }).join('')+'</div>';
+  return h;
 }
 
 // ══ PUSHNOTISER ══════════════════════════════════════════════════════════════
@@ -18496,6 +18989,23 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '2 november 2026 (277)',
+    items: [
+      { type: 'improved', text: 'Sällskapsronden har fått samma sifferväljare som tourens livescoring: tryck på spelarens scoreruta och välj slag 1–10 (färgade och märkta Birdie, Par, Bogey …), sedan puttar 0–8 eller Hoppa över. Snabbare på banan, särskilt för höga och låga score. Plus/minus-knapparna finns kvar för små justeringar, och inslaget slag visas med samma färg och etikett som i touren.' },
+      { type: 'improved', text: 'Wolf: när alla fyra har fått sina slag på ett hål och Wolfens val saknas kommer frågan upp direkt (partner, Ensam Wolf eller Blind Wolf). Den kommer också upp om man trycker Nästa hål eller Avsluta utan att ha valt. "Senare" går att välja, och valet kan alltid göras eller ändras i hålkortet.' },
+    ]
+  },
+  {
+    date: '2 november 2026 (276)',
+    items: [
+      { type: 'new', text: 'Spelformer i sällskapsrond! Nytt flöde: Bana → Spelform → Spelare → SHCP. Välj primärt spel – Slagspel (netto/brutto), Poängbogey, Matchspel, Skins, Bästboll (slagspel, poängbogey, matchspel), Low Scratch/Net, Scramble (slagspel/matchspel), Foursome eller Greensome – och valfritt ett sidospel som räknas separat på samma slag.' },
+      { type: 'new', text: 'Wolf som sidospel för fyra spelare: Wolf roterar varje hål (spelare 1 på hål 1, spelare 2 på hål 2 …) och väljer partner, Ensam Wolf eller Blind Wolf direkt på hålet. Poängen räknas på bästa netto och påverkar aldrig det primära spelet eller tourens OoM.' },
+      { type: 'new', text: 'Lag och lag-SHCP: i par- och lagformer delar du in spelarna i lag i sista steget. Lagformer med ett lagscore (scramble, foursome, greensome) får ett föreslaget lag-SHCP som går att ändra, och scoren förs per lag.' },
+      { type: 'new', text: 'Sidotävlingar: lägg till Närmast hål och Längsta drive på valfria hål och markera vinnaren under ronden. De är helt skilda från tourens side bets (inga pengar) och samlas i en egen tabell under Stats → Sällskap → Scorestatistik.' },
+      { type: 'new', text: 'Rondtyp: Sällskap, Träning eller Simulator. Träningsronder sparas men räknas inte i någon statistik.' },
+    ]
+  },
   {
     date: '1 november 2026 (275)',
     items: [
