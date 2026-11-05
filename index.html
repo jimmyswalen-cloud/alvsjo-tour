@@ -3367,22 +3367,49 @@ function repairMissingHolePuttsFromLiveScoring() {
   });
 }
 
+// Alla märken som visas i Märkeslogotyper: standardlistan + egna märken som lagts till
+// (logoBank) + märken som spelare skrivit in i sina bagar ("What's in the Bag").
+function logoManagerBrands() {
+  var seen = {}, out = [];
+  var add = function(n){ n = (n||'').trim(); if(!n) return; var k = brandKey(n); if(seen[k]) return; seen[k] = 1; out.push(n); };
+  ALL_BRANDS.forEach(add);
+  customLogoBrands().forEach(add);
+  (S.users||[]).forEach(function(u){
+    (function walk(o){ if(!o || typeof o !== 'object') return; Object.keys(o).forEach(function(k){ var v = o[k];
+      if(typeof v === 'string') { if(/brand/i.test(k) && v.length <= 40) add(v); } else walk(v); }); })(u.bag);
+  });
+  return out.sort(function(a,b){ return a.localeCompare(b,'sv'); });
+}
+function logoSlug(b) { return brandKey(b).replace(/[^a-z0-9]/g,'-'); }
+
 function renderLogoManagerSection(targetId) {
   var el = document.getElementById(targetId || 'logo-manager-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML=''; return; }
-  var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-tags"></i> Märkeslogotyper (What\'s in the Bag)</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px">Tryck <i class="ti ti-upload"></i> för att ladda upp en logga direkt här - den kopplas in automatiskt i "What\'s in the Bag" så fort den laddats upp. Vill du hellre lägga filen manuellt i GitHub-repot går det också, i mappen <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">brand-logos/</code> med filnamnet nedan (både <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.jpg</code> och <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.png</code> funkar).</p>';
-  html += '<p id="logo-manager-count" style="font-size:12px;color:var(--text-3);margin-bottom:10px">Kontrollerar vilka loggor som finns uppladdade...</p>';
-  html += '<div class="card" id="logo-manager-list" style="padding:0;max-height:420px;overflow-y:auto">';
-  ALL_BRANDS.forEach(function(b, idx){
-    var suggested = suggestBrandLogoFilename(b);
-    var suggestedAlt = suggested.replace(/\.jpg$/i, '.png');
-    var slug = brandKey(b).replace(/[^a-z0-9]/g,'-');
-    html += '<div class="row" data-brand="'+esc(b)+'" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 16px;'+(idx<ALL_BRANDS.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+  var brands = logoManagerBrands();
+  var html = '';
+  // Lägg till nytt märke
+  html += '<div class="card" style="margin-bottom:12px">'+
+    '<div style="font-size:14px;font-weight:700;margin-bottom:4px"><i class="ti ti-circle-plus" style="color:var(--green-dark)"></i> Lägg till nytt märke</div>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Skriv märkets namn och välj en logga. Märket blir valbart i "What\'s in the Bag" och loggan visas direkt.</p>'+
+    '<div class="row" style="gap:8px">'+
+      '<input id="logo-new-name" type="text" placeholder="t.ex. Sugar Golf" autocomplete="off" style="flex:1;min-width:0;margin:0">'+
+      '<input type="file" id="logo-new-file" accept="image/*" style="display:none" onchange="addNewBrandLogo(this.files[0]);this.value=\'\'">'+
+      '<button type="button" class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="pickNewBrandLogo()"><i class="ti ti-upload"></i> Välj logga</button>'+
+    '</div>'+
+    '<div id="logo-new-status" style="font-size:12px;margin-top:6px"></div>'+
+  '</div>';
+  html += '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px">'+
+    '<input id="logo-search" type="text" autocomplete="off" placeholder="🔍 Sök märke..." oninput="filterLogoManager(this.value)" style="flex:1;margin:0">'+
+  '</div>';
+  html += '<p id="logo-manager-count" style="font-size:12px;color:var(--text-3);margin-bottom:8px">Kontrollerar vilka loggor som finns...</p>';
+  html += '<div class="card" id="logo-manager-list" style="padding:0">';
+  brands.forEach(function(b, idx){
+    var slug = logoSlug(b);
+    html += '<div class="row logo-row" data-brand="'+esc(brandKey(b))+'" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 16px;'+(idx<brands.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
       '<div class="row" style="gap:10px;align-items:center;min-width:0;flex:1">'+
         '<div id="logo-thumb-'+slug+'" style="width:36px;height:36px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--text-3);font-size:16px"></i></div>'+
         '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(b)+'</div>'+
-        '<div id="logo-status-'+slug+'" style="font-size:11px;color:var(--text-3)">Ladda upp: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code> <span style="color:var(--text-3)">eller</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggestedAlt)+'</code></div>'+
+        '<div id="logo-status-'+slug+'" style="font-size:11px;color:var(--text-3)">Ingen logga – tryck <i class="ti ti-upload" style="font-size:10px"></i></div>'+
         '</div>'+
       '</div>'+
       '<input type="file" id="logo-file-'+slug+'" accept="image/*" style="display:none" onchange="handleBrandLogoUpload(this.files[0],\''+esc(b).replace(/'/g,"\\'")+'\',\''+slug+'\');this.value=\'\'">'+
@@ -3391,7 +3418,45 @@ function renderLogoManagerSection(targetId) {
   });
   html += '</div>';
   el.innerHTML = html;
-  setTimeout(function(){ detectBrandLogos(); }, 20);
+  setTimeout(function(){ detectBrandLogos(brands); }, 20);
+}
+
+function filterLogoManager(q) {
+  q = brandKey(q);
+  document.querySelectorAll('#logo-manager-list .logo-row').forEach(function(r){
+    r.style.display = !q || (r.getAttribute('data-brand')||'').indexOf(q) >= 0 ? '' : 'none';
+  });
+}
+
+function pickNewBrandLogo() {
+  var n = (document.getElementById('logo-new-name')||{}).value || '';
+  if(!n.trim()) { alert('Skriv märkets namn först.'); var i = document.getElementById('logo-new-name'); if(i) i.focus(); return; }
+  document.getElementById('logo-new-file').click();
+}
+
+function addNewBrandLogo(file) {
+  if(!file || !isAdmin()) return;
+  var nameEl = document.getElementById('logo-new-name');
+  var name = ((nameEl||{}).value || '').trim();
+  if(!name) return;
+  // Finns märket redan (oavsett stora/små bokstäver)? Använd då dess befintliga stavning.
+  var existing = logoManagerBrands().find(function(b){ return brandKey(b) === brandKey(name); });
+  if(existing) name = existing;
+  var st = document.getElementById('logo-new-status');
+  if(st) { st.innerHTML = '<i class="ti ti-loader-2"></i> Laddar upp loggan för '+esc(name)+'...'; st.style.color = 'var(--text-3)'; }
+  compressImage(file, 400, 200, 0.9, function(dataUrl){
+    saveBrandLogo(name, dataUrl, function(url){
+      if(!url) { if(st) { st.innerHTML = '<i class="ti ti-alert-triangle"></i> Uppladdningen misslyckades – försök igen.'; st.style.color = 'var(--danger-text)'; } return; }
+      if(!logoBank[brandKey(name)]) logoBank[brandKey(name)] = { displayName: name, url: url };
+      renderLogoManagerSection('brand-logos-content');
+      setTimeout(function(){
+        var st2 = document.getElementById('logo-new-status');
+        if(st2) { st2.innerHTML = '<i class="ti ti-check"></i> '+esc(name)+' tillagd med logga.'; st2.style.color = 'var(--green-dark)'; }
+        var row = document.querySelector('#logo-manager-list .logo-row[data-brand="'+brandKey(name).replace(/"/g,'')+'"]');
+        if(row) { row.style.background = 'var(--green-light)'; row.scrollIntoView({ block:'center' }); }
+      }, 60);
+    });
+  });
 }
 
 // Körs när admin väljer en bildfil via uppladdningsknappen i Märkeslogotyper-
@@ -3417,16 +3482,17 @@ function handleBrandLogoUpload(file, brand, slug) {
 }
 
 // Försöker faktiskt ladda varje märkes logga (jpg, sedan png) i bakgrunden för att ge en korrekt status,
-// eftersom vi inte kan veta om en fil finns på GitHub utan att försöka hämta den.
-function detectBrandLogos() {
+// eftersom vi inte kan veta om en fil finns (uppladdad eller i repot) utan att försöka hämta den.
+function detectBrandLogos(brands) {
+  brands = brands || logoManagerBrands();
   var foundCount = 0;
-  var total = ALL_BRANDS.length;
+  var total = brands.length;
   var updateCounter = function() {
     var el = document.getElementById('logo-manager-count');
     if(el) el.textContent = foundCount+' av '+total+' märken har logotyp uppladdad.';
   };
-  ALL_BRANDS.forEach(function(b){
-    var slug = brandKey(b).replace(/[^a-z0-9]/g,'-');
+  brands.forEach(function(b){
+    var slug = logoSlug(b);
     var primary = getBrandLogo(b);
     var alt = /\.png$/i.test(primary) ? primary.replace(/\.png$/i,'.jpg') : primary.replace(/\.jpg$/i,'.png');
     var markFound = function(url) {
@@ -10600,12 +10666,22 @@ var ALL_BRANDS = Array.from(new Set([].concat(CLUB_BRANDS,PUTTER_BRANDS,BALL_BRA
 function buildDatalist(id, list) {
   return '<datalist id="'+id+'">'+list.map(function(b){ return '<option value="'+esc(b)+'">'; }).join('')+'</datalist>';
 }
-var _bagDatalists = buildDatalist('dl-club-brands', CLUB_BRANDS)+buildDatalist('dl-putter-brands', PUTTER_BRANDS)+
-  buildDatalist('dl-ball-brands', BALL_BRANDS)+buildDatalist('dl-shaft-brands', SHAFT_BRANDS)+
-  buildDatalist('dl-grip-brands', GRIP_BRANDS)+buildDatalist('dl-bag-brands', BAG_BRANDS)+
-  buildDatalist('dl-shoe-brands', SHOE_BRANDS)+buildDatalist('dl-clothing-brands', CLOTHING_BRANDS)+
-  buildDatalist('dl-gps-brands', GPS_BRANDS)+buildDatalist('dl-rangefinder-brands', RANGEFINDER_BRANDS)+
-  buildDatalist('dl-all-brands', ALL_BRANDS);
+// Egna märken som admin lagt till under Märkeslogotyper (logoBank) läggs till i förslagslistorna.
+function customLogoBrands() {
+  var known = {}; ALL_BRANDS.forEach(function(b){ known[brandKey(b)] = 1; });
+  return Object.keys(logoBank||{}).map(function(k){ return (logoBank[k] && logoBank[k].displayName) || k; })
+    .filter(function(n){ return n && !known[brandKey(n)]; });
+}
+function bagDatalists() {
+  var x = customLogoBrands();
+  var L = function(list){ return x.length ? list.concat(x) : list; };
+  return buildDatalist('dl-club-brands', L(CLUB_BRANDS))+buildDatalist('dl-putter-brands', L(PUTTER_BRANDS))+
+    buildDatalist('dl-ball-brands', L(BALL_BRANDS))+buildDatalist('dl-shaft-brands', L(SHAFT_BRANDS))+
+    buildDatalist('dl-grip-brands', L(GRIP_BRANDS))+buildDatalist('dl-bag-brands', L(BAG_BRANDS))+
+    buildDatalist('dl-shoe-brands', L(SHOE_BRANDS))+buildDatalist('dl-clothing-brands', L(CLOTHING_BRANDS))+
+    buildDatalist('dl-gps-brands', L(GPS_BRANDS))+buildDatalist('dl-rangefinder-brands', L(RANGEFINDER_BRANDS))+
+    buildDatalist('dl-all-brands', L(ALL_BRANDS).slice().sort(function(a,b){ return a.localeCompare(b,'sv'); }));
+}
 
 var _editingBag = null;   // { username, clubs:[...], ball, glove, putterGrip, notes }
 var _bagClubDraft = null; // klubban som just nu läggs till/redigeras, eller null
@@ -10821,7 +10897,7 @@ function renderBagModal() {
   h += ' <span style="font-size:11px;color:var(--text-3)">eller klistra in</span>';
   h += '<input type="file" id="bag-file-inp" accept="image/*" style="display:none">';
   h += '</div>';
-  h += _bagDatalists;
+  h += bagDatalists();
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
     '<button class="btn" onclick="closeModal()">Stäng</button>'+
     '<button class="btn btn-primary" onclick="saveBagEdit()">Spara bagen</button></div>';
@@ -10903,7 +10979,7 @@ function renderBagClubForm() {
     '<div class="field"><label>Carry-distans (m)</label><input id="bc-carry" type="number" value="'+esc(d.carry)+'"></div>'+
     '<div class="field"><label>Totaldistans (m)</label><input id="bc-total" type="number" value="'+esc(d.total)+'"></div>'+
   '</div>';
-  h += _bagDatalists;
+  h += bagDatalists();
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">'+
     '<button class="btn" onclick="cancelBagClubForm()">Avbryt</button>'+
     '<button class="btn btn-primary" onclick="saveBagClubForm()">Spara klubba</button></div>';
@@ -18955,6 +19031,7 @@ var RELEASE_NOTES = [
   {
     date: '5 november 2026 (280)',
     items: [
+      { type: 'new', text: 'Märkeslogotyper: nu kan du lägga till helt nya märken direkt i appen (Inställningar → Märkeslogotyper → Lägg till nytt märke: skriv namn och välj logga). Nya märken blir valbara i "What\'s in the Bag". Listan visar även märken som spelare skrivit in i sina bagar, har sökfält och hänvisar inte längre till GitHub-repot.' },
       { type: 'new', text: 'Databas-sidan visar nu vad som tar plats: varje tour, användare/profiler, idéväggen och inbäddade bilder var för sig, med staplar. Gamla bilder som fortfarande ligger inbäddade i databasen (från före molnlagringen) kan flyttas till molnlagringen med en knapp – de ser likadana ut i appen men databasen krymper.' },
       { type: 'changed', text: 'Inställningar har fått ny översikt med färgade ikonrutor i samma stil som startsidan: Användare, Banor, Märkeslogotyper, Inloggningar, Databas samt Kontroll & reparation. Varje ruta visar en kort status (t.ex. antal banor utan bild, databasstorlek) och öppnar sin egen sida med tillbaka-knapp till Inställningar.' },
     ]
