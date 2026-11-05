@@ -18955,6 +18955,7 @@ var RELEASE_NOTES = [
   {
     date: '5 november 2026 (280)',
     items: [
+      { type: 'new', text: 'Databas-sidan visar nu vad som tar plats: varje tour, användare/profiler, idéväggen och inbäddade bilder var för sig, med staplar. Gamla bilder som fortfarande ligger inbäddade i databasen (från före molnlagringen) kan flyttas till molnlagringen med en knapp – de ser likadana ut i appen men databasen krymper.' },
       { type: 'changed', text: 'Inställningar har fått ny översikt med färgade ikonrutor i samma stil som startsidan: Användare, Banor, Märkeslogotyper, Inloggningar, Databas samt Kontroll & reparation. Varje ruta visar en kort status (t.ex. antal banor utan bild, databasstorlek) och öppnar sin egen sida med tillbaka-knapp till Inställningar.' },
     ]
   },
@@ -22125,6 +22126,33 @@ function renderDbDiagnostics() {
 
   html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
   html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
+  // Vad består databasen av? Inbäddade bilder (gammal bilddata) räknas separat från ren data.
+  var emb = dbFindEmbeddedImages();
+  var embBytes = emb.reduce(function(a,x){ return a + x.size; }, 0);
+  var parts = [];
+  var sizeNoImg = function(obj){ return JSON.stringify(obj, function(k,v){ return (typeof v === 'string' && /^data:image/.test(v) && v.length > 2048) ? '' : v; }).length; };
+  (S.tours||[]).forEach(function(t){ parts.push({ label: 'Tour: ' + t.name, icon:'ti-trophy', size: sizeNoImg(t) }); });
+  parts.push({ label: 'Användare & profiler', icon:'ti-users', size: sizeNoImg(S.users||[]) });
+  Object.keys(S).forEach(function(k){ if(k === 'tours' || k === 'users') return; var z = sizeNoImg(S[k]); if(z > 512) parts.push({ label: k === 'ideas' ? 'Idéväggen' : 'Övrigt: ' + k, icon:'ti-dots', size: z }); });
+  if(embBytes) parts.push({ label: 'Inbäddade bilder (' + emb.length + ' st)', icon:'ti-photo', size: embBytes, img:true });
+  parts.sort(function(a,b){ return b.size - a.size; });
+  var maxPart = parts.length ? parts[0].size : 1;
+  html += '<div style="font-size:12px;color:var(--text-2);margin-bottom:6px">Vad tar plats:</div>';
+  parts.forEach(function(pt){
+    var kb = pt.size/1024, w = Math.max(2, Math.round(pt.size/maxPart*100));
+    html += '<div style="margin-bottom:7px"><div class="row" style="justify-content:space-between;font-size:13px;gap:8px">'+
+      '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="ti '+pt.icon+'" style="color:'+(pt.img?'var(--danger-text)':'var(--green-dark)')+'"></i> '+esc(pt.label)+'</span>'+
+      '<span style="color:var(--text-2);flex-shrink:0">'+(kb < 10 ? kb.toFixed(1) : Math.round(kb))+' KB</span></div>'+
+      '<div style="background:var(--surface2);border-radius:4px;height:5px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+w+'%;background:'+(pt.img?'var(--danger-text)':'var(--green)')+'"></div></div></div>';
+  });
+  if(emb.length) {
+    html += '<div style="background:#FFF4F2;border:1px solid #F6D3CF;border-radius:8px;padding:10px 12px;margin:10px 0 14px">'+
+      '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px"><b>'+Math.round(embBytes/1024)+' KB</b> är gamla bilder som ligger inbäddade direkt i databasen (från tiden före molnlagringen). De kan flyttas till molnlagringen – bilderna ser likadana ut i appen, men databasen krymper med samma mängd.</div>'+
+      '<button class="btn btn-sm btn-primary" id="db-migrate-btn" onclick="migrateEmbeddedImages()"><i class="ti ti-cloud-upload"></i> Flytta '+emb.length+' bild'+(emb.length===1?'':'er')+' till molnlagringen</button>'+
+    '</div>';
+  } else {
+    html += '<div style="font-size:12px;color:var(--text-3);margin:8px 0 14px"><i class="ti ti-cloud-check" style="color:var(--green-dark)"></i> Inga bilder ligger inbäddade i databasen – allt är text och siffror (resultat, scorekort, anmälningar m.m.).</div>';
+  }
   // Profilbilder: visar vilka spelare som har en egen uppladdad bild och om den ligger
   // i molnlagringen (bara en kort länk i databasen) eller som gammal inbäddad bilddata.
   var withImg = (S.users||[]).filter(function(u){ return u.img; });
@@ -22150,6 +22178,46 @@ function renderDbDiagnostics() {
   }
   html += '</div>';
   el.innerHTML = html;
+}
+
+// Hittar alla bilder som ligger inbäddade som data:image-strängar (> 2 KB) någonstans i S,
+// med en referens (objekt + nyckel) så att de kan bytas ut mot en molnlänk.
+function dbFindEmbeddedImages() {
+  var out = [];
+  (function walk(obj, path) {
+    if(!obj || typeof obj !== 'object') return;
+    Object.keys(obj).forEach(function(k){
+      var v = obj[k];
+      if(typeof v === 'string') { if(v.length > 2048 && /^data:image/.test(v)) out.push({ parent: obj, key: k, size: v.length, path: path.concat(k).join('/') }); }
+      else if(v && typeof v === 'object') walk(v, path.concat(String((v && v.id) || k)));
+    });
+  })(S, []);
+  return out;
+}
+
+// Laddar upp alla inbäddade bilder till Firebase Storage (migrated/<sökväg>.jpg) och
+// ersätter bilddatan med den korta molnlänken. En bild i taget; misslyckas en behålls den som den var.
+function migrateEmbeddedImages() {
+  if(!isAdmin()) return;
+  var list = dbFindEmbeddedImages();
+  if(!list.length) return;
+  if(!confirm('Flytta '+list.length+' inbäddade bild'+(list.length===1?'':'er')+' till molnlagringen?\n\nBilderna ser likadana ut i appen, men databasen krymper.')) return;
+  var btn = document.getElementById('db-migrate-btn');
+  var done = 0, failed = 0, i = 0;
+  function next() {
+    if(btn) btn.innerHTML = '<i class="ti ti-loader-2"></i> Flyttar '+(i+1 > list.length ? list.length : i+1)+' av '+list.length+'...';
+    if(i >= list.length) {
+      if(done) save();
+      setTimeout(function(){ renderDbDiagnostics(); alert('Klart! '+done+' bild'+(done===1?'':'er')+' flyttade till molnlagringen'+(failed?' ('+failed+' misslyckades – försök igen senare)':'')+'.'); }, 400);
+      return;
+    }
+    var it = list[i++];
+    var path = 'migrated/' + it.path.replace(/[^A-Za-z0-9_\/-]/g, '_').replace(/\/+/g, '-') + '.jpg';
+    uploadImageToStorage(it.parent[it.key], path).then(function(url){
+      if(url && /^https?:/.test(url)) { it.parent[it.key] = url; done++; } else failed++;
+    }).catch(function(){ failed++; }).then(next);
+  }
+  next();
 }
 
 function deleteDiagnosticImage(i) {
