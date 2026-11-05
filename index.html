@@ -102,8 +102,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .row{display:flex;gap:8px;align-items:center}
 .avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
 .avatar-ph{width:44px;height:44px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:var(--green-dark);flex-shrink:0}
-.player-card{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
-.player-card:last-child{border-bottom:none}
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
 .badge-green{background:var(--green-light);color:var(--green-dark)}
 .badge-gold{background:var(--gold-light);color:var(--gold)}
@@ -125,7 +123,6 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .oom-row{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:var(--radius);transition:background .1s}
 .oom-row:hover{background:var(--surface2)}
 .oom-row:last-child{border-bottom:none}
-.oom-pts{margin-left:auto;font-weight:600;font-size:16px;color:var(--green-dark)}
 .rotate-hint{display:flex;align-items:center;gap:12px;margin:10px 0 4px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--text-2);line-height:1.4}
 .rotate-hint svg{flex-shrink:0;width:34px;height:34px;overflow:visible}
 .rotate-hint .rh-phone{transform-origin:17px 17.5px;animation:rhRotate 2.8s ease-in-out infinite}
@@ -173,32 +170,11 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .ch-invite{border-color:#F3D19E;background:#FFF8EC}
 .ch-create{display:flex;align-items:center;gap:12px;padding:14px;border:2px dashed var(--border-strong);border-radius:12px;cursor:pointer;margin-bottom:12px;background:var(--surface)}
 .ch-create-ic{width:44px;height:44px;border-radius:12px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-.ch-hero{position:relative;border-radius:14px;overflow:hidden;min-height:132px;display:flex;align-items:flex-end;box-shadow:0 3px 14px rgba(0,0,0,.12)}
 .ch-hero-in{display:flex;align-items:center;gap:14px;padding:16px;width:100%;background:linear-gradient(0deg,rgba(0,0,0,.45),rgba(0,0,0,0));color:#fff}
 .ch-hero-in .ch-ico{box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .ch-hero-eye{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.85}
 .ch-hero-title{font-size:22px;font-weight:800;line-height:1.15;text-shadow:0 2px 8px rgba(0,0,0,.3);overflow-wrap:anywhere}
-.ch-hero-meta{display:flex;gap:14px;font-size:12px;margin-top:4px;opacity:.95}
-.ch-mine-row{display:flex;margin-top:8px}
-.ch-stat{flex:1;text-align:center;border-left:1px solid var(--border)}
-.ch-stat:first-child{border-left:none}
-.ch-stat-v{font-size:26px;font-weight:800;color:var(--green-dark);line-height:1.1}
-.ch-stat-v small{font-size:14px;color:var(--text-3);font-weight:600}
-.ch-stat-l{font-size:12px;color:var(--text-3);margin-top:2px}
-.ch-board-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px}
-.ch-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
-.ch-row:last-child{border-bottom:none}
-.ch-row.me{background:var(--green-light)}
-.ch-pos{width:26px;height:26px;border-radius:50%;background:var(--surface2);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
-.ch-pos.p1{background:#F6D77A;color:#6B4A0B}
-.ch-pos.p2{background:#DADDE1;color:#3F4650}
-.ch-pos.p3{background:#E7B489;color:#6B3A12}
-.ch-val{font-weight:800;font-size:17px;color:var(--green-dark);white-space:nowrap}
-.ch-val small{font-size:11px;color:var(--text-3);font-weight:600}
-.ch-prize{display:flex;align-items:center;gap:14px;background:var(--gold-light);border-color:#F3D19E}
 .ch-prize-ic{width:44px;height:44px;border-radius:12px;background:#fff;color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
-.ch-details div{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:14px}
-.ch-details i{font-size:18px;color:var(--green-dark);width:22px;text-align:center}
 .ch-act{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-weight:600;font-size:15px;cursor:pointer}
 .ch-act-ic{width:42px;height:42px;border-radius:12px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
 .ch-pill{font-size:10px;font-weight:800;letter-spacing:.05em;background:var(--gold-light);color:var(--gold);border-radius:12px;padding:4px 9px}
@@ -337,17 +313,11 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
   .leaderboard-table .stk-name{left:26px;min-width:88px}
   .leaderboard-table .lb-avatar{width:19px;height:19px;margin-right:4px}
 }
-.profile-header{background:linear-gradient(135deg,#065f46 0%,#1D9E75 100%);border-radius:12px;padding:1.5rem;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:16px}
-.profile-avatar-lg{width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.4);flex-shrink:0}
-.profile-avatar-ph{width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600;color:#fff;flex-shrink:0}
 .back-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-bottom:14px;padding:4px 0}
 .back-btn:hover{color:var(--text)}
 .result-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .result-row:last-child{border-bottom:none}
 .pos-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
-.pos-1{background:#FAC775;color:#633806}
-.pos-2{background:#D3D1C7;color:#2C2C2A}
-.pos-3{background:#F5C4B3;color:#4A1B0C}
 .pos-other{background:var(--surface2);color:var(--text-2)}
 .sw-chip{border:1px solid var(--border);background:transparent;color:var(--text-2);border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit}
 .sw-chip.sw-chip-active-green{background:#1D9E75;color:#fff;border-color:#1D9E75}
@@ -358,7 +328,6 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -700,8 +669,7 @@ window.onerror = function(msg, url, line, col, err) {
 var activeTourId = null;
 var _currentAppView = 'tournament'; // spårar vilken flik som är aktiv inne i en tour (Tävlingar/Spelare/Kalender/OoM)
 var _profileReturnView = 'tournament'; // vilken flik man kom ifrån när man öppnade en spelarprofil
-var _tourImg = null, _eImg = null, _pImg = null, _wImg = null;
-var _editTourId = null;
+var _wImg = null;
 
 // Wizard state for new tour creation
 var wiz = null;
@@ -2191,7 +2159,6 @@ function chIconHTML(type, size) {
 function chToday() { return hcpTodayISO(); }
 function chStatus(c) { var d = chToday(); return d > c.end ? 'ended' : d < c.start ? 'upcoming' : 'active'; }
 function chDaysLeft(c) { return Math.max(0, Math.round((new Date(c.end+'T12:00:00') - new Date(chToday()+'T12:00:00')) / 86400000)); }
-function chFmtDate(iso) { return iso || ''; }
 function chIsOrganizer(c) { return !!currentUser && (c.createdBy === currentUser.username || isAdmin()); }
 function chIsIn(c, u) { return (c.participants||[]).indexOf(u || (currentUser && currentUser.username)) >= 0; }
 function chIsInvited(c, u) { u = u || (currentUser && currentUser.username); return (c.invited||[]).indexOf(u) >= 0 && !chIsIn(c, u) && (c.declined||[]).indexOf(u) < 0; }
@@ -6433,18 +6400,6 @@ function addPlayerToTour(username) {
   renderOOM();
 }
 
-// Kollar om en spelare har deltagit (dvs har ett sparat resultat) i minst en deltävling i touren.
-// Används för att spärra borttagning av spelare - varken admin eller spelaren själv ska kunna
-// ta bort en spelare som redan finns med i något resultat, eftersom det skulle bryta historiken
-// (pi-index i e.results skulle peka på en spelare som inte längre går att slå upp).
-function playerHasParticipatedInTour(t, username) {
-  getPlayersForTour(t); // säkerställer att t.playerIndexMap är uppbyggd
-  var pi = t.playerIndexMap ? t.playerIndexMap[username] : null;
-  if(pi == null) return false;
-  return (t.events||[]).some(function(e){
-    return e.results && e.results.some(function(r){ return r.pi === pi; });
-  });
-}
 
 // Tar bort en spelares åtkomst till den aktuella touren. Spelarens pi-index (playerIndexMap)
 // och redan sparade resultat/side bets rörs inte - de finns kvar i historiken, men spelaren
@@ -9289,14 +9244,14 @@ function setTeeGroupTime(eid, gIdx, time) {
 // just det datumet. Kan hända om någon avanmäler sig, admin ändrar status,
 // eller data skapades innan den här kontrollen fanns. Körs varje gång
 // Anmälningar eller bollväljaren byggs, så det rättar till sig automatiskt -
-// och även direkt vid statusändring (se setRegStatus/onRegCbChange) för
+// och även direkt vid statusändring (se setRegStatus) för
 // omedelbar effekt utan att behöva öppna vyn på nytt.
 // Självläkande städning: en spelare ska ALDRIG kunna sitta kvar i en boll om
 // hen inte längre är anmäld (aktivt "Anmäld", inte "Deltar ej"/"Oklart") för
 // just det datumet. Kan hända om någon avanmäler sig, admin ändrar status,
 // eller data skapades innan den här kontrollen fanns. Körs varje gång
 // Anmälningar eller bollväljaren byggs, så det rättar till sig automatiskt -
-// och även direkt vid statusändring (se setRegStatus/onRegCbChange), som då
+// och även direkt vid statusändring (se setRegStatus), som då
 // även visar en tydlig bekräftelse till den som ändrar status om något
 // faktiskt påverkades (istället för att det sker helt tyst i bakgrunden).
 function pruneUnregisteredFromTeeGroups(e) {
@@ -9485,30 +9440,6 @@ function setRegStatus(ei, pi, statusCode) {
   if(pruneMsg) alert(pruneMsg);
 }
 
-function onRegCbChange(ei, pi, cb) {
-  var t = getTour(), e = t.events[ei];
-  var p = t.players[pi];
-  if(!isAdmin() && (!p || p.username !== currentUser.username)) {
-    alert('Du kan bara anmäla dig själv, inte andra spelare.');
-    cb.checked = !cb.checked;
-    return;
-  }
-  if(!e.registrations) e.registrations = [];
-  var dateInp = document.getElementById('reg-date-'+pi);
-  if(cb.checked) {
-    dateInp.disabled = false;
-    var existing = e.registrations.find(function(r){return r.pi===pi;});
-    if(!existing) e.registrations.push({pi:pi, date: dateInp.value || e.date});
-  } else {
-    dateInp.disabled = true;
-    e.registrations = e.registrations.filter(function(r){return r.pi!==pi;});
-  }
-  var pruneResult = pruneUnregisteredFromTeeGroups(e); // ta direkt bort spelaren ur ev. boll om anmälan togs bort
-  save();
-  refreshRegisterModal(ei);
-  var pruneMsg = describeTeeGroupPruneResult(t, pruneResult);
-  if(pruneMsg) alert(pruneMsg);
-}
 
 function onRegDateChange(ei, pi, inp) {
   var t = getTour(), e = t.events[ei];
@@ -11301,9 +11232,6 @@ function casualIsParticipant(r, username) {
 function casualCanEdit(r) {
   return !!r && !!currentUser && (isAdmin() || r.createdBy === currentUser.username || casualIsParticipant(r, currentUser.username));
 }
-function casualCourse(r) {
-  return { holePars: r.holePars || [], holeHcpIndex: r.holeHcpIndex || [] };
-}
 // Resultat för en spelare hittills i ronden
 function casualTotals(r, pl) {
   var n = (r.holePars||[]).length, sc = (r.scores||{})[pl.key] || {}, pt = (r.putts||{})[pl.key] || {};
@@ -11578,11 +11506,6 @@ function casualPickCourse(id) {
   var conf = c && currentUser ? casualCompetitionConflict(currentUser.username, c, _cw.date) : null;
   if(conf && !confirm('⚠️ Tävlingsbana idag\n\n' + casualConflictText(null, c, conf))) return;
   _cw.courseId = id; _cw.step = 2; renderCasualWizard(); window.scrollTo(0,0);
-}
-function casualSaveMyShcp() {
-  var v = parseInt((document.getElementById('cw-myshcp')||{}).value);
-  if(isNaN(v)) { alert('Ange ditt SHCP.'); return; }
-  _cw.players[0].shcp = v; _cw.step = 3; renderCasualWizard(); window.scrollTo(0,0);
 }
 // Spelare man senast spelat med: först från sällskapsronder (nyast först), sedan
 // fylls på med bollkompisar från tourernas bollar (nyast deltävling först). Max 4.
@@ -16079,16 +16002,6 @@ function saveCourseDb() {
   });
 }
 
-function suggestCourseFilename(name) {
-  if(!name || !name.trim()) return '';
-  return name.trim()
-    .toLowerCase()
-    .replace(/å/g, 'a').replace(/ä/g, 'a').replace(/ö/g, 'o')
-    .replace(/é/g, 'e').replace(/ü/g, 'u').replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-') + '.jpg';
-}
 
 // ── BANPROFILER (GIS Version 5) ─────────────────────────────────────────────
 // Räknar in en spelares rond för banstatistiken så FORT rundan är godkänd
@@ -16335,7 +16248,7 @@ function openAddCourse() {
       '<input type="file" id="cd-image-file" accept="image/*" style="display:none" onchange="handleCourseDbImageUpload(this.files[0], document.getElementById(\'cd-name\').value);this.value=\'\'">' +
       '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'cd-image-file\').click()"><i class="ti ti-photo"></i> Ladda upp bild</button>' +
     '</div>' +
-    '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK" oninput="updateCourseFilenameHint()"></div>' +
+    '<div class="field"><label>Bannamn *</label><input id="cd-name" type="text" placeholder="t.ex. Riksten GK"></div>' +
     '<div class="field"><label>Klubb <span style="font-size:11px;color:var(--text-3)">(om annat än bannamnet)</span></label><input id="cd-klubb" type="text" placeholder="t.ex. Riksten Golfklubb"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
       '<div class="field"><label>Antal hål</label><input id="cd-holes" type="number" min="1" max="27" value="18" onchange="renderScorecardGrid()"></div>' +
@@ -16542,17 +16455,6 @@ function readCourseFormFields() {
   };
 }
 
-function updateCourseFilenameHint() {
-  var nameEl = document.getElementById('cd-name');
-  var hintEl = document.getElementById('cd-filename-hint');
-  var valEl  = document.getElementById('cd-filename-value');
-  if(!nameEl || !hintEl || !valEl) return;
-  var name = nameEl.value.trim();
-  if(!name) { hintEl.style.display = 'none'; return; }
-  var fname = suggestCourseFilename(name);
-  valEl.textContent = fname;
-  hintEl.style.display = '';
-}
 
 function submitAddCourse() {
   if(!isAdmin()) return;
@@ -18587,7 +18489,7 @@ function renderCourseDbSection(targetId) {
   var withCoords = courseDb.filter(function(c){ return c.lat!=null && c.lng!=null; }).length;
   var pendingCount = countPendingCourses();
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-golf"></i> Bandatabas</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Ladda upp en bild direkt via redigera-knappen på en bana, eller lägg en fil manuellt i GitHub-repot med filnamnet som visas där.</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banor du lägger in här kan väljas direkt när du skapar nya tävlingar. Bilder laddas upp direkt via redigera-knappen på respektive bana.</p>';
   html += '<div class="row" style="justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">'+
     '<button class="btn btn-sm" onclick="openCourseMap()"><i class="ti ti-map"></i> Visa karta ('+withCoords+'/'+courseDb.length+' med koordinater)</button>'+
     '<button class="btn btn-sm" onclick="geocodeMissingCourses()"><i class="ti ti-map-pin-search"></i> Geokoda saknade ('+(courseDb.length-withCoords)+' st)</button>'+
@@ -18661,7 +18563,6 @@ function renderCourseDbList() {
   html += '<div class="card" style="padding:0">';
   filtered.forEach(function(c, idx){
     var img = getCourseImage(c.name);
-    var suggested = suggestCourseFilename(c.name);
     var hasScorecard = !!(c.holePars && c.holePars.length);
     var scorecardBadge = hasScorecard
       ? ' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Scorekort OK</span>'
@@ -18751,7 +18652,6 @@ function updateHero(tourId) {
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
 var currentUser = null; // { username, role: 'admin'|'user', tourAccess: [tourId,...] }
 var impersonatorAdmin = null; // set to the real admin's username while impersonating another user
-var USERS_DOC_REF = null; // set after db init
 
 function simpleHash(str) {
   // Lightweight non-cryptographic hash, sufficient for a private friends' tour site.
@@ -19010,6 +18910,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '5 november 2026 (279)',
+    items: [
+      { type: 'changed', text: 'Städning av koden: borttaget 13 funktioner som inte längre anropades (bl.a. gamla anmälningskryssrutan, gammal SHCP-steg i sällskapsrunda, export av profilbilder till GitHub), ca 30 oanvända CSS-regler (gamla utmaningsdesignen m.m.), oanvända variabler samt zip-biblioteket (JSZip) som bara användes av exporten – appen laddar ett externt skript mindre.' },
+      { type: 'changed', text: 'Databasdiagnostiken (Mer → Inställningar, admin) visar nu namnen på alla spelare med egen profilbild och om bilden ligger i molnlagringen (moln-ikon) eller som gammal inbäddad bilddata (röd). Knapparna "Exportera alla profilbilder" och "Rensa som redan finns statiskt" är borttagna – bilder hanteras helt i appen. Listan "Största bidragsgivarna" visar bara bilder som faktiskt tar plats.' },
+      { type: 'changed', text: 'Bandatabasens infotext hänvisar inte längre till att lägga filer manuellt i GitHub-repot.' },
+    ]
+  },
   {
     date: '5 november 2026 (278)',
     items: [
@@ -22129,6 +22037,8 @@ function renderDbDiagnostics() {
     });
   });
 
+  // Bilder i molnlagringen är bara en kort länk (~0 KB) – visa bara det som faktiskt tar plats
+  items = items.filter(function(it){ return it.size > 2048; });
   items.sort(function(a,b){ return b.size - a.size; });
   _dbDiagnosticItems = items;
   var totalKB = Math.round(totalSize/1024);
@@ -22162,15 +22072,18 @@ function renderDbDiagnostics() {
 
   html += '<div class="row" style="justify-content:space-between;margin-bottom:8px"><strong>Databasstorlek</strong><span style="font-weight:700;color:'+barColor+'">'+totalKB+' / ~1000 KB</span></div>';
   html += '<div style="background:var(--surface2);border-radius:8px;height:10px;overflow:hidden;margin-bottom:14px"><div style="background:'+barColor+';height:100%;width:'+pct+'%"></div></div>';
-  var profileImgCount = (S.users||[]).filter(function(u){ return u.img; }).length;
-  var backedUpCount = (S.users||[]).filter(function(u){ return u.img && STATIC_PLAYER_PHOTOS[u.username.toLowerCase()]; }).length;
-  if(profileImgCount) {
+  // Profilbilder: visar vilka spelare som har en egen uppladdad bild och om den ligger
+  // i molnlagringen (bara en kort länk i databasen) eller som gammal inbäddad bilddata.
+  var withImg = (S.users||[]).filter(function(u){ return u.img; });
+  if(withImg.length) {
+    var embedded = withImg.filter(function(u){ return /^data:/.test(u.img); });
     html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:14px">'+
-      '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px"><i class="ti ti-golf"></i> '+profileImgCount+' profilbilder lagras just nu i databasen'+(backedUpCount?' ('+backedUpCount+' finns redan statiskt på GitHub)':'')+'.</div>'+
-      '<div class="row" style="gap:8px;flex-wrap:wrap">'+
-        '<button class="btn btn-sm btn-primary" onclick="exportAllPlayerPhotos()"><i class="ti ti-download"></i> Exportera alla profilbilder</button>'+
-        (backedUpCount?'<button class="btn btn-sm" onclick="clearBackedUpProfilePhotos()"><i class="ti ti-trash"></i> Rensa '+backedUpCount+' som redan finns statiskt</button>':'')+
-      '</div>'+
+      '<div style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-user-circle"></i> '+withImg.length+' spelare har egen profilbild'+
+        (embedded.length ? ' – <b style="color:var(--danger-text)">'+embedded.length+' ligger som inbäddad bilddata</b> (tar plats i databasen; ladda upp bilden igen i profilen så flyttas den till molnlagringen)' : ' – alla ligger i molnlagringen och tar knappt plats i databasen')+'.</div>'+
+      '<div style="font-size:12px;line-height:1.7">'+withImg.map(function(u){
+        var emb = /^data:/.test(u.img);
+        return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;white-space:nowrap"><i class="ti '+(emb?'ti-database':'ti-cloud')+'" style="color:'+(emb?'var(--danger-text)':'var(--green-dark)')+'"></i>'+esc(u.name||u.username)+'</span>';
+      }).join('')+'</div>'+
     '</div>';
   }
   if(!items.length) {
@@ -22198,80 +22111,10 @@ function deleteDiagnosticImage(i) {
   renderDbDiagnostics();
 }
 
-// ── EXPORT AV PROFILBILDER (för statisk hosting på GitHub) ─────────────────
-function dataUriToBlob(dataUri) {
-  var parts = dataUri.split(',');
-  var mimeMatch = parts[0].match(/data:([^;]+);base64/);
-  var mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-  var binary = atob(parts[1]);
-  var arr = new Uint8Array(binary.length);
-  for(var i=0; i<binary.length; i++) arr[i] = binary.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}
 
-function extFromMime(mime) {
-  if(mime.indexOf('png') !== -1) return 'png';
-  if(mime.indexOf('webp') !== -1) return 'webp';
-  return 'jpg';
-}
 
-function downloadBlob(blob, filename) {
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-}
 
-function exportAllPlayerPhotos() {
-  if(!isAdmin()) return;
-  var users = (S.users||[]).filter(function(u){ return u.img; });
-  if(!users.length) { alert('Inga profilbilder att exportera.'); return; }
-  if(typeof JSZip === 'undefined') { alert('Kunde inte ladda zip-biblioteket (kontrollera internetanslutningen) och försök igen.'); return; }
 
-  var mapLines = [];
-  var zip = new JSZip();
-  var folder = zip.folder('player-photos');
-  users.forEach(function(u){
-    var blob = dataUriToBlob(u.img);
-    var ext = extFromMime(blob.type);
-    var filename = u.username.toLowerCase()+'.'+ext;
-    folder.file(filename, blob);
-    mapLines.push("  '"+u.username.toLowerCase()+"': 'player-photos/"+filename+"',");
-  });
-  var snippet = "var STATIC_PLAYER_PHOTOS = {\n"+mapLines.join('\n')+"\n};";
-  zip.file('player-photos/LÄS-MIG.txt',
-    'Ladda upp hela "player-photos"-mappen till ditt GitHub-repo, bredvid index.html.\n\n'+
-    'Klistra sedan in koden nedan i index.html (den ersätter STATIC_PLAYER_PHOTOS-objektet):\n\n'+snippet
-  );
-
-  zip.generateAsync({ type: 'blob' }).then(function(zipBlob){
-    downloadBlob(zipBlob, 'spelarbilder.zip');
-    showModal(
-      '<h3><i class="ti ti-download"></i> Profilbilder exporterade</h3>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+users.length+' bilder har packats i <code>spelarbilder.zip</code> och laddats ner.</p>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:10px"><b>Nästa steg:</b> Packa upp zip-filen och ladda upp hela <code>player-photos</code>-mappen till ditt GitHub-repo, bredvid index.html (en <code>LÄS-MIG.txt</code> med instruktioner + koden finns med i mappen).</p>'+
-      '<p style="font-size:13px;color:var(--text-2);margin-bottom:6px">Skicka sedan tillbaka den här kodsnutten till mig (eller klistra in den själv i index.html):</p>'+
-      '<textarea readonly onclick="this.select()" style="width:100%;height:180px;font-family:monospace;font-size:11px;box-sizing:border-box">'+esc(snippet)+'</textarea>'+
-      '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>',
-      true
-    );
-  }).catch(function(err){
-    console.error('Zip-fel', err);
-    alert('Något gick fel när zip-filen skulle skapas. Försök igen.');
-  });
-}
-
-function clearBackedUpProfilePhotos() {
-  if(!isAdmin()) return;
-  var users = (S.users||[]).filter(function(u){ return u.img && STATIC_PLAYER_PHOTOS[u.username.toLowerCase()]; });
-  if(!users.length) { alert('Inga profilbilder är redo att rensas ännu. Lägg till dem i STATIC_PLAYER_PHOTOS i koden först (se "Exportera alla profilbilder").'); return; }
-  if(!confirm('Ta bort den gamla bild-datan för '+users.length+' spelare från databasen? Bilderna fortsätter visas (nu från GitHub istället). Går inte att ångra.')) return;
-  users.forEach(function(u){ u.img = null; });
-  save();
-  renderDbDiagnostics();
-  alert('Klart! Databasen krympt med bilddata för '+users.length+' spelare.');
-}
 
 var _newUserImg = null;
 var _pendingTourAccess = [];
