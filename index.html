@@ -420,7 +420,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 
 <div id="users-screen" style="display:none">
   <div class="tours-header">
-    <button class="back-to-tours" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
+    <button class="back-to-tours" id="users-back" onclick="showToursView()"><i class="ti ti-arrow-left"></i> TOURER</button>
     <h2 id="users-screen-title" style="margin:0;flex:1;text-align:right">Användare</h2>
   </div>
   <div class="row" style="justify-content:flex-end;margin-bottom:16px">
@@ -549,8 +549,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
   </div>
   <div id="global-settings-screen" style="display:none">
     <div class="tours-header">
-      <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
-      <h2 style="margin:0;flex:1;text-align:center">Inställningar</h2>
+      <button class="btn btn-sm" id="gs-back" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
+      <h2 style="margin:0;flex:1;text-align:center" id="gs-title">Inställningar</h2>
     </div>
     <div id="global-settings-content"></div>
   </div>
@@ -3001,6 +3001,7 @@ function showGlobalSettings() {
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'global-settings-screen' ? '' : 'none';
   });
+  _gsSection = null;
   renderGlobalSettings();
   window.scrollTo(0, 0);
 }
@@ -3096,43 +3097,84 @@ function saveHcpUpdateFromHome() {
   renderHomeUserBar();
 }
 
+// Inställningar: översikt med ikonrutor (samma stil som startsidans navigering).
+// Varje ruta öppnar antingen en egen sida (Användare, Bandata, Märkeslogotyper)
+// eller en undersektion här i Inställningar (_gsSection).
+var _gsSection = null;
+var GS_TILES = [
+  { key:'users',  icon:'ti-users',        label:'Användare',          bg:'#CFE3F7', fg:'#123E6B', sub2:'#2A5A8C', go:function(){ showUsersView(true); } },
+  { key:'courses',icon:'ti-golf',         label:'Banor',              bg:'#BFE3D9', fg:'#0B4F3F', sub2:'#13664F', go:function(){ showCourseDataPage(); } },
+  { key:'logos',  icon:'ti-tags',         label:'Märkeslogotyper',    bg:'#FFE1B3', fg:'#7A4A00', sub2:'#8F5A00', go:function(){ showBrandLogosPage(); } },
+  { key:'logins', icon:'ti-shield-lock',  label:'Inloggningar',       bg:'#E5D4F5', fg:'#5B2C8C', sub2:'#7A4CAE' },
+  { key:'db',     icon:'ti-database',     label:'Databas',            bg:'#D3D1C7', fg:'#444441', sub2:'#5F5E5A' },
+  { key:'tools',  icon:'ti-tool',         label:'Kontroll & reparation', bg:'#F6D3CF', fg:'#7A231B', sub2:'#923328' }
+];
+function gsTileSub(key) {
+  try {
+    if(key === 'users') return (S.users||[]).length + ' konton';
+    if(key === 'courses') {
+      var n = (courseDb||[]).length, noImg = (courseDb||[]).filter(function(c){ return !getCourseImage(c.name); }).length;
+      return n + ' banor' + (noImg ? ' · ' + noImg + ' utan bild' : '');
+    }
+    if(key === 'logos') return '"What\'s in the Bag"';
+    if(key === 'logins') return 'Senaste 50 inloggningarna';
+    if(key === 'db') return Math.round(JSON.stringify(S).length/1024) + ' av ~1000 KB';
+    if(key === 'tools') return 'OoM-poäng, saknade resultat, puttar';
+  } catch(e) {}
+  return '';
+}
+function openGsSection(key) {
+  var t = GS_TILES.find(function(x){ return x.key === key; });
+  if(t && t.go) { t.go(); return; }
+  _gsSection = key;
+  renderGlobalSettings();
+  window.scrollTo(0, 0);
+}
 function renderGlobalSettings() {
   var el = document.getElementById('global-settings-content');
   if(!el) return;
-  var html = '';
-  if(isAdmin()) {
-    html += '<div class="card" style="margin-bottom:12px"><p style="font-size:13px;color:var(--text-2);margin-bottom:10px">Administrera användare och behörigheter.</p>';
-    html += '<button class="btn btn-primary btn-sm" onclick="showUsersView()"><i class="ti ti-users"></i> Hantera användare</button></div>';
-    html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-medal" style="color:#0F6E56"></i> Kontrollera OoM-poäng</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda (icke-final) deltävlingar i alla tourer och jämför varje spelares SPARADE OoM-poäng mot vad poängskalan (+ ev. majors-multiplikator) borde ge för spelarens nuvarande placering i resultatlistan. Kan hända att de kommer i otakt om en deltävling återöppnades för att rätta ett resultat och sedan sparades om via "Resultat", utan att "Stäng" klickades igen efteråt (det sista steget räknar om poängen - att bara spara resultat gör det inte). Rör ALDRIG placeringsordningen, bara det sparade poängvärdet.</p>'+
-      '<button class="btn btn-sm" onclick="auditAndRepairOomPoints()"><i class="ti ti-wand"></i> Kontrollera</button>'+
-    '</div>';
-    html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-clipboard-x" style="color:#0F6E56"></i> Hitta saknade resultat</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Går igenom alla stängda deltävlingar (inkl. finaler) i alla tourer och letar efter spelare som spelat klart alla hål enligt livescoringen, men som saknas helt i det officiella sparade resultatet - för att admin stängde deltävlingen innan spelarens scorekort hann godkännas. Listar varje sådant fynd med en genväg direkt till deltävlingen. Gör ALDRIG någon ändring själv - bara hittar och listar.</p>'+
-      '<button class="btn btn-sm" onclick="auditMissingFinalResults()"><i class="ti ti-search"></i> Kontrollera</button>'+
-    '</div>';
-    html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf" style="color:#0F6E56"></i> Reparera saknade puttar</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">"Registrera för bollen" (gruppinmatning från livescoring) tappade tidigare bort inmatade puttar - de sparades aldrig i scorekortet trots att de matats in under rundan. Bugg fixad framåt i tiden (release 196), men redan inskickade scorekort som drabbades behöver kompletteras en gång. Knappen letar igenom alla godkända scorekort som helt saknar puttar, och fyller i dem igen från den sparade livescoring-datan (om den fortfarande finns kvar) - rör aldrig scorekort som redan har puttar.</p>'+
-      '<button class="btn btn-sm" onclick="repairMissingHolePuttsFromLiveScoring()"><i class="ti ti-wand"></i> Kör reparation</button>'+
-    '</div>';
-    html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-golf"></i> Bandata</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Bandatabas (redigera banor, kartor, geokodning) och Bildbank för banor, samlat.</p>'+
-      '<button class="btn btn-sm" onclick="showCourseDataPage()"><i class="ti ti-arrow-right"></i> Öppna bandata</button>'+
-    '</div>';
-    html += '<div class="card" style="margin-bottom:12px">'+
-      '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px"><i class="ti ti-tags"></i> Märkeslogotyper</div>'+
-      '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Status för logotyper till "What\'s in the Bag".</p>'+
-      '<button class="btn btn-sm" onclick="showBrandLogosPage()"><i class="ti ti-arrow-right"></i> Öppna märkeslogotyper</button>'+
-    '</div>';
+  var back = document.getElementById('gs-back'), title = document.getElementById('gs-title');
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  var sec = _gsSection ? GS_TILES.find(function(x){ return x.key === _gsSection; }) : null;
+  if(back) {
+    back.innerHTML = '<i class="ti ti-arrow-left"></i> ' + (sec ? 'Inställningar' : 'Hem');
+    back.onclick = sec ? function(){ _gsSection = null; renderGlobalSettings(); window.scrollTo(0,0); } : function(){ showHomeScreen(); };
   }
-  html += '<div id="login-log-section"></div><div id="db-diagnostics"></div>';
+  if(title) title.textContent = sec ? sec.label : 'Inställningar';
+  var html = '';
+
+  if(!sec) {
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+    GS_TILES.forEach(function(t){
+      html += '<div class="home-card" onclick="openGsSection(\''+t.key+'\')" style="background:'+t.bg+';border:none;padding:1.3rem .8rem">'+
+        '<i class="ti '+t.icon+'" style="font-size:32px;color:'+t.fg+'" aria-hidden="true"></i>'+
+        '<div class="home-card-label" style="color:'+t.fg+'">'+t.label+'</div>'+
+        '<div class="home-card-sub" style="color:'+t.sub2+'">'+esc(gsTileSub(t.key))+'</div>'+
+      '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+    return;
+  }
+
+  if(sec.key === 'tools') {
+    var tool = function(icon, title, text, btnIcon, btnLabel, fn) {
+      return '<div class="card" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-start">'+
+        '<div style="width:42px;height:42px;border-radius:12px;background:#F6D3CF;color:#7A231B;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti '+icon+'" style="font-size:22px"></i></div>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;margin-bottom:4px">'+title+'</div>'+
+        '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">'+text+'</p>'+
+        '<button class="btn btn-sm" onclick="'+fn+'()"><i class="ti '+btnIcon+'"></i> '+btnLabel+'</button></div>'+
+      '</div>';
+    };
+    html += tool('ti-medal', 'Kontrollera OoM-poäng', 'Jämför varje spelares sparade OoM-poäng i stängda deltävlingar (ej final) mot vad poängskalan och ev. majors-multiplikator borde ge för placeringen, och erbjuder att rätta avvikelser.', 'ti-wand', 'Kontrollera', 'auditAndRepairOomPoints');
+    html += tool('ti-clipboard-x', 'Hitta saknade resultat', 'Letar i stängda deltävlingar (inkl. finaler) efter spelare som spelat klart alla hål enligt livescoringen men saknas i det officiella resultatet.', 'ti-search', 'Kontrollera', 'auditMissingFinalResults');
+    html += tool('ti-golf', 'Reparera saknade puttar', 'Kompletterar puttar som tidigare tappades bort vid "Registrera för bollen", från sparad livescoring. Rör aldrig scorekort som redan har puttar.', 'ti-wand', 'Kör reparation', 'repairMissingHolePuttsFromLiveScoring');
+  }
+  if(sec.key === 'logins') html += '<div id="login-log-section"></div>';
+  if(sec.key === 'db') html += '<div id="db-diagnostics"></div>';
   el.innerHTML = html;
-  renderLoginLogSection();
-  renderDbDiagnostics();
+  if(sec.key === 'logins') renderLoginLogSection();
+  if(sec.key === 'db') renderDbDiagnostics();
 }
 
 // Engångsreparation (men säker att köra flera gånger - rör aldrig scorekort
@@ -18911,6 +18953,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '5 november 2026 (280)',
+    items: [
+      { type: 'changed', text: 'Inställningar har fått ny översikt med färgade ikonrutor i samma stil som startsidan: Användare, Banor, Märkeslogotyper, Inloggningar, Databas samt Kontroll & reparation. Varje ruta visar en kort status (t.ex. antal banor utan bild, databasstorlek) och öppnar sin egen sida med tillbaka-knapp till Inställningar.' },
+    ]
+  },
+  {
     date: '5 november 2026 (279)',
     items: [
       { type: 'changed', text: 'Städning av koden: borttaget 13 funktioner som inte längre anropades (bl.a. gamla anmälningskryssrutan, gammal SHCP-steg i sällskapsrunda, export av profilbilder till GitHub), ca 30 oanvända CSS-regler (gamla utmaningsdesignen m.m.), oanvända variabler samt zip-biblioteket (JSZip) som bara användes av exporten – appen laddar ett externt skript mindre.' },
@@ -21829,7 +21877,12 @@ function submitChangePassword() {
 }
 
 // ── ADMIN: USER MANAGEMENT ─────────────────────────────────────────────────
-function showUsersView() {
+function showUsersView(fromSettings) {
+  var ub = document.getElementById('users-back');
+  if(ub) {
+    ub.innerHTML = '<i class="ti ti-arrow-left"></i> ' + (fromSettings === true ? 'INSTÄLLNINGAR' : 'TOURER');
+    ub.onclick = fromSettings === true ? function(){ showGlobalSettings(); } : function(){ showToursView(); };
+  }
   document.getElementById('tours-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = '';
