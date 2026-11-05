@@ -811,6 +811,54 @@ function getEventImage(e) {
   return getCourseImage(e.course) || null;
 }
 
+
+function courseImgBroken(img) {
+  // Bildlänken finns men filen går inte att ladda – visa det tydligt i stället för "Bild OK"
+  try {
+    var ph = document.createElement('div');
+    ph.style.cssText = 'width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0';
+    ph.innerHTML = '<i class="ti ti-unlink" style="color:var(--danger-text);font-size:16px"></i>';
+    var row = img.parentNode;
+    img.replaceWith(ph);
+    var ok = row && row.querySelector('.cimg-ok');
+    if(ok) { ok.style.color = 'var(--danger-text)'; ok.innerHTML = '<i class="ti ti-alert-triangle" style="font-size:11px"></i> Bildlänk trasig – ladda upp igen via <i class="ti ti-edit" style="font-size:10px"></i>'; }
+  } catch(e) {}
+}
+// Reparation (körs av admin, en gång per webbläsare): banor vars bildlänk är en
+// gissad filväg i repot (t.ex. "las-ramblas.jpg") i stället för en uppladdad bild.
+//  1) Finns en uppladdad bild i Firebase Storage (course-images/<namn>.jpg) → använd den.
+//  2) Annars: går den gamla filen att ladda (bild som faktiskt ligger i repot) → låt den vara.
+//  3) Annars: ta bort den döda länken så banan visas som "Ingen bild" med uppladdningsknapp.
+function repairCourseBankImages() {
+  if(!isAdmin() || !COURSE_BANK_REF) return;
+  try { if(localStorage.getItem('courseImgRepairV2')) return; } catch(e) {}
+  var keys = Object.keys(courseBank||{}).filter(function(k){ var u = (courseBank[k]||{}).url || ''; return u && !/^https?:|^data:/.test(u) && !STATIC_COURSE_IMAGES[k]; });
+  var fixed = 0, cleared = 0, i = 0;
+  function setUrl(k, url) {
+    var upd = {}; upd[k] = { displayName: (courseBank[k] && courseBank[k].displayName) || k, url: url };
+    if(courseBank[k]) courseBank[k].url = url;
+    return COURSE_BANK_REF.set(upd, { merge: true });
+  }
+  function canLoad(src) {
+    return new Promise(function(res){ var im = new Image(); var t = setTimeout(function(){ res(false); }, 8000);
+      im.onload = function(){ clearTimeout(t); res(true); }; im.onerror = function(){ clearTimeout(t); res(false); }; im.src = src; });
+  }
+  function next() {
+    if(i >= keys.length) {
+      try { localStorage.setItem('courseImgRepairV2', '1'); } catch(e) {}
+      if(fixed || cleared) { console.log('Banbilder: reparerade', fixed, '· döda länkar borttagna', cleared); try { renderCourseDbList(); } catch(e) {} }
+      return;
+    }
+    var k = keys[i++];
+    var oldUrl = courseBank[k].url;
+    storage.ref().child('course-images/' + k + '.jpg').getDownloadURL().then(function(url){
+      fixed++; return setUrl(k, url);
+    }, function(){
+      return canLoad(oldUrl).then(function(ok){ if(!ok) { cleared++; return setUrl(k, ''); } });
+    }).catch(function(){}).then(next);
+  }
+  next();
+}
 function saveCourseImage(name, imgData, cb) {
   if(!COURSE_BANK_REF) { if(cb) cb(null); return; }
   var key = courseKey(name);
@@ -6100,14 +6148,7 @@ function wizStep2SaveCurrent() {
     courseDb.push({ id: uid(), name: ev.course, par: 72 });
     courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
     saveCourseDb();
-    // Register suggested filename in course bank for future image lookups
-    var suggested = suggestCourseFilename(ev.course);
-    var key = courseKey(ev.course);
-    if(key && !STATIC_COURSE_IMAGES[key] && suggested && COURSE_BANK_REF) {
-      var update = {};
-      update[key] = { displayName: ev.course, url: suggested };
-      COURSE_BANK_REF.set(update, { merge: true });
-    }
+    // Ingen gissad filväg längre – banbilder laddas upp via appen (Firebase Storage).
   }
   ev.date = document.getElementById('w-ev-date').value;
   recomputeAutoPeriods();
@@ -16290,7 +16331,7 @@ function openAddCourse() {
   showModal(
     '<h3>Lägg till bana</h3>' +
     '<div style="margin-bottom:14px">' +
-      '<div id="cd-image-preview" style="margin-bottom:8px"><p style="font-size:12px;color:var(--text-3);margin:0">Ingen bild uppladdad än.</p></div>' +
+      '<div id="cd-image-preview" style="margin-bottom:8px"><p style="font-size:12px;color:var(--text-3);margin:0">Ingen bild uppladdad än. Fyll i bannamnet och tryck sedan Ladda upp bild – bilden sparas direkt i appen.</p></div>' +
       '<input type="file" id="cd-image-file" accept="image/*" style="display:none" onchange="handleCourseDbImageUpload(this.files[0], document.getElementById(\'cd-name\').value);this.value=\'\'">' +
       '<button type="button" class="btn btn-sm" onclick="document.getElementById(\'cd-image-file\').click()"><i class="ti ti-photo"></i> Ladda upp bild</button>' +
     '</div>' +
@@ -16348,11 +16389,6 @@ function openAddCourse() {
       '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" id="cd-evcharging" style="width:auto;margin:0"> Elbilsladdning</label>' +
       '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" id="cd-rvparking" style="width:auto;margin:0"> Husbilsparkering</label>' +
       '<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400"><input type="checkbox" id="cd-guestplay" style="width:auto;margin:0"> Gästspel tillåtet</label>' +
-    '</div>' +
-    '<div id="cd-filename-hint" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;display:none">' +
-      '<div style="color:var(--text-2);margin-bottom:4px">Ladda upp denna fil till GitHub för att få bild:</div>' +
-      '<div style="font-family:monospace;font-weight:700;color:var(--green-dark)" id="cd-filename-value"></div>' +
-      '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Lägg filen i samma mapp som index.html i ditt repo.</div>' +
     '</div>' +
     '<div class="row" style="justify-content:flex-end;gap:8px">' +
       '<button class="btn" onclick="closeModal()">Avbryt</button>' +
@@ -16529,14 +16565,7 @@ function submitAddCourse() {
   courseDb.push(f);
   courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
   saveCourseDb();
-  // Also register the suggested filename in the course bank so getCourseImage() finds it automatically
-  var suggested = suggestCourseFilename(f.name);
-  var key = courseKey(f.name);
-  if(key && !STATIC_COURSE_IMAGES[key] && suggested) {
-    var update = {};
-    update[key] = { displayName: f.name, url: suggested };
-    COURSE_BANK_REF && COURSE_BANK_REF.set(update, { merge: true });
-  }
+  // Ingen gissad filväg längre – bilden laddas upp via "Ladda upp bild" (Firebase Storage).
   closeModal();
   renderCourseDbSection();
 }
@@ -18065,14 +18094,6 @@ function importCoursesFromTours() {
       if(already) return;
       courseDb.push({ id: uid(), name: name, par: 72 });
       imported++;
-      // Register suggested filename in course bank for future image lookups
-      var key = courseKey(name);
-      var suggested = suggestCourseFilename(name);
-      if(key && !STATIC_COURSE_IMAGES[key] && suggested && COURSE_BANK_REF) {
-        var update = {};
-        update[key] = { displayName: name, url: suggested };
-        COURSE_BANK_REF.set(update, { merge: true });
-      }
     });
   });
   if(!imported) { alert('Inga nya banor hittades – alla banor från dina tourer finns redan i databasen.'); return; }
@@ -18649,9 +18670,9 @@ function renderCourseDbList() {
     html += '<div class="row" style="justify-content:space-between;align-items:center;padding:10px 16px;'+border+'">';
     if(img) {
       html += '<div class="row" style="gap:10px;align-items:center;flex:1;min-width:0;cursor:pointer" onclick="openCourseProfile(\''+c.id+'\')">' +
-        '<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0">' +
+        '<img src="'+img+'" style="width:56px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="courseImgBroken(this)">' +
         '<div><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
-        '<div style="font-size:12px;color:var(--text-2)">Par '+c.par+(c.district?' &nbsp;·&nbsp; '+esc(c.district):'')+' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-check" style="font-size:11px"></i> Bild OK</span>'+
+        '<div style="font-size:12px;color:var(--text-2)">Par '+c.par+(c.district?' &nbsp;·&nbsp; '+esc(c.district):'')+' &nbsp;·&nbsp; <span class="cimg-ok" style="color:var(--green-dark)"><i class="ti ti-check" style="font-size:11px"></i> Bild OK</span>'+
         (c.lat!=null?' &nbsp;·&nbsp; <span style="color:var(--green-dark)"><i class="ti ti-map-pin" style="font-size:11px"></i> Karta OK</span>':' &nbsp;·&nbsp; <span style="color:var(--text-3)">Ingen koordinat</span>')+
         scorecardBadge+
         '</div></div>' +
@@ -18661,7 +18682,7 @@ function renderCourseDbList() {
         '<div style="width:56px;height:36px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:16px"></i></div>' +
         '<div style="min-width:0"><div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>' +
         '<div style="font-size:12px;color:var(--danger-text)">Ingen bild &nbsp;·&nbsp; Par '+c.par+(c.district?' &nbsp;·&nbsp; '+esc(c.district):'')+'</div>' +
-        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Tryck <i class="ti ti-edit" style="font-size:10px"></i> för att ladda upp en bild, eller lägg manuellt: <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">'+esc(suggested)+'</code></div>' +
+        '<div style="font-size:11px;color:var(--text-3);margin-top:2px">Tryck <i class="ti ti-edit" style="font-size:10px"></i> för att ladda upp en bild</div>' +
         (c.lat==null?'<div style="font-size:11px;color:var(--text-3);margin-top:2px"><i class="ti ti-map-pin-off" style="font-size:11px"></i> Ingen koordinat satt</div>':'') +
         '<div style="font-size:11px;margin-top:2px">'+(hasScorecard?'<span style="color:var(--green-dark)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Scorekort OK</span>':'<span style="color:var(--text-3)"><i class="ti ti-list-numbers" style="font-size:11px"></i> Inget scorekort</span>')+'</div>' +
         '</div>' +
@@ -18989,6 +19010,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '5 november 2026 (278)',
+    items: [
+      { type: 'new', text: 'Banbilder hanteras nu helt i appen: ingen gissad filväg och inget "lägg filen i repot" längre. Lägg till/Redigera bana → Ladda upp bild sparar bilden direkt (Firebase Storage). Gamla döda länkar rensas automatiskt så att banan visas som "Ingen bild" med uppladdningsknapp.' },
+      { type: 'fixed', text: 'Bandatabasen visar nu "Bildlänk trasig" (rött) i stället för "Bild OK" när en banas bild inte går att ladda – då syns direkt vilka banor som behöver ny bild.' },
+      { type: 'fixed', text: 'Banbild som laddades upp via "Ladda upp bild" när en NY bana lades till i bandatabasen blev en död länk: när banan sparades skrevs den uppladdade bilden över av en gissad filväg. Nu behålls den uppladdade bilden, och redan drabbade banor (t.ex. Las Ramblas) repareras automatiskt nästa gång admin öppnar appen.' },
+    ]
+  },
   {
     date: '2 november 2026 (277)',
     items: [
@@ -21660,6 +21689,7 @@ function afterLogin() {
   }
   showHomeScreen();
   try { seedTrackmanForIndoorTour(); } catch(e) { console.error('trackman', e); }
+  setTimeout(function(){ try { repairCourseBankImages(); } catch(e) {} }, 3000);
   renderImpersonationBanner();
   setTimeout(function(){ if(typeof initPushAfterLogin==='function') initPushAfterLogin(); }, 1500);
   if(!currentUser.golfId || currentUser.golfId.length !== 10) {
