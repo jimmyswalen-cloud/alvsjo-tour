@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Skapa konto – Älvsjö Players Tour</title>
+<title>Skapa konto</title>
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
@@ -57,9 +57,9 @@ input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0
 </head>
 <body>
 
-<div class="hero">
+<div class="hero" id="su-hero">
   <div class="hero-content">
-    <div class="hero-eyebrow">Älvsjö Golf &amp; Country Club</div>
+    <div class="hero-eyebrow" id="su-eyebrow">&#9971; Golftouren</div>
     <div class="hero-title">Skapa ditt konto</div>
   </div>
 </div>
@@ -67,7 +67,7 @@ input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0
 <div class="wrap">
   <div class="card" id="form-card">
     <h2>Ny spelare</h2>
-    <p class="sub">Fyll i dina uppgifter för att skapa ett konto. Ditt konto skapas som <strong>spelare</strong> – en admin behöver sedan ge dig tillgång till en eller flera tourer innan du ser något, precis som vanligt.</p>
+    <p class="sub">Fyll i dina uppgifter för att skapa ett konto. När kontot är skapat får admin en notis och <strong>godkänner dig</strong> genom att ge dig tillgång till rätt klubbhus. Därefter kan du logga in med användarnamnet och lösenordet du väljer här.</p>
 
     <div class="error-box" id="error-box"></div>
 
@@ -123,9 +123,9 @@ input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0
 
   <div class="card success-box" id="success-card" style="display:none">
     <i class="ti ti-circle-check"></i>
-    <h2>Kontot är skapat!</h2>
+    <h2>Tack – kontot är skapat!</h2>
     <p id="success-msg"></p>
-    <a class="btn" style="text-decoration:none" href="index.html"><i class="ti ti-login"></i> Gå till inloggningen</a>
+    <a class="btn" style="text-decoration:none" href="index.html"><i class="ti ti-arrow-left"></i> Till inloggningssidan</a>
   </div>
 
   <p class="footer-link">Har du redan ett konto? <a href="index.html">Logga in här</a></p>
@@ -158,6 +158,15 @@ function simpleHash(str) {
   }
   return 'h' + (h >>> 0).toString(36) + '_' + str.length;
 }
+
+// Samma utseende som inloggningssidan: senast använda klubbhus på enheten, annars neutralt
+(function(){
+  try {
+    var b = JSON.parse(localStorage.getItem('agcc-login-brand') || 'null');
+    if(b && b.name) document.getElementById('su-eyebrow').textContent = '\u26f3 ' + b.name;
+    if(b && b.bg) document.getElementById('su-hero').style.backgroundImage = "url('" + b.bg + "')";
+  } catch(e) {}
+})();
 
 function showError(msg) {
   var box = document.getElementById('error-box');
@@ -198,13 +207,13 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
 
   db.runTransaction(function(tx) {
     return tx.get(DOC_REF).then(function(doc) {
-      var state = { tours: [], users: [], ideas: [] };
-      if(doc.exists && doc.data().data) {
-        var parsed = JSON.parse(doc.data().data);
-        state.tours = parsed.tours || [];
-        state.users = parsed.users || [];
-        state.ideas = parsed.ideas || [];
-      }
+      // VIKTIGT: behåll HELA det sparade tillståndet (tourer, användare, idéer, inställningar,
+      // klubbhus …) – bara users ändras. Tidigare sparades bara tours/users/ideas tillbaka,
+      // vilket hade raderat t.ex. klubbhusen och appinställningarna.
+      var state = (doc.exists && doc.data().data) ? JSON.parse(doc.data().data) : {};
+      if(!state.tours) state.tours = [];
+      if(!state.users) state.users = [];
+      if(!state.ideas) state.ideas = [];
       var taken = state.users.some(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
       if(taken) throw new Error('USERNAME_TAKEN');
 
@@ -219,15 +228,21 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
         golfId: golfId || '',
         gender: gender,
         hcp: isNaN(hcp) ? 0 : hcp,
-        img: null
+        img: null,
+        // Tom lista = väntar på att admin tilldelar ett eller flera klubbhus
+        clubhouses: [],
+        pending: true,
+        createdAt: Date.now()
       });
 
-      tx.set(DOC_REF, { data: JSON.stringify(state) });
+      tx.set(DOC_REF, { data: JSON.stringify(state), lastActor: username, savedAt: Date.now() });
     });
   }).then(function() {
+    // Notis till admin (push + popup i appen) om att ett nytt konto väntar
+    db.collection('pushOutbox').add({ kind: 'signup', username: username, name: name, createdBy: username, createdAt: Date.now() }).catch(function(){});
     document.getElementById('form-card').style.display = 'none';
     document.getElementById('success-msg').textContent =
-      'Ditt konto (' + username + ') är skapat som spelare. Be din admin tilldela dig en tour, så kan du logga in och komma igång.';
+      'Ditt konto (' + username + ') väntar nu på att godkännas av admin. Du kan logga in så fort du fått tillgång – oftast får du ett meddelande när det är klart.';
     document.getElementById('success-card').style.display = 'block';
   }).catch(function(err) {
     btn.disabled = false;
