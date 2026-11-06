@@ -344,7 +344,6 @@ html[data-theme="dark"] .modal{box-shadow:0 8px 32px rgba(0,0,0,.6)}
 html[data-theme="dark"] .btn-primary{border-color:#0F6E56}
 html[data-theme="dark"] .home-card,html[data-theme="dark"] .bs-it{filter:brightness(.82) saturate(.95)}
 html[data-theme="dark"] .home-card:hover{filter:brightness(.75)}
-html[data-theme="dark"] img{filter:none}
 html[data-theme="dark"] [style*="background:var(--green-dark)"]{background:#0F6E56 !important}
 html[data-theme="dark"] [style*="background:#fff;"],html[data-theme="dark"] [style*="background:#fff\""],
 html[data-theme="dark"] [style*="background:#ffffff"],html[data-theme="dark"] [style*="background:white"],
@@ -356,6 +355,38 @@ html[data-theme="dark"] [style*="background:#FAEEDA"],html[data-theme="dark"] [s
 html[data-theme="dark"] [style*="background:#FCEBEB"],html[data-theme="dark"] [style*="background:#fdecec"],
 html[data-theme="dark"] [style*="background:#fef2f2"]{background:var(--danger-bg) !important}
 html[data-theme="dark"] [style*="background:#EEEDFE"],html[data-theme="dark"] [style*="background:#F4F3FE"]{background:#26233F !important}
+/* Automatiskt genererat: alla mycket ljusa bakgrundsfärger i inline-stilar får en mörk ton i samma färgskala */
+html[data-theme="dark"] [style*="background:#DCFCE7" i]{background:#153721 !important}
+html[data-theme="dark"] [style*="background:#E1F5EE" i]{background:#15372B !important}
+html[data-theme="dark"] [style*="background:#E3EFFB" i]{background:#152637 !important}
+html[data-theme="dark"] [style*="background:#E8F5E9" i]{background:#173519 !important}
+html[data-theme="dark"] [style*="background:#EAF3DE" i]{background:#293715 !important}
+html[data-theme="dark"] [style*="background:#EAF3FB" i]{background:#152737 !important}
+html[data-theme="dark"] [style*="background:#EDECE8" i]{background:#2B2922 !important}
+html[data-theme="dark"] [style*="background:#EEEDFE" i]{background:#171537 !important}
+html[data-theme="dark"] [style*="background:#EEF8F3" i]{background:#163626 !important}
+html[data-theme="dark"] [style*="background:#EFE4FA" i]{background:#261537 !important}
+html[data-theme="dark"] [style*="background:#F0F4F1" i]{background:var(--surface) !important}
+html[data-theme="dark"] [style*="background:#F1EBFD" i]{background:#211537 !important}
+html[data-theme="dark"] [style*="background:#F4F3FE" i]{background:#181537 !important}
+html[data-theme="dark"] [style*="background:#F6F2FE" i]{background:#211537 !important}
+html[data-theme="dark"] [style*="background:#F9FAFB" i]{background:var(--surface) !important}
+html[data-theme="dark"] [style*="background:#FAEEDA" i]{background:#372B15 !important}
+html[data-theme="dark"] [style*="background:#FCEBEB" i]{background:#371515 !important}
+html[data-theme="dark"] [style*="background:#FCEFDA" i]{background:#372A15 !important}
+html[data-theme="dark"] [style*="background:#FDECEC" i]{background:#371515 !important}
+html[data-theme="dark"] [style*="background:#FDF3DF" i]{background:#372C15 !important}
+html[data-theme="dark"] [style*="background:#FDF6EA" i]{background:#372B15 !important}
+html[data-theme="dark"] [style*="background:#FEF2F2" i]{background:#371515 !important}
+html[data-theme="dark"] [style*="background:#FEF3E2" i]{background:#372A15 !important}
+html[data-theme="dark"] [style*="background:#FEF3E9" i]{background:#372515 !important}
+html[data-theme="dark"] [style*="background:#FFF4DC" i]{background:#372D15 !important}
+html[data-theme="dark"] [style*="background:#FFF4F2" i]{background:#371A15 !important}
+html[data-theme="dark"] [style*="background:#FFF6E5" i]{background:#372C15 !important}
+html[data-theme="dark"] [style*="background:#FFF8E6" i]{background:#372E15 !important}
+html[data-theme="dark"] [style*="background:#FFF8EC" i]{background:#372B15 !important}
+html[data-theme="dark"] [style*="background:#FFFBF2" i]{background:#372D15 !important}
+html[data-theme="dark"] [style*="background:#FFFFFF" i]{background:var(--surface) !important}
 html[data-theme="dark"] .ch-invite,html[data-theme="dark"] .cf-tile.on{background:var(--gold-light)}
 html[data-theme="dark"] .tm-cell{background:#26233F}
 html[data-theme="dark"] .ch-prize-ic{background:var(--surface)}
@@ -366,6 +397,12 @@ html[data-theme="dark"] [style*="color:#B45309"]:not(.home-card *):not(.bs-it *)
 html[data-theme="dark"] [style*="color:#A32D2D"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#dc2626"]:not(.home-card *):not(.bs-it *){color:#F38B8B !important}
 html[data-theme="dark"] [style*="color:#534AB7"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#6D28D9"]:not(.home-card *):not(.bs-it *){color:#B4A8F5 !important}
 html[data-theme="dark"] [style*="color:#3B6D11"]:not(.home-card *):not(.bs-it *){color:#9BD46A !important}
+/* Märkesloggor (svart text på vit/transparent botten) inverteras i mörkt läge: vit text,
+   och den (nu svarta) bakgrunden blandas bort med screen så loggan ser transparent ut.
+   hue-rotate återställer ev. färgade detaljer (t.ex. röda) till ungefär sin ursprungsfärg. */
+html[data-theme="dark"] img.brand-logo{filter:invert(1) hue-rotate(180deg);mix-blend-mode:screen;background:transparent !important}
+html[data-theme="dark"] .brand-logo-box{background:transparent !important;padding:0 !important}
+html[data-theme="dark"] [style*="#FFF6DD"]{background:linear-gradient(90deg,rgba(186,117,23,.28),transparent) !important}
 html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -10785,7 +10822,7 @@ function playerBrandLogoTag(username, height) {
   if(!logo) return '';
   height = adjustedLogoSize(brand, height || 15);
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
-  return '<img src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
+  return '<img class="brand-logo" src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
     'style="height:'+height+'px;width:auto;max-width:90px;object-fit:contain;vertical-align:middle;margin-left:6px">';
 }
 
@@ -10795,7 +10832,7 @@ function brandLogoTag(brand, size) {
   size = adjustedLogoSize(brand, size || 16);
   // Om den registrerade filändelsen inte finns, prova automatiskt den andra (jpg <-> png) innan loggan döljs helt.
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
-  return '<img src="'+logo+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
+  return '<img class="brand-logo" src="'+logo+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
     'style="width:'+size+'px;height:'+size+'px;object-fit:contain;vertical-align:middle;margin-right:4px;border-radius:3px;background:#fff">';
 }
 
@@ -19097,6 +19134,8 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (281)',
     items: [
+      { type: 'fixed', text: 'Mörkt läge: bollindelningen under deltävlingar (Boll 1, Boll 2 …) hade ljus bakgrund med ljus text och gick knappt att läsa. Nu får bollarna en mörk grön/guld-ton. Samma rättning gäller alla andra ljusa färgade rutor i appen (t.ex. ljusgröna, ljusgula, ljusröda och lila infoboxar).' },
+      { type: 'fixed', text: 'Mörkt läge: märkesloggor (t.ex. Titleist, TaylorMade) visas nu inverterade – vit logga direkt mot den mörka bakgrunden utan vit ruta. Det fästa säsongsmästar-inlägget på väggen har fått en mörk guldton istället för ljusgul, så texten går att läsa.' },
       { type: 'new', text: 'Mörkt läge (testversion). Admin-konton kan redan nu växla mellan ljust och mörkt med måne/sol-ikonen i menyraden högst upp. Under Inställningar → Utseende slår admin på mörkt läge för alla användare – då kan varje spelare välja själv. Valet sparas på kontot och följer med mellan enheter.' },
     ]
   },
@@ -22065,7 +22104,7 @@ function buildGlobalPlayerProfileHTML(username) {
       ? '<img src="'+playerImg+'" style="width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green,#3B6D11)">'
       : '<div style="width:72px;height:72px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#0F6E56;flex-shrink:0">'+ini(displayName)+'</div>')+
     '<div><div style="font-size:22px;font-weight:700;color:var(--text)">'+esc(displayName)+'</div>'+
-    (playerBrandLogoTag(u.username, 20)?'<div style="background:#fff;border-radius:8px;padding:4px 9px;display:inline-flex;align-items:center;margin-top:5px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
+    (playerBrandLogoTag(u.username, 20)?'<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:4px 9px;display:inline-flex;align-items:center;margin-top:5px">'+playerBrandLogoTag(u.username, 20)+'</div>':'')+
     (u.hcp!=null?'<div style="font-size:13px;color:var(--text-2);margin-top:3px">HCP '+fmtHcp(u.hcp)+(u.gender?' · '+(u.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>':'')+
     '</div></div>';
   if(isOwnProfile) h += '<button class="btn btn-sm" onclick="openMyProfile()"><i class="ti ti-settings"></i> Kontouppgifter</button>';
@@ -22202,7 +22241,7 @@ function renderUsersList() {
           '</div>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">'+
-          (pLogo ? '<div style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center;flex-shrink:0">'+pLogo+'</div>' : '')+
+          (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center;flex-shrink:0">'+pLogo+'</div>' : '')+
           (admin ? '<div class="row" style="gap:6px">'+
             (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
