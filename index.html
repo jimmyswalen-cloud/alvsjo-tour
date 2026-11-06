@@ -426,7 +426,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
-      <img src="logo-hero.png" style="height:clamp(44px,9vw,72px);width:auto" alt="ÄGCC Tour">
+      <img id="hero-logo" src="logo-hero.png" style="height:clamp(44px,9vw,72px);width:auto" alt="ÄGCC Tour">
       <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
@@ -468,7 +468,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 </div>
 
 <div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;row-gap:10px;padding:24px 0 10px;font-size:12px;color:var(--text-2)">
-  <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span><span id="club-switcher" style="display:none;align-items:center;gap:4px;margin-left:6px"></span></span>
+  <span style="display:flex;align-items:center;gap:6px"><img id="user-bar-logo" src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px;object-fit:contain"><i class="ti ti-user-circle"></i> <span id="user-badge"></span><span id="club-switcher" style="display:none;align-items:center;gap:4px;margin-left:6px"></span></span>
   <span style="display:flex;gap:14px">
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><span>Användare</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><span>Min profil</span></span>
@@ -18930,13 +18930,14 @@ function renderCourseBankSection(targetId) {
 var DEFAULT_BG = "url('hero-bg.jpg')";
 
 function updateHero(tourId) {
+  try { applyClubBranding(); } catch(e) {}
   var heroBg=document.getElementById('hero-bg'), heroTitle=document.getElementById('hero-title'),
       heroSub=document.getElementById('hero-sub'), heroEye=document.getElementById('hero-eyebrow');
   if(!heroBg) return;
   heroBg.classList.remove('hero-banner'); heroBg.style.removeProperty('--hero-ar');
   heroBg.setAttribute('data-hero-tour', tourId || '');
   if(!tourId) {
-    heroBg.style.backgroundImage = DEFAULT_BG;
+    heroBg.style.backgroundImage = clubHeroBg();
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='\u26f3 TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR';
     // Andra klubbhus än Älvsjö: klubbhusets namn i headern (fullt eget utseende kommer i etapp 2)
@@ -18951,7 +18952,7 @@ function updateHero(tourId) {
     // över bilden om inget annat valts; med bara omslaget (en logotyp) avgör bildens format.
     var heroSrc = t.headerImg || t.img;
     var heroMode = (t.headerText === 'show' || t.headerText === 'hide') ? t.headerText : (t.headerImg ? 'show' : 'auto');
-    heroBg.style.backgroundImage = heroSrc ? "url('"+heroSrc+"')" : DEFAULT_BG;
+    heroBg.style.backgroundImage = heroSrc ? "url('"+heroSrc+"')" : clubHeroBg();
     if(heroSrc) applyHeroBannerIfWide(heroBg, heroSrc, tourId, heroMode);
     heroTitle.textContent=t.name; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='';
@@ -19222,6 +19223,8 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'improved', text: 'Inställningar → Klubbhus: tydlig knapp "Utseende" på varje klubbhus för ikon och headerbild (bakgrunden i headern).' },
+      { type: 'new', text: 'Varje klubbhus kan få egen ikon (loggan bredvid namnet i headern och i menyraden) och egen headerbild: Inställningar → Klubbhus → palett-knappen. Välj "Ingen ikon" för att bara visa namnet. Nya klubbhus visar ingen ikon förrän du laddat upp en – Älvsjö behåller ÄGCC-loggan.' },
       { type: 'fixed', text: 'Klubbhusfiltret (Alla klubbhus / Älvsjö / Familjen) visas bara i användarlistan, inte längre ovanför en öppnad spelarprofil.' },
       { type: 'new', text: 'KLUBBHUS (etapp 1). Appen kan nu ha flera tour-sällskap – klubbhus – t.ex. Älvsjö GCC, Familjen och Kompisarna. Varje klubbhus har egna tourer, egen statistik, OoM, vägg, sällskapsronder, utmaningar, vinster och Hey Champ – ingenting blandas mellan klubbhusen. Banor, scorekort, banbilder, märkeslogotyper, spelformer och användarkonton är gemensamma.' },
       { type: 'new', text: 'All befintlig data ligger i klubbhuset Älvsjö GCC och alla befintliga konton har tillgång dit – för spelare som bara finns i Älvsjö ändras ingenting.' },
@@ -22926,6 +22929,7 @@ function switchClub(id) {
   try { localStorage.setItem('agcc-club', id); } catch(e) {}
   applyClubFilters();
   renderClubSwitcher();
+  try { applyClubBranding(); } catch(e) {}
   showHomeScreen();
   window.scrollTo(0, 0);
 }
@@ -22991,18 +22995,124 @@ function clubhouseSettingsHTML() {
   clubList().forEach(function(c){
     var nT = (S.tours||[]).filter(function(t){ return itemClub(t) === c.id; }).length;
     var nU = clubUsers(c.id).length;
-    h += '<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:12px">'+
-      '<div style="width:42px;height:42px;border-radius:12px;background:'+(c.id===cur?'var(--green-light)':'var(--surface2)')+';color:var(--green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-building-community" style="font-size:22px"></i></div>'+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
+    h += '<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap">'+
+      '<div style="width:42px;height:42px;border-radius:12px;background:'+(clubLogoSrc(c)?'#1a2e22':(c.id===cur?'var(--green-light)':'var(--surface2)'))+';color:var(--green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+(clubLogoSrc(c)?'<img src="'+esc(clubLogoSrc(c))+'" style="max-width:36px;max-height:36px;object-fit:contain">':'<i class="ti ti-building-community" style="font-size:22px"></i>')+'</div>'+
+      '<div style="flex:1 1 170px;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
         '<div style="font-size:12px;color:var(--text-3)">Kort namn: '+esc(clubShort(c))+' · '+nT+' tour'+(nT===1?'':'er')+' · '+nU+' spelare</div></div>'+
-      '<div class="row" style="gap:6px;flex-shrink:0">'+
+      '<div class="row" style="gap:6px;flex-shrink:0;margin-left:auto">'+
         (c.id!==cur?'<button class="btn btn-sm" title="Växla hit" onclick="switchClub(\''+c.id+'\')"><i class="ti ti-arrows-exchange"></i></button>':'')+
+        '<button class="btn btn-sm btn-primary" title="Utseende (ikon, headerbild)" onclick="openClubLook(\''+c.id+'\')"><i class="ti ti-palette"></i> Utseende</button>'+
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="Ta bort" onclick="deleteClubhouse(\''+c.id+'\')"><i class="ti ti-trash" style="color:var(--danger-text)"></i></button>':'')+
       '</div></div>';
   });
   return h;
 }
+
+// ── Klubbhusets utseende: ikon (loggan i headern/menyraden) och headerbild ──
+// Älvsjö GCC använder de gamla filerna i repot (logo-hero.png m.fl.) om inget annat valts.
+// Övriga klubbhus utan egen ikon visar ingen ikon alls, bara namnet.
+function clubLogoSrc(c) {
+  c = c || currentClub();
+  if(c && c.logo === 'none') return '';
+  if(c && c.logo) return c.logo;
+  return (!c || c.id === DEFAULT_CLUB_ID) ? 'logo-hero.png' : '';
+}
+function clubHeroBg() {
+  var c = currentUser ? currentClub() : null;
+  return (c && c.heroImg) ? "url('" + c.heroImg + "')" : DEFAULT_BG;
+}
+function applyClubBranding() {
+  var c = currentUser ? currentClub() : null;
+  var src = clubLogoSrc(c);
+  var hl = document.getElementById('hero-logo');
+  if(hl) { if(src) { hl.src = src; hl.style.display = ''; } else hl.style.display = 'none'; }
+  var ul = document.getElementById('user-bar-logo');
+  if(ul) {
+    var small = (c && c.logo && c.logo !== 'none') ? c.logo : ((!c || c.id === DEFAULT_CLUB_ID) && !(c && c.logo === 'none') ? 'logo-footer.png' : '');
+    if(small) { ul.src = small; ul.style.display = ''; } else ul.style.display = 'none';
+  }
+}
+// Skalar en vald bild till PNG (behåller genomskinlighet – viktigt för loggor)
+function resizeToPng(file, maxW, maxH, cb) {
+  var r = new FileReader();
+  r.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var sc = Math.min(1, maxW / img.width, maxH / img.height);
+      var w = Math.max(1, Math.round(img.width * sc)), h = Math.max(1, Math.round(img.height * sc));
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      cb(cv.toDataURL('image/png'));
+    };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(file);
+}
+function uploadClubAsset(dataUrl, path, contentType) {
+  return storage.ref().child(path).putString(dataUrl, 'data_url', { contentType: contentType })
+    .then(function(snap){ return snap.ref.getDownloadURL(); });
+}
+var _clubEditId = null;
+function openClubLook(id) {
+  if(!isAdmin()) return;
+  ensureClubList();
+  var c = clubById(id); if(!c) return;
+  _clubEditId = id;
+  var logo = clubLogoSrc(c);
+  var h = '<h3><i class="ti ti-palette"></i> Utseende – '+esc(c.name)+'</h3>';
+  h += '<div style="font-size:13px;font-weight:700;margin:6px 0 6px">Ikon / logga</div>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Visas bredvid namnet i headern och i menyraden. PNG med genomskinlig bakgrund blir snyggast.</p>'+
+    '<div class="row" style="gap:12px;align-items:center;margin-bottom:14px">'+
+      '<div style="width:72px;height:72px;border-radius:12px;background:#1a2e22;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+
+        (logo ? '<img src="'+esc(logo)+'" style="max-width:64px;max-height:64px;object-fit:contain">' : '<i class="ti ti-photo-off" style="color:rgba(255,255,255,.5);font-size:24px"></i>')+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+        '<input type="file" id="club-logo-file" accept="image/*" style="display:none" onchange="saveClubLogo(this.files[0]);this.value=\'\'">'+
+        '<button class="btn btn-sm btn-primary" onclick="document.getElementById(\'club-logo-file\').click()"><i class="ti ti-upload"></i> Ladda upp ikon</button>'+
+        (c.logo && c.logo !== 'none' ? '<button class="btn btn-sm" onclick="setClubField(\'logo\', null)"><i class="ti ti-arrow-back-up"></i> Standard</button>' : '')+
+        (logo ? '<button class="btn btn-sm" onclick="setClubField(\'logo\', \'none\')"><i class="ti ti-eye-off"></i> Ingen ikon</button>' : '')+
+      '</div></div>';
+  h += '<div style="font-size:13px;font-weight:700;margin:6px 0 6px">Headerbild</div>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Bakgrundsbilden högst upp på startsidan för klubbhuset. Liggande bild, gärna minst 1600 px bred.</p>'+
+    '<div style="height:90px;border-radius:10px;background:'+(c.heroImg ? "url('"+esc(c.heroImg)+"')" : DEFAULT_BG)+' center/cover;margin-bottom:8px"></div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
+      '<input type="file" id="club-hero-file" accept="image/*" style="display:none" onchange="saveClubHero(this.files[0]);this.value=\'\'">'+
+      '<button class="btn btn-sm btn-primary" onclick="document.getElementById(\'club-hero-file\').click()"><i class="ti ti-upload"></i> Ladda upp headerbild</button>'+
+      (c.heroImg ? '<button class="btn btn-sm" onclick="setClubField(\'heroImg\', null)"><i class="ti ti-arrow-back-up"></i> Standardbild</button>' : '')+
+    '</div>';
+  h += '<p id="club-look-status" style="font-size:12px;min-height:16px;margin-top:6px"></p>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn btn-primary" onclick="closeModal();renderGlobalSettings()">Klar</button></div>';
+  showModal(h);
+}
+function setClubField(key, val) {
+  ensureClubList();
+  var c = clubById(_clubEditId); if(!c) return;
+  if(val == null) delete c[key]; else c[key] = val;
+  save(); applyClubBranding(); try { if(!activeTourId) updateHero(null); } catch(e) {}
+  openClubLook(_clubEditId);
+}
+function clubLookStatus(txt, err) { var el = document.getElementById('club-look-status'); if(el) { el.innerHTML = txt; el.style.color = err ? 'var(--danger-text)' : 'var(--text-3)'; } }
+function saveClubLogo(file) {
+  if(!file || !_clubEditId) return;
+  var id = _clubEditId;
+  clubLookStatus('<i class="ti ti-loader-2"></i> Laddar upp ikonen…');
+  resizeToPng(file, 400, 400, function(dataUrl){
+    uploadClubAsset(dataUrl, 'club-assets/' + id + '-logo-' + Date.now() + '.png', 'image/png').then(function(url){
+      _clubEditId = id; setClubField('logo', url);
+    }).catch(function(e){ console.error(e); clubLookStatus('Uppladdningen misslyckades – försök igen.', true); });
+  });
+}
+function saveClubHero(file) {
+  if(!file || !_clubEditId) return;
+  var id = _clubEditId;
+  clubLookStatus('<i class="ti ti-loader-2"></i> Laddar upp headerbilden…');
+  compressImage(file, 2000, 1200, 0.82, function(dataUrl){
+    uploadClubAsset(dataUrl, 'club-assets/' + id + '-hero-' + Date.now() + '.jpg', 'image/jpeg').then(function(url){
+      _clubEditId = id; setClubField('heroImg', url);
+    }).catch(function(e){ console.error(e); clubLookStatus('Uppladdningen misslyckades – försök igen.', true); });
+  });
+}
+
 // Kryssrutor i Ny/Redigera användare
 function clubAccessFieldHTML(u) {
   var ids = u ? userClubIds(u) : [currentClubId()];
