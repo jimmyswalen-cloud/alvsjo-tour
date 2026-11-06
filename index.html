@@ -19235,6 +19235,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (286)',
+    items: [
+      { type: 'improved', text: 'Användarlistan: märkesloggan i spelarkorten är ännu lite mindre så att namn och e-post alltid får plats. (Ny versionssiffra så det syns när telefonen hämtat den senaste versionen.)' },
+    ]
+  },
+  {
     date: '6 november 2026 (285)',
     items: [
       { type: 'fixed', text: 'Användarlistan: knapparna (Redigera, Dela inloggning, Logga in som, Ta bort) ligger nu på en egen rad längst ner i spelarkortet och märkesloggan är mindre – tidigare fick inte allt plats på mobilen.' },
@@ -22399,7 +22405,7 @@ function renderUsersList() {
             '</div>'+
           '</div>'+
         '</div>'+
-        (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:4px 8px;display:flex;align-items:center;flex-shrink:0;max-width:96px;overflow:hidden">'+playerBrandLogoTag(u.username, 20)+'</div>' : '')+
+        (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:76px;overflow:hidden">'+playerBrandLogoTag(u.username, 16).replace('max-width:90px','max-width:64px').replace('margin-left:6px','margin-left:0')+'</div>' : '')+
       '</div>'+
       (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-top:10px">Admin ser alltid alla tourer i översikten</div>' : '')+
       (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
