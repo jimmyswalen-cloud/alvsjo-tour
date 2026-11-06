@@ -441,9 +441,9 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,30,18,.35) 0%,rgba(6,30,18,.65) 100%)"></div>
   <div style="position:relative;width:100%;max-width:380px">
     <div style="text-align:center;margin-bottom:22px">
-      <img src="logo-login.png" alt="ÄGCC Tour" style="width:70px;height:88px;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
+      <img id="login-logo" src="logo-login.png" alt="" style="height:88px;width:auto;max-width:140px;object-fit:contain;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:8px">&#9971; Välkommen till</div>
-      <div style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">ÄLVSJÖ GCC TOUR</div>
+      <div id="login-title" style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">ÄLVSJÖ GCC TOUR</div>
     </div>
     <div style="background:rgba(255,255,255,.97);border-radius:16px;padding:1.75rem;box-shadow:0 12px 40px rgba(0,0,0,.25);backdrop-filter:blur(8px)">
       <h2 style="margin-bottom:4px;text-align:center">Logga in</h2>
@@ -521,6 +521,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
     <div id="home-push-banner"></div>
     <div id="home-billing-widget"></div>
+    <div id="home-pending-users-widget"></div>
     <div id="home-course-review-widget"></div>
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
@@ -1168,6 +1169,7 @@ function initFirebaseSync(onFirstLoad) {
       try { seedTrackmanForIndoorTour(); } catch(e) {}
       try { applyTheme(); } catch(e) {}
       try { applyClubFilters(); renderClubSwitcher(); } catch(e) {}
+      try { renderHomePendingUsers(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -1936,6 +1938,7 @@ function showHomeScreen() {
   try { if(_cr && _cr.unsub) { _cr.unsub(); _cr.unsub = null; _cr.id = null; } subscribeCasualRounds(); renderHomeCasualWidget(); } catch(e) { console.error('casual', e); }
   try { renderHomeBillingWidget(); } catch(e) {}
   try { renderHomeCourseReviewWidget(); } catch(e) {}
+  try { renderHomePendingUsers(); } catch(e) {}
   try { subscribeChallenges(); renderHomeChallengeWidget(); } catch(e) { console.error('challenges', e); }
   updateSettingsCard();
   // Utan detta hamnar man kvar på samma scroll-position som föregående vy (t.ex. långt
@@ -3204,7 +3207,7 @@ var GS_TILES = [
 ];
 function gsTileSub(key) {
   try {
-    if(key === 'users') return (S.users||[]).length + ' konton';
+    if(key === 'users') { var np = pendingUsers().length; return (S.users||[]).length + ' konton' + (np ? ' · ' + np + ' väntar' : ''); }
     if(key === 'clubs') return clubList().length + ' st · aktivt: ' + clubShort(currentClub());
     if(key === 'courses') {
       var n = (courseDb||[]).length, noImg = (courseDb||[]).filter(function(c){ return !getCourseImage(c.name); }).length;
@@ -19234,6 +19237,9 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'fixed', text: 'Användarlistan: knapparna (Redigera, Dela inloggning, Logga in som, Ta bort) ligger nu på en egen rad längst ner i spelarkortet och märkesloggan är mindre – tidigare fick inte allt plats på mobilen.' },
+      { type: 'new', text: 'Skapa konto (inloggningssidan) är omgjort: kontot skapas men kan inte logga in förrän admin godkänt det. Nya konton dyker upp överst på startsidan för admin ("Nya konton väntar på klubbhus") – ett tryck på t.ex. "+ Familjen" godkänner och ger tillgång, och du erbjuds direkt att skicka inloggningslänken. Spelaren får en notis när kontot är godkänt. Admin får en notis när någon registrerar sig.' },
+      { type: 'new', text: 'Inloggningssidan följer klubbhuset: efter utloggning visas det klubbhus du senast var i – med dess ikon, namn och headerbild. En enhet som aldrig varit inloggad (eller som öppnar appen första gången) får en neutral inloggningssida utan Älvsjö-märkning. Delade inloggningslänkar visar rätt klubbhus direkt.' },
       { type: 'new', text: 'Dela inloggning: admin kan skicka en länk till inloggningssidan med användarnamnet redan ifyllt (och rätt klubbhus). Dela-knappen finns på varje spelarkort under Användare, i Redigera användare, och erbjuds direkt när en ny användare skapats. Välj Dela… (SMS, Messenger, WhatsApp m.m. på mobilen) eller kopiera meddelandet/länken. Lösenordet skickas aldrig med.' },
       { type: 'fixed', text: 'Ny/Redigera användare: Tour-åtkomst visar nu bara tourer i de klubbhus som är ikryssade. Kryssar man ur ett klubbhus tas åtkomsten till dess tourer bort automatiskt.' },
       { type: 'new', text: 'Klubbhusets headerbild kan väljas direkt från samma omslagsbibliotek som när man skapar en tour (Klubbhus → Utseende → Välj från omslagen), eller laddas upp som egen bild.' },
@@ -21813,6 +21819,7 @@ function deleteIdea(id) {
 function showLoginScreen() {
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  try { applyLoginBranding(); } catch(e) {}
   document.getElementById('tours-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('hero-bg').style.display = 'none';
@@ -21832,6 +21839,11 @@ function doLogin() {
   var user = findUser(u);
   if(!user || user.passHash !== simpleHash(p)) {
     errEl.textContent = 'Fel användarnamn eller lösenord.';
+    errEl.style.display = '';
+    return;
+  }
+  if(isPendingUser(user)) {
+    errEl.innerHTML = '<b>Ditt konto väntar på godkännande.</b><br>En admin behöver ge dig tillgång till ett klubbhus innan du kan logga in. Du kan logga in direkt när det är klart.';
     errEl.style.display = '';
     return;
   }
@@ -21939,7 +21951,7 @@ function tryAutoLogin() {
   try {
     var sess = JSON.parse(raw);
     var user = findUser(sess.username);
-    if(user) { currentUser = user; return true; }
+    if(user && !isPendingUser(user)) { currentUser = user; return true; }
   } catch(e) {}
   return false;
 }
@@ -22322,7 +22334,7 @@ function renderUsersList() {
   // Klubbhus: spelare ser bara spelare i det aktiva klubbhuset. Admin ser det aktiva
   // klubbhuset som standard men kan välja "Alla klubbhus".
   var clubFilter = admin ? (_usersClubFilter || currentClubId()) : currentClubId();
-  if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && u.role === 'admin' && u.username === currentUser.username); });
+  if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && u.role === 'admin' && u.username === currentUser.username) || (admin && isPendingUser(u)); });
   var clubBarEl = document.getElementById('users-club-filter');
   if(clubBarEl) clubBarEl.innerHTML = (admin && clubList().length > 1) ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
     [{id:'all', name:'Alla klubbhus'}].concat(clubList()).map(function(c){
@@ -22375,31 +22387,31 @@ function renderUsersList() {
     return divider + '<div class="card" style="cursor:pointer;padding:0;overflow:hidden" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')">'+
       '<div style="padding:16px 18px '+(swSection?'12px':'16px')+'">'+
       '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">'+
-        '<div class="row" style="gap:12px;align-items:center">'+
+        '<div class="row" style="gap:12px;align-items:center;flex:1;min-width:0">'+
           avatar+
-          '<div>'+
+          '<div style="min-width:0">'+
             '<div style="font-weight:700;font-size:16px;color:var(--text)">'+esc(displayName)+'</div>'+
             (admin && displayName !== u.username ? '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Användarnamn: <span style="color:var(--text-2)">@'+esc(u.username)+'</span></div>' : '')+
-            (admin && u.email ? '<div style="font-size:12px;color:var(--text-3);margin-top:1px">E-post: <span style="color:var(--text-2)">'+esc(u.email)+'</span></div>' : '')+
+            (admin && u.email ? '<div style="font-size:12px;color:var(--text-3);margin-top:1px;overflow-wrap:anywhere">E-post: <span style="color:var(--text-2)">'+esc(u.email)+'</span></div>' : '')+
             '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+
               (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
               (isPlayer ? '<span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0" onclick="event.stopPropagation()">'+
-          (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center;flex-shrink:0">'+pLogo+'</div>' : '')+
-          (admin ? '<div class="row" style="gap:6px">'+
-            (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
-            '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')" title="Dela inloggningslänk"><i class="ti ti-share"></i></button>'+
-            '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
-            (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
-          '</div>' : '')+
-        '</div>'+
+        (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:4px 8px;display:flex;align-items:center;flex-shrink:0;max-width:96px;overflow:hidden">'+playerBrandLogoTag(u.username, 20)+'</div>' : '')+
       '</div>'+
       (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-top:10px">Admin ser alltid alla tourer i översikten</div>' : '')+
       (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
-        (clubList().length>1?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
+        (isPendingUser(u)?'<div style="font-size:13px;font-weight:700;color:#0C447C;margin-top:4px"><i class="ti ti-hourglass"></i> Väntar på klubbhus – redigera kontot och kryssa i ett eller flera</div>':'')+
+        (clubList().length>1 && !isPendingUser(u)?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
+      // Admin-knappar på en egen rad (fick inte plats bredvid namnet på mobil)
+      (admin ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px" onclick="event.stopPropagation()">'+
+        '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i> Redigera</button>'+
+        '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela inloggning</button>'+
+        (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i> Logga in som</button>' : '')+
+        (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="delUser('+i+')" title="Ta bort"><i class="ti ti-trash"></i></button>' : '')+
+      '</div>' : '')+
       '</div>'+
       swSection+
     '</div>';
@@ -22914,7 +22926,11 @@ function clubList() {
 }
 function clubById(id) { return clubList().find(function(c){ return c.id === id; }) || null; }
 function clubShort(c) { return c ? (c.short || c.name) : ''; }
-function userClubIds(u) { return (u && u.clubhouses && u.clubhouses.length) ? u.clubhouses : [DEFAULT_CLUB_ID]; }
+// Saknas fältet helt = gammalt konto = Älvsjö. En TOM lista = självregistrerat konto som
+// väntar på att admin tilldelar klubbhus (se isPendingUser).
+function userClubIds(u) { return (u && Array.isArray(u.clubhouses)) ? u.clubhouses : [DEFAULT_CLUB_ID]; }
+function isPendingUser(u) { return !!u && u.role !== 'admin' && Array.isArray(u.clubhouses) && !u.clubhouses.length; }
+function pendingUsers() { return (S.users||[]).filter(isPendingUser); }
 function accessibleClubs() {
   if(!currentUser) return [];
   if(isAdmin()) return clubList();
@@ -23058,6 +23074,7 @@ function clubHeroBg() {
 }
 function applyClubBranding() {
   var c = currentUser ? currentClub() : null;
+  if(c) saveLoginBrand();
   var src = clubLogoSrc(c);
   var hl = document.getElementById('hero-logo');
   if(hl) { if(src) { hl.src = src; hl.style.display = ''; } else hl.style.display = 'none'; }
@@ -23154,6 +23171,85 @@ function saveClubHero(file) {
       _clubEditId = id; setClubField('heroImg', url);
     }).catch(function(e){ console.error(e); clubLookStatus('Uppladdningen misslyckades – försök igen.', true); });
   });
+}
+
+
+// ── Inloggningssidans utseende ──────────────────────────────────────────────
+// Visar det klubbhus som senast användes på enheten (sparas vid varje inloggning
+// och klubbhusbyte i localStorage 'agcc-login-brand'). Har enheten aldrig varit
+// inloggad visas en neutral variant utan Älvsjö-märkning.
+var NEUTRAL_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E9C6E"/><stop offset="1" stop-color="#0F5A3E"/></linearGradient></defs><circle cx="60" cy="60" r="56" fill="url(#g)" stroke="#fff" stroke-width="4"/><ellipse cx="60" cy="86" rx="30" ry="7" fill="#0A3D2A"/><rect x="57" y="30" width="4" height="56" fill="#fff"/><path d="M61 31 L88 40 L61 49 Z" fill="#FFB547"/><circle cx="44" cy="82" r="5" fill="#fff"/></svg>');
+function saveLoginBrand() {
+  try {
+    var c = currentClub();
+    if(!c) return;
+    localStorage.setItem('agcc-login-brand', JSON.stringify({ id: c.id, name: c.name, logo: clubLogoSrc(c) || '', bg: c.heroImg || '' }));
+  } catch(e) {}
+}
+function applyLoginBranding() {
+  var b = null;
+  try { b = JSON.parse(localStorage.getItem('agcc-login-brand') || 'null'); } catch(e) {}
+  // Färskare uppgifter om klubbhuset finns i den laddade databasen
+  var savedId = null; try { savedId = localStorage.getItem('agcc-club'); } catch(e) {}
+  var id = (b && b.id) || savedId;
+  var c = (id && S.clubhouses) ? clubById(id) : null;
+  if(c) b = { id: c.id, name: c.name, logo: clubLogoSrc(c) || '', bg: c.heroImg || '' };
+  else if(!b && id === DEFAULT_CLUB_ID) b = { id: DEFAULT_CLUB_ID };
+  var logo = document.getElementById('login-logo'), title = document.getElementById('login-title'), scr = document.getElementById('login-screen');
+  if(!logo || !title || !scr) return;
+  var bg = 'login-bg.jpg', logoSrc = NEUTRAL_LOGO, name = 'GOLFTOUREN', boxy = false;
+  if(b && b.id === DEFAULT_CLUB_ID && !(c && (c.logo || c.heroImg))) { logoSrc = 'logo-login.png'; name = 'ÄLVSJÖ GCC TOUR'; boxy = true; }
+  else if(b) { logoSrc = b.logo || NEUTRAL_LOGO; name = (b.id === DEFAULT_CLUB_ID ? 'ÄLVSJÖ GCC TOUR' : (b.name || '').toUpperCase()); if(b.bg) bg = b.bg; if(b.logo === 'logo-hero.png') { logoSrc = 'logo-login.png'; boxy = true; } }
+  logo.src = logoSrc;
+  logo.style.boxShadow = boxy ? '0 6px 20px rgba(0,0,0,.35)' : 'none';
+  logo.style.filter = boxy ? '' : 'drop-shadow(0 6px 16px rgba(0,0,0,.45))';
+  title.textContent = name;
+  title.style.fontSize = name.length > 16 ? '30px' : '38px';
+  scr.style.backgroundImage = "url('" + bg + "')";
+}
+
+
+// ── Självregistrerade konton som väntar på klubbhus (admin) ───────────────────
+function renderHomePendingUsers() {
+  var el = document.getElementById('home-pending-users-widget'); if(!el) return;
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  var list = pendingUsers();
+  if(!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:#7DB7F0;background:#EAF3FB">'+
+    '<div style="font-size:13px;font-weight:700;color:#0C447C;margin-bottom:4px"><i class="ti ti-user-plus"></i> Nya konton väntar på klubbhus ('+list.length+')</div>'+
+    '<div style="font-size:12px;color:var(--text-2);margin-bottom:4px">Personerna har registrerat sig själva och kan logga in först när du gett dem ett klubbhus.</div>'+
+    list.map(function(u){
+      var idx = getUsers().indexOf(u);
+      return '<div style="border-top:1px solid #CFE3F7;padding:9px 0;font-size:13px">'+
+        '<div style="font-weight:700">'+esc(u.name || u.username)+' <span style="font-weight:400;color:var(--text-3)">@'+esc(u.username)+'</span></div>'+
+        '<div style="font-size:12px;color:var(--text-2)">'+(u.createdAt?'Registrerad '+new Date(u.createdAt).toLocaleDateString('sv-SE')+' · ':'')+'HCP '+(u.hcp!=null?u.hcp:'–')+(u.golfId?' · Golf-ID '+esc(u.golfId):' · Golf-ID saknas')+(u.email?' · '+esc(u.email):'')+'</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">'+
+          clubList().map(function(c){ return '<button class="btn btn-sm btn-primary" onclick="approvePendingUser(\''+esc(u.username)+'\',\''+c.id+'\')"><i class="ti ti-plus"></i> '+esc(clubShort(c))+'</button>'; }).join('')+
+          '<button class="btn btn-sm" onclick="openEditUser('+idx+')" title="Öppna kontot (välj flera klubbhus, tourer m.m.)"><i class="ti ti-edit"></i></button>'+
+          '<button class="btn btn-sm btn-danger" onclick="rejectPendingUser(\''+esc(u.username)+'\')" title="Ta bort kontot"><i class="ti ti-trash"></i></button>'+
+        '</div></div>';
+    }).join('')+'</div>';
+}
+function approvePendingUser(username, clubId) {
+  if(!isAdmin()) return;
+  var u = findUser(username); if(!u) return;
+  var c = clubById(clubId);
+  u.clubhouses = [clubId];
+  delete u.pending;
+  save();
+  // Meddela spelaren (popup i appen + push om notiser är på)
+  try { PUSH_INBOX_COL.add({ username: u.username, title: '✅ Ditt konto är godkänt', body: 'Välkommen till ' + (c ? c.name : 'golfappen') + '! Du kan logga in nu.', link: '', category: 'todo', createdAt: Date.now(), dismissed: false }).catch(function(){}); } catch(e) {}
+  renderHomePendingUsers();
+  try { renderUsersList(); } catch(e) {}
+  if(confirm((u.name || u.username) + ' har nu tillgång till ' + (c ? c.name : 'klubbhuset') + '.\n\nVill du skicka ett meddelande med inloggningslänken?')) shareLoginLink(u.username);
+}
+function rejectPendingUser(username) {
+  if(!isAdmin()) return;
+  var i = getUsers().findIndex(function(x){ return x.username === username; });
+  if(i < 0) return;
+  if(!confirm('Ta bort kontot "' + username + '"? Det går inte att ångra.')) return;
+  S.users.splice(i, 1);
+  save(); renderHomePendingUsers(); try { renderUsersList(); } catch(e) {}
 }
 
 // Kryssrutor i Ny/Redigera användare
