@@ -19234,6 +19234,7 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'fixed', text: 'Ny/Redigera användare: Tour-åtkomst visar nu bara tourer i de klubbhus som är ikryssade. Kryssar man ur ett klubbhus tas åtkomsten till dess tourer bort automatiskt.' },
       { type: 'new', text: 'Klubbhusets headerbild kan väljas direkt från samma omslagsbibliotek som när man skapar en tour (Klubbhus → Utseende → Välj från omslagen), eller laddas upp som egen bild.' },
       { type: 'new', text: 'Väggen finns i alla klubbhus – även ett nytt, tomt klubbhus visar nu väggen (med en förklaring tills första inlägget kommer). Väggen heter "The ÄGCC Wall" i Älvsjö och "The [klubbhus] Wall" i övriga, och namnet kan ändras under Klubbhus → Utseende.' },
       { type: 'improved', text: 'Inställningar → Klubbhus: tydlig knapp "Utseende" på varje klubbhus för ikon och headerbild (bakgrunden i headern).' },
@@ -22628,12 +22629,14 @@ function openNewUser() {
 }
 
 function buildTourAccessPickerHTML() {
-  var available = S.tours.filter(function(t){ return _pendingTourAccess.indexOf(t.id) < 0; });
+  // Bara tourer i de klubbhus som är ikryssade (eller det aktiva om fältet inte finns)
+  var selClubs = readClubAccessField() || _clubFieldDefault || [currentClubId()];
+  var available = S.tours.filter(function(t){ return _pendingTourAccess.indexOf(t.id) < 0 && selClubs.indexOf(itemClub(t)) >= 0; });
   var h = '<div class="row" style="gap:8px;margin-bottom:10px">';
   h += '<select id="tour-access-select" style="margin:0;flex:1">';
   h += available.length
     ? available.map(function(t){ return '<option value="'+t.id+'">'+(clubList().length>1?esc(clubShort(clubById(itemClub(t))))+' · ':'')+t.name+'</option>'; }).join('')
-    : '<option value="">Inga fler tourer</option>';
+    : '<option value="">'+(selClubs.length ? 'Inga fler tourer i valda klubbhus' : 'Välj klubbhus först')+'</option>';
   h += '</select>';
   h += '<button type="button" class="btn btn-sm btn-primary" id="tour-access-add-btn" '+(available.length?'':'disabled')+'><i class="ti ti-plus"></i> Lägg till</button>';
   h += '</div>';
@@ -23149,13 +23152,23 @@ function saveClubHero(file) {
 }
 
 // Kryssrutor i Ny/Redigera användare
+var _clubFieldDefault = null;
 function clubAccessFieldHTML(u) {
   var ids = u ? userClubIds(u) : [currentClubId()];
+  _clubFieldDefault = ids.slice();
   return '<div class="field" id="u-club-field"><label>Klubbhus</label><div style="display:flex;flex-wrap:wrap;gap:8px 16px">'+
     clubList().map(function(c){
-      return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:400;cursor:pointer"><input type="checkbox" class="u-club-cb" value="'+esc(c.id)+'" '+(ids.indexOf(c.id)>=0?'checked':'')+' style="width:auto;margin:0"> '+esc(c.name)+'</label>';
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:400;cursor:pointer"><input type="checkbox" class="u-club-cb" value="'+esc(c.id)+'" '+(ids.indexOf(c.id)>=0?'checked':'')+' onchange="onClubAccessChange()" style="width:auto;margin:0"> '+esc(c.name)+'</label>';
     }).join('')+
   '</div><p style="font-size:11px;color:var(--text-3);margin-top:4px">Spelaren ser bara de klubbhus som är ikryssade. Med fler än ett får spelaren en väljare i menyraden.</p></div>';
+}
+// När klubbhus kryssas ur/i: ta bort tour-åtkomst till tourer i urkryssade klubbhus
+// och visa bara tourer från valda klubbhus i tour-listan.
+function onClubAccessChange() {
+  var sel = readClubAccessField() || [];
+  var removed = _pendingTourAccess.filter(function(tid){ var t = S.tours.find(function(x){ return x.id === tid; }); return t && sel.indexOf(itemClub(t)) < 0; });
+  if(removed.length) _pendingTourAccess = _pendingTourAccess.filter(function(tid){ return removed.indexOf(tid) < 0; });
+  try { refreshTourAccessPicker(); } catch(e) {}
 }
 function readClubAccessField() {
   var cbs = document.querySelectorAll('.u-club-cb');
