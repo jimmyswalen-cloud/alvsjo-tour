@@ -3205,7 +3205,7 @@ function gsTileSub(key) {
     if(key === 'logins') return 'Senaste 50 inloggningarna';
     if(key === 'db') return Math.round(JSON.stringify(S).length/1024) + ' av ~1000 KB';
     if(key === 'tools') return 'OoM-poäng, saknade resultat, puttar';
-    if(key === 'look') return 'Mörkt läge: ' + ((S.settings && S.settings.darkModeForAll) ? 'på för alla' : 'bara admin');
+    if(key === 'look') return 'Mörkt läge: ' + (darkModeForAllOn() ? 'på för alla' : 'bara admin');
   } catch(e) {}
   return '';
 }
@@ -3257,7 +3257,7 @@ function renderGlobalSettings() {
     html += tool('ti-golf', 'Reparera saknade puttar', 'Kompletterar puttar som tidigare tappades bort vid "Registrera för bollen", från sparad livescoring. Rör aldrig scorekort som redan har puttar.', 'ti-wand', 'Kör reparation', 'repairMissingHolePuttsFromLiveScoring');
   }
   if(sec.key === 'look') {
-    var on = !!(S.settings && S.settings.darkModeForAll);
+    var on = darkModeForAllOn();
     var mine = currentThemeChoice() === 'dark';
     var sw = function(checked, fn){ return '<label style="position:relative;display:inline-block;width:50px;height:30px;flex-shrink:0;cursor:pointer"><input type="checkbox" '+(checked?'checked':'')+' onchange="'+fn+'" style="opacity:0;width:0;height:0;position:absolute">'+
       '<span style="position:absolute;inset:0;border-radius:15px;background:'+(checked?'var(--green)':'var(--border-strong)')+';transition:background .2s"></span>'+
@@ -19132,6 +19132,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (282)',
+    items: [
+      { type: 'new', text: 'Mörkt läge är nu tillgängligt för alla användare. Varje spelare växlar själv mellan ljust och mörkt med måne/sol-knappen i menyraden högst upp (standard är ljust). Admin kan stänga av funktionen för alla igen under Inställningar → Utseende.' },
+    ]
+  },
+  {
     date: '6 november 2026 (281)',
     items: [
       { type: 'fixed', text: 'Mörkt läge: bollindelningen under deltävlingar (Boll 1, Boll 2 …) hade ljus bakgrund med ljus text och gick knappt att läsa. Nu får bollarna en mörk grön/guld-ton. Samma rättning gäller alla andra ljusa färgade rutor i appen (t.ex. ljusgröna, ljusgula, ljusröda och lila infoboxar).' },
@@ -22737,9 +22743,13 @@ function visibleTours() {
 // ── MÖRKT LÄGE ────────────────────────────────────────────────────────────────
 // Varje användare väljer själv ljust/mörkt (sparas på kontot: u.theme, + localStorage för
 // att undvika "blink" vid start). Funktionen är bara tillgänglig för admin-konton tills
-// admin slår på den för alla (S.settings.darkModeForAll, Inställningar → Utseende).
+// Påslaget för alla som standard sedan release 282; admin kan stänga av igen
+// (S.settings.darkModeForAll = false, Inställningar → Utseende).
 function darkModeAllowed() {
-  return !!currentUser && (isAdmin() || !!(S.settings && S.settings.darkModeForAll));
+  return !!currentUser && (isAdmin() || darkModeForAllOn());
+}
+function darkModeForAllOn() {
+  return !(S.settings && S.settings.darkModeForAll === false);
 }
 function currentThemeChoice() {
   var u = currentUser ? findUser(currentUser.username) : null;
