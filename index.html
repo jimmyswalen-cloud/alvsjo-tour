@@ -16482,8 +16482,8 @@ function openAddCourse() {
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
     '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
-      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata (t.ex. "Par 4 - Index 9" per rad, en per hål)</label>' +
-      '<textarea id="cd-scorecard-paste" rows="3" placeholder="Par 5 - Index 7&#10;Par 4 - Index 9&#10;Par 3 - Index 17 ..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
+      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata – ett hål per rad: <b>par-index</b> (t.ex. "5-4") eller "Par 4 - Index 9"</label>' +
+      '<textarea id="cd-scorecard-paste" rows="3" placeholder="5-4&#10;4-16&#10;3-18&#10;..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
       '<button type="button" class="btn btn-sm" onclick="parseScorecardPaste()"><i class="ti ti-wand"></i> Tolka & fyll i</button>' +
     '</div>' +
     '<div id="cd-scorecard-grid" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px"></div>' +
@@ -16535,22 +16535,63 @@ function openAddCourse() {
 
 // Tolkar inklistrad scorekortstext (t.ex. kopierad från Caddee.se: "Par 5 - Index 7" per hål)
 // och fyller automatiskt i par/hcp-index-rutnätet. Ordningen i texten avgör hålordningen.
+// Tolkar inklistrad scorekortsdata, ett hål per rad i hålordning. Två format stöds:
+//  1) "Par 4 - Index 9" (t.ex. kopierat från Caddee.se)
+//  2) Kortformat "4-9": första siffran = par, andra = index (bindestreck, snedstreck,
+//     mellanslag, tab, komma eller semikolon fungerar som avskiljare).
+function parseScorecardText(text) {
+  var pars = [], hcps = [];
+  var long = (text||'').match(/par\s*(\d)\s*[-–—]\s*(?:index|hcp)\s*(\d+)/gi);
+  if(long && long.length) {
+    long.forEach(function(m){
+      var mm = m.match(/par\s*(\d)\s*[-–—]\s*(?:index|hcp)\s*(\d+)/i);
+      pars.push(parseInt(mm[1])); hcps.push(parseInt(mm[2]));
+    });
+    return { pars: pars, hcps: hcps, format: 'long' };
+  }
+  var bad = [];
+  (text||'').split(/\r?\n/).forEach(function(line, i){
+    var t = line.trim();
+    if(!t) return;
+    var mm = t.match(/^(\d)\s*(?:[-–—\/,;:\t]|\s)\s*(\d{1,2})$/);
+    if(mm) { pars.push(parseInt(mm[1])); hcps.push(parseInt(mm[2])); }
+    else bad.push('rad '+(i+1)+': "'+t+'"');
+  });
+  return { pars: pars, hcps: hcps, format: 'short', bad: bad };
+}
+
 function parseScorecardPaste() {
   var textEl = document.getElementById('cd-scorecard-paste');
   if(!textEl) return;
-  var text = textEl.value;
-  var matches = text.match(/par\s*(\d)\s*[-–]\s*index\s*(\d+)/gi);
-  if(!matches || !matches.length) {
-    alert('Kunde inte tolka texten. Förväntat format per hål: "Par 4 - Index 9" (en rad/förekomst per hål, i hålordning).');
+  var r = parseScorecardText(textEl.value);
+  var pars = r.pars, hcps = r.hcps;
+  if(!pars.length) {
+    alert('Kunde inte tolka texten. Skriv ett hål per rad, i hålordning, t.ex.:\n\n5-4\n4-16\n3-18\n\n(första siffran = par, andra = index)\neller "Par 4 - Index 9".');
     return;
   }
-  var pars = [], hcps = [];
-  matches.forEach(function(m){
-    var mm = m.match(/par\s*(\d)\s*[-–]\s*index\s*(\d+)/i);
-    pars.push(parseInt(mm[1]));
-    hcps.push(parseInt(mm[2]));
+  if(r.bad && r.bad.length) {
+    if(!confirm('Följande rader kunde inte tolkas och hoppas över:\n\n'+r.bad.slice(0,8).join('\n')+(r.bad.length>8?'\n…':'')+'\n\nFortsätta med de '+pars.length+' hål som gick att läsa?')) return;
+  }
+  // Rimlighetskoll: par 3–6, index 1–antal hål, inga dubbletter av index
+  var warn = [];
+  pars.forEach(function(pv, i){ if(pv < 3 || pv > 6) warn.push('Hål '+(i+1)+': par '+pv); });
+  var seen = {};
+  hcps.forEach(function(h, i){
+    if(h < 1 || h > Math.max(18, pars.length)) warn.push('Hål '+(i+1)+': index '+h);
+    if(seen[h]) warn.push('Index '+h+' förekommer flera gånger (hål '+seen[h]+' och '+(i+1)+')'); else seen[h] = i+1;
   });
+  if(warn.length && !confirm('Kontrollera följande:\n\n'+warn.slice(0,8).join('\n')+(warn.length>8?'\n…':'')+'\n\nFylla i ändå?')) return;
+  var holesEl = document.getElementById('cd-holes');
   var parInputs = document.querySelectorAll('.cd-holepar-inp');
+  // Byt automatiskt antal hål om texten har 9 eller 18 hål och formuläret har ett annat antal
+  if(holesEl && pars.length !== parInputs.length && (pars.length === 9 || pars.length === 18)) {
+    if(confirm('Texten innehåller '+pars.length+' hål men banan står på '+parInputs.length+'. Ändra antal hål till '+pars.length+'?')) {
+      var lens = Array.prototype.map.call(document.querySelectorAll('.cd-holelength-inp'), function(x){ return x.value; });
+      holesEl.value = pars.length;
+      renderScorecardGrid(pars, hcps, lens);
+      parInputs = document.querySelectorAll('.cd-holepar-inp');
+    }
+  }
   var hcpInputs = document.querySelectorAll('.cd-holehcp-inp');
   if(pars.length !== parInputs.length) {
     if(!confirm('Hittade '+pars.length+' hål i texten, men banan har '+parInputs.length+' hål inlagt just nu. Fylla i så långt det går ändå?')) return;
@@ -16558,7 +16599,8 @@ function parseScorecardPaste() {
   var n = Math.min(pars.length, parInputs.length);
   for(var i=0; i<n; i++) { parInputs[i].value = pars[i]; hcpInputs[i].value = hcps[i]; }
   updateScorecardTotal();
-  alert(n+' hål ifyllda från inklistrad text. Kontrollera gärna att det ser rätt ut innan du sparar.');
+  var tot = pars.slice(0, n).reduce(function(a,b){ return a+b; }, 0);
+  alert(n+' hål ifyllda (par '+tot+'). Kontrollera gärna att det ser rätt ut innan du sparar.');
 }
 
 function renderScorecardGrid(existingPars, existingHcp, existingLengths) {
@@ -16717,8 +16759,8 @@ function openEditCourse(id) {
     '<div style="font-size:13px;font-weight:600;color:var(--text);margin:10px 0 8px"><i class="ti ti-list-numbers"></i> Scorekort (par per hål)</div>' +
     '<p style="font-size:11px;color:var(--text-3);margin-bottom:8px">Behövs för att kunna räkna birdies m.m. senare i resultatinmatningen.</p>' +
     '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
-      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata (t.ex. "Par 4 - Index 9" per rad, en per hål)</label>' +
-      '<textarea id="cd-scorecard-paste" rows="3" placeholder="Par 5 - Index 7&#10;Par 4 - Index 9&#10;Par 3 - Index 17 ..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
+      '<label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Klistra in scorekortsdata – ett hål per rad: <b>par-index</b> (t.ex. "5-4") eller "Par 4 - Index 9"</label>' +
+      '<textarea id="cd-scorecard-paste" rows="3" placeholder="5-4&#10;4-16&#10;3-18&#10;..." style="width:100%;box-sizing:border-box;font-size:12px;margin-bottom:6px"></textarea>' +
       '<button type="button" class="btn btn-sm" onclick="parseScorecardPaste()"><i class="ti ti-wand"></i> Tolka & fyll i</button>' +
     '</div>' +
     '<div class="row" style="justify-content:flex-end;margin-bottom:6px">' +
@@ -19131,6 +19173,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '6 november 2026 (283)',
+    items: [
+      { type: 'new', text: 'Scorekort i bandatabasen kan nu klistras in i kortformat: ett hål per rad som "par-index", t.ex. 5-4, 4-16, 3-18. Det gamla formatet "Par 4 - Index 9" fungerar fortfarande. Appen varnar för orimliga värden (par utanför 3–6, dubbla index) och byter automatiskt antal hål om texten har 9 eller 18 hål.' },
+    ]
+  },
   {
     date: '6 november 2026 (282)',
     items: [
