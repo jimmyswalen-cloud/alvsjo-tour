@@ -19235,6 +19235,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (287)',
+    items: [
+      { type: 'new', text: 'Automatisk uppdatering: appen kollar själv om en nyare version publicerats (vid start och när man går tillbaka till appen). Finns det en, visas en grön banderoll "Ny version finns" – ett tryck laddar den nya versionen. Löser att telefoner (särskilt appen på iPhones hemskärm) ibland visade en gammal kopia.' },
+    ]
+  },
+  {
     date: '6 november 2026 (286)',
     items: [
       { type: 'improved', text: 'Användarlistan: märkesloggan i spelarkorten är ännu lite mindre så att namn och e-post alltid får plats. (Ny versionssiffra så det syns när telefonen hämtat den senaste versionen.)' },
@@ -21469,6 +21475,34 @@ function renderAppVersionLabel() {
   el.textContent = v ? ('App Version ' + v) : '';
 }
 renderAppVersionLabel();
+
+// ── Automatisk uppdateringskoll ──────────────────────────────────────────────
+// Telefoner (särskilt appen på iPhones hemskärm) håller ibland kvar en gammal kopia av
+// index.html. Appen hämtar därför den publicerade filen förbi cachen och jämför
+// versionsnumret – finns en nyare visas en banderoll som laddar om till den nya versionen.
+function currentReleaseNo() { var m = ((RELEASE_NOTES[0]||{}).date||'').match(/\((\d+)\)/); return m ? parseInt(m[1]) : 0; }
+var _updLastCheck = 0;
+function checkForAppUpdate(force) {
+  if(!force && Date.now() - _updLastCheck < 5 * 60 * 1000) return;
+  _updLastCheck = Date.now();
+  if(location.protocol === 'file:') return;
+  fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.ok ? r.text() : ''; }).then(function(txt){
+    var m = txt && txt.match(/date:\s*'[^']*\((\d+)\)'/);
+    var remote = m ? parseInt(m[1]) : 0;
+    if(remote > currentReleaseNo()) showUpdateBanner(remote);
+  }).catch(function(){});
+}
+function showUpdateBanner(ver) {
+  if(document.getElementById('upd-banner')) return;
+  var d = document.createElement('div');
+  d.id = 'upd-banner';
+  d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:400;background:#0F6E56;color:#fff;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;cursor:pointer';
+  d.innerHTML = '<i class="ti ti-refresh" style="font-size:22px"></i><div style="flex:1"><b>Ny version finns ('+ver+')</b><div style="font-size:12px;opacity:.85">Tryck här för att uppdatera appen</div></div><i class="ti ti-chevron-right"></i>';
+  d.onclick = function(){ location.replace(location.pathname + '?v=' + ver + location.hash); };
+  document.body.appendChild(d);
+}
+setTimeout(function(){ checkForAppUpdate(true); }, 4000);
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') checkForAppUpdate(false); });
 
 var RELEASE_TYPE_META = {
   new:      { label: 'Nytt',        color: '#0F6E56', bg: '#E1F5EE', icon: 'ti-sparkles' },
