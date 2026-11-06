@@ -7996,7 +7996,18 @@ function fitFeedImage(imgEl) {
 function renderHomeActivityFeed(items) {
   var el = document.getElementById('home-activity-feed');
   if(!el) return;
-  if(!items.length) { el.innerHTML = ''; return; }
+  if(!items.length) {
+    // Tomt klubbhus (t.ex. nyskapat): visa väggen ändå, med en förklaring
+    el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">'+
+        '<i class="ti ti-messages" style="font-size:20px;color:var(--gold)"></i>'+
+        '<div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">'+esc(clubWallName())+'</div>'+
+      '</div>'+
+      '<div style="text-align:center;padding:14px 6px 6px;color:var(--text-3);font-size:13px"><i class="ti ti-message-circle-plus" style="font-size:26px;display:block;margin-bottom:6px"></i>'+
+        'Inga inlägg ännu. Väggen fylls på automatiskt med birdies, vinnare och säsongsmästare från klubbhusets tourer, sällskapsronder ni delar och bilder från tävlingschatten.</div>'+
+    '</div>';
+    return;
+  }
   _homeFeedItems = items;
   var pinnedCount = items.filter(function(it){ return it._pinned; }).length;
   var visibleItems = _homeFeedExpanded ? items : items.slice(0, HOME_FEED_COLLAPSED_COUNT + pinnedCount);
@@ -8084,11 +8095,11 @@ function renderHomeActivityFeed(items) {
   el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">'+
       '<i class="ti ti-messages" style="font-size:20px;color:var(--gold)"></i>'+
-      '<div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">The ÄGCC Wall</div>'+
+      '<div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">'+esc(clubWallName())+'</div>'+
     '</div>'+
     rows+
     toggleBtn+
-    '<div class="home-wall-end"><i class="ti ti-messages"></i> Slut på The ÄGCC Wall</div>'+
+    '<div class="home-wall-end"><i class="ti ti-messages"></i> Slut på '+esc(clubWallName())+'</div>'+
   '</div>';
 }
 
@@ -12268,7 +12279,7 @@ function renderCasualRound() {
   // Åtgärder
   out += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'+
     '<button class="btn btn-sm" onclick="showCasualScorecard()"><i class="ti ti-table"></i> Scorekort</button>'+
-    (finished && casualCanEdit(r) && !r.sharedToWall ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på The ÄGCC Wall</button>' : '')+
+    (finished && casualCanEdit(r) && !r.sharedToWall ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på '+esc(clubWallName())+'</button>' : '')+
     (finished && casualCanEdit(r) ? '<button class="btn btn-sm" onclick="reopenCasualRound()"><i class="ti ti-lock-open"></i> Öppna för ändring</button>' : '')+
     ((isAdmin() || r.createdBy === (currentUser&&currentUser.username)) ? '<button class="btn btn-sm btn-danger" onclick="deleteCasualRound()"><i class="ti ti-trash"></i> Ta bort ronden</button>' : '')+
   '</div>';
@@ -12296,7 +12307,7 @@ function finishCasualRound() {
   if(incomplete.length) msg += '\n\nObs! '+incomplete.map(function(p){ return p.name; }).join(', ')+' har inte alla hål ifyllda. Ofullständiga ronder räknas inte i statistiken.';
   if(!confirm(msg)) return;
   CASUAL_COL.doc(r.id).update({ status:'finished', finishedAt: Date.now(), finishedBy: currentUser.username }).then(function(){
-    if(confirm('Ronden är sparad! Vill du dela resultatet på The ÄGCC Wall?')) shareCasualRoundToWall();
+    if(confirm('Ronden är sparad! Vill du dela resultatet på '+clubWallName()+'?')) shareCasualRoundToWall();
   }).catch(function(e){ alert('Kunde inte avsluta: '+e.message); });
 }
 function reopenCasualRound() {
@@ -12334,7 +12345,7 @@ function shareCasualRoundToWall() {
     createdAt: Date.now(), likes: {}
   }).then(function(){
     CASUAL_COL.doc(r.id).update({ sharedToWall: true }).catch(function(){});
-    showPushToast('Delat på The ÄGCC Wall', r.courseName);
+    showPushToast('Delat på '+clubWallName(), r.courseName);
   }).catch(function(e){ alert('Kunde inte dela: '+e.message); });
 }
 
@@ -12755,7 +12766,7 @@ var PUSH_CATEGORIES = [
   { key:'todo',       icon:'ti-clipboard-check', label:'Att göra för mig',      desc:'Attestera som markör, side bets du lagts till i, lottad i boll.' },
   { key:'live',       icon:'ti-trophy',          label:'Resultat & rekord',     desc:'Vinnare, säsongsmästare, nytt banrekord, stark rond, side bet-vinst.' },
   { key:'livebirdie', icon:'ti-feather',         label:'Birdies & eagles live', desc:'Birdie, eagle, albatross och hole-in-one från andra bollar.' },
-  { key:'wall',       icon:'ti-messages',        label:'The ÄGCC Wall',         desc:'Nya inlägg och bilder på väggen.' },
+  { key:'wall',       icon:'ti-messages',        label:'Väggen (The Wall)',         desc:'Nya inlägg och bilder på väggen.' },
   { key:'likes',      icon:'ti-thumb-up',        label:'Gillningar',            desc:'När någon gillar ditt inlägg.' }
 ];
 var _pushSwReg = null, _pushOnMsgBound = false, _pushPrefs = null;
@@ -19223,6 +19234,7 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'new', text: 'Väggen finns i alla klubbhus – även ett nytt, tomt klubbhus visar nu väggen (med en förklaring tills första inlägget kommer). Väggen heter "The ÄGCC Wall" i Älvsjö och "The [klubbhus] Wall" i övriga, och namnet kan ändras under Klubbhus → Utseende.' },
       { type: 'improved', text: 'Inställningar → Klubbhus: tydlig knapp "Utseende" på varje klubbhus för ikon och headerbild (bakgrunden i headern).' },
       { type: 'new', text: 'Varje klubbhus kan få egen ikon (loggan bredvid namnet i headern och i menyraden) och egen headerbild: Inställningar → Klubbhus → palett-knappen. Välj "Ingen ikon" för att bara visa namnet. Nya klubbhus visar ingen ikon förrän du laddat upp en – Älvsjö behåller ÄGCC-loggan.' },
       { type: 'fixed', text: 'Klubbhusfiltret (Alla klubbhus / Älvsjö / Familjen) visas bara i användarlistan, inte längre ovanför en öppnad spelarprofil.' },
@@ -23012,6 +23024,19 @@ function clubhouseSettingsHTML() {
 // ── Klubbhusets utseende: ikon (loggan i headern/menyraden) och headerbild ──
 // Älvsjö GCC använder de gamla filerna i repot (logo-hero.png m.fl.) om inget annat valts.
 // Övriga klubbhus utan egen ikon visar ingen ikon alls, bara namnet.
+function clubWallName(c) {
+  c = c || (currentUser ? currentClub() : null);
+  if(c && c.wallName) return c.wallName;
+  return (!c || c.id === DEFAULT_CLUB_ID) ? 'The ÄGCC Wall' : 'The ' + clubShort(c) + ' Wall';
+}
+function renameClubWall() {
+  ensureClubList();
+  var c = clubById(_clubEditId); if(!c) return;
+  var v = prompt('Namn på väggen (lämna tomt för standard: "'+(c.id===DEFAULT_CLUB_ID?'The ÄGCC Wall':'The '+clubShort(c)+' Wall')+'"):', c.wallName || '');
+  if(v === null) return;
+  setClubField('wallName', v.trim() ? v.trim().slice(0, 40) : null);
+  try { subscribeHomeActivityFeed(); } catch(e) {}
+}
 function clubLogoSrc(c) {
   c = c || currentClub();
   if(c && c.logo === 'none') return '';
@@ -23080,6 +23105,9 @@ function openClubLook(id) {
       '<button class="btn btn-sm btn-primary" onclick="document.getElementById(\'club-hero-file\').click()"><i class="ti ti-upload"></i> Ladda upp headerbild</button>'+
       (c.heroImg ? '<button class="btn btn-sm" onclick="setClubField(\'heroImg\', null)"><i class="ti ti-arrow-back-up"></i> Standardbild</button>' : '')+
     '</div>';
+  h += '<div style="font-size:13px;font-weight:700;margin:12px 0 6px">Väggens namn</div>'+
+    '<div class="row" style="gap:8px;align-items:center"><span style="flex:1;font-size:14px"><i class="ti ti-messages" style="color:var(--gold)"></i> '+esc(clubWallName(c))+'</span>'+
+    '<button class="btn btn-sm" onclick="renameClubWall()"><i class="ti ti-edit"></i> Byt namn</button></div>';
   h += '<p id="club-look-status" style="font-size:12px;min-height:16px;margin-top:6px"></p>';
   h += '<div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn btn-primary" onclick="closeModal();renderGlobalSettings()">Klar</button></div>';
   showModal(h);
