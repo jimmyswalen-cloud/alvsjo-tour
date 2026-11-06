@@ -19234,6 +19234,7 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'new', text: 'Klubbhusets headerbild kan väljas direkt från samma omslagsbibliotek som när man skapar en tour (Klubbhus → Utseende → Välj från omslagen), eller laddas upp som egen bild.' },
       { type: 'new', text: 'Väggen finns i alla klubbhus – även ett nytt, tomt klubbhus visar nu väggen (med en förklaring tills första inlägget kommer). Väggen heter "The ÄGCC Wall" i Älvsjö och "The [klubbhus] Wall" i övriga, och namnet kan ändras under Klubbhus → Utseende.' },
       { type: 'improved', text: 'Inställningar → Klubbhus: tydlig knapp "Utseende" på varje klubbhus för ikon och headerbild (bakgrunden i headern).' },
       { type: 'new', text: 'Varje klubbhus kan få egen ikon (loggan bredvid namnet i headern och i menyraden) och egen headerbild: Inställningar → Klubbhus → palett-knappen. Välj "Ingen ikon" för att bara visa namnet. Nya klubbhus visar ingen ikon förrän du laddat upp en – Älvsjö behåller ÄGCC-loggan.' },
@@ -23102,7 +23103,8 @@ function openClubLook(id) {
     '<div style="height:90px;border-radius:10px;background:'+(c.heroImg ? "url('"+esc(c.heroImg)+"')" : DEFAULT_BG)+' center/cover;margin-bottom:8px"></div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'+
       '<input type="file" id="club-hero-file" accept="image/*" style="display:none" onchange="saveClubHero(this.files[0]);this.value=\'\'">'+
-      '<button class="btn btn-sm btn-primary" onclick="document.getElementById(\'club-hero-file\').click()"><i class="ti ti-upload"></i> Ladda upp headerbild</button>'+
+      '<button class="btn btn-sm btn-primary" onclick="pickClubHeroFromLibrary()"><i class="ti ti-photo-search"></i> Välj från omslagen</button>'+
+      '<button class="btn btn-sm" onclick="document.getElementById(\'club-hero-file\').click()"><i class="ti ti-upload"></i> Ladda upp egen</button>'+
       (c.heroImg ? '<button class="btn btn-sm" onclick="setClubField(\'heroImg\', null)"><i class="ti ti-arrow-back-up"></i> Standardbild</button>' : '')+
     '</div>';
   h += '<div style="font-size:13px;font-weight:700;margin:12px 0 6px">Väggens namn</div>'+
@@ -23111,6 +23113,11 @@ function openClubLook(id) {
   h += '<p id="club-look-status" style="font-size:12px;min-height:16px;margin-top:6px"></p>';
   h += '<div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn btn-primary" onclick="closeModal();renderGlobalSettings()">Klar</button></div>';
   showModal(h);
+}
+// Samma omslagsbibliotek som när man skapar en tour (TOUR_COVER_LIBRARY)
+function pickClubHeroFromLibrary() {
+  var id = _clubEditId;
+  openTourCoverPicker(function(url){ _clubEditId = id; setClubField('heroImg', url); }, function(){ openClubLook(id); });
 }
 function setClubField(key, val) {
   ensureClubList();
