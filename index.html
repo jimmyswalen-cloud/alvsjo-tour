@@ -19222,6 +19222,7 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'fixed', text: 'Klubbhusfiltret (Alla klubbhus / Älvsjö / Familjen) visas bara i användarlistan, inte längre ovanför en öppnad spelarprofil.' },
       { type: 'new', text: 'KLUBBHUS (etapp 1). Appen kan nu ha flera tour-sällskap – klubbhus – t.ex. Älvsjö GCC, Familjen och Kompisarna. Varje klubbhus har egna tourer, egen statistik, OoM, vägg, sällskapsronder, utmaningar, vinster och Hey Champ – ingenting blandas mellan klubbhusen. Banor, scorekort, banbilder, märkeslogotyper, spelformer och användarkonton är gemensamma.' },
       { type: 'new', text: 'All befintlig data ligger i klubbhuset Älvsjö GCC och alla befintliga konton har tillgång dit – för spelare som bara finns i Älvsjö ändras ingenting.' },
       { type: 'new', text: 'Admin skapar, byter namn på och tar bort klubbhus under Inställningar → Klubbhus, och väljer per konto vilka klubbhus spelaren har tillgång till (Användare → redigera → Klubbhus). Användarlistan kan filtreras per klubbhus.' },
@@ -22198,7 +22199,7 @@ function showUsersView(fromSettings) {
   var profileEl = document.getElementById('global-player-profile');
   var listEl = document.getElementById('users-list');
   if(profileEl) profileEl.style.display = 'none';
-  if(listEl) listEl.style.display = '';
+  if(listEl) listEl.style.display = ''; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = '';
   renderUsersList();
   window.scrollTo(0, 0);
 }
@@ -22274,7 +22275,7 @@ function buildGlobalPlayerProfileHTML(username) {
 function showGlobalPlayerProfile(username) {
   var listEl = document.getElementById('users-list');
   var profileEl = document.getElementById('global-player-profile');
-  if(listEl) listEl.style.display = 'none';
+  if(listEl) listEl.style.display = 'none'; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = 'none';
   if(profileEl) { profileEl.style.display = ''; profileEl.innerHTML = buildGlobalPlayerProfileHTML(username); }
   window.scrollTo(0, 0);
 }
@@ -22283,7 +22284,7 @@ function goBackFromGlobalProfile() {
   var listEl = document.getElementById('users-list');
   var profileEl = document.getElementById('global-player-profile');
   if(profileEl) profileEl.style.display = 'none';
-  if(listEl) listEl.style.display = '';
+  if(listEl) listEl.style.display = ''; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = '';
   window.scrollTo(0, 0);
 }
 
