@@ -424,7 +424,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 
 <div class="hero hero-sticky" id="hero-bg">
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
-    <div class="hero-eyebrow" id="hero-eyebrow">&#9971; TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
+    <div class="hero-eyebrow" id="hero-eyebrow">TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
       <img id="hero-logo" src="logo-hero.png" style="height:clamp(44px,9vw,72px);width:auto" alt="ÄGCC Tour">
       <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
@@ -18940,6 +18940,60 @@ function renderCourseBankSection(targetId) {
   el.innerHTML = html;
 }
 
+// Liten vit halfway house-ikon (transparent bakgrund) – visas i headern i andra klubbhus än Älvsjö
+function halfwayHouseIconSVG(h, color) {
+  h = h || 24; color = color || '#fff';
+  return '<svg class="hero-hwh-icon" role="img" aria-label="Klubbhus" viewBox="0 0 40 32" height="'+h+'" width="'+Math.round(h*40/32)+'" '+
+    'xmlns="http://www.w3.org/2000/svg" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '+
+    'style="display:block;margin:0 auto;overflow:visible">'+
+    '<line x1="20" y1="8" x2="20" y2="1"/>'+                          // flaggstång på taknocken
+    '<path d="M20 1 L27 3 L20 5 Z" fill="'+color+'" stroke-width="1.2"/>'+  // flagga
+    '<path d="M3 15 L20 8 L37 15 Z" fill="'+color+'"/>'+                     // tak med takfot
+    '<rect x="7" y="15" width="26" height="14"/>'+                      // stugan
+    '<path d="M10 18 H22 V20.5 H10 Z" fill="'+color+'" stroke-width="1.2"/>'+ // markis över luckan
+    '<rect x="10" y="20.5" width="12" height="5.5" stroke-width="1.6"/>'+ // serveringslucka
+    '<line x1="9" y1="26" x2="23" y2="26" stroke-width="2.4"/>'+         // disk
+    '<rect x="25.5" y="19" width="4.5" height="10" fill="'+color+'" stroke-width="1.2"/>'+ // dörr
+    '<line x1="1" y1="29" x2="39" y2="29"/>'+                            // mark
+  '</svg>';
+}
+
+// Färdiga klubbhusikoner som admin kan välja under Klubbhus → Utseende.
+// Sparas som c.logo = 'preset:<nyckel>' och ritas som SVG – ingen uppladdning behövs.
+var CLUB_ICON_PRESETS = {
+  halfway: { label: 'Halfway house', svg: halfwayHouseIconSVG }
+};
+function clubPresetKey(c) {
+  return (c && typeof c.logo === 'string' && c.logo.indexOf('preset:') === 0) ? c.logo.slice(7) : '';
+}
+// Raden ovanför namnet i headern (eyebrow): ikon + text, valbart per klubbhus under Utseende.
+// c.eyebrowIcon: 'halfway' (standard) | 'flag' (⛳) | 'none'   c.eyebrowText: 'hide' döljer texten
+// c.eyebrowLayout: 'inline' (standard, ikonen före texten) | 'above' (ikonen centrerad ovanför texten)
+// c.eyebrowCustom: egen text; radbrytningar (Enter) i texten blir radbrytningar i headern
+function heroEyebrowHTML(c, text) {
+  var ic = (c && c.eyebrowIcon) || 'halfway';
+  var showText = !(c && c.eyebrowText === 'hide');
+  var above = !!(c && c.eyebrowLayout === 'above');
+  var raw = (c && c.eyebrowCustom) ? c.eyebrowCustom : text;
+  var txt = String(raw || '').split(/\r?\n/).map(function(l){ return esc(l.trim()); }).filter(function(l){ return l; }).join('<br>');
+  if(!txt) showText = false;
+  // Före texten: ikonen ligger i textflödet så att den följer med även när texten bryts på flera rader
+  var gap = (showText && !above) ? '9px' : '0';
+  var iconInner = ic === 'halfway' ? halfwayHouseIconSVG(above ? 28 : 24)
+                : ic === 'flag' ? '<span style="font-size:'+(above?'18':'15')+'px;letter-spacing:0">\u26f3</span>' : '';
+  if(!iconInner && !showText) return '';
+  if(above) {
+    return (iconInner ? '<div style="display:flex;justify-content:center;margin-bottom:'+(showText?'6px':'0')+'">'+iconInner+'</div>' : '')+
+      (showText ? '<div>'+txt+'</div>' : '');
+  }
+  var icon = iconInner ? '<span style="display:inline-block;vertical-align:middle;margin:'+(ic==='halfway'?'-4px':'0')+' '+gap+' 0 0">'+iconInner+'</span>' : '';
+  return icon + (showText ? '<span style="display:inline-block;vertical-align:middle">'+txt+'</span>' : '');
+}
+function clubPresetIconURI(key, color) {
+  var p = CLUB_ICON_PRESETS[key]; if(!p) return '';
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(p.svg(64, color || '#fff'));
+}
+
 // ── INIT ───────────────────────────────────────────────────────────────────
 var DEFAULT_BG = "url('hero-bg.jpg')";
 
@@ -18953,11 +19007,12 @@ function updateHero(tourId) {
   if(!tourId) {
     heroBg.style.backgroundImage = clubHeroBg();
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
-    heroEye.textContent='\u26f3 TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR';
+    var _ec = currentUser ? currentClub() : null;
+    heroEye.innerHTML = heroEyebrowHTML(_ec, 'TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR');
     // Andra klubbhus än Älvsjö: klubbhusets namn i headern (fullt eget utseende kommer i etapp 2)
     if(currentUser && currentClubId() !== DEFAULT_CLUB_ID && currentClub()) {
       heroTitle.textContent = (currentClub().name || '').toUpperCase();
-      heroEye.textContent = '\u26f3 KLUBBHUS';
+      heroEye.innerHTML = heroEyebrowHTML(currentClub(), 'KLUBBHUS');
     }
   } else {
     var t=S.tours.find(function(x){return x.id===tourId;});
@@ -19234,6 +19289,38 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '6 november 2026 (292)',
+    items: [
+      { type: 'new', text: 'Raden ovanför namnet i headern: välj om ikonen ska stå före texten eller centrerad ovanför texten (Inställningar → Klubbhus → Utseende → Ikonens placering).' },
+      { type: 'new', text: 'Egen text på raden ovanför namnet, där du själv bestämmer radbrytningarna – tryck Enter där texten ska byta rad. Lämna tomt för standardtexten ("Touren för Älvsjö…" respektive "Klubbhus").' },
+    ]
+  },
+  {
+    date: '6 november 2026 (291)',
+    items: [
+      { type: 'improved', text: 'Raden ovanför namnet i headern har nu en tydligare halfway house-ikon i större storlek – i alla klubbhus, även Älvsjö (där golfflaggan ⛳ satt tidigare).' },
+      { type: 'new', text: 'Välj design per klubbhus: Inställningar → Klubbhus → Utseende → "Raden ovanför namnet". Välj Halfway house, Golfflagga eller Ingen ikon, och om texten ska visas. Valet är fristående från ikonen bredvid namnet, så t.ex. Familjen kan ha sin egen ikon vid namnet och halfway house på raden ovanför.' },
+    ]
+  },
+  {
+    date: '6 november 2026 (290)',
+    items: [
+      { type: 'improved', text: 'Headern i andra klubbhus än Älvsjö: texten "KLUBBHUS" är tillbaka ovanför klubbhusets namn, och den lilla golfflaggan (⛳) framför är utbytt mot en liten vit halfway house-ikon.' },
+    ]
+  },
+  {
+    date: '6 november 2026 (289)',
+    items: [
+      { type: 'new', text: 'Färdiga ikoner för klubbhus: under Inställningar → Klubbhus → Utseende finns nu en färdig halfway house-ikon att välja med ett tryck – ingen bild behöver laddas upp. Ikonen visas vit bredvid klubbhusets namn i headern och grön i menyraden.' },
+    ]
+  },
+  {
+    date: '6 november 2026 (288)',
+    items: [
+      { type: 'improved', text: 'Headern i andra klubbhus än Älvsjö: texten "KLUBBHUS" ovanför klubbhusets namn är utbytt mot en liten vit ikon av ett halfway house.' },
+    ]
+  },
   {
     date: '6 november 2026 (287)',
     items: [
@@ -23105,6 +23192,7 @@ function renameClubWall() {
 function clubLogoSrc(c) {
   c = c || currentClub();
   if(c && c.logo === 'none') return '';
+  if(clubPresetKey(c)) return clubPresetIconURI(clubPresetKey(c), '#fff');
   if(c && c.logo) return c.logo;
   return (!c || c.id === DEFAULT_CLUB_ID) ? 'logo-hero.png' : '';
 }
@@ -23120,7 +23208,8 @@ function applyClubBranding() {
   if(hl) { if(src) { hl.src = src; hl.style.display = ''; } else hl.style.display = 'none'; }
   var ul = document.getElementById('user-bar-logo');
   if(ul) {
-    var small = (c && c.logo && c.logo !== 'none') ? c.logo : ((!c || c.id === DEFAULT_CLUB_ID) && !(c && c.logo === 'none') ? 'logo-footer.png' : '');
+    var small = clubPresetKey(c) ? clubPresetIconURI(clubPresetKey(c), '#1D9E75') :
+      (c && c.logo && c.logo !== 'none') ? c.logo : ((!c || c.id === DEFAULT_CLUB_ID) && !(c && c.logo === 'none') ? 'logo-footer.png' : '');
     if(small) { ul.src = small; ul.style.display = ''; } else ul.style.display = 'none';
   }
 }
@@ -23163,6 +23252,51 @@ function openClubLook(id) {
         (c.logo && c.logo !== 'none' ? '<button class="btn btn-sm" onclick="setClubField(\'logo\', null)"><i class="ti ti-arrow-back-up"></i> Standard</button>' : '')+
         (logo ? '<button class="btn btn-sm" onclick="setClubField(\'logo\', \'none\')"><i class="ti ti-eye-off"></i> Ingen ikon</button>' : '')+
       '</div></div>';
+  var curPreset = clubPresetKey(c);
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin:-4px 0 6px">Färdiga ikoner</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'+
+    Object.keys(CLUB_ICON_PRESETS).map(function(k){
+      var on = curPreset === k;
+      return '<button type="button" onclick="setClubField(\'logo\', \'preset:'+k+'\')" title="'+esc(CLUB_ICON_PRESETS[k].label)+'" '+
+        'style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 12px;border-radius:12px;cursor:pointer;'+
+        'background:#1a2e22;border:2px solid '+(on?'var(--green)':'transparent')+';color:#fff;font-size:11px;font-weight:600">'+
+        CLUB_ICON_PRESETS[k].svg(34)+
+        '<span>'+esc(CLUB_ICON_PRESETS[k].label)+(on?' ✓':'')+'</span></button>';
+    }).join('')+
+    '</div>';
+  var eIc = c.eyebrowIcon || 'halfway', eTxtOn = c.eyebrowText !== 'hide';
+  var eBtn = function(val, label, inner){
+    var on = eIc === val;
+    return '<button type="button" onclick="setClubField(\'eyebrowIcon\', '+(val==='halfway'?'null':'\''+val+'\'')+')" '+
+      'style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;cursor:pointer;background:#1a2e22;color:#fff;font-size:12px;font-weight:600;'+
+      'border:2px solid '+(on?'var(--green)':'transparent')+'">'+inner+'<span>'+label+(on?' ✓':'')+'</span></button>';
+  };
+  h += '<div style="font-size:13px;font-weight:700;margin:6px 0 6px">Raden ovanför namnet</div>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Den lilla raden ovanför klubbhusets namn i headern ('+(c.id===DEFAULT_CLUB_ID?'\u201dTouren för Älvsjö…\u201d':'\u201dKlubbhus\u201d')+'). Fungerar oberoende av ikonen bredvid namnet.</p>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">'+
+      eBtn('halfway', 'Halfway house', halfwayHouseIconSVG(20))+
+      eBtn('flag', 'Golfflagga', '<span style="font-size:16px">\u26f3</span>')+
+      eBtn('none', 'Ingen ikon', '<i class="ti ti-eye-off" style="font-size:16px"></i>')+
+    '</div>'+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">'+
+      '<input type="checkbox" '+(eTxtOn?'checked':'')+' onchange="setClubField(\'eyebrowText\', this.checked ? null : \'hide\')"> Visa texten</label>';
+  var eAbove = c.eyebrowLayout === 'above';
+  var lBtn = function(on, val, label, ic){
+    return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" onclick="setClubField(\'eyebrowLayout\', '+val+')"><i class="ti '+ic+'"></i> '+label+'</button>';
+  };
+  h += '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:6px">Ikonens placering</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+
+      lBtn(!eAbove, 'null', 'Före texten', 'ti-arrow-bar-right')+
+      lBtn(eAbove, '\'above\'', 'Centrerad ovanför texten', 'ti-arrow-bar-up')+
+    '</div>'+
+    '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:4px">Text</div>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:6px">Tryck Enter där du vill att texten ska byta rad. Lämna tomt för standardtexten.</p>'+
+    '<textarea id="club-eyebrow-text" rows="3" style="width:100%;box-sizing:border-box;font-size:14px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;resize:vertical" '+
+      'placeholder="'+esc(c.id===DEFAULT_CLUB_ID?'Touren för Älvsjö Golf & Country Clubs medlemmar':'Klubbhus')+'">'+esc(c.eyebrowCustom||'')+'</textarea>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 16px">'+
+      '<button type="button" class="btn btn-sm btn-primary" onclick="saveClubEyebrowText()"><i class="ti ti-device-floppy"></i> Spara text</button>'+
+      (c.eyebrowCustom ? '<button type="button" class="btn btn-sm" onclick="setClubField(\'eyebrowCustom\', null)"><i class="ti ti-arrow-back-up"></i> Standardtext</button>' : '')+
+    '</div>';
   h += '<div style="font-size:13px;font-weight:700;margin:6px 0 6px">Headerbild</div>'+
     '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Bakgrundsbilden högst upp på startsidan för klubbhuset. Liggande bild, gärna minst 1600 px bred.</p>'+
     '<div style="height:90px;border-radius:10px;background:'+(c.heroImg ? "url('"+esc(c.heroImg)+"')" : DEFAULT_BG)+' center/cover;margin-bottom:8px"></div>'+
@@ -23190,6 +23324,11 @@ function setClubField(key, val) {
   if(val == null) delete c[key]; else c[key] = val;
   save(); applyClubBranding(); try { if(!activeTourId) updateHero(null); } catch(e) {}
   openClubLook(_clubEditId);
+}
+function saveClubEyebrowText() {
+  var el = document.getElementById('club-eyebrow-text'); if(!el) return;
+  var v = el.value.replace(/\r/g, '').split('\n').map(function(l){ return l.trim(); }).join('\n').replace(/^\n+|\n+$/g, '').slice(0, 160);
+  setClubField('eyebrowCustom', v ? v : null);
 }
 function clubLookStatus(txt, err) { var el = document.getElementById('club-look-status'); if(el) { el.innerHTML = txt; el.style.color = err ? 'var(--danger-text)' : 'var(--text-3)'; } }
 function saveClubLogo(file) {
