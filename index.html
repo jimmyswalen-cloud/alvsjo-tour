@@ -325,6 +325,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 .sw-chip.sw-chip-active-red{background:#dc2626;color:#fff;border-color:#dc2626}
 
 
+/* Klubbhusväljaren i menyraden: på smal skärm får namn + väljare en egen rad överst */
+@media (max-width:600px){ #user-bar.has-club > span:first-child{flex-basis:100%} #user-bar.has-club > span:last-child{margin-left:auto} }
 /* ── MÖRKT LÄGE ── aktiveras via <html data-theme="dark"> (applyTheme). Färgvariablerna
    byts, och några hårdkodade ljusa färger i inline-stilar skrivs över nedan. Färgade
    ikonrutor (startsidan, Mer-menyn, Inställningar) behåller sina pastellfärger men dämpas lite. */
@@ -465,8 +467,8 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   </div>
 </div>
 
-<div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;padding:10px 0;font-size:12px;color:var(--text-2)">
-  <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span></span>
+<div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;row-gap:10px;padding:24px 0 10px;font-size:12px;color:var(--text-2)">
+  <span style="display:flex;align-items:center;gap:6px"><img src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px"><i class="ti ti-user-circle"></i> <span id="user-badge"></span><span id="club-switcher" style="display:none;align-items:center;gap:4px;margin-left:6px"></span></span>
   <span style="display:flex;gap:14px">
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><span>Användare</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><span>Min profil</span></span>
@@ -508,6 +510,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="row" style="justify-content:flex-end;margin-bottom:16px">
     <button class="btn btn-primary btn-sm" id="new-user-btn" onclick="openNewUser()"><i class="ti ti-plus"></i> Ny användare</button>
   </div>
+  <div id="users-club-filter"></div>
   <div id="users-list"></div>
   <div id="global-player-profile" style="display:none"></div>
 </div>
@@ -1106,7 +1109,7 @@ function playerPhoto(username, fallbackImg) {
   return null;
 }
 
-var S = { tours: [], ideas: [], settings: {} };
+var S = { tours: [], ideas: [], settings: {}, clubhouses: null };
 var firebaseReady = false;
 var saveTimer = null;
 
@@ -1140,6 +1143,7 @@ function initFirebaseSync(onFirstLoad) {
       S.users = incoming.users || [];
       S.ideas = incoming.ideas || [];
       S.settings = incoming.settings || {};
+      S.clubhouses = incoming.clubhouses || null;
     } else {
       S.tours = [];
       S.users = [];
@@ -1163,6 +1167,7 @@ function initFirebaseSync(onFirstLoad) {
       try { renderBnavMain(); } catch(e) {}
       try { seedTrackmanForIndoorTour(); } catch(e) {}
       try { applyTheme(); } catch(e) {}
+      try { applyClubFilters(); renderClubSwitcher(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -1494,7 +1499,7 @@ function casualRoundToTour(r) {
 function statsTours(mode) {
   var sim = statsModeIsSim(mode), casual = statsModeIsCasual(mode);
   var out = [];
-  if(!casual) (S.tours||[]).forEach(function(t){ if(isSimTour(t) === sim) out.push(t); });
+  if(!casual) clubTours().forEach(function(t){ if(isSimTour(t) === sim) out.push(t); });
   if(casual || sim) (_casualRounds||[]).forEach(function(r){
     if(r.roundType === 'practice') return; // träningsronder räknas aldrig i statistiken
     if(!!r.sim !== sim) return;
@@ -1700,7 +1705,7 @@ function enablePasteForInput(btnId, onImage) {
 function computeMyBettingOverview() {
   var myActive = [], joinable = [];
   if(!currentUser) return { myActive: myActive, joinable: joinable };
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
     if(myPi < 0) return;
@@ -1727,7 +1732,7 @@ function computeMyBettingOverview() {
 function computeMyTourWinningsOverview() {
   var rows = [], total = 0;
   if(!currentUser) return { rows: rows, total: total };
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     if(!(t.fee > 0)) return;
     if(!isTourConcluded(t)) return;
     var players = getPlayersForTour(t);
@@ -1829,7 +1834,7 @@ function computeEarningsLeaderboard() {
     if(!byUser[key]) byUser[key] = { username: key, name: p.name || key, tourWon: 0, betWon: 0 };
     return byUser[key];
   }
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     // Alla som spelar i någon tour är med i underlaget (så att sidospelsvinster plockas upp).
     players.forEach(function(p){ if(p && p.username) entry(p); });
@@ -1922,7 +1927,7 @@ function showHomeScreen() {
   // Startsidan ska ha en egen, mer personlig hero-rubrik ("Älvsjö GCC TOUR") istället för
   // den generiska "TOURER" som visas i Tourer-listvyn (showToursView) och övriga undersidor.
   var homeHeroTitle = document.getElementById('hero-title');
-  if(homeHeroTitle) homeHeroTitle.textContent = 'ÄLVSJÖ GCC TOUR';
+  if(homeHeroTitle) homeHeroTitle.textContent = (currentClubId() !== DEFAULT_CLUB_ID && currentClub()) ? (currentClub().name||'').toUpperCase() : 'ÄLVSJÖ GCC TOUR';
   renderHomeNextRoundWidget();
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
@@ -1979,7 +1984,7 @@ function bnavMainState() {
     .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
   if(mine.length) return { kind:'casual', id: mine[0].id, round: mine[0] };
   var today = hcpTodayISO(), access = currentUser.tourAccess || [], cands = [], order = 0;
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     if(!t || access.indexOf(t.id) < 0) return;
     var myPi = getMyPi(t);
     if(myPi < 0) return;
@@ -2091,7 +2096,7 @@ if(document.readyState === 'loading') document.addEventListener('DOMContentLoade
 // automatiskt när nästa tour med final avgörs.
 function reigningTourChampion() {
   var best = null;
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     if(!t || !t.events || !t.events.some(function(e){ return e.isFinal; })) return;
     if(!isTourConcluded(t)) return;
     var finalEv = t.events.find(function(e){ return e.isFinal && e.closed; });
@@ -2208,7 +2213,7 @@ function syncOomLandscape() { syncLandscape(); }
 //     courses:[namn], name, desc, prize, bg:{tpl}|{img}, createdBy, createdAt,
 //     participants:[username], invited:[username], declined:[username], invitedBy:{u:inviter} }
 var CH_COL = db.collection('challenges');
-var _chAll = [], _chUnsub = null, _chView = { mode:'list', tab:'active', id:null, ptab:'in' };
+var _chAll = [], _chRaw = [], _chUnsub = null, _chView = { mode:'list', tab:'active', id:null, ptab:'in' };
 var _chw = null; // guiden
 var CH_TYPES = {
   holes:   { title:'Flest spelade hål', short:'Spela så många hål som du kan under utmaningsperioden.', icon:'ti-flag-3', fg:'#085041', bg:'#9FE1CB', unit:'hål', goal:true },
@@ -2275,7 +2280,8 @@ function subscribeChallenges() {
   _chUnsub = CH_COL.onSnapshot(function(snap){
     var all = [];
     snap.forEach(function(d){ var x = d.data(); x.id = d.id; if(!x.deleted) all.push(x); });
-    _chAll = all;
+    _chRaw = all;
+    _chAll = all.filter(inCurrentClub);
     try { renderHomeChallengeWidget(); } catch(e) {}
     var scr = document.getElementById('challenge-screen');
     if(scr && scr.style.display !== 'none' && _chView.mode !== 'wizard') renderChallengeScreen();
@@ -2711,7 +2717,7 @@ function chPeopleHTML() {
   if(canInvite && chStatus(c) !== 'ended') h += '<div class="ch-act" onclick="_chView.ptab=\'invite\';renderChallengeScreen()"><span class="ch-act-ic"><i class="ti ti-user-plus"></i></span><div style="flex:1">Bjud in spelare<div style="font-size:12px;font-weight:400;color:var(--text-3)">De får en inbjudan i appen och en notis</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
   h += '<div class="ch-act" onclick="chShare(\''+c.id+'\')"><span class="ch-act-ic" style="background:var(--gold-light);color:var(--gold)"><i class="ti ti-link"></i></span><div style="flex:1">Dela inbjudningslänk<div style="font-size:12px;font-weight:400;color:var(--text-3)">Skicka i gruppchatten</div></div><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
   var parts = c.participants||[], inv = (c.invited||[]).filter(function(u){ return parts.indexOf(u) < 0; });
-  var others = (S.users||[]).filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; });
+  var others = clubUsers().filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; });
   var tb = function(k, l){ return '<button class="ch-tab'+(tab===k?' on':'')+'" onclick="_chView.ptab=\''+k+'\';renderChallengeScreen()">'+l+'</button>'; };
   h += '<div class="card" style="padding:12px 14px"><div class="ch-tabs" style="justify-content:flex-start;margin-top:0">'+tb('in','Deltagare ('+parts.length+')')+tb('inv','Inbjudna ('+inv.length+')')+(canInvite?tb('invite','Övriga'):'')+'</div>';
   var row = function(u, right){ var x = findUser(u)||{}; return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--border)">'+chAvatar(u, 44)+
@@ -2740,7 +2746,7 @@ function chPeopleListHTML(c, others) {
 function chRenderPeopleList() {
   var c = _chAll.find(function(x){ return x.id === _chView.id; }); var el = document.getElementById('ch-people-list'); if(!c || !el) return;
   var parts = c.participants||[], inv = c.invited||[];
-  el.innerHTML = chPeopleListHTML(c, (S.users||[]).filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; }));
+  el.innerHTML = chPeopleListHTML(c, clubUsers().filter(function(u){ return u && u.username !== 'admin' && parts.indexOf(u.username) < 0 && inv.indexOf(u.username) < 0; }));
 }
 function chInvite(id, u) {
   var me = currentUser.username;
@@ -2894,6 +2900,7 @@ function saveChallenge() {
   bgP.then(function(bg){
     doc.bg = bg;
     if(_chw._editId) return CH_COL.doc(id).update(doc);
+    doc.clubhouse = currentClubId();
     doc.createdBy = me; doc.createdAt = Date.now(); doc.participants = [me]; doc.invited = []; doc.declined = []; doc.invitedBy = {};
     return CH_COL.doc(id).set(doc);
   }).then(function(){
@@ -3186,6 +3193,7 @@ function saveHcpUpdateFromHome() {
 // eller en undersektion här i Inställningar (_gsSection).
 var _gsSection = null;
 var GS_TILES = [
+  { key:'clubs',  icon:'ti-building-community', label:'Klubbhus',      bg:'#DCE8A8', fg:'#4A5A12', sub2:'#5E7016' },
   { key:'users',  icon:'ti-users',        label:'Användare',          bg:'#CFE3F7', fg:'#123E6B', sub2:'#2A5A8C', go:function(){ showUsersView(true); } },
   { key:'courses',icon:'ti-golf',         label:'Banor',              bg:'#BFE3D9', fg:'#0B4F3F', sub2:'#13664F', go:function(){ showCourseDataPage(); } },
   { key:'logos',  icon:'ti-tags',         label:'Märkeslogotyper',    bg:'#FFE1B3', fg:'#7A4A00', sub2:'#8F5A00', go:function(){ showBrandLogosPage(); } },
@@ -3197,6 +3205,7 @@ var GS_TILES = [
 function gsTileSub(key) {
   try {
     if(key === 'users') return (S.users||[]).length + ' konton';
+    if(key === 'clubs') return clubList().length + ' st · aktivt: ' + clubShort(currentClub());
     if(key === 'courses') {
       var n = (courseDb||[]).length, noImg = (courseDb||[]).filter(function(c){ return !getCourseImage(c.name); }).length;
       return n + ' banor' + (noImg ? ' · ' + noImg + ' utan bild' : '');
@@ -3256,6 +3265,7 @@ function renderGlobalSettings() {
     html += tool('ti-clipboard-x', 'Hitta saknade resultat', 'Letar i stängda deltävlingar (inkl. finaler) efter spelare som spelat klart alla hål enligt livescoringen men saknas i det officiella resultatet.', 'ti-search', 'Kontrollera', 'auditMissingFinalResults');
     html += tool('ti-golf', 'Reparera saknade puttar', 'Kompletterar puttar som tidigare tappades bort vid "Registrera för bollen", från sparad livescoring. Rör aldrig scorekort som redan har puttar.', 'ti-wand', 'Kör reparation', 'repairMissingHolePuttsFromLiveScoring');
   }
+  if(sec.key === 'clubs') html += clubhouseSettingsHTML();
   if(sec.key === 'look') {
     var on = darkModeForAllOn();
     var mine = currentThemeChoice() === 'dark';
@@ -4879,6 +4889,15 @@ function saveEditTour() {
 }
 
 function enterTour(id) {
+  // Klubbhus: en tour i ett annat klubbhus (t.ex. via en notislänk) – växla dit om man har
+  // åtkomst, annars stoppa.
+  var tClub = (S.tours||[]).find(function(x){ return x.id === id; });
+  if(tClub && currentUser && itemClub(tClub) !== currentClubId()) {
+    if(!accessibleClubs().some(function(c){ return c.id === itemClub(tClub); })) { alert('Du har inte tillgång till den här touren.'); return; }
+    _clubId = itemClub(tClub);
+    try { localStorage.setItem('agcc-club', _clubId); } catch(e) {}
+    applyClubFilters(); renderClubSwitcher();
+  }
   activeTourId = id;
   document.getElementById('tours-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
@@ -5183,7 +5202,7 @@ function findMyNextRoundInfo() {
   var todayStr = new Date().toISOString().slice(0,10);
   var today = new Date(todayStr+'T00:00:00');
   var best = null, bestDiff = Infinity;
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     if(accessIds.indexOf(t.id) < 0) return;
     var myPi = getMyPi(t);
     if(myPi < 0) return;
@@ -5723,7 +5742,7 @@ function renderTourSearchList() {
   if(!el) return;
   var q = (document.getElementById('tour-search-input')||{}).value || '';
   q = q.trim().toLowerCase();
-  var tours = (S.tours||[]).filter(function(t){ return !q || (t.name||'').toLowerCase().indexOf(q) >= 0; });
+  var tours = clubTours().filter(function(t){ return !q || (t.name||'').toLowerCase().indexOf(q) >= 0; });
   if(!tours.length) {
     el.innerHTML = '<p class="empty">Inga tourer hittades.</p>';
     return;
@@ -6502,6 +6521,7 @@ function wizFinish() {
       payments: {},
       calYear: new Date().getFullYear(), calMonth: new Date().getMonth()
     };
+    tour.clubhouse = currentClubId();
     S.tours.push(tour);
     wiz = null;
     discardDraft();
@@ -6518,7 +6538,7 @@ function renderPlayers() {
   // Admin: search & add section
   var addSection = '';
   if(isAdmin()) {
-    var eligibleUsers = (S.users||[]).filter(function(u){
+    var eligibleUsers = clubUsers(getTour() && getTour().clubhouse).filter(function(u){
       var wantsToPlay = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
       return wantsToPlay && (u.tourAccess||[]).indexOf(t.id) < 0;
     });
@@ -7600,7 +7620,7 @@ function isSubmissionApproved(sub) {
 function computeHomeApprovalTasks() {
   var asMarker = [], asAdminAll = [];
   var admin = isAdmin();
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     var myPi = players.findIndex(function(p){ return p && currentUser && p.username===currentUser.username; });
     (t.events||[]).forEach(function(e){
@@ -7807,7 +7827,7 @@ function dateMinusDays(dateStr, days) {
 function computeSideBetDues() {
   var dues = [];
   if(!currentUser) return dues;
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     var myPi = players.findIndex(function(p){ return p && p.username===currentUser.username; });
     if(myPi < 0) return;
@@ -7924,7 +7944,8 @@ function subscribeHomeActivityFeed() {
   var el = document.getElementById('home-activity-feed');
   if(!el || !currentUser) { if(el) el.innerHTML = ''; return; }
   // Firestore 'in' tillåter max 10 värden: 9 tourer + sällskapsronder ('__casual')
-  var tourIds = (currentUser.tourAccess||[]).slice(0, 9).concat(['__casual']);
+  var clubTourIds = clubTours().map(function(t){ return t.id; });
+  var tourIds = (currentUser.tourAccess||[]).filter(function(id){ return clubTourIds.indexOf(id) >= 0; }).slice(0, 9).concat([clubCasualFeedId()]);
   subscribeHomeChampions(tourIds);
   el.innerHTML = '<p style="text-align:center;color:var(--text-3);font-size:12px;padding:10px 0">Laddar aktivitetsflöde…</p>';
   _homeFeedUnsub = ACTIVITY_FEED_COL.where('tourId','in', tourIds).orderBy('createdAt','desc').limit(20)
@@ -11268,7 +11289,7 @@ function openTourBagStats() {
 // ── SPELARENS GOLFKARTA / "SCRATCH MAP" (GIS Version 4) ────────────────────
 function computePlayerCourseStats(username) {
   var playedMap = {}; // courseName(lower) -> { name, firstDate }
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     var players = getPlayersForTour(t);
     var pi = players.findIndex(function(p){ return p && p.username===username; });
     if(pi < 0) return;
@@ -11432,7 +11453,7 @@ var LOGIN_LOG_COL = db.collection('loginLog');
 //     holeHcpIndex, sim, status:'active'|'finished', players:[{key, username|null,
 //     name, guest, shcp}], scores:{key:{hole:gross}}, putts:{key:{hole:n}}, finishedAt, sharedToWall }
 var CASUAL_COL = db.collection('casualRounds');
-var _casualAll = [], _casualUnsub = null;
+var _casualAll = [], _casualRaw = [], _casualUnsub = null;
 var _cw = null;        // guiden (ny rond)
 var _cr = { id:null, data:null, hole:1, unsub:null }; // öppen rond
 
@@ -11441,8 +11462,9 @@ function subscribeCasualRounds() {
   _casualUnsub = CASUAL_COL.onSnapshot(function(snap){
     var all = [];
     snap.forEach(function(d){ var x = d.data(); x.id = d.id; all.push(x); });
-    _casualAll = all;
-    _casualRounds = all.filter(function(r){ return r.status === 'finished'; });
+    _casualRaw = all;
+    _casualAll = all.filter(inCurrentClub);
+    _casualRounds = _casualAll.filter(function(r){ return r.status === 'finished'; });
     renderHomeCasualWidget();
     try { renderBnavMain(); } catch(e) {}
   }, function(err){ console.error('casualRounds', err); });
@@ -11739,7 +11761,7 @@ function casualRecentMates() {
     .forEach(function(r){ (r.players||[]).forEach(function(p){ if(!p.guest) push(p.username); }); });
   if(out.length < 4) {
     var groups = [];
-    (S.tours||[]).forEach(function(t){
+    clubTours().forEach(function(t){
       var piU = {}; Object.keys(t.playerIndexMap||{}).forEach(function(u){ piU[t.playerIndexMap[u]] = u; });
       var myPi = (t.playerIndexMap||{})[me];
       if(myPi == null) return;
@@ -11763,7 +11785,7 @@ function renderCasualUserList(q) {
       '<span style="flex:1;font-size:14px">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+(sub?' · '+sub:'')+'</span></span>'+
       '<button class="btn btn-sm btn-primary" onclick="casualAddUser(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i></button></div>';
   };
-  var all = (S.users||[]).filter(function(u){
+  var all = clubUsers().filter(function(u){
     if(!u || u.username === 'admin' || inRound[u.username] || (currentUser && u.username === currentUser.username)) return false;
     return !q || (u.name||u.username).toLowerCase().indexOf(q) >= 0;
   }).sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
@@ -12043,6 +12065,7 @@ function createCasualRound() {
   if(!c || !casualCourseHasCard(c)) { alert('Välj en bana med scorekort.'); return; }
   var doc = {
     createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(),
+    clubhouse: currentClubId(),
     courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
     sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active', players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
     scores: {}, putts: {},
@@ -12305,7 +12328,7 @@ function shareCasualRoundToWall() {
   }
   ACTIVITY_FEED_COL.add({
     resultLine: resLine, formatLabel: fmtS.legacy ? null : cfLabel(fmtS.primary),
-    tourId: '__casual', tourName: 'Sällskapsrond', eventId: r.id, eventName: r.courseName,
+    tourId: clubCasualFeedId(), clubhouse: currentClubId(), tourName: 'Sällskapsrond', eventId: r.id, eventName: r.courseName,
     playerUsername: currentUser.username, playerName: me.name || currentUser.username,
     category: 'casualround', course: r.courseName, sim: !!r.sim, holes: r.holePars.length, summary: summary,
     createdAt: Date.now(), likes: {}
@@ -14919,7 +14942,7 @@ function computeCourseHoleStats(courseName) {
   var counts = emptyHoleCounts();
   var totalHolesPlayed = 0;
   if(course && course.holePars && course.holePars.length) {
-    (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+    clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
       var players = getPlayersForTour(t);
       (t.events||[]).forEach(function(e){
         if((e.course||'').trim().toLowerCase()!==courseName.trim().toLowerCase()) return;
@@ -14942,7 +14965,7 @@ function computeCourseHoleStats(courseName) {
 function computePlayerSideBetStats(username) {
   var stats = { betsPlaced: 0, totalStaked: 0, totalWon: 0, winsByType: {} };
   SIDE_BET_TYPES.forEach(function(bt){ stats.winsByType[bt] = 0; });
-  (S.tours||[]).forEach(function(t){
+  clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     var myPi = players.findIndex(function(p){ return p && p.username===username; });
     if(myPi < 0) return;
@@ -15014,7 +15037,7 @@ function computePlayerHoleStats(username, sim) {
 
 function computePlayerHoleCategoryLeaders(categoryKey) {
   var counts = {}; // username -> {name, count}
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase()===(e.course||'').trim().toLowerCase(); });
@@ -16235,7 +16258,7 @@ function computeCourseHistory(courseName) {
   var key = courseName.toLowerCase();
   var rounds = []; // {score, isStab}
   var playedEvents = []; // {tourName, eventName, date, winner, isFinal}
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       if((e.course||'').toLowerCase() !== key) return;
@@ -18482,7 +18505,7 @@ function initTourMap(t) {
 // ── HEATMAPS (GIS Version 6) ────────────────────────────────────────────────
 function computeGolfHeatmaps() {
   var courseRounds = {}; // key(lower) -> {name, rounds:[{score,isStab}], district}
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     (t.events||[]).filter(function(e){ return e.closed && e.results && e.results.length && e.course; }).forEach(function(e){ // inkl. finaler (rått resultat r.score)
       var key = e.course.trim().toLowerCase();
       if(!key) return;
@@ -18540,7 +18563,7 @@ function computeGolfHeatmaps() {
 // istället för att vänta på att HELA deltävlingen stängs av admin.
 function computePuttingLeaders() {
   var byUser = {}; // username -> { name, totalPutts, totalHoles }
-  (S.tours||[]).forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
+  clubTours().forEach(function(t){ if(isSimTour(t)) return; // simulatorgolf räknas aldrig in i statistik
     var players = getPlayersForTour(t);
     (t.events||[]).forEach(function(e){
       players.forEach(function(p, pi){
@@ -18916,6 +18939,11 @@ function updateHero(tourId) {
     heroBg.style.backgroundImage = DEFAULT_BG;
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='\u26f3 TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR';
+    // Andra klubbhus än Älvsjö: klubbhusets namn i headern (fullt eget utseende kommer i etapp 2)
+    if(currentUser && currentClubId() !== DEFAULT_CLUB_ID && currentClub()) {
+      heroTitle.textContent = (currentClub().name || '').toUpperCase();
+      heroEye.textContent = '\u26f3 KLUBBHUS';
+    }
   } else {
     var t=S.tours.find(function(x){return x.id===tourId;});
     if(!t) return;
@@ -19070,7 +19098,7 @@ function renderMyHcp() {
   var today = hcpTodayISO(), from24 = hcpIsoMinus(730);
   var h = '';
   if(isAdmin()) {
-    var us = (S.users||[]).filter(function(x){ return x.username !== 'admin'; }).slice().sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
+    var us = clubUsers().filter(function(x){ return x.username !== 'admin'; }).slice().sort(function(a,b){ return (a.name||a.username).localeCompare(b.name||b.username,'sv'); });
     h += '<div style="margin-bottom:12px"><select onchange="setMyHcpUser(this.value)" style="margin:0;width:100%;font-weight:600">'+
       us.map(function(x){ return '<option value="'+esc(x.username)+'"'+(x.username===u.username?' selected':'')+'>'+esc(x.name||x.username)+(x.username===currentUser.username?' (du)':'')+'</option>'; }).join('')+'</select></div>';
   }
@@ -19192,8 +19220,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (285)',
+    items: [
+      { type: 'new', text: 'KLUBBHUS (etapp 1). Appen kan nu ha flera tour-sällskap – klubbhus – t.ex. Älvsjö GCC, Familjen och Kompisarna. Varje klubbhus har egna tourer, egen statistik, OoM, vägg, sällskapsronder, utmaningar, vinster och Hey Champ – ingenting blandas mellan klubbhusen. Banor, scorekort, banbilder, märkeslogotyper, spelformer och användarkonton är gemensamma.' },
+      { type: 'new', text: 'All befintlig data ligger i klubbhuset Älvsjö GCC och alla befintliga konton har tillgång dit – för spelare som bara finns i Älvsjö ändras ingenting.' },
+      { type: 'new', text: 'Admin skapar, byter namn på och tar bort klubbhus under Inställningar → Klubbhus, och väljer per konto vilka klubbhus spelaren har tillgång till (Användare → redigera → Klubbhus). Användarlistan kan filtreras per klubbhus.' },
+      { type: 'new', text: 'Spelare (och admin) med fler än ett klubbhus får en väljare i menyraden högst upp, bredvid namnet. Nya tourer, sällskapsronder och utmaningar hamnar i det klubbhus man står i.' },
+    ]
+  },
+  {
     date: '6 november 2026 (284)',
     items: [
+      { type: 'fixed', text: 'Menyraden högst upp (Användare, Min profil, Byt lösenord, Ljust/Mörkt, Logga ut) låg delvis under toningen från headerbilden. Den har flyttats ner en bit så den syns helt.' },
       { type: 'fixed', text: 'Bildbank för banor visade bara miniatyr för äldre uppladdningar – nyare banbilder (sparade i ett nytt fält) syntes inte och deras "Ladda ner"-knapp fungerade inte, trots att bilderna fanns i molnlagringen. Nu visas alla bilder, listan är sorterad i bokstavsordning och banor vars bild saknas eller inte går att ladda markeras i rött.' },
     ]
   },
@@ -21912,6 +21950,7 @@ function afterLogin() {
   if(currentUser.role === 'admin') {
     document.getElementById('nav-users-btn').style.display = 'flex';
   }
+  try { applyClubFilters(); renderClubSwitcher(); } catch(e) {}
   showHomeScreen();
   try { seedTrackmanForIndoorTour(); } catch(e) { console.error('trackman', e); }
   setTimeout(function(){ try { repairCourseBankImages(); } catch(e) {} }, 3000);
@@ -22260,6 +22299,16 @@ function renderUsersList() {
   var admin = isAdmin();
   // Admin-kontot är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
   var users = getUsers().filter(function(u){ return admin || u.role !== 'admin'; });
+  // Klubbhus: spelare ser bara spelare i det aktiva klubbhuset. Admin ser det aktiva
+  // klubbhuset som standard men kan välja "Alla klubbhus".
+  var clubFilter = admin ? (_usersClubFilter || currentClubId()) : currentClubId();
+  if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && u.role === 'admin' && u.username === currentUser.username); });
+  var clubBarEl = document.getElementById('users-club-filter');
+  if(clubBarEl) clubBarEl.innerHTML = (admin && clubList().length > 1) ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
+    [{id:'all', name:'Alla klubbhus'}].concat(clubList()).map(function(c){
+      var on = c.id === clubFilter;
+      return '<button class="btn btn-sm'+(on?' btn-primary':'')+'" onclick="_usersClubFilter=\''+c.id+'\';renderUsersList()">'+(c.id==='all'?'<i class="ti ti-world"></i> ':'<i class="ti ti-building-community"></i> ')+esc(c.id==='all'?c.name:clubShort(c))+'</button>';
+    }).join('')+'</div>' : '';
   var newUserBtn = document.getElementById('new-user-btn');
   if(newUserBtn) newUserBtn.style.display = admin ? '' : 'none';
   var headerEl = document.getElementById('users-screen-title');
@@ -22328,7 +22377,8 @@ function renderUsersList() {
         '</div>'+
       '</div>'+
       (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-top:10px">Admin ser alltid alla tourer i översikten</div>' : '')+
-      (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>' : '')+
+      (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
+        (clubList().length>1?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
       '</div>'+
       swSection+
     '</div>';
@@ -22538,6 +22588,7 @@ function openNewUser() {
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" checked style="width:auto;margin:0"> Användare</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" style="width:auto;margin:0"> Admin</label>';
   h += '</div></div>';
+  h += clubAccessFieldHTML(null);
   h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
   h += buildTourAccessPickerHTML();
   h += '</div>';
@@ -22564,7 +22615,7 @@ function buildTourAccessPickerHTML() {
   var h = '<div class="row" style="gap:8px;margin-bottom:10px">';
   h += '<select id="tour-access-select" style="margin:0;flex:1">';
   h += available.length
-    ? available.map(function(t){ return '<option value="'+t.id+'">'+t.name+'</option>'; }).join('')
+    ? available.map(function(t){ return '<option value="'+t.id+'">'+(clubList().length>1?esc(clubShort(clubById(itemClub(t))))+' · ':'')+t.name+'</option>'; }).join('')
     : '<option value="">Inga fler tourer</option>';
   h += '</select>';
   h += '<button type="button" class="btn btn-sm btn-primary" id="tour-access-add-btn" '+(available.length?'':'disabled')+'><i class="ti ti-plus"></i> Lägg till</button>';
@@ -22631,12 +22682,15 @@ function saveNewUser() {
   var role = document.querySelector('input[name="u-role"]:checked').value;
   var isPlayer = document.getElementById('u-isplayer').checked;
   var tourAccess = _pendingTourAccess.slice();
+  var clubIds = readClubAccessField() || [currentClubId()];
+  if(!clubIds.length) { alert('Välj minst ett klubbhus.'); return; }
 
   function finishSaveNewUser(imgUrl) {
     if(!S.users) S.users = [];
     S.users.push({
       username: username, email: email || null, passHash: simpleHash(password), role: role, tourAccess: tourAccess,
-      name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: imgUrl||null, isPlayer: isPlayer
+      name: name || username, golfId: golfId, gender: genderEl?genderEl.value:'man', hcp: hcp, img: imgUrl||null, isPlayer: isPlayer,
+      clubhouses: clubIds
     });
     save(); closeModal(); renderUsersList();
   }
@@ -22686,6 +22740,7 @@ function openEditUser(i) {
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="user" '+(u.role!=='admin'?'checked':'')+' style="width:auto;margin:0"> Användare</label>';
   h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;font-weight:400"><input type="radio" name="u-role" value="admin" '+(u.role==='admin'?'checked':'')+' style="width:auto;margin:0"> Admin</label>';
   h += '</div></div>';
+  h += clubAccessFieldHTML(u);
   h += '<div class="field" id="u-tour-access-field"><label>Tour-åtkomst</label>';
   h += buildTourAccessPickerHTML();
   h += '</div>';
@@ -22778,6 +22833,11 @@ function saveEditUser(i) {
   u.isPlayer = document.getElementById('u-isplayer').checked;
   u.role = document.querySelector('input[name="u-role"]:checked').value;
   u.tourAccess = _pendingTourAccess.slice();
+  var clubIds = readClubAccessField();
+  if(clubIds) {
+    if(!clubIds.length) { alert('Välj minst ett klubbhus.'); return; }
+    u.clubhouses = clubIds;
+  }
 
   // Bilden laddas upp till Storage FÖRST (om en ny valts) - u.img sätts sedan
   // till URL:en. Samma stabila sökväg (username) gör att den gamla bilden i
@@ -22808,8 +22868,154 @@ function delUser(i) {
 
 // ── ACCESS CONTROL HELPERS ──────────────────────────────────────────────────
 function visibleTours() {
-  if(currentUser.role === 'admin') return S.tours;
-  return S.tours.filter(function(t){ return (currentUser.tourAccess||[]).indexOf(t.id) >= 0; });
+  if(currentUser.role === 'admin') return clubTours();
+  return clubTours().filter(function(t){ return (currentUser.tourAccess||[]).indexOf(t.id) >= 0; });
+}
+
+
+// ── KLUBBHUS ─────────────────────────────────────────────────────────────────
+// Ett klubbhus är ett eget tour-sällskap (Älvsjö GCC, Familjen, Kompisarna …).
+// Varje tour, sällskapsrond, utmaning och väggpost hör till exakt ett klubbhus
+// (fältet "clubhouse"; saknas det = Älvsjö GCC, dvs all data från före klubbhusen).
+// Statistik, OoM, väggen m.m. räknas bara inom det aktiva klubbhuset. Banor,
+// scorekort, banbilder, märkeslogotyper och användarkonton är gemensamma.
+// Spelare ser bara klubbhus de har åtkomst till (u.clubhouses, saknas = Älvsjö);
+// admin-konton ser och kan växla mellan alla.
+var DEFAULT_CLUB_ID = 'alvsjo';
+var _usersClubFilter = null;
+var _clubId = null;
+function clubList() {
+  return (S.clubhouses && S.clubhouses.length) ? S.clubhouses : [{ id: DEFAULT_CLUB_ID, name: 'Älvsjö GCC', short: 'Älvsjö' }];
+}
+function clubById(id) { return clubList().find(function(c){ return c.id === id; }) || null; }
+function clubShort(c) { return c ? (c.short || c.name) : ''; }
+function userClubIds(u) { return (u && u.clubhouses && u.clubhouses.length) ? u.clubhouses : [DEFAULT_CLUB_ID]; }
+function accessibleClubs() {
+  if(!currentUser) return [];
+  if(isAdmin()) return clubList();
+  var ids = userClubIds(findUser(currentUser.username) || currentUser);
+  return clubList().filter(function(c){ return ids.indexOf(c.id) >= 0; });
+}
+function currentClubId() {
+  var acc = accessibleClubs();
+  if(!acc.length) return _clubId || DEFAULT_CLUB_ID;
+  if(_clubId && acc.some(function(c){ return c.id === _clubId; })) return _clubId;
+  var saved = null; try { saved = localStorage.getItem('agcc-club'); } catch(e) {}
+  _clubId = (saved && acc.some(function(c){ return c.id === saved; })) ? saved : acc[0].id;
+  return _clubId;
+}
+function currentClub() { return clubById(currentClubId()); }
+function itemClub(x) { return (x && x.clubhouse) || DEFAULT_CLUB_ID; }
+function inCurrentClub(x) { return itemClub(x) === currentClubId(); }
+function clubTours() { var id = currentClubId(); return (S.tours||[]).filter(function(t){ return itemClub(t) === id; }); }
+function clubUsers(clubId) {
+  clubId = clubId || currentClubId();
+  return (S.users||[]).filter(function(u){ return userClubIds(u).indexOf(clubId) >= 0; });
+}
+// Sällskapsronder på väggen: Älvsjö behåller det gamla id:t så gamla inlägg syns kvar.
+function clubCasualFeedId() { var id = currentClubId(); return id === DEFAULT_CLUB_ID ? '__casual' : '__casual_' + id; }
+function applyClubFilters() {
+  _casualAll = (_casualRaw||[]).filter(inCurrentClub);
+  _casualRounds = _casualAll.filter(function(r){ return r.status === 'finished'; });
+  _chAll = (_chRaw||[]).filter(inCurrentClub);
+}
+function switchClub(id) {
+  if(!accessibleClubs().some(function(c){ return c.id === id; })) return;
+  _clubId = id;
+  try { localStorage.setItem('agcc-club', id); } catch(e) {}
+  applyClubFilters();
+  renderClubSwitcher();
+  showHomeScreen();
+  window.scrollTo(0, 0);
+}
+function renderClubSwitcher() {
+  var el = document.getElementById('club-switcher');
+  if(!el) return;
+  var acc = accessibleClubs();
+  var bar = document.getElementById('user-bar');
+  if(bar) bar.classList.toggle('has-club', acc.length >= 2);
+  if(acc.length < 2) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  var cur = currentClubId();
+  el.style.display = 'inline-flex';
+  el.innerHTML = '<i class="ti ti-building-community" style="font-size:15px;color:var(--green-dark)"></i>'+
+    '<select onchange="switchClub(this.value)" aria-label="Byt klubbhus" style="width:auto;margin:0;padding:3px 22px 3px 6px;font-size:12px;font-weight:700;color:var(--green-dark);background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer">'+
+      acc.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===cur?' selected':'')+'>'+esc(clubShort(c))+'</option>'; }).join('')+
+    '</select>';
+}
+function clubSlug(name) {
+  return (name||'').trim().toLowerCase().replace(/å/g,'a').replace(/ä/g,'a').replace(/ö/g,'o').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || ('klubbhus-' + Date.now());
+}
+function ensureClubList() { if(!S.clubhouses || !S.clubhouses.length) S.clubhouses = clubList().map(function(c){ return Object.assign({}, c); }); }
+function createClubhouse() {
+  if(!isAdmin()) return;
+  var name = (prompt('Namn på det nya klubbhuset (t.ex. "Familjen"):') || '').trim();
+  if(!name) return;
+  ensureClubList();
+  var id = clubSlug(name), n = 2;
+  while(clubById(id)) { id = clubSlug(name) + '-' + n; n++; }
+  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now() });
+  // Den som skapar klubbhuset får åtkomst direkt (bra för att kunna testa som spelare också)
+  var me = findUser(currentUser.username);
+  if(me) { me.clubhouses = userClubIds(me).concat([id]).filter(function(x, i, a){ return a.indexOf(x) === i; }); }
+  save();
+  renderClubSwitcher();
+  renderGlobalSettings();
+}
+function renameClubhouse(id) {
+  if(!isAdmin()) return;
+  ensureClubList();
+  var c = clubById(id); if(!c) return;
+  var name = (prompt('Nytt namn för klubbhuset:', c.name) || '').trim();
+  if(!name) return;
+  var short = (prompt('Kort namn (visas i väljaren i menyraden):', c.short || name) || '').trim() || name;
+  c.name = name; c.short = short.slice(0, 18);
+  save(); renderClubSwitcher(); renderGlobalSettings();
+}
+function deleteClubhouse(id) {
+  if(!isAdmin() || id === DEFAULT_CLUB_ID) return;
+  var tours = (S.tours||[]).filter(function(t){ return itemClub(t) === id; });
+  if(tours.length) { alert('Klubbhuset har '+tours.length+' tour(er). Ta bort eller flytta dem först.'); return; }
+  var c = clubById(id); if(!c) return;
+  if(!confirm('Ta bort klubbhuset "'+c.name+'"? Spelarnas åtkomst till det tas också bort.')) return;
+  ensureClubList();
+  S.clubhouses = S.clubhouses.filter(function(x){ return x.id !== id; });
+  (S.users||[]).forEach(function(u){ if(u.clubhouses) u.clubhouses = u.clubhouses.filter(function(x){ return x !== id; }); });
+  if(_clubId === id) { _clubId = null; try { localStorage.removeItem('agcc-club'); } catch(e) {} }
+  save(); renderClubSwitcher(); renderGlobalSettings();
+}
+function clubhouseSettingsHTML() {
+  var h = '<div class="card" style="margin-bottom:12px"><p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Varje klubbhus har egna tourer, egen statistik, OoM, vägg, sällskapsronder och utmaningar. Banor, scorekort, bilder och konton är gemensamma. Vilka spelare som har tillgång väljer du under <b>Användare</b> (redigera spelaren → Klubbhus).</p>'+
+    '<button class="btn btn-primary btn-sm" onclick="createClubhouse()"><i class="ti ti-plus"></i> Nytt klubbhus</button></div>';
+  var cur = currentClubId();
+  clubList().forEach(function(c){
+    var nT = (S.tours||[]).filter(function(t){ return itemClub(t) === c.id; }).length;
+    var nU = clubUsers(c.id).length;
+    h += '<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:12px">'+
+      '<div style="width:42px;height:42px;border-radius:12px;background:'+(c.id===cur?'var(--green-light)':'var(--surface2)')+';color:var(--green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-building-community" style="font-size:22px"></i></div>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
+        '<div style="font-size:12px;color:var(--text-3)">Kort namn: '+esc(clubShort(c))+' · '+nT+' tour'+(nT===1?'':'er')+' · '+nU+' spelare</div></div>'+
+      '<div class="row" style="gap:6px;flex-shrink:0">'+
+        (c.id!==cur?'<button class="btn btn-sm" title="Växla hit" onclick="switchClub(\''+c.id+'\')"><i class="ti ti-arrows-exchange"></i></button>':'')+
+        '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
+        (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="Ta bort" onclick="deleteClubhouse(\''+c.id+'\')"><i class="ti ti-trash" style="color:var(--danger-text)"></i></button>':'')+
+      '</div></div>';
+  });
+  return h;
+}
+// Kryssrutor i Ny/Redigera användare
+function clubAccessFieldHTML(u) {
+  var ids = u ? userClubIds(u) : [currentClubId()];
+  return '<div class="field" id="u-club-field"><label>Klubbhus</label><div style="display:flex;flex-wrap:wrap;gap:8px 16px">'+
+    clubList().map(function(c){
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:400;cursor:pointer"><input type="checkbox" class="u-club-cb" value="'+esc(c.id)+'" '+(ids.indexOf(c.id)>=0?'checked':'')+' style="width:auto;margin:0"> '+esc(c.name)+'</label>';
+    }).join('')+
+  '</div><p style="font-size:11px;color:var(--text-3);margin-top:4px">Spelaren ser bara de klubbhus som är ikryssade. Med fler än ett får spelaren en väljare i menyraden.</p></div>';
+}
+function readClubAccessField() {
+  var cbs = document.querySelectorAll('.u-club-cb');
+  if(!cbs.length) return null;
+  var ids = Array.prototype.filter.call(cbs, function(x){ return x.checked; }).map(function(x){ return x.value; });
+  return ids;
 }
 
 // ── MÖRKT LÄGE ────────────────────────────────────────────────────────────────
