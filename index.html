@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0F6E56">
+<script>try{if(localStorage.getItem("agcc-theme")==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tourer">
@@ -323,6 +324,49 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 .sw-chip.sw-chip-active-green{background:#1D9E75;color:#fff;border-color:#1D9E75}
 .sw-chip.sw-chip-active-red{background:#dc2626;color:#fff;border-color:#dc2626}
 
+
+/* ── MÖRKT LÄGE ── aktiveras via <html data-theme="dark"> (applyTheme). Färgvariablerna
+   byts, och några hårdkodade ljusa färger i inline-stilar skrivs över nedan. Färgade
+   ikonrutor (startsidan, Mer-menyn, Inställningar) behåller sina pastellfärger men dämpas lite. */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --green-light:#14392c;--green-dark:#5BD0A2;
+  --gold:#E0A548;--gold-light:#3A2C12;
+  --bg:#0E1411;--surface:#18201C;--surface2:#222B26;
+  --border:#2D3833;--border-strong:#3B4842;
+  --text:#E6ECE8;--text-2:#A7B2AC;--text-3:#7C8781;
+  --danger-bg:#3A1818;--danger-border:#6B2626;--danger-text:#F38B8B;
+}
+html[data-theme="dark"] .hero.hero-sticky::after{background:linear-gradient(180deg,var(--bg) 0%,rgba(14,20,17,0) 100%)}
+html[data-theme="dark"] #bnav{background:rgba(24,32,28,.96)}
+html[data-theme="dark"] .card{box-shadow:0 1px 3px rgba(0,0,0,.4)}
+html[data-theme="dark"] .modal{box-shadow:0 8px 32px rgba(0,0,0,.6)}
+html[data-theme="dark"] .btn-primary{border-color:#0F6E56}
+html[data-theme="dark"] .home-card,html[data-theme="dark"] .bs-it{filter:brightness(.82) saturate(.95)}
+html[data-theme="dark"] .home-card:hover{filter:brightness(.75)}
+html[data-theme="dark"] img{filter:none}
+html[data-theme="dark"] [style*="background:var(--green-dark)"]{background:#0F6E56 !important}
+html[data-theme="dark"] [style*="background:#fff;"],html[data-theme="dark"] [style*="background:#fff\""],
+html[data-theme="dark"] [style*="background:#ffffff"],html[data-theme="dark"] [style*="background:white"],
+html[data-theme="dark"] [style*="background:#f9fafb"],html[data-theme="dark"] [style*="background:rgba(255,255,255,.9"]{background:var(--surface) !important}
+html[data-theme="dark"] [style*="background:#E1F5EE"],html[data-theme="dark"] [style*="background:#e8f5e9"],
+html[data-theme="dark"] [style*="background:#dcfce7"],html[data-theme="dark"] [style*="background:#EAF3DE"]{background:var(--green-light) !important}
+html[data-theme="dark"] [style*="background:#FFF8EC"],html[data-theme="dark"] [style*="background:#FEF3E2"],
+html[data-theme="dark"] [style*="background:#FAEEDA"],html[data-theme="dark"] [style*="background:#FFF4F2"]{background:var(--gold-light) !important}
+html[data-theme="dark"] [style*="background:#FCEBEB"],html[data-theme="dark"] [style*="background:#fdecec"],
+html[data-theme="dark"] [style*="background:#fef2f2"]{background:var(--danger-bg) !important}
+html[data-theme="dark"] [style*="background:#EEEDFE"],html[data-theme="dark"] [style*="background:#F4F3FE"]{background:#26233F !important}
+html[data-theme="dark"] .ch-invite,html[data-theme="dark"] .cf-tile.on{background:var(--gold-light)}
+html[data-theme="dark"] .tm-cell{background:#26233F}
+html[data-theme="dark"] .ch-prize-ic{background:var(--surface)}
+html[data-theme="dark"] [style*="color:#0F6E56"]:not(.home-card *):not(.bs-it *){color:#5BD0A2 !important}
+html[data-theme="dark"] [style*="color:#111827"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#1f2937"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#374151"]:not(.home-card *):not(.bs-it *){color:var(--text) !important}
+html[data-theme="dark"] [style*="color:#185FA5"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#0C447C"]:not(.home-card *):not(.bs-it *){color:#7DB7F0 !important}
+html[data-theme="dark"] [style*="color:#B45309"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#854F0B"]:not(.home-card *):not(.bs-it *){color:#F0B35E !important}
+html[data-theme="dark"] [style*="color:#A32D2D"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#dc2626"]:not(.home-card *):not(.bs-it *){color:#F38B8B !important}
+html[data-theme="dark"] [style*="color:#534AB7"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#6D28D9"]:not(.home-card *):not(.bs-it *){color:#B4A8F5 !important}
+html[data-theme="dark"] [style*="color:#3B6D11"]:not(.home-card *):not(.bs-it *){color:#9BD46A !important}
+html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -390,6 +434,7 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><span>Användare</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="viewMyProfile()"><i class="ti ti-user-edit" style="font-size:17px"></i><span>Min profil</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><span>Byt lösenord</span></span>
+    <span id="nav-theme-btn" style="display:none;cursor:pointer;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="toggleTheme()"><i class="ti ti-moon" id="nav-theme-ic" style="font-size:17px"></i><span id="nav-theme-lbl">Mörkt</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><span>Logga ut</span></span>
   </span>
 </div>
@@ -1024,7 +1069,7 @@ function playerPhoto(username, fallbackImg) {
   return null;
 }
 
-var S = { tours: [], ideas: [] };
+var S = { tours: [], ideas: [], settings: {} };
 var firebaseReady = false;
 var saveTimer = null;
 
@@ -1057,6 +1102,7 @@ function initFirebaseSync(onFirstLoad) {
       S.tours = incoming.tours || [];
       S.users = incoming.users || [];
       S.ideas = incoming.ideas || [];
+      S.settings = incoming.settings || {};
     } else {
       S.tours = [];
       S.users = [];
@@ -1079,6 +1125,7 @@ function initFirebaseSync(onFirstLoad) {
       try { renderHomeChampGreeting(); } catch(e) {}
       try { renderBnavMain(); } catch(e) {}
       try { seedTrackmanForIndoorTour(); } catch(e) {}
+      try { applyTheme(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -3107,6 +3154,7 @@ var GS_TILES = [
   { key:'logos',  icon:'ti-tags',         label:'Märkeslogotyper',    bg:'#FFE1B3', fg:'#7A4A00', sub2:'#8F5A00', go:function(){ showBrandLogosPage(); } },
   { key:'logins', icon:'ti-shield-lock',  label:'Inloggningar',       bg:'#E5D4F5', fg:'#5B2C8C', sub2:'#7A4CAE' },
   { key:'db',     icon:'ti-database',     label:'Databas',            bg:'#D3D1C7', fg:'#444441', sub2:'#5F5E5A' },
+  { key:'look',   icon:'ti-moon-stars',   label:'Utseende',           bg:'#2B3A55', fg:'#FFFFFF', sub2:'#C9D6EE' },
   { key:'tools',  icon:'ti-tool',         label:'Kontroll & reparation', bg:'#F6D3CF', fg:'#7A231B', sub2:'#923328' }
 ];
 function gsTileSub(key) {
@@ -3120,6 +3168,7 @@ function gsTileSub(key) {
     if(key === 'logins') return 'Senaste 50 inloggningarna';
     if(key === 'db') return Math.round(JSON.stringify(S).length/1024) + ' av ~1000 KB';
     if(key === 'tools') return 'OoM-poäng, saknade resultat, puttar';
+    if(key === 'look') return 'Mörkt läge: ' + ((S.settings && S.settings.darkModeForAll) ? 'på för alla' : 'bara admin');
   } catch(e) {}
   return '';
 }
@@ -3169,6 +3218,23 @@ function renderGlobalSettings() {
     html += tool('ti-medal', 'Kontrollera OoM-poäng', 'Jämför varje spelares sparade OoM-poäng i stängda deltävlingar (ej final) mot vad poängskalan och ev. majors-multiplikator borde ge för placeringen, och erbjuder att rätta avvikelser.', 'ti-wand', 'Kontrollera', 'auditAndRepairOomPoints');
     html += tool('ti-clipboard-x', 'Hitta saknade resultat', 'Letar i stängda deltävlingar (inkl. finaler) efter spelare som spelat klart alla hål enligt livescoringen men saknas i det officiella resultatet.', 'ti-search', 'Kontrollera', 'auditMissingFinalResults');
     html += tool('ti-golf', 'Reparera saknade puttar', 'Kompletterar puttar som tidigare tappades bort vid "Registrera för bollen", från sparad livescoring. Rör aldrig scorekort som redan har puttar.', 'ti-wand', 'Kör reparation', 'repairMissingHolePuttsFromLiveScoring');
+  }
+  if(sec.key === 'look') {
+    var on = !!(S.settings && S.settings.darkModeForAll);
+    var mine = currentThemeChoice() === 'dark';
+    var sw = function(checked, fn){ return '<label style="position:relative;display:inline-block;width:50px;height:30px;flex-shrink:0;cursor:pointer"><input type="checkbox" '+(checked?'checked':'')+' onchange="'+fn+'" style="opacity:0;width:0;height:0;position:absolute">'+
+      '<span style="position:absolute;inset:0;border-radius:15px;background:'+(checked?'var(--green)':'var(--border-strong)')+';transition:background .2s"></span>'+
+      '<span style="position:absolute;top:3px;left:'+(checked?'23px':'3px')+';width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s"></span></label>'; };
+    html += '<div class="card" style="margin-bottom:12px"><div class="row" style="gap:12px;align-items:center">'+
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700"><i class="ti ti-users" style="color:var(--green-dark)"></i> Mörkt läge för alla användare</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-top:4px">'+(on ? 'PÅ – alla spelare kan välja ljust eller mörkt via <i class="ti ti-moon"></i> i menyraden högst upp.' : 'AV – bara admin-konton ser valet just nu (testläge). Slå på när du är nöjd så kan alla spelare välja själva.')+'</p></div>'+
+      sw(on, 'setDarkModeForAll(this.checked)')+
+    '</div></div>';
+    html += '<div class="card" style="margin-bottom:12px"><div class="row" style="gap:12px;align-items:center">'+
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700"><i class="ti '+(mine?'ti-moon':'ti-sun')+'" style="color:var(--green-dark)"></i> Mitt utseende: '+(mine?'Mörkt':'Ljust')+'</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-top:4px">Gäller bara ditt konto. Spelarna byter själva med <i class="ti ti-moon"></i>/<i class="ti ti-sun"></i> i menyraden högst upp.</p></div>'+
+      sw(mine, 'toggleTheme();renderGlobalSettings()')+
+    '</div></div>';
   }
   if(sec.key === 'logins') html += '<div id="login-log-section"></div>';
   if(sec.key === 'db') html += '<div id="db-diagnostics"></div>';
@@ -19029,6 +19095,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (281)',
+    items: [
+      { type: 'new', text: 'Mörkt läge (testversion). Admin-konton kan redan nu växla mellan ljust och mörkt med måne/sol-ikonen i menyraden högst upp. Under Inställningar → Utseende slår admin på mörkt läge för alla användare – då kan varje spelare välja själv. Valet sparas på kontot och följer med mellan enheter.' },
+    ]
+  },
+  {
     date: '5 november 2026 (280)',
     items: [
       { type: 'new', text: 'Märkeslogotyper: nu kan du lägga till helt nya märken direkt i appen (Inställningar → Märkeslogotyper → Lägg till nytt märke: skriv namn och välj logga). Nya märken blir valbara i "What\'s in the Bag". Listan visar även märken som spelare skrivit in i sina bagar, har sökfält och hänvisar inte längre till GitHub-repot.' },
@@ -21705,6 +21777,7 @@ function logout() {
   window._champHelloShown = false;
   currentUser = null;
   activeTourId = null;
+  try { applyTheme(); } catch(e) {}
   var userBar = document.getElementById('user-bar');
   if(userBar) userBar.style.display = 'none';
   var usersBtn = document.getElementById('nav-users-btn');
@@ -21714,6 +21787,7 @@ function logout() {
 }
 
 function afterLogin() {
+  try { applyTheme(); } catch(e) {}
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('hero-bg').style.display = '';
   document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
@@ -22620,6 +22694,50 @@ function visibleTours() {
   if(currentUser.role === 'admin') return S.tours;
   return S.tours.filter(function(t){ return (currentUser.tourAccess||[]).indexOf(t.id) >= 0; });
 }
+
+// ── MÖRKT LÄGE ────────────────────────────────────────────────────────────────
+// Varje användare väljer själv ljust/mörkt (sparas på kontot: u.theme, + localStorage för
+// att undvika "blink" vid start). Funktionen är bara tillgänglig för admin-konton tills
+// admin slår på den för alla (S.settings.darkModeForAll, Inställningar → Utseende).
+function darkModeAllowed() {
+  return !!currentUser && (isAdmin() || !!(S.settings && S.settings.darkModeForAll));
+}
+function currentThemeChoice() {
+  var u = currentUser ? findUser(currentUser.username) : null;
+  return (u && u.theme) || (currentUser && currentUser.theme) || 'light';
+}
+function applyTheme() {
+  var allowed = darkModeAllowed();
+  var dark = allowed && currentThemeChoice() === 'dark';
+  var root = document.documentElement;
+  if(dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
+  try { localStorage.setItem('agcc-theme', dark ? 'dark' : 'light'); } catch(e) {}
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', dark ? '#0E1411' : '#0F6E56');
+  var btn = document.getElementById('nav-theme-btn');
+  if(btn) btn.style.display = allowed ? 'flex' : 'none';
+  var ic = document.getElementById('nav-theme-ic'), lbl = document.getElementById('nav-theme-lbl');
+  if(ic) ic.className = 'ti ' + (dark ? 'ti-sun' : 'ti-moon');
+  if(lbl) lbl.textContent = dark ? 'Ljust' : 'Mörkt';
+}
+function toggleTheme() {
+  if(!darkModeAllowed()) return;
+  var next = currentThemeChoice() === 'dark' ? 'light' : 'dark';
+  var u = findUser(currentUser.username);
+  if(u) u.theme = next;
+  currentUser.theme = next;
+  applyTheme();
+  save();
+}
+function setDarkModeForAll(on) {
+  if(!isAdmin()) return;
+  if(!S.settings) S.settings = {};
+  S.settings.darkModeForAll = !!on;
+  save();
+  applyTheme();
+  renderGlobalSettings();
+}
+
 function isAdmin() { return currentUser && currentUser.role === 'admin'; }
 
 
