@@ -18859,25 +18859,43 @@ function renderCourseDbList() {
   el.innerHTML = html;
 }
 
+function courseBankImgErr(img) {
+  var d = document.createElement('div');
+  d.style.cssText = 'width:44px;height:32px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0';
+  d.title = 'Bilden går inte att ladda';
+  d.innerHTML = '<i class="ti ti-unlink" style="color:var(--danger-text);font-size:14px"></i>';
+  img.replaceWith(d);
+}
 function renderCourseBankSection(targetId) {
   var el = document.getElementById(targetId || 'course-bank-section');
   if(!el) return;
   if(!isAdmin()) { el.innerHTML = ''; return; }
-  var entries = Object.keys(courseBank).map(function(key){ return { key:key, displayName: courseBank[key].displayName || key, img: courseBank[key].img }; });
+  // Bilden kan ligga i fältet "url" (nyare uppladdningar) eller "img" (äldre) – eller vara en
+  // statisk bild i repot. getCourseImage() hanterar alla fall; tidigare lästes bara "img",
+  // så nyare banor visades utan miniatyr och med en trasig Ladda ner-länk.
+  var entries = Object.keys(courseBank).map(function(key){
+    var en = courseBank[key] || {};
+    var name = en.displayName || key;
+    return { key:key, displayName: name, src: getCourseImage(name) || en.url || en.img || '' };
+  }).sort(function(a,b){ return a.displayName.localeCompare(b.displayName, 'sv'); });
   var html = '<div class="section-title" style="margin-top:20px"><i class="ti ti-photo"></i> Bildbank för banor</div>';
-  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banbilder som laddas upp (via Bandata eller när en tour skapas) sparas här automatiskt, i molnlagringen - inte i själva databasen. Samma bana behöver därför bara laddas upp en gång.</p>';
+  html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Banbilder som laddas upp (via Bandata eller när en tour skapas) sparas här automatiskt i molnlagringen. Samma bana behöver därför bara laddas upp en gång.</p>';
   if(!entries.length) {
     html += '<p class="empty">Inga banor sparade ännu.</p>';
   } else {
-
     html += '<div class="card" style="padding:0">';
     entries.forEach(function(e, idx){
-      html += '<div class="row" style="justify-content:space-between;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
-        '<div class="row" style="gap:10px;align-items:center">'+
-          (getEventImage(e)?'<img src="'+getEventImage(e)+'" style="width:44px;height:32px;object-fit:cover;border-radius:6px">':'')+
-          '<span style="font-weight:500">'+esc(e.displayName)+'</span>'+
+      var ph = '<div style="width:44px;height:32px;border-radius:6px;background:var(--danger-bg);border:1px dashed var(--danger-border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-photo-off" style="color:var(--danger-text);font-size:14px"></i></div>';
+      var thumb = e.src
+        ? '<img src="'+esc(e.src)+'" style="width:44px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="courseBankImgErr(this)">'
+        : ph;
+      html += '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;'+(idx<entries.length-1?'border-bottom:1px solid var(--border)':'')+'">'+
+        '<div class="row" style="gap:10px;align-items:center;min-width:0">'+thumb+
+          '<span style="font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis">'+esc(e.displayName)+'</span>'+
         '</div>'+
-        '<a class="btn btn-sm" href="'+e.img+'" download="'+esc(e.key.replace(/\s+/g,'-'))+'.jpg"><i class="ti ti-download"></i> Ladda ner</a>'+
+        (e.src
+          ? '<a class="btn btn-sm" style="flex-shrink:0" href="'+esc(e.src)+'" target="_blank" rel="noopener" download="'+esc(e.key.replace(/\s+/g,'-'))+'.jpg"><i class="ti ti-download"></i> Ladda ner</a>'
+          : '<span style="font-size:12px;color:var(--text-3);flex-shrink:0">Ingen bild</span>')+
       '</div>';
     });
     html += '</div>';
@@ -19173,6 +19191,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '6 november 2026 (284)',
+    items: [
+      { type: 'fixed', text: 'Bildbank för banor visade bara miniatyr för äldre uppladdningar – nyare banbilder (sparade i ett nytt fält) syntes inte och deras "Ladda ner"-knapp fungerade inte, trots att bilderna fanns i molnlagringen. Nu visas alla bilder, listan är sorterad i bokstavsordning och banor vars bild saknas eller inte går att ladda markeras i rött.' },
+    ]
+  },
   {
     date: '6 november 2026 (283)',
     items: [
