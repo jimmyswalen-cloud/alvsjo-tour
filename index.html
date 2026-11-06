@@ -19234,6 +19234,7 @@ var RELEASE_NOTES = [
   {
     date: '6 november 2026 (285)',
     items: [
+      { type: 'new', text: 'Dela inloggning: admin kan skicka en länk till inloggningssidan med användarnamnet redan ifyllt (och rätt klubbhus). Dela-knappen finns på varje spelarkort under Användare, i Redigera användare, och erbjuds direkt när en ny användare skapats. Välj Dela… (SMS, Messenger, WhatsApp m.m. på mobilen) eller kopiera meddelandet/länken. Lösenordet skickas aldrig med.' },
       { type: 'fixed', text: 'Ny/Redigera användare: Tour-åtkomst visar nu bara tourer i de klubbhus som är ikryssade. Kryssar man ur ett klubbhus tas åtkomsten till dess tourer bort automatiskt.' },
       { type: 'new', text: 'Klubbhusets headerbild kan väljas direkt från samma omslagsbibliotek som när man skapar en tour (Klubbhus → Utseende → Välj från omslagen), eller laddas upp som egen bild.' },
       { type: 'new', text: 'Väggen finns i alla klubbhus – även ett nytt, tomt klubbhus visar nu väggen (med en förklaring tills första inlägget kommer). Väggen heter "The ÄGCC Wall" i Älvsjö och "The [klubbhus] Wall" i övriga, och namnet kan ändras under Klubbhus → Utseende.' },
@@ -21818,6 +21819,7 @@ function showLoginScreen() {
   setTimeout(function(){
     var f = document.getElementById('login-form');
     if(f) f.onsubmit = function(e){ e.preventDefault(); doLogin(); return false; };
+    if(window._prefillUsername) { var lu = document.getElementById('login-username'); if(lu && !lu.value) { lu.value = window._prefillUsername; var lp = document.getElementById('login-password'); if(lp) lp.focus(); } }
   }, 30);
 }
 
@@ -22389,6 +22391,7 @@ function renderUsersList() {
           (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:8px;padding:5px 10px;display:flex;align-items:center;flex-shrink:0">'+pLogo+'</div>' : '')+
           (admin ? '<div class="row" style="gap:6px">'+
             (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i></button>' : '')+
+            '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')" title="Dela inloggningslänk"><i class="ti ti-share"></i></button>'+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i></button>'+
             (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" onclick="delUser('+i+')"><i class="ti ti-trash"></i></button>' : '')+
           '</div>' : '')+
@@ -22713,6 +22716,7 @@ function saveNewUser() {
       clubhouses: clubIds
     });
     save(); closeModal(); renderUsersList();
+    setTimeout(function(){ shareLoginLink(username); }, 150); // erbjud att skicka inloggningen direkt
   }
   // Bilden laddas upp till Storage FÖRST (om en valts) - u.img blir URL:en,
   // inte själva bilddatan. Användarnamnet finns redan här (validerat ovan),
@@ -22734,6 +22738,7 @@ function openEditUser(i) {
   var u = getUsers()[i];
   _pendingTourAccess = (u.tourAccess||[]).slice();
   var h = '<h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px">Redigera ' + u.username + ' <button class="btn btn-sm" style="font-weight:400;font-size:12px" onclick="promptRenameUsername(\''+esc(u.username)+'\')"><i class="ti ti-signature"></i> Byt användarnamn</button></h3>';
+  h += '<button type="button" class="btn btn-sm btn-primary" style="margin-bottom:12px" onclick="shareLoginLink(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela inloggningslänk</button>';
   h += '<div class="field"><label>E-postadress (valfritt)</label><input id="u-email" type="email" value="'+esc(u.email||'')+'" placeholder="t.ex. namn@exempel.se"></div>';
   h += '<div class="field"><label>Nytt lösenord (lämna tomt för att behålla nuvarande)</label><input id="u-password" type="text" placeholder="Lämna tomt = oförändrat"></div>';
   h += '<hr class="divider">';
@@ -23176,6 +23181,69 @@ function readClubAccessField() {
   var ids = Array.prototype.filter.call(cbs, function(x){ return x.checked; }).map(function(x){ return x.value; });
   return ids;
 }
+
+
+// ── DELA INLOGGNINGSLÄNK ─────────────────────────────────────────────────────
+// Länk till appen med användarnamnet ifyllt (?u=) och ev. klubbhus (?k=) så rätt
+// klubbhus visas efter inloggning. Lösenordet skickas aldrig med (det sparas inte i klartext).
+function loginLinkFor(u) {
+  var base = location.origin + location.pathname;
+  var ids = userClubIds(u);
+  var club = ids.indexOf(currentClubId()) >= 0 ? currentClubId() : ids[0];
+  return base + '?u=' + encodeURIComponent(u.username) + (club && club !== DEFAULT_CLUB_ID ? '&k=' + encodeURIComponent(club) : '');
+}
+function loginShareText(u) {
+  var ids = userClubIds(u);
+  var c = clubById(ids.indexOf(currentClubId()) >= 0 ? currentClubId() : ids[0]);
+  var first = String(u.name || u.username).split(' ')[0];
+  return 'Hej ' + first + '! 🏌️\n\nHär är din inloggning till ' + (c ? c.name : 'golfappen') + ':\n' + loginLinkFor(u) +
+    '\n\nAnvändarnamn: ' + u.username + '\nLösenord: (får du av mig)\n\nTips: lägg appen på hemskärmen via Dela → "Lägg till på hemskärmen".';
+}
+function shareLoginLink(username) {
+  if(!isAdmin()) return;
+  var u = findUser(username); if(!u) return;
+  var canShare = !!navigator.share;
+  var h = '<h3><i class="ti ti-share"></i> Dela inloggning – '+esc(u.name || u.username)+'</h3>'+
+    '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Länken öppnar appen med användarnamnet ifyllt'+(clubList().length>1?' och rätt klubbhus':'')+'. Lösenordet skickas inte med – skriv in det själv i meddelandet eller ge det separat.</p>'+
+    '<textarea id="share-login-text" rows="9" style="font-size:14px;line-height:1.4">'+esc(loginShareText(u))+'</textarea>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">'+
+      (canShare ? '<button class="btn btn-primary" onclick="doShareLogin(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela…</button>' : '')+
+      '<button class="btn'+(canShare?'':' btn-primary')+'" onclick="copyShareLogin(false)"><i class="ti ti-copy"></i> Kopiera meddelande</button>'+
+      '<button class="btn" onclick="copyShareLogin(true, \''+esc(u.username)+'\')"><i class="ti ti-link"></i> Kopiera bara länken</button>'+
+    '</div>'+
+    '<p id="share-login-status" style="font-size:12px;color:var(--green-dark);min-height:16px;margin-top:8px"></p>'+
+    '<div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">Stäng</button></div>';
+  showModal(h);
+}
+function doShareLogin(username) {
+  var u = findUser(username); if(!u) return;
+  var txt = (document.getElementById('share-login-text')||{}).value || loginShareText(u);
+  navigator.share({ title: 'Inloggning', text: txt }).catch(function(){});
+}
+function copyShareLogin(linkOnly, username) {
+  var txt = linkOnly ? loginLinkFor(findUser(username)) : ((document.getElementById('share-login-text')||{}).value || '');
+  var done = function(){ var st = document.getElementById('share-login-status'); if(st) st.innerHTML = '<i class="ti ti-check"></i> Kopierat! Klistra in i SMS, Messenger eller WhatsApp.'; };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function(){ fallbackCopy(txt); done(); });
+  else { fallbackCopy(txt); done(); }
+}
+function fallbackCopy(txt) {
+  var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch(e) {} ta.remove();
+}
+// Vid start: ?u=användarnamn&k=klubbhus från en delad länk
+(function(){
+  try {
+    var q = new URLSearchParams(location.search);
+    var u = q.get('u'), k = q.get('k');
+    if(k) localStorage.setItem('agcc-club', k);
+    if(u) {
+      window._prefillUsername = u;
+      var fill = function(){ var el = document.getElementById('login-username'); if(el && !el.value) { el.value = u; var pw = document.getElementById('login-password'); if(pw) setTimeout(function(){ pw.focus(); }, 50); } };
+      document.addEventListener('DOMContentLoaded', fill); setTimeout(fill, 300); setTimeout(fill, 1500);
+    }
+    if(u || k) history.replaceState(null, '', location.pathname + location.hash);
+  } catch(e) {}
+})();
 
 // ── MÖRKT LÄGE ────────────────────────────────────────────────────────────────
 // Varje användare väljer själv ljust/mörkt (sparas på kontot: u.theme, + localStorage för
