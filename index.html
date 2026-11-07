@@ -10168,11 +10168,33 @@ function openEditEventCourseImg(i) {
   renderEeciModal();
 }
 
-// En deltävling räknas som "påbörjad" (och bana/datum låses) så fort den har
-// anmälningar - oavsett om touren i övrigt är låst/startad. Banfoto påverkas
-// inte av detta, det går alltid att byta så länge deltävlingen inte är stängd.
+// Bana/datum låses först när deltävlingen har inlämnade scorekort eller sparade
+// resultat - då hör hålpoängen till den gamla banan. Enbart anmälningar låser
+// INTE längre (de följer bara med till den nya banan). Live scoring som redan
+// startat kontrolleras separat vid sparning (ligger i egen samling).
+// Banfoto går alltid att byta så länge deltävlingen inte är stängd.
 function eeciIsLocked(e) {
-  return !!(e.registrations && e.registrations.length);
+  var hasSub = (e.scoreSubmissions||[]).some(function(x){ return x && (x.score!=null || x.holes); });
+  var hasRes = (e.results||[]).some(function(r){ return r && r.score!=null && r.score!=='' && !isNaN(r.score); });
+  return hasSub || hasRes;
+}
+function eeciRegCount(e) {
+  return getEventRegPis(e).length;
+}
+// Kollar om någon boll i deltävlingen redan har live-scorade hål. Skapar inga nya boll-id.
+function eeciHasLiveScores(e) {
+  var ids = (e.teeGroups||[]).filter(function(g){ return g && g.id; }).map(function(g){ return liveScoringDocId(e.id, g.id); });
+  if(!ids.length) return Promise.resolve(false);
+  return Promise.all(ids.map(function(id){
+    return LIVE_SCORING_COL.doc(id).get().then(function(doc){
+      if(!doc.exists) return false;
+      var sc = (doc.data()||{}).scores || {};
+      return Object.keys(sc).some(function(k){
+        var arr = sc[k]; if(!arr) return false;
+        return (Array.isArray(arr) ? arr : Object.values(arr)).some(function(v){ return v!=null && v!=='' && v!==0; });
+      });
+    }).catch(function(){ return false; });
+  })).then(function(r){ return r.some(Boolean); });
 }
 
 // Ritar om Bana/bild-modalen utifrån NUVARANDE _editEventDraft, utan att bygga
@@ -10212,7 +10234,8 @@ function renderEeciModal() {
 
   var h = '<h3><i class="ti ti-map-pin"></i> Redigera bana/bild'+(e.isFinal?' – Final':'')+'</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
-  if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan anmälningar, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
+  if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan inlämnade scorekort eller resultat, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
+  else if(eeciRegCount(e)) h += '<p style="font-size:12px;color:var(--text-2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-users"></i> '+eeciRegCount(e)+' anmälda följer med om du byter bana eller datum.</p>';
   h += courseField;
   h += dateField;
   h += '<div class="field"><label>Banfoto</label>';
@@ -10318,6 +10341,19 @@ function saveEditEventCourseImg() {
   if(!locked) {
     if(!_editEventDraft.course) { alert('Ange en bana.'); return; }
     if(!_editEventDraft.date) { alert('Ange ett datum.'); return; }
+    var courseChanged = (e.course||'').toLowerCase() !== _editEventDraft.course.toLowerCase();
+    // Bana byts på en deltävling med anmälda: kontrollera live scoring och bekräfta först
+    if(courseChanged && eeciRegCount(e) && !_editEventDraft._confirmed) {
+      var draft = _editEventDraft;
+      eeciHasLiveScores(e).then(function(hasLive){
+        if(hasLive) { alert('Live scoring har redan startat för den här deltävlingen, så banan kan inte bytas. Hålpoängen hör till "'+(e.course||'')+'".'); return; }
+        if(!confirm('Byt bana från "'+(e.course||'–')+'" till "'+draft.course+'"?\n\n'+eeciRegCount(e)+' anmälda följer med till den nya banan.')) return;
+        if(_editEventDraft !== draft) return;
+        draft._confirmed = true;
+        saveEditEventCourseImg();
+      });
+      return;
+    }
     e.course = _editEventDraft.course;
     e.date = _editEventDraft.date;
     // Om banan skrevs in manuellt och saknas i banregistret, lägg till den (samma logik som i skapa-tour-guiden)
@@ -19289,6 +19325,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '6 november 2026 (293)',
+    items: [
+      { type: 'fixed', text: 'Byt bana fungerar igen på deltävlingar som redan har anmälningar (t.ex. Saurines i Spanish Tour). Tidigare låstes bana och datum så fort någon anmält sig. Nu låses de först när scorekort lämnats in, resultat sparats eller live scoring startat – då hör hålpoängen till den gamla banan. Anmälda spelare följer med till den nya banan, och appen ber om bekräftelse innan bytet sparas.' },
+    ]
+  },
   {
     date: '6 november 2026 (292)',
     items: [
