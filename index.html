@@ -1113,6 +1113,24 @@ function playerPhoto(username, fallbackImg) {
 var S = { tours: [], ideas: [], settings: {}, clubhouses: null };
 var firebaseReady = false;
 var saveTimer = null;
+// Det som medvetet tagits bort på DEN HÄR enheten under sessionen – allt annat som finns
+// i molnet men saknas lokalt läggs tillbaka innan vi sparar (skydd mot inaktuell data).
+var _localDeleted = { tours: {}, clubs: {}, users: {} };
+function mergeBackMissing(server) {
+  var restored = [];
+  if(!server) return restored;
+  function byKey(arr, key) { var m = {}; (arr||[]).forEach(function(x){ if(x && x[key]!=null) m[x[key]] = true; }); return m; }
+  if(Array.isArray(server.clubhouses) && server.clubhouses.length) {
+    if(!S.clubhouses || !S.clubhouses.length) S.clubhouses = clubList().map(function(c){ return Object.assign({}, c); });
+    var haveC = byKey(S.clubhouses, 'id');
+    server.clubhouses.forEach(function(c){ if(c && c.id && !haveC[c.id] && !_localDeleted.clubs[c.id]) { S.clubhouses.push(c); restored.push('klubbhus '+(c.name||c.id)); } });
+  }
+  var haveT = byKey(S.tours, 'id');
+  (server.tours||[]).forEach(function(t){ if(t && t.id && !haveT[t.id] && !_localDeleted.tours[t.id]) { S.tours.push(t); restored.push('tour '+(t.name||t.id)); } });
+  var haveU = byKey(S.users, 'username');
+  (server.users||[]).forEach(function(u){ if(u && u.username && !haveU[u.username] && !_localDeleted.users[u.username]) { S.users.push(u); restored.push('spelare '+u.username); } });
+  return restored;
+}
 
 function save() {
   // Write the full state to Firestore. Debounced slightly so rapid edits
@@ -1129,10 +1147,23 @@ function save() {
       alert('Varning: databasen är nästan full (' + sizeKB + ' KB av max ~1000 KB). Ta bort gamla bilder eller komprimera mer för att undvika sparfel.');
     }
     // lastActor: vem som sparade - pushservern skickar aldrig notiser till den som själv gjorde ändringen
-    DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now() }).catch(function(err) {
-      console.error('Firestore save failed', err);
-      alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
-    });
+    function doWrite() {
+      payload = JSON.stringify(S);
+      DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now() }).catch(function(err) {
+        console.error('Firestore save failed', err);
+        alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
+      });
+    }
+    // Läs molnets senaste version först och lägg tillbaka klubbhus/tourer/spelare som
+    // saknas här (t.ex. om telefonen legat i viloläge med gammal data) – inget raderas av misstag.
+    DOC_REF.get({ source: 'server' }).then(function(doc){
+      try {
+        var server = (doc.exists && doc.data().data) ? JSON.parse(doc.data().data) : null;
+        var r = mergeBackMissing(server);
+        if(r.length) console.warn('Återställde innan sparning:', r);
+      } catch(e) { console.error('merge', e); }
+      doWrite();
+    }).catch(function(){ doWrite(); });
   }, 250);
 }
 
@@ -5854,6 +5885,7 @@ function delTour(id) {
   if(!isAdmin()) return;
   var t=S.tours.find(function(x){return x.id===id;});
   if(confirm('Ta bort "'+t.name+'"? All data raderas.')) {
+    _localDeleted.tours[id] = true;
     S.tours=S.tours.filter(function(x){return x.id!==id;}); save(); renderToursList();
   }
 }
@@ -19349,6 +19381,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (295)',
+    items: [
+      { type: 'fixed', text: 'Admin: klubbhus som försvunnit ur listan kan återställas. Under Inställningar → Klubbhus visas "Saknade klubbhus" om det finns tourer eller spelare som hör till ett klubbhus som saknas – ett tryck på Återställ tar tillbaka klubbhuset med alla dess tourer och spelare.' },
+      { type: 'fixed', text: 'Skydd mot att data skrivs över: innan appen sparar hämtas molnets senaste version, och klubbhus, tourer och spelare som saknas på enheten (t.ex. efter att telefonen legat i viloläge) läggs tillbaka i stället för att raderas.' },
+    ]
+  },
+  {
     date: '6 november 2026 (294)',
     items: [
       { type: 'fixed', text: 'Menyraden längst ner kunde försvinna under en pågående sällskapsrond (den trodde att tangentbordet fortfarande var uppe efter rondguiden). Nu är den alltid kvar, och mittknappen "Fortsätt" tar dig direkt tillbaka till ronden.' },
@@ -23098,6 +23137,7 @@ function delUser(i) {
   var u = getUsers()[i];
   if(u.username === currentUser.username) { alert('Du kan inte ta bort dig själv.'); return; }
   if(!confirm('Ta bort användaren "'+u.username+'"?')) return;
+  if(S.users[i]) _localDeleted.users[S.users[i].username] = true;
   S.users.splice(i,1);
   save(); renderUsersList();
 }
@@ -23219,14 +23259,49 @@ function deleteClubhouse(id) {
   var c = clubById(id); if(!c) return;
   if(!confirm('Ta bort klubbhuset "'+c.name+'"? Spelarnas åtkomst till det tas också bort.')) return;
   ensureClubList();
+  _localDeleted.clubs[id] = true;
   S.clubhouses = S.clubhouses.filter(function(x){ return x.id !== id; });
   (S.users||[]).forEach(function(u){ if(u.clubhouses) u.clubhouses = u.clubhouses.filter(function(x){ return x !== id; }); });
   if(_clubId === id) { _clubId = null; try { localStorage.removeItem('agcc-club'); } catch(e) {} }
   save(); renderClubSwitcher(); renderGlobalSettings();
 }
+// Klubbhus-id som tourer, spelare eller sällskapsronder pekar på men som saknas i listan
+function orphanClubIds() {
+  var known = {}; clubList().forEach(function(c){ known[c.id] = true; });
+  var found = {};
+  function add(id, kind, label) { if(!id || known[id]) return; var f = found[id] = found[id] || { id:id, tours:[], users:0, rounds:0 }; if(kind==='t') f.tours.push(label); else if(kind==='u') f.users++; else f.rounds++; }
+  (S.tours||[]).forEach(function(t){ if(t && t.clubhouse) add(t.clubhouse, 't', t.name||t.id); });
+  (S.users||[]).forEach(function(u){ (Array.isArray(u.clubhouses)?u.clubhouses:[]).forEach(function(id){ add(id, 'u'); }); });
+  (_casualRaw||[]).forEach(function(r){ if(r && r.clubhouse) add(r.clubhouse, 'r'); });
+  return Object.keys(found).map(function(k){ return found[k]; });
+}
+function restoreClubhouse(id) {
+  if(!isAdmin()) return;
+  var guess = id.replace(/-\d+$/, '').replace(/-/g, ' '); guess = guess.charAt(0).toUpperCase() + guess.slice(1);
+  var name = (prompt('Namn på klubbhuset som återställs:', guess) || '').trim();
+  if(!name) return;
+  ensureClubList();
+  if(clubById(id)) return;
+  delete _localDeleted.clubs[id];
+  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), restoredAt: Date.now() });
+  save(); renderClubSwitcher(); renderGlobalSettings();
+  alert('"'+name+'" är återställt med sina tourer och spelare. Utseende (ikon och headerbild) behöver ställas in igen under Utseende.');
+}
 function clubhouseSettingsHTML() {
   var h = '<div class="card" style="margin-bottom:12px"><p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Varje klubbhus har egna tourer, egen statistik, OoM, vägg, sällskapsronder och utmaningar. Banor, scorekort, bilder och konton är gemensamma. Vilka spelare som har tillgång väljer du under <b>Användare</b> (redigera spelaren → Klubbhus).</p>'+
     '<button class="btn btn-primary btn-sm" onclick="createClubhouse()"><i class="ti ti-plus"></i> Nytt klubbhus</button></div>';
+  var orph = orphanClubIds();
+  if(orph.length) {
+    h += '<div class="card" style="margin-bottom:12px;border:2px solid var(--gold);background:var(--gold-light)">'+
+      '<div style="font-weight:700;margin-bottom:4px"><i class="ti ti-alert-triangle"></i> Saknade klubbhus hittades</div>'+
+      '<p style="font-size:12px;color:var(--text-2);margin-bottom:8px">Det finns tourer eller spelare som hör till ett klubbhus som inte längre finns i listan. Datan finns kvar – återställ klubbhuset så syns den igen.</p>'+
+      orph.map(function(o){
+        return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border)">'+
+          '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(o.id)+'</div>'+
+          '<div style="font-size:12px;color:var(--text-3)">'+o.tours.length+' tour'+(o.tours.length===1?'':'er')+(o.tours.length?' ('+esc(o.tours.slice(0,4).join(', '))+(o.tours.length>4?' …':'')+')':'')+' · '+o.users+' spelare'+(o.rounds?' · '+o.rounds+' sällskapsronder':'')+'</div></div>'+
+          '<button class="btn btn-sm btn-primary" onclick="restoreClubhouse(\''+esc(o.id)+'\')"><i class="ti ti-restore"></i> Återställ</button></div>';
+      }).join('')+'</div>';
+  }
   var cur = currentClubId();
   clubList().forEach(function(c){
     var nT = (S.tours||[]).filter(function(t){ return itemClub(t) === c.id; }).length;
@@ -23499,6 +23574,7 @@ function rejectPendingUser(username) {
   var i = getUsers().findIndex(function(x){ return x.username === username; });
   if(i < 0) return;
   if(!confirm('Ta bort kontot "' + username + '"? Det går inte att ångra.')) return;
+  if(S.users[i]) _localDeleted.users[S.users[i].username] = true;
   S.users.splice(i, 1);
   save(); renderHomePendingUsers(); try { renderUsersList(); } catch(e) {}
 }
