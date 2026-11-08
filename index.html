@@ -1220,6 +1220,7 @@ function initFirebaseSync(onFirstLoad) {
       try { applyTheme(); } catch(e) {}
       try { applyClubFilters(); renderClubSwitcher(); } catch(e) {}
       try { renderHomePendingUsers(); } catch(e) {}
+      try { if(document.getElementById('wall-composer') && document.activeElement && document.activeElement.id !== 'wall-input') renderWallComposer(); else renderWallHeadActions(); } catch(e) {}
     }
   }, function(err) {
     console.error('Firestore listen failed', err);
@@ -8225,19 +8226,58 @@ function fitFeedImage(imgEl) {
   }
 }
 
+// ── BILDINLÄGG I FULL BREDD (release 306) ───────────────────────────────────
+// Bildinlägg från tävlingschatten visas som i ett socialt flöde: namn och datum
+// överst, bilden kant i kant över hela kortets bredd, gilla-raden under bilden
+// och bildtexten sist. Bilden behåller sitt eget format men begränsas till mellan
+// 4:5 (stående) och 1,91:1 (liggande), så att väldigt höga eller breda bilder inte
+// tar över flödet. Tryck på bilden öppnar den i helskärm.
+function fitFeedPhoto(imgEl) {
+  if(!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) return;
+  var r = imgEl.naturalWidth / imgEl.naturalHeight;
+  r = Math.max(0.8, Math.min(1.91, r));
+  var box = imgEl.parentNode;
+  if(box) box.style.aspectRatio = r.toFixed(3);
+}
+
+function feedPhotoPostHTML(it, avatar, likeCount, iLiked) {
+  var subtitleName = it.eventName ? esc(it.eventName) : (it.tourName ? esc(it.tourName) : '');
+  var firstName = String(it.playerName || '').split(' ')[0];
+  var wrapStyle = it._pinned ? 'background:linear-gradient(90deg,#FFF6DD,transparent);margin:0 -16px;padding:12px 16px 12px;' : 'padding:12px 0 12px;';
+  return '<div style="'+wrapStyle+'border-bottom:1px solid var(--border)">'+
+    // Rubrikrad: profilbild, namn, deltävling och tid + radera (admin)
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+      avatar+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(it.playerName)+'</div>'+
+        '<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+(it._pinned?'<span style="color:#B45309;font-weight:700"><i class="ti ti-pin"></i> Fäst</span> · ':'')+subtitleName+(subtitleName?' · ':'')+formatRelativeTime(it.createdAt)+'</div>'+
+      '</div>'+
+      (canDeleteFeedItem(it) ? '<button onclick="deleteActivityFeedItem(\''+it._id+'\')" title="Radera inlägget" style="background:none;border:none;cursor:pointer;padding:6px 2px;color:var(--text-3);flex-shrink:0"><i class="ti ti-trash" style="font-size:16px"></i></button>' : '')+
+    '</div>'+
+    // Bilden kant i kant (kortets sidomarginal är 16 px)
+    '<div style="margin:0 -16px;aspect-ratio:1;background:var(--surface2);overflow:hidden">'+
+      '<img src="'+esc(it.img)+'" onload="fitFeedPhoto(this)" onclick="openImageLightbox(\''+esc(it.img)+'\')" loading="lazy" alt="" style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in">'+
+    '</div>'+
+    // Gilla-raden under bilden
+    '<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'+
+      '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" title="Gilla" style="background:none;border:none;cursor:pointer;padding:6px 6px 6px 0;color:'+(iLiked?'#1D9E75':'var(--text-2)')+'"><i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:24px"></i></button>'+
+      (likeCount>0
+        ? '<button onclick="showFeedLikers(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:4px 0;font-size:13px;font-weight:700;color:var(--text)">'+likeCount+' '+(likeCount===1?'gillar':'gillar')+'</button>'
+        : '<span style="font-size:12px;color:var(--text-3)">Bli först att gilla</span>')+
+    '</div>'+
+    // Bildtext
+    (it.caption ? '<div style="font-size:13px;color:var(--text);line-height:1.45;margin-top:2px;overflow-wrap:anywhere"><b>'+esc(firstName)+'</b> '+esc(it.caption)+'</div>' : '')+
+  '</div>';
+}
+
 function renderHomeActivityFeed(items) {
   var el = document.getElementById('home-activity-feed');
   if(!el) return;
   if(!items.length) {
-    // Tomt klubbhus (t.ex. nyskapat): visa väggen ändå, med en förklaring
-    el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">'+
-        '<i class="ti ti-messages" style="font-size:20px;color:var(--gold)"></i>'+
-        '<div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">'+esc(clubWallName())+'</div>'+
-      '</div>'+
-      '<div style="text-align:center;padding:14px 6px 6px;color:var(--text-3);font-size:13px"><i class="ti ti-message-circle-plus" style="font-size:26px;display:block;margin-bottom:6px"></i>'+
-        'Inga inlägg ännu. Väggen fylls på automatiskt med birdies, vinnare och säsongsmästare från klubbhusets tourer, sällskapsronder ni delar och bilder från tävlingschatten.</div>'+
-    '</div>';
+    // Tomt klubbhus (t.ex. nyskapat): visa väggen ändå, med skrivfält och en förklaring
+    _homeFeedItems = [];
+    setWallCardBody('<div style="text-align:center;padding:14px 6px 6px;color:var(--text-3);font-size:13px"><i class="ti ti-message-circle-plus" style="font-size:26px;display:block;margin-bottom:6px"></i>'+
+        'Inga inlägg ännu. Skriv det första! Väggen fylls också på automatiskt med birdies, vinnare och säsongsmästare från klubbhusets tourer, sällskapsronder ni delar och bilder från tävlingschatten.</div>');
     return;
   }
   _homeFeedItems = items;
@@ -8256,6 +8296,8 @@ function renderHomeActivityFeed(items) {
     var likes = it.likes || {};
     var likeCount = Object.keys(likes).length;
     var iLiked = currentUser && !!likes[currentUser.username];
+    // Bildinlägg från chatten: egen layout med bilden i full bredd (release 306)
+    if((it.category === 'chatpost' || it.category === 'wallpost') && it.img) return feedPhotoPostHTML(it, avatar, likeCount, iLiked);
     var lineHtml;
     if(it.category === 'goodround') {
       var resultLabel = it.isStab
@@ -8278,6 +8320,8 @@ function renderHomeActivityFeed(items) {
         ? esc(it.playerName)+' plockar hem hela potten på '+it.pot+' kr'
         : esc(it.playerName)+' vinner äran';
       lineHtml = sideBetEmoji(it.sideBetType)+'<b>'+esc(it.playerName)+'</b> '+actionText+courseText+', '+winText;
+    } else if(it.category === 'wallpost') {
+      lineHtml = '<b>'+esc(it.playerName)+'</b><div style="font-size:14px;line-height:1.45;margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere">'+esc(it.text||'')+'</div>';
     } else if(it.category === 'chatpost') {
       lineHtml = '<b>'+esc(it.playerName)+'</b>'+(it.caption ? ': '+esc(it.caption) : ' delade en bild i chatten');
     } else if(it.category === 'casualround') {
@@ -8313,7 +8357,7 @@ function renderHomeActivityFeed(items) {
         '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:6px;color:'+(iLiked?'#1D9E75':'var(--text-3)')+'" title="Gilla"><i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:18px"></i></button>'+
         (likeCount>0 ? '<button onclick="showFeedLikers(\''+it._id+'\')" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:11px;color:var(--text-3);text-decoration:underline">'+likeCount+'</button>' : '')+
       '</div>'+
-      (isAdmin() ? '<button onclick="deleteActivityFeedItem(\''+it._id+'\')" title="Radera inlägget (admin)" style="background:none;border:none;cursor:pointer;padding:6px 2px;color:var(--text-3);flex-shrink:0"><i class="ti ti-trash" style="font-size:15px"></i></button>' : '')+
+      (canDeleteFeedItem(it) ? '<button onclick="deleteActivityFeedItem(\''+it._id+'\')" title="Radera inlägget" style="background:none;border:none;cursor:pointer;padding:6px 2px;color:var(--text-3);flex-shrink:0"><i class="ti ti-trash" style="font-size:15px"></i></button>' : '')+
     '</div>';
   }).join('');
 
@@ -8324,15 +8368,167 @@ function renderHomeActivityFeed(items) {
       : '<button onclick="toggleHomeFeedExpanded()" style="background:none;border:none;cursor:pointer;color:var(--green-dark);font-weight:700;font-size:12px;padding:10px 0 0;width:100%;text-align:center"><i class="ti ti-plus" style="font-size:12px"></i> Visa fler ('+(items.length-HOME_FEED_COLLAPSED_COUNT)+')</button>';
   }
 
-  el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:14px 16px">'+
+  setWallCardBody(rows + toggleBtn + '<div class="home-wall-end"><i class="ti ti-messages"></i> Slut på '+esc(clubWallName())+'</div>');
+}
+
+// Väggens kort byggs en gång (rubrik + skrivfält + inlägg). Vid nya snapshots
+// (någon gillar, nytt inlägg) ritas bara inläggsdelen om, så att det man håller
+// på att skriva i skrivfältet aldrig försvinner eller tappar fokus.
+function setWallCardBody(bodyHtml) {
+  var el = document.getElementById('home-activity-feed');
+  if(!el) return;
+  var card = document.getElementById('wall-card'), body = document.getElementById('wall-body');
+  if(card && body && el.contains(card)) {
+    body.innerHTML = bodyHtml;
+    var tt = document.getElementById('wall-title'); if(tt) tt.textContent = clubWallName();
+    renderWallHeadActions();
+    return;
+  }
+  el.innerHTML = '<div class="card" id="wall-card" style="margin-bottom:12px;padding:14px 16px">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">'+
       '<i class="ti ti-messages" style="font-size:20px;color:var(--gold)"></i>'+
-      '<div style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">'+esc(clubWallName())+'</div>'+
+      '<div id="wall-title" style="flex:1;min-width:0;font-size:17px;font-weight:800;color:var(--text);letter-spacing:.01em">'+esc(clubWallName())+'</div>'+
+      '<span id="wall-head-actions"></span>'+
     '</div>'+
-    rows+
-    toggleBtn+
-    '<div class="home-wall-end"><i class="ti ti-messages"></i> Slut på '+esc(clubWallName())+'</div>'+
+    '<div id="wall-composer"></div>'+
+    '<div id="wall-body">'+bodyHtml+'</div>'+
   '</div>';
+  renderWallComposer();
+}
+
+// ── SKRIV PÅ VÄGGEN (release 307) ───────────────────────────────────────────
+// Alla inloggade kan skriva egna inlägg (text och/eller en bild) direkt på
+// klubbhusets vägg. Inläggen sparas i activityFeed med kategori 'wallpost' och
+// samma tourId som klubbhusets sällskapsronder (clubCasualFeedId), så de syns för
+// alla i klubbhuset via den befintliga flödesfrågan. Admin kan pausa funktionen
+// per klubbhus (c.wallPaused) vid missbruk - då visas en notis i stället för
+// skrivfältet. Automatiska inlägg och delningar från tävlingschatten påverkas inte.
+var WALL_POST_MAX = 500;
+var WALL_POST_COOLDOWN_MS = 15000;
+var _wallDraft = '', _wallDraftImg = null, _wallBusy = false, _wallLastPost = 0;
+
+function wallPaused() { var c = currentClub(); return !!(c && c.wallPaused); }
+
+function canDeleteFeedItem(it) {
+  if(isAdmin()) return true;
+  return !!(it && it.category === 'wallpost' && currentUser && it.playerUsername === currentUser.username);
+}
+
+function renderWallHeadActions() {
+  var el = document.getElementById('wall-head-actions');
+  if(!el) return;
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  var p = wallPaused();
+  el.innerHTML = '<button onclick="toggleWallPaused()" title="'+(p?'Öppna väggen för alla igen':'Pausa möjligheten att skriva på väggen')+'" style="background:'+(p?'#FCEBEB':'none')+';border:1px solid '+(p?'#E24B4A':'var(--border)')+';color:'+(p?'#A32D2D':'var(--text-2)')+';border-radius:16px;padding:4px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px">'+
+    '<i class="ti '+(p?'ti-player-play':'ti-player-pause')+'"></i> '+(p?'Pausad':'Pausa')+'</button>';
+}
+
+function renderWallComposer() {
+  renderWallHeadActions();
+  var el = document.getElementById('wall-composer');
+  if(!el || !currentUser) { if(el) el.innerHTML = ''; return; }
+  var paused = wallPaused(), adm = isAdmin();
+  if(paused && !adm) {
+    el.innerHTML = '<div style="display:flex;gap:8px;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 12px;margin:2px 0 10px;font-size:12px;color:var(--text-2)">'+
+      '<i class="ti ti-player-pause" style="font-size:16px;flex-shrink:0"></i> Att skriva på väggen är pausat av admin just nu. Gilla och läs fungerar som vanligt.</div>';
+    return;
+  }
+  var me = findUser(currentUser.username) || currentUser;
+  var img = playerPhoto(currentUser.username, me && me.img);
+  var avatar = img
+    ? '<img src="'+img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+    : '<div class="avatar-ph" style="width:36px;height:36px;font-size:13px;flex-shrink:0">'+ini(me.name||me.username)+'</div>';
+  var hasContent = !!(_wallDraft.trim() || _wallDraftImg);
+  el.innerHTML =
+    (paused ? '<div style="font-size:11px;color:#A32D2D;font-weight:700;margin:0 0 6px"><i class="ti ti-player-pause"></i> Pausad för spelarna – bara admin kan skriva.</div>' : '')+
+    '<div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0 12px;border-bottom:1px solid var(--border)">'+
+      avatar+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:flex-end;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:18px;padding:4px 6px 4px 12px">'+
+          '<textarea id="wall-input" rows="1" maxlength="'+WALL_POST_MAX+'" placeholder="Skriv något på väggen…" oninput="onWallInput(this)" '+
+            'style="flex:1;min-width:0;border:none;outline:none;background:transparent;color:var(--text);font:inherit;font-size:14px;line-height:1.4;resize:none;padding:6px 0;margin:0;max-height:160px;box-shadow:none">'+esc(_wallDraft)+'</textarea>'+
+          '<label title="Lägg till bild" style="cursor:pointer;padding:6px;color:var(--text-2);display:flex;margin:0;flex-shrink:0"><i class="ti ti-photo" style="font-size:20px"></i>'+
+            '<input type="file" accept="image/*" style="display:none" onchange="pickWallImage(this.files[0]);this.value=\'\'"></label>'+
+        '</div>'+
+        (_wallDraftImg ? '<div style="position:relative;display:inline-block;margin-top:8px">'+
+          '<img src="'+_wallDraftImg+'" style="max-width:160px;max-height:160px;border-radius:10px;display:block;border:1px solid var(--border)">'+
+          '<button onclick="removeWallImage()" title="Ta bort bilden" style="position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center"><i class="ti ti-x" style="font-size:14px"></i></button>'+
+        '</div>' : '')+
+        '<div id="wall-actions" style="display:'+(hasContent?'flex':'none')+';align-items:center;justify-content:space-between;gap:8px;margin-top:8px">'+
+          '<span id="wall-status" style="font-size:11px;color:var(--text-3)">'+_wallDraft.length+'/'+WALL_POST_MAX+'</span>'+
+          '<button class="btn btn-primary btn-sm" id="wall-submit" onclick="submitWallPost()"'+(_wallBusy?' disabled':'')+'><i class="ti ti-send"></i> Publicera</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  var ta = document.getElementById('wall-input'); if(ta) autoGrowWallInput(ta);
+}
+
+function autoGrowWallInput(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; }
+
+function onWallInput(ta) {
+  _wallDraft = ta.value;
+  autoGrowWallInput(ta);
+  var act = document.getElementById('wall-actions');
+  if(act) act.style.display = (_wallDraft.trim() || _wallDraftImg) ? 'flex' : 'none';
+  var st = document.getElementById('wall-status');
+  if(st) { st.textContent = _wallDraft.length + '/' + WALL_POST_MAX; st.style.color = 'var(--text-3)'; }
+}
+
+function wallStatus(txt, err) {
+  var st = document.getElementById('wall-status');
+  if(st) { st.innerHTML = txt; st.style.color = err ? 'var(--danger-text)' : 'var(--text-3)'; }
+}
+
+function pickWallImage(file) {
+  if(!file || !/^image\//.test(file.type)) return;
+  compressImage(file, 1600, 1600, 0.85, function(d){
+    _wallDraftImg = d;
+    renderWallComposer();
+  });
+}
+function removeWallImage() { _wallDraftImg = null; renderWallComposer(); }
+
+function submitWallPost() {
+  if(!currentUser || _wallBusy) return;
+  if(wallPaused() && !isAdmin()) { renderWallComposer(); return; }
+  var text = (_wallDraft || '').trim().slice(0, WALL_POST_MAX);
+  if(!text && !_wallDraftImg) { wallStatus('Skriv något eller välj en bild först.', true); return; }
+  var wait = WALL_POST_COOLDOWN_MS - (Date.now() - _wallLastPost);
+  if(wait > 0) { wallStatus('Vänta '+Math.ceil(wait/1000)+' s innan nästa inlägg.', true); return; }
+  _wallBusy = true;
+  var btn = document.getElementById('wall-submit'); if(btn) btn.disabled = true;
+  wallStatus('<i class="ti ti-loader-2"></i> Publicerar…');
+  var me = findUser(currentUser.username) || currentUser;
+  var club = currentClubId(), ts = Date.now(), imgData = _wallDraftImg;
+  var upload = imgData ? uploadImageToStorage(imgData, 'chat-images/wall-'+club+'/'+currentUser.username+'-'+ts+'.jpg') : Promise.resolve(null);
+  upload.then(function(url){
+    if(imgData && !url) throw new Error('Bilduppladdningen misslyckades');
+    return ACTIVITY_FEED_COL.add({
+      tourId: clubCasualFeedId(), clubhouse: club,
+      category: 'wallpost', playerUsername: currentUser.username, playerName: me.name || me.username,
+      text: text, caption: text, img: url || null,
+      createdAt: ts, likes: {}
+    });
+  }).then(function(){
+    _wallDraft = ''; _wallDraftImg = null; _wallBusy = false; _wallLastPost = ts;
+    renderWallComposer();
+  }).catch(function(err){
+    console.error('Kunde inte publicera på väggen', err);
+    _wallBusy = false;
+    var b = document.getElementById('wall-submit'); if(b) b.disabled = false;
+    wallStatus('Kunde inte publicera just nu. Kontrollera anslutningen och försök igen.', true);
+  });
+}
+
+function toggleWallPaused() {
+  if(!isAdmin()) return;
+  ensureClubList();
+  var c = clubById(currentClubId()); if(!c) return;
+  var on = !c.wallPaused;
+  if(on && !confirm('Pausa väggen för spelarna?\n\nIngen utom admin kan skriva nya inlägg förrän du öppnar igen. Befintliga inlägg, gilla och automatiska inlägg (birdies, vinnare m.m.) fungerar som vanligt.')) return;
+  if(on) c.wallPaused = true; else delete c.wallPaused;
+  save();
+  renderWallComposer();
 }
 
 // Växlar mellan begränsad (3 st) och full lista i startsidans aktivitetsflöde.
@@ -8370,8 +8566,10 @@ function showFeedLikers(docId) {
 // som fastnat (se cleanupOrphanedLiveScoringDocs-fixen ovan för grundorsaken),
 // eller om något postades av misstag.
 function deleteActivityFeedItem(docId) {
-  if(!isAdmin()) return;
-  if(!confirm('Radera det här inlägget från aktivitetsfeeden? Går inte att ångra.')) return;
+  var it = (_homeFeedItems||[]).find(function(x){ return x && x._id === docId; });
+  if(!canDeleteFeedItem(it)) return;
+  var own = it && currentUser && it.playerUsername === currentUser.username && it.category === 'wallpost';
+  if(!confirm(own ? 'Radera ditt inlägg från väggen? Går inte att ångra.' : 'Radera det här inlägget från aktivitetsfeeden? Går inte att ångra.')) return;
   ACTIVITY_FEED_COL.doc(docId).delete().catch(function(err){
     console.error('Kunde inte radera feed-inlägget', err);
     alert('Kunde inte radera inlägget. Kontrollera internetanslutningen och försök igen.');
@@ -19786,6 +19984,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '8 november 2026 (307)',
+    items: [
+      { type: 'new', text: 'Skriv direkt på väggen! Överst på The ÄGCC Wall finns nu ett skrivfält: skriv en rad, lägg till en bild med bildikonen om du vill och tryck Publicera. Inlägget syns för alla i klubbhuset. Egna inlägg kan du radera själv med papperskorgen.' },
+      { type: 'new', text: 'Admin kan pausa möjligheten att skriva på väggen med knappen "Pausa" i väggens rubrik (gäller klubbhuset du står i). Spelarna ser då en notis i stället för skrivfältet; läsa, gilla och automatiska inlägg fungerar som vanligt. Tryck "Pausad" för att öppna igen.' },
+    ]
+  },
+  {
+    date: '8 november 2026 (306)',
+    items: [
+      { type: 'improved', text: 'Bilder på väggen visas nu i full bredd, som i ett socialt flöde: namn och tävling överst, bilden kant i kant över hela rutan, gilla under bilden och bildtexten sist. Bilden behåller sitt format (stående eller liggande) och öppnas i helskärm med ett tryck.' },
+    ]
+  },
   {
     date: '8 november 2026 (305)',
     items: [
