@@ -5016,7 +5016,7 @@ function enterTour(id) {
   if(tClub && currentUser && itemClub(tClub) !== currentClubId()) {
     if(!accessibleClubs().some(function(c){ return c.id === itemClub(tClub); })) { alert('Du har inte tillgång till den här touren.'); return; }
     _clubId = itemClub(tClub);
-    try { localStorage.setItem('agcc-club', _clubId); } catch(e) {}
+    rememberClubChoice(_clubId);
     applyClubFilters(); renderClubSwitcher();
   }
   activeTourId = id;
@@ -19985,6 +19985,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '8 november 2026 (308)',
+    items: [
+      { type: 'fixed', text: 'Logga in som (admin): klubbhusväljaren låg kvar från admins eget konto, så man såg alla klubbhus (t.ex. Familjen) fast spelaren bara har ett. Nu räknas klubbhusen om utifrån spelaren direkt – väljaren visas bara om spelaren har fler än ett klubbhus och bara med dennes egna. När du avslutar kommer du tillbaka till ditt eget klubbhus.' },
+    ]
+  },
+  {
     date: '8 november 2026 (307)',
     items: [
       { type: 'new', text: 'Skriv direkt på väggen! Överst på The ÄGCC Wall finns nu ett skrivfält: skriv en rad, lägg till en bild med bildikonen om du vill och tryck Publicera. Inlägget syns för alla i klubbhuset. Egna inlägg kan du radera själv med papperskorgen.' },
@@ -23043,12 +23049,32 @@ function impersonateUser(username) {
   if(target.role === 'admin') { alert('Du kan inte logga in som en annan admin.'); return; }
   if(!confirm('Logga in som '+(target.name||target.username)+'? Du kan gå tillbaka till ditt eget konto när du vill.')) return;
   impersonatorAdmin = currentUser.username;
+  _clubIdBeforeImpersonation = _clubId;
   currentUser = target;
   document.getElementById('user-badge').textContent = currentUser.username;
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'none';
+  // Klubbhus: räkna om utifrån SPELARENS klubbhus (inte admins val), så att väljaren
+  // bara visas om spelaren har fler än ett klubbhus och bara visar dennes klubbhus.
+  _clubId = null;
+  refreshClubContext();
   renderImpersonationBanner();
   showHomeScreen();
 }
+
+// Ritar om allt som beror på aktuellt klubbhus och inloggad användare: filtrerade
+// listor (sällskapsronder, utmaningar), klubbhusväljaren och headerns utseende.
+function refreshClubContext() {
+  try { applyClubFilters(); } catch(e) {}
+  try { renderClubSwitcher(); } catch(e) {}
+  try { applyClubBranding(); } catch(e) {}
+}
+// Sparar valt klubbhus på enheten - men inte när admin är inloggad som en spelare,
+// så att admins eget val inte skrivs över av spelarens klubbhus.
+function rememberClubChoice(id) {
+  if(impersonatorAdmin) return;
+  try { localStorage.setItem('agcc-club', id); } catch(e) {}
+}
+var _clubIdBeforeImpersonation = null;
 
 function stopImpersonating() {
   if(!impersonatorAdmin) return;
@@ -23058,6 +23084,10 @@ function stopImpersonating() {
   currentUser = admin;
   document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'flex';
+  // Tillbaka till admins eget klubbhus och full väljare
+  _clubId = _clubIdBeforeImpersonation;
+  _clubIdBeforeImpersonation = null;
+  refreshClubContext();
   renderImpersonationBanner();
   showHomeScreen();
 }
@@ -23953,7 +23983,7 @@ function applyClubFilters() {
 function switchClub(id) {
   if(!accessibleClubs().some(function(c){ return c.id === id; })) return;
   _clubId = id;
-  try { localStorage.setItem('agcc-club', id); } catch(e) {}
+  rememberClubChoice(id);
   applyClubFilters();
   renderClubSwitcher();
   try { applyClubBranding(); } catch(e) {}
