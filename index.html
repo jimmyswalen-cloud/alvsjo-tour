@@ -667,9 +667,13 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <h2 style="margin:0;flex:1;text-align:center">Idéer &amp; nyheter</h2>
       <button class="btn btn-primary btn-sm" onclick="openNewIdeaModal()"><i class="ti ti-plus"></i> Nytt förslag</button>
     </div>
-    <div id="release-notes-inline" style="margin-bottom:20px"></div>
+    <!-- Release 305: förslag & förbättringar överst, nyhetsloggen under -->
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin:2px 2px 10px;display:flex;align-items:center;gap:6px"><i class="ti ti-bulb" style="color:#7A4CAE"></i> Förslag &amp; förbättringar</div>
     <div id="idea-wall-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
     <div id="idea-wall-content"></div>
+    <div id="release-notes-inline" style="margin-top:24px"></div>
+    <!-- Syns bara när hela loggen är utfälld och man scrollat förbi dess rubrik -->
+    <button type="button" id="rn-collapse-fab" onclick="collapseReleaseNotesInline()" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--bnav-h,0px) + 24px + env(safe-area-inset-bottom));z-index:140;border:none;border-radius:22px;padding:10px 18px;background:var(--green-dark,#0F6E56);color:#fff;font:inherit;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;align-items:center;gap:6px"><i class="ti ti-chevron-up"></i> Fäll ihop loggen</button>
   </div>
   <div id="help-screen" style="display:none">
     <div class="tours-header">
@@ -19783,6 +19787,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '8 november 2026 (305)',
+    items: [
+      { type: 'improved', text: 'Idéer & nyheter: förslagen och förbättringarna ligger nu överst på sidan och nyhetsloggen under.' },
+      { type: 'improved', text: 'Hela nyhetsloggen går att fälla ihop från toppen: när den är utfälld finns "Fäll ihop" i loggens rubrikrad, och scrollar du längre ner dyker en flytande knapp "Fäll ihop loggen" upp nertill. Sidan hoppar då tillbaka till loggens början.' },
+    ]
+  },
+  {
     date: '8 november 2026 (304)',
     items: [
       { type: 'new', text: 'Fler genvägar i Mer-menyn (längst ner till höger): Tourer, Banor och Min profil ligger nu som egna rutor överst. Banor öppnar banlistan i Banstatistik direkt, med sök, distrikt, karta och "Nära mig".' },
@@ -22381,17 +22392,58 @@ var _releaseNotesInlineExpanded = false;
 var RELEASE_NOTES_PREVIEW_COUNT = 3;
 
 function toggleReleaseNotesInline() {
-  _releaseNotesInlineExpanded = !_releaseNotesInlineExpanded;
+  if(_releaseNotesInlineExpanded) { collapseReleaseNotesInline(); return; }
+  _releaseNotesInlineExpanded = true;
   renderReleaseNotesInline();
+}
+
+// Fäller ihop hela loggen (från rubrikraden överst, knappen längst ner eller den
+// flytande knappen) och scrollar tillbaka till loggens början om man stod långt ner,
+// så att man aldrig blir lämnad mitt i en tom yta.
+function collapseReleaseNotesInline() {
+  _releaseNotesInlineExpanded = false;
+  renderReleaseNotesInline();
+  var el = document.getElementById('release-notes-inline');
+  if(el) {
+    var top = el.getBoundingClientRect().top;
+    if(top < 0) window.scrollTo(0, Math.max(0, top + window.pageYOffset - 12));
+  }
+  updateReleaseNotesFab();
+}
+
+// Den flytande "Fäll ihop loggen"-knappen visas bara när loggen är utfälld och
+// dess rubrikrad (med Fäll ihop-knappen) har scrollats ur bild, men loggen fortfarande syns.
+function updateReleaseNotesFab() {
+  var fab = document.getElementById('rn-collapse-fab');
+  if(!fab) return;
+  var show = false;
+  if(_releaseNotesInlineExpanded) {
+    var head = document.getElementById('rn-inline-head'), card = document.getElementById('release-notes-inline');
+    if(head && card && card.offsetParent !== null) {
+      var hr = head.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      show = hr.bottom < 0 && cr.bottom > 160;
+    }
+  }
+  fab.style.display = show ? 'flex' : 'none';
+}
+if(!window._rnFabInit) {
+  window._rnFabInit = true;
+  window.addEventListener('scroll', function(){ updateReleaseNotesFab(); }, { passive: true });
+  window.addEventListener('resize', function(){ updateReleaseNotesFab(); });
 }
 
 function renderReleaseNotesInline() {
   var el = document.getElementById('release-notes-inline');
   if(!el) return;
   var hasMore = RELEASE_NOTES.length > RELEASE_NOTES_PREVIEW_COUNT;
+  var expanded = _releaseNotesInlineExpanded && hasMore;
   var entriesToShow = _releaseNotesInlineExpanded ? RELEASE_NOTES : RELEASE_NOTES.slice(0, RELEASE_NOTES_PREVIEW_COUNT);
   el.innerHTML = '<div class="card" style="padding:14px 16px">'+
-    '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:var(--gold)"></i> Nyheter i appen</div>'+
+    '<div id="rn-inline-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">'+
+      '<div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-sparkles" style="color:var(--gold)"></i> Nyheter i appen'+
+        (expanded ? ' <span style="font-weight:600;color:var(--text-3)">('+RELEASE_NOTES.length+')</span>' : '')+'</div>'+
+      (expanded ? '<button class="btn btn-sm" style="flex-shrink:0" onclick="collapseReleaseNotesInline()"><i class="ti ti-chevron-up"></i> Fäll ihop</button>' : '')+
+    '</div>'+
     entriesToShow.map(function(entry){
       var rows = entry.items.map(function(it){
         var meta = RELEASE_TYPE_META[it.type] || RELEASE_TYPE_META.new;
@@ -22404,10 +22456,11 @@ function renderReleaseNotesInline() {
     }).join('')+
     (hasMore ? '<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px" onclick="toggleReleaseNotesInline()">'+
       (_releaseNotesInlineExpanded
-        ? '<i class="ti ti-chevron-up"></i> Visa färre'
+        ? '<i class="ti ti-chevron-up"></i> Fäll ihop'
         : '<i class="ti ti-chevron-down"></i> Visa alla nyheter ('+RELEASE_NOTES.length+')')+
     '</button>' : '')+
   '</div>';
+  updateReleaseNotesFab();
 }
 
 function setIdeaFilter(status) {
