@@ -267,10 +267,13 @@ body.has-bnav.kb-open #bnav{display:none}
 #bsheet .bs-grab span{display:block;width:40px;height:5px;border-radius:3px;background:#d5dad7;margin:0 auto}
 #bsheet .bs-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}
 #bsheet .bs-head b{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3)}
-#bsheet .bs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+#bsheet .bs-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+#bsheet .bs-grid .bs-it{grid-column:span 2}
+#bsheet .bs-grid .bs-it.bs-half{grid-column:span 3}
+#bsheet .bs-grid .bs-it.bs-hide{display:none}
 #bsheet .bs-it{border:none;border-radius:14px;padding:16px 6px 14px;display:flex;flex-direction:column;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:700;text-align:center;cursor:pointer;line-height:1.2;min-height:86px;justify-content:center}
 #bsheet .bs-it i{font-size:28px}
-#bsheet .bs-it.bs-wide{grid-column:1 / -1;flex-direction:row;min-height:56px;padding:12px;gap:10px;font-size:14px}
+#bsheet .bs-grid .bs-it.bs-wide{grid-column:1 / -1;flex-direction:row;min-height:56px;padding:12px;gap:10px;font-size:14px}
 #bsheet .bs-it.bs-wide i{font-size:24px}
 #bnav .bn-main .bn-c{position:relative;transition:background .25s}
 #bnav .bn-main .bn-dot{display:none;position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:#E24B4A;border:2px solid var(--surface);animation:bnPulse 1.6s ease-out infinite}
@@ -493,12 +496,16 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="bs-grid">
     <button type="button" class="bs-it bs-wide" style="background:linear-gradient(135deg,#FFE3B3,#FFD08A);color:#7A4100" onclick="bsheetGo(startCasualRoundWizard)"><i class="ti ti-users-group"></i>Ny sällskapsrond</button>
     <button type="button" class="bs-it bs-wide" style="background:linear-gradient(135deg,#0E5A3A,#2E8B57);color:#fff" onclick="bsheetGo(showChallenges)"><i class="ti ti-swords"></i>Utmaningar</button>
+    <!-- Genvägar (release 304): Tourer, Banor och Min profil direkt från Mer-menyn -->
+    <button type="button" class="bs-it" style="background:#9FE1CB;color:#085041" onclick="bsheetGo(showToursList)"><i class="ti ti-trophy"></i>Tourer</button>
+    <button type="button" class="bs-it" style="background:#B5D4F4;color:#0C447C" onclick="bsheetGo(showCoursesShortcut)"><i class="ti ti-flag"></i>Banor</button>
+    <button type="button" class="bs-it" style="background:#C9D3F5;color:#2B3A7A" onclick="bsheetGo(viewMyProfile)"><i class="ti ti-user-circle"></i>Min profil</button>
     <button type="button" class="bs-it" style="background:#FAC775;color:#633806" onclick="bsheetGo(showGlobalPlayers)"><i class="ti ti-users"></i>Spelare</button>
     <button type="button" class="bs-it" style="background:#BFE3D9;color:#0B4F3F" onclick="bsheetGo(showMyHcp)"><i class="ti ti-chart-line"></i>Mitt HCP</button>
     <button type="button" class="bs-it" style="background:#FFB870;color:#7A3D00" onclick="bsheetGo(showMyBetting)"><i class="ti ti-coin"></i>Vinster &amp; betting</button>
-    <button type="button" class="bs-it" style="background:#E5D4F5;color:#5B2C8C" onclick="bsheetGo(showIdeaWall)"><i class="ti ti-bulb"></i>Idéer &amp; nyheter</button>
-    <button type="button" class="bs-it" style="background:#D3D1C7;color:#444441" onclick="bsheetGo(showGlobalSettings)"><i class="ti ti-settings" id="bsheet-settings-icon"></i><span id="bsheet-settings-label">Inställningar</span></button>
-    <button type="button" class="bs-it" style="background:#1E3A5F;color:#fff" onclick="bsheetGo(showHelp)"><i class="ti ti-help-circle"></i>Regler, hjälp &amp; tips</button>
+    <button type="button" class="bs-it" id="bsheet-idea-btn" style="background:#E5D4F5;color:#5B2C8C" onclick="bsheetGo(showIdeaWall)"><i class="ti ti-bulb"></i>Idéer &amp; nyheter</button>
+    <button type="button" class="bs-it" id="bsheet-settings-btn" style="background:#D3D1C7;color:#444441" onclick="bsheetGo(showGlobalSettings)"><i class="ti ti-settings" id="bsheet-settings-icon"></i><span id="bsheet-settings-label">Inställningar</span></button>
+    <button type="button" class="bs-it" id="bsheet-help-btn" style="background:#1E3A5F;color:#fff" onclick="bsheetGo(showHelp)"><i class="ti ti-help-circle"></i>Regler, hjälp &amp; tips</button>
   </div>
 </div>
 
@@ -2039,7 +2046,13 @@ function syncBottomNav() {
     b.classList.toggle('on', sheetOpen ? b.dataset.k === 'mer' : b.dataset.k === k);
   });
   var lbl = document.getElementById('bsheet-settings-label'), ic = document.getElementById('bsheet-settings-icon');
-  if(lbl && ic) { var adm = isAdmin(); lbl.textContent = adm ? 'Inställningar' : 'Min profil'; ic.className = 'ti ' + (adm ? 'ti-settings' : 'ti-user-circle'); }
+  if(lbl && ic) { lbl.textContent = 'Inställningar'; ic.className = 'ti ti-settings'; }
+  // Min profil har en egen genväg i arket, så Inställningar visas bara för admin.
+  // Utan den rutan delar Idéer & nyheter och Hjälp på sista raden (halva bredden var).
+  var adm = isAdmin();
+  var setBtn = document.getElementById('bsheet-settings-btn');
+  if(setBtn) setBtn.classList.toggle('bs-hide', !adm);
+  ['bsheet-idea-btn','bsheet-help-btn'].forEach(function(id){ var b = document.getElementById(id); if(b) b.classList.toggle('bs-half', !adm); });
 }
 // Mittknappen är dynamisk: 1) pågående sällskapsrond där jag är med -> "Fortsätt",
 // 2) tourrond som spelas IDAG där jag är anmäld och lottad i en boll -> "Livescore",
@@ -3134,6 +3147,18 @@ function showCourseStats() {
   window.scrollTo(0, 0);
 }
 
+// Genväg "Banor" i Mer-menyn: öppnar Statistik direkt på fliken Banstatistik
+// (banlistan med sök, distrikt, karta och "Nära mig"), oavsett vilken flik som var vald sist.
+function showCoursesShortcut() {
+  if(_statsView !== 'course') {
+    _statsView = 'course';
+    try { localStorage.setItem('statsView', 'course'); } catch(e) {}
+    var el = document.getElementById('course-stats-content');
+    if(el) el.innerHTML = '';
+  }
+  showCourseStats();
+}
+
 function showTourSearch() {
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
@@ -3271,6 +3296,7 @@ var GS_TILES = [
   { key:'users',  icon:'ti-users',        label:'Användare',          bg:'#CFE3F7', fg:'#123E6B', sub2:'#2A5A8C', go:function(){ showUsersView(true); } },
   { key:'courses',icon:'ti-golf',         label:'Banor',              bg:'#BFE3D9', fg:'#0B4F3F', sub2:'#13664F', go:function(){ showCourseDataPage(); } },
   { key:'logos',  icon:'ti-tags',         label:'Märkeslogotyper',    bg:'#FFE1B3', fg:'#7A4A00', sub2:'#8F5A00', go:function(){ showBrandLogosPage(); } },
+  { key:'covers', icon:'ti-library-photo',label:'Tour-omslag',        bg:'#CFE8FB', fg:'#0C447C', sub2:'#185FA5', go:function(){ openTourCoverPicker(null, null); } },
   { key:'logins', icon:'ti-shield-lock',  label:'Inloggningar',       bg:'#E5D4F5', fg:'#5B2C8C', sub2:'#7A4CAE' },
   { key:'db',     icon:'ti-database',     label:'Databas',            bg:'#D3D1C7', fg:'#444441', sub2:'#5F5E5A' },
   { key:'look',   icon:'ti-moon-stars',   label:'Utseende',           bg:'#2B3A55', fg:'#FFFFFF', sub2:'#C9D6EE' },
@@ -3286,6 +3312,7 @@ function gsTileSub(key) {
     }
     if(key === 'logos') return '"What\'s in the Bag"';
     if(key === 'logins') return 'Senaste 50 inloggningarna';
+    if(key === 'covers') { var nc = allTourCovers().length, nu = customTourCovers().length; return nc + ' bilder' + (nu ? ' · ' + nu + ' uppladdade' : ''); }
     if(key === 'db') return Math.round(JSON.stringify(S).length/1024) + ' av ~1000 KB';
     if(key === 'tools') return 'OoM-poäng, saknade resultat, puttar';
     if(key === 'look') return 'Mörkt läge: ' + (darkModeForAllOn() ? 'på för alla' : 'bara admin');
@@ -5969,6 +5996,22 @@ var TOUR_COVER_LIBRARY = [
 
 var _coverPickerOnSelect = null;
 var _coverPickerOnCancel = null;
+var _coverPickerManage = false; // true = öppnat från Inställningar (bara hantera, inget val)
+
+// Admin-uppladdade omslag (release 304). Bilderna ligger i Firebase Storage
+// (tour-covers/library-<tid>.jpg) och listan i samma Firestore-dokument som
+// omslagsnamnen (golfapp/tourCoverLabels, fältet _library), så den synkas live
+// till alla via den befintliga lyssnaren. Inbyggda bilder (tour-photos/*.jpg)
+// ligger kvar i TOUR_COVER_LIBRARY ovan.
+function customTourCovers() {
+  var arr = tourCoverLabels && Array.isArray(tourCoverLabels._library) ? tourCoverLabels._library : [];
+  return arr.filter(function(c){ return c && c.key && c.url; })
+    .slice().sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
+}
+// Uppladdade först (nyast överst) så att en ny bild syns direkt, sedan de inbyggda.
+function allTourCovers() {
+  return customTourCovers().concat(TOUR_COVER_LIBRARY);
+}
 
 function getCoverLabel(c) {
   return tourCoverLabels[c.key] || c.label;
@@ -5977,31 +6020,125 @@ function getCoverLabel(c) {
 function openTourCoverPicker(onSelect, onCancel) {
   _coverPickerOnSelect = onSelect;
   _coverPickerOnCancel = onCancel;
-  var h = '<h3><i class="ti ti-photo"></i> Välj omslagsbild</h3>';
-  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">Klicka på en bild för att välja den.'+(isAdmin()?' Klicka på pennan för att döpa om.':'')+'</p>';
-  if(!TOUR_COVER_LIBRARY.length) {
+  _coverPickerManage = !onSelect;
+  var adm = isAdmin();
+  var covers = allTourCovers();
+  var h = '<h3><i class="ti ti-photo"></i> '+(_coverPickerManage ? 'Omslagsbibliotek' : 'Välj omslagsbild')+'</h3>';
+  h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+
+    (_coverPickerManage ? 'Bilderna som visas när man väljer omslag till en tour, header eller klubbhus.' : 'Klicka på en bild för att välja den.')+
+    (adm ? ' Pennan döper om, papperskorgen tar bort en uppladdad bild.' : '')+'</p>';
+  if(adm) {
+    h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0"><i class="ti ti-upload"></i> Ladda upp omslag'+
+        '<input type="file" accept="image/*" multiple style="display:none" onchange="uploadTourCoversToLibrary(this.files);this.value=\'\'"></label>'+
+      '<span id="tcp-status" style="font-size:12px;color:var(--text-3)">Liggande bild, gärna minst 1800 px bred.</span>'+
+    '</div>';
+  }
+  if(!covers.length) {
     h += '<p style="font-size:13px;color:var(--text-3)">Inga bilder i biblioteket ännu.</p>';
   } else {
-    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:420px;overflow-y:auto">';
-    TOUR_COVER_LIBRARY.forEach(function(c){
+    h += '<div id="tcp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:420px;overflow-y:auto">';
+    covers.forEach(function(c){
       var label = getCoverLabel(c);
-      h += '<div style="border-radius:8px;overflow:hidden;border:1px solid var(--border)">'+
-        '<img src="'+esc(c.url)+'" style="width:100%;height:90px;object-fit:cover;display:block;cursor:pointer" onclick="selectTourCover(\''+esc(c.url)+'\')">'+
-        '<div style="padding:6px 8px;font-size:12px;font-weight:600;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:4px">'+
-          '<span style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="selectTourCover(\''+esc(c.url)+'\')">'+esc(label)+'</span>'+
-          (isAdmin() ? '<i class="ti ti-pencil" style="cursor:pointer;color:var(--text-3);flex-shrink:0" onclick="event.stopPropagation();renameTourCover(\''+esc(c.key)+'\')"></i>' : '')+
+      var custom = !!c.createdAt;
+      var pick = _coverPickerManage ? 'openImageLightbox(\''+esc(c.url)+'\')' : 'selectTourCover(\''+esc(c.url)+'\')';
+      h += '<div style="border-radius:8px;overflow:hidden;border:1px solid var(--border);position:relative">'+
+        '<img src="'+esc(c.url)+'" loading="lazy" style="width:100%;height:90px;object-fit:cover;display:block;cursor:pointer" onclick="'+pick+'">'+
+        (custom ? '<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px">Uppladdad</span>' : '')+
+        '<div style="padding:6px 8px;font-size:12px;font-weight:600;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:6px">'+
+          '<span style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="'+pick+'">'+esc(label)+'</span>'+
+          (adm ? '<span style="display:flex;gap:8px;flex-shrink:0">'+
+            '<i class="ti ti-pencil" style="cursor:pointer;color:var(--text-3)" onclick="event.stopPropagation();renameTourCover(\''+esc(c.key)+'\')"></i>'+
+            (custom ? '<i class="ti ti-trash" style="cursor:pointer;color:#dc2626" onclick="event.stopPropagation();deleteTourCoverFromLibrary(\''+esc(c.key)+'\')"></i>' : '')+
+          '</span>' : '')+
         '</div>'+
       '</div>';
     });
     h += '</div>';
   }
-  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="cancelTourCoverPicker()">Avbryt</button></div>';
+  h += '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="cancelTourCoverPicker()">'+(_coverPickerManage ? 'Stäng' : 'Avbryt')+'</button></div>';
   showModal(h, true, true);
+}
+
+function reopenTourCoverPicker() {
+  openTourCoverPicker(_coverPickerOnSelect, _coverPickerOnCancel);
+}
+function tcpStatus(html, err) {
+  var el = document.getElementById('tcp-status');
+  if(el) { el.innerHTML = html; el.style.color = err ? 'var(--danger-text)' : 'var(--text-3)'; }
+}
+
+// Ladda upp en eller flera bilder till omslagsbiblioteket (bara admin). Bilden
+// komprimeras men beskärs inte - samma bild används i olika format (tourkort,
+// header, klubbhusbild) och varje plats beskär själv med object-fit.
+function uploadTourCoversToLibrary(fileList) {
+  if(!isAdmin()) return;
+  var files = Array.prototype.slice.call(fileList || []).filter(function(f){ return f && /^image\//.test(f.type); });
+  if(!files.length) return;
+  var nextNo = allTourCovers().length + 1;
+  var added = 0, failed = 0, i = 0;
+  function nextFile() {
+    if(i >= files.length) { finish(); return; }
+    var f = files[i++];
+    tcpStatus('<i class="ti ti-loader-2"></i> Laddar upp '+i+' av '+files.length+'…');
+    compressImage(f, 2400, 1800, 0.88, function(dataUrl){
+      var ts = Date.now();
+      uploadImageToStorage(dataUrl, 'tour-covers/library-' + ts + '.jpg').then(function(url){
+        if(!url) { failed++; nextFile(); return; }
+        var base = (f.name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+        var entry = { key: 'u' + ts, label: (files.length === 1 ? '' : base) || ('Omslag ' + (nextNo + added)), url: url, createdAt: ts, by: currentUser ? currentUser.username : '' };
+        TOUR_COVER_LABELS_REF.set({ _library: firebase.firestore.FieldValue.arrayUnion(entry) }, { merge: true }).then(function(){
+          if(!Array.isArray(tourCoverLabels._library)) tourCoverLabels._library = [];
+          if(!tourCoverLabels._library.some(function(x){ return x && x.key === entry.key; })) tourCoverLabels._library.push(entry);
+          added++; nextFile();
+        }).catch(function(err){
+          console.error('Kunde inte spara omslaget i biblioteket', err);
+          failed++; nextFile();
+        });
+      });
+    });
+  }
+  function finish() {
+    // Bara en bild: fråga efter namn direkt (går att ändra senare med pennan)
+    if(added === 1 && files.length === 1) {
+      var mine = customTourCovers()[0];
+      if(mine) {
+        var nm = prompt('Namn på bilden (visas i biblioteket):', mine.label);
+        if(nm != null && nm.trim()) {
+          var upd = {}; upd[mine.key] = nm.trim();
+          tourCoverLabels[mine.key] = nm.trim();
+          TOUR_COVER_LABELS_REF.set(upd, { merge: true }).catch(function(e){ console.error(e); });
+        }
+      }
+    }
+    if(document.getElementById('tcp-status') || document.getElementById('tcp-grid')) reopenTourCoverPicker();
+    if(failed) tcpStatus(added + ' uppladdade, ' + failed + ' misslyckades. Kontrollera anslutningen och försök igen.', true);
+    else tcpStatus(added === 1 ? 'Bilden ligger nu först i biblioteket.' : added + ' bilder ligger nu först i biblioteket.');
+  }
+  nextFile();
+}
+
+// Ta bort ett uppladdat omslag ur biblioteket. Själva filen i Storage lämnas kvar,
+// så tourer och klubbhus som redan använder bilden behåller den.
+function deleteTourCoverFromLibrary(key) {
+  if(!isAdmin()) return;
+  var entry = (tourCoverLabels._library || []).find(function(x){ return x && x.key === key; });
+  if(!entry) return;
+  if(!confirm('Ta bort "' + getCoverLabel(entry) + '" ur biblioteket?\n\nTourer som redan använder bilden behåller den.')) return;
+  var upd = { _library: firebase.firestore.FieldValue.arrayRemove(entry) };
+  upd[key] = firebase.firestore.FieldValue.delete();
+  TOUR_COVER_LABELS_REF.set(upd, { merge: true }).catch(function(err){
+    console.error('Kunde inte ta bort omslaget', err);
+    alert('Kunde inte ta bort bilden just nu. Försök igen.');
+  });
+  tourCoverLabels._library = (tourCoverLabels._library || []).filter(function(x){ return !x || x.key !== key; });
+  delete tourCoverLabels[key];
+  reopenTourCoverPicker();
 }
 
 function renameTourCover(key) {
   if(!isAdmin()) return;
-  var c = TOUR_COVER_LIBRARY.find(function(x){ return x.key === key; });
+  var c = allTourCovers().find(function(x){ return x.key === key; });
   if(!c) return;
   var current = getCoverLabel(c);
   var next = prompt('Nytt namn för bilden:', current);
@@ -6015,7 +6152,7 @@ function renameTourCover(key) {
     alert('Kunde inte spara namnet just nu. Försök igen.');
   });
   tourCoverLabels[key] = next; // lokal uppdatering direkt, Firestore-lyssnaren synkar sedan
-  openTourCoverPicker(_coverPickerOnSelect, _coverPickerOnCancel);
+  reopenTourCoverPicker();
 }
 
 function selectTourCover(url) {
@@ -6025,9 +6162,10 @@ function selectTourCover(url) {
 }
 
 function cancelTourCoverPicker() {
-  var cb = _coverPickerOnCancel;
-  _coverPickerOnSelect = null; _coverPickerOnCancel = null;
+  var cb = _coverPickerOnCancel, manage = _coverPickerManage;
+  _coverPickerOnSelect = null; _coverPickerOnCancel = null; _coverPickerManage = false;
   if(cb) cb();
+  else if(manage) { closeModal(); try { if(_gsSection == null && document.getElementById('global-settings-screen').style.display !== 'none') renderGlobalSettings(); } catch(e) {} }
 }
 
 function openNewTourWizard() {
@@ -19644,6 +19782,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '8 november 2026 (304)',
+    items: [
+      { type: 'new', text: 'Fler genvägar i Mer-menyn (längst ner till höger): Tourer, Banor och Min profil ligger nu som egna rutor överst. Banor öppnar banlistan i Banstatistik direkt, med sök, distrikt, karta och "Nära mig".' },
+      { type: 'new', text: 'Admin kan ladda upp egna omslag till tourernas bildbibliotek direkt i appen: tryck "Ladda upp omslag" när du väljer bild (Bildbibliotek), eller gå till Inställningar → Tour-omslag. Flera bilder kan väljas på en gång. Uppladdade bilder hamnar först, går att döpa om med pennan och ta bort med papperskorgen.' },
+      { type: 'improved', text: 'Min profil har fått en egen ruta i Mer-menyn, så rutan Inställningar visas nu bara för admin.' },
+    ]
+  },
   {
     date: '8 november 2026 (303)',
     items: [
