@@ -12585,7 +12585,7 @@ function cfResults(r, fk) {
       for(var h=1; h<=n; h++) { var x = cfHole(r, u.key, u.shcp, h); if(!x) continue; thru++; g += x.g; net += x.net; par += x.par; pts += x.pts; }
       var val = fk === 'stableford' ? pts : fk === 'stroke_gross' ? g - par : net - par;
       return { name:u.name, thru:thru, val: thru ? val : null, main: thru ? (fk === 'stableford' ? pts + ' p' : cfVsPar(val)) : '–',
-        sub: thru ? (thru === n ? 'Klar' : thru + ' hål') + ' · brutto ' + g + (fk === 'stableford' ? '' : ' · netto ' + net) : 'Inte startat' };
+        sub: thru ? (thru === n ? 'Klar' : thru + ' hål') + ' · brutto ' + g + ' (' + cfVsPar(g - par) + ')' + (fk === 'stableford' ? '' : ' · netto ' + net) : 'Inte startat' };
     });
     rows.sort(function(a,b){ if(a.val == null) return 1; if(b.val == null) return -1; return fk === 'stableford' ? b.val - a.val : a.val - b.val; });
     out.rows = rows; return out;
@@ -19422,6 +19422,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '8 november 2026 (297)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond: ställningen visar nu även hur många slag bruttot är från par, t.ex. "brutto 84 (+13)". Räknas på de hål som spelats, så det stämmer även mitt i ronden.' },
+    ]
+  },
   {
     date: '8 november 2026 (296)',
     items: [
