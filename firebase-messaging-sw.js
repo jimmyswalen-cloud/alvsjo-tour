@@ -32,3 +32,14 @@ self.addEventListener('notificationclick', function(event) {
 
 self.addEventListener('install', function() { self.skipWaiting(); });
 self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });
+
+// Hämta alltid appens sida (index.html) färskt från nätet när den öppnas, så att
+// telefonen aldrig visar en gammal, cachad version av appen (t.ex. 246 i stället för 296).
+// Inget sparas i någon cache här – utan nät faller den tillbaka på webbläsarens vanliga beteende.
+self.addEventListener('fetch', function(event) {
+  var req = event.request;
+  if(req.method !== 'GET' || req.mode !== 'navigate') return;
+  var url = new URL(req.url);
+  if(url.origin !== self.location.origin) return;
+  event.respondWith(fetch(req, { cache: 'no-store' }).catch(function(){ return fetch(req); }));
+});

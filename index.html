@@ -1149,7 +1149,7 @@ function save() {
     // lastActor: vem som sparade - pushservern skickar aldrig notiser till den som själv gjorde ändringen
     function doWrite() {
       payload = JSON.stringify(S);
-      DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now() }).catch(function(err) {
+      DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now(), appVer: currentReleaseNo() }).catch(function(err) {
         console.error('Firestore save failed', err);
         alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
       });
@@ -1157,6 +1157,14 @@ function save() {
     // Läs molnets senaste version först och lägg tillbaka klubbhus/tourer/spelare som
     // saknas här (t.ex. om telefonen legat i viloläge med gammal data) – inget raderas av misstag.
     DOC_REF.get({ source: 'server' }).then(function(doc){
+      var srvVer = doc.exists ? (doc.data().appVer || 0) : 0;
+      if(srvVer > currentReleaseNo()) {
+        // Någon har redan sparat med en nyare version av appen – spara inte med den här gamla, ladda om först
+        console.warn('Gammal appversion ('+currentReleaseNo()+' < '+srvVer+') – sparar inte, laddar om.');
+        alert('Appen har uppdaterats till version '+srvVer+'. Den laddas om nu – gör sedan om din senaste ändring.');
+        reloadToLatest(srvVer);
+        return;
+      }
       try {
         var server = (doc.exists && doc.data().data) ? JSON.parse(doc.data().data) : null;
         var r = mergeBackMissing(server);
@@ -12286,6 +12294,39 @@ function cfWolfPrompt(nextHole) {
   return true;
 }
 function casualNextHole(nh) { if(!cfWolfPrompt(nh)) casualGoHole(nh); }
+// Ändra SHCP under pågående (eller avslutad, öppnad) sällskapsrond utan att börja om.
+// Inmatade slag ligger kvar – netto, poäng och spelformer räknas om direkt med nytt SHCP.
+function openCasualShcpEdit() {
+  var r = _cr.data; if(!r || !casualCanEdit(r)) return;
+  var teams = (r.teams||[]).filter(function(t){ return t && t.key; });
+  var row = function(cls, key, name, val) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">'+
+      '<span style="flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(name)+'</span>'+
+      '<input type="number" step="1" min="-10" max="54" inputmode="numeric" class="'+cls+'" data-key="'+esc(key)+'" value="'+(val!=null?val:0)+'" '+
+        'style="width:72px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px"></div>';
+  };
+  var h = '<h3 style="margin-bottom:6px"><i class="ti ti-adjustments"></i> Ändra SHCP</h3>'+
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Rätta spelhandicap för ronden. Alla inmatade slag ligger kvar – netto, poäng och ställning räknas om direkt.</p>'+
+    (r.players||[]).map(function(p){ return row('cr-shcp-p', p.key, p.name, p.shcp); }).join('');
+  if(teams.length) h += '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin:12px 0 2px">Lag-SHCP</div>'+
+    '<p style="font-size:11px;color:var(--text-3);margin-bottom:4px">Lagets handicap räknas inte om automatiskt när en spelare ändras – justera här vid behov.</p>'+
+    teams.map(function(t){ return row('cr-shcp-t', t.key, t.name, t.shcp); }).join('');
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px">'+
+    '<button class="btn" onclick="closeModal()">Avbryt</button>'+
+    '<button class="btn btn-primary" onclick="saveCasualShcp()"><i class="ti ti-check"></i> Spara</button></div>';
+  showModal(h);
+}
+function saveCasualShcp() {
+  var r = _cr.data; if(!r || !casualCanEdit(r)) return;
+  var pv = {}, tv = {}, bad = false;
+  document.querySelectorAll('.cr-shcp-p').forEach(function(i){ var v = parseInt(i.value, 10); if(isNaN(v) || v < -10 || v > 54) bad = true; pv[i.getAttribute('data-key')] = v; });
+  document.querySelectorAll('.cr-shcp-t').forEach(function(i){ var v = parseInt(i.value, 10); if(isNaN(v) || v < -10 || v > 54) bad = true; tv[i.getAttribute('data-key')] = v; });
+  if(bad) { alert('Ange ett SHCP mellan -10 och 54.'); return; }
+  var players = (r.players||[]).map(function(p){ var c = Object.assign({}, p); if(pv[p.key] != null) c.shcp = pv[p.key]; return c; });
+  var upd = { players: players, shcpEditedAt: Date.now(), shcpEditedBy: currentUser ? currentUser.username : null };
+  if((r.teams||[]).length) upd.teams = r.teams.map(function(t){ var c = Object.assign({}, t); if(t && tv[t.key] != null) c.shcp = tv[t.key]; return c; });
+  CASUAL_COL.doc(r.id).update(upd).then(function(){ closeModal(); }).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
+}
 function renderCasualRound() {
   var el = document.getElementById('casual-content'); var r = _cr.data;
   if(!el || !r) return;
@@ -12322,7 +12363,7 @@ function renderCasualRound() {
     var stepBtn = function(field, delta, icon){ return '<button type="button" '+(edit?'':'disabled ')+'onclick="casualStep(\''+p.key+'\',\''+field+'\','+delta+')" style="width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:18px;cursor:pointer;'+(edit?'':'opacity:.4')+'"><i class="ti '+icon+'"></i></button>'; };
     out += '<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+(teamScore&&p.team?' <span style="font-size:11px;color:var(--text-3);font-weight:400">'+esc(p.team.members.map(function(k){ return cfShort(r,k); }).join(' & '))+'</span>':'')+(p.guest?' <span style="font-size:10px;color:var(--text-3);font-weight:400">gäst</span>':'')+'</span>'+
-        '<span style="font-size:11px;color:var(--text-3)">SHCP '+p.shcp+(recv?' · '+'●'.repeat(Math.min(recv,3))+' '+recv+' slag':'')+'</span></div>'+
+        '<span style="font-size:11px;color:var(--text-3);'+(edit?'cursor:pointer':'')+'"'+(edit?' onclick="openCasualShcpEdit()" title="Ändra SHCP"':'')+'>SHCP '+p.shcp+(edit?' <i class="ti ti-pencil" style="font-size:11px"></i>':'')+(recv?' · '+'●'.repeat(Math.min(recv,3))+' '+recv+' slag':'')+'</span></div>'+
       '<div style="display:flex;align-items:center;gap:8px">'+
         stepBtn('scores',-1,'ti-minus')+
         '<button type="button" '+(edit?'':'disabled ')+'onclick="casualOpenPicker(\''+p.key+'\')" style="flex:1;height:44px;border-radius:10px;border:2px solid '+(typeof g==='number'?col:'var(--border)')+';'+(typeof g==='number' && liveScoreCellStyle(g, par) ? liveScoreCellStyle(g, par) : 'background:var(--surface);color:'+col)+';font:inherit;font-size:22px;font-weight:800;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1">'+(typeof g==='number'?g+(liveScoreLabel(g, par)?'<span style="font-size:8px;font-weight:700;letter-spacing:.4px;opacity:.85;margin-top:2px">'+liveScoreLabel(g, par)+'</span>':''):'<span style="font-size:13px;font-weight:600">Tryck för slag</span>')+'</button>'+
@@ -12366,6 +12407,7 @@ function renderCasualRound() {
   // Åtgärder
   out += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'+
     '<button class="btn btn-sm" onclick="showCasualScorecard()"><i class="ti ti-table"></i> Scorekort</button>'+
+    (edit ? '<button class="btn btn-sm" onclick="openCasualShcpEdit()"><i class="ti ti-adjustments"></i> Ändra SHCP</button>' : '')+
     (finished && casualCanEdit(r) && !r.sharedToWall && !r.hidden ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på '+esc(clubWallName())+'</button>' : '')+
     (finished && casualCanEdit(r) ? '<button class="btn btn-sm" onclick="reopenCasualRound()"><i class="ti ti-lock-open"></i> Öppna för ändring</button>' : '')+
     ((isAdmin() || r.createdBy === (currentUser&&currentUser.username)) ? '<button class="btn btn-sm btn-danger" onclick="deleteCasualRound()"><i class="ti ti-trash"></i> Ta bort ronden</button>' : '')+
@@ -19381,6 +19423,14 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '8 november 2026 (296)',
+    items: [
+      { type: 'new', text: 'Ändra SHCP under en pågående sällskapsrond: tryck på "Ändra SHCP" (eller på SHCP-siffran vid spelaren). Alla inmatade slag ligger kvar, och netto, poäng och ställning räknas om direkt. I tourernas livescoring finns samma knapp sedan tidigare.' },
+      { type: 'fixed', text: 'Appen kunde ibland öppnas i en gammal version (t.ex. 246) som legat kvar i telefonens minne. Nu kontrolleras versionen direkt vid start och när appen väcks efter en stund i bakgrunden – finns en nyare version laddas den automatiskt.' },
+      { type: 'fixed', text: 'Extra dataskydd: en gammal version av appen kan inte längre spara över data som redan sparats med en nyare version – den laddas om i stället.' },
+    ]
+  },
+  {
     date: '6 november 2026 (295)',
     items: [
       { type: 'fixed', text: 'Admin: klubbhus som försvunnit ur listan kan återställas. Under Inställningar → Klubbhus visas "Saknade klubbhus" om det finns tourer eller spelare som hör till ett klubbhus som saknas – ett tryck på Återställ tar tillbaka klubbhuset med alla dess tourer och spelare.' },
@@ -21679,15 +21729,27 @@ renderAppVersionLabel();
 // index.html. Appen hämtar därför den publicerade filen förbi cachen och jämför
 // versionsnumret – finns en nyare visas en banderoll som laddar om till den nya versionen.
 function currentReleaseNo() { var m = ((RELEASE_NOTES[0]||{}).date||'').match(/\((\d+)\)/); return m ? parseInt(m[1]) : 0; }
-var _updLastCheck = 0;
-function checkForAppUpdate(force) {
+var _updLastCheck = 0, _appOpenedAt = Date.now(), _hiddenAt = 0;
+// Ladda om till senaste versionen direkt (utan att användaren behöver trycka)
+function reloadToLatest(ver) {
+  try { sessionStorage.setItem('upd_reload_to', String(ver||'')); } catch(e) {}
+  location.replace(location.pathname + '?v=' + (ver || Date.now()) + location.hash);
+}
+// auto=true: ladda om automatiskt om en nyare version finns (vid appstart och när appen
+// väcks efter en stund i bakgrunden) – så att en gammal, cachad version aldrig används/sparar.
+function checkForAppUpdate(force, auto) {
   if(!force && Date.now() - _updLastCheck < 5 * 60 * 1000) return;
   _updLastCheck = Date.now();
   if(location.protocol === 'file:') return;
   fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.ok ? r.text() : ''; }).then(function(txt){
     var m = txt && txt.match(/date:\s*'[^']*\((\d+)\)'/);
     var remote = m ? parseInt(m[1]) : 0;
-    if(remote > currentReleaseNo()) showUpdateBanner(remote);
+    if(remote > currentReleaseNo()) {
+      var tried = ''; try { tried = sessionStorage.getItem('upd_reload_to') || ''; } catch(e) {}
+      // Försök bara en automatisk omladdning per version, annars banderollen (undvik loop)
+      if(auto && tried !== String(remote)) reloadToLatest(remote);
+      else showUpdateBanner(remote);
+    }
   }).catch(function(){});
 }
 function showUpdateBanner(ver) {
@@ -21699,8 +21761,17 @@ function showUpdateBanner(ver) {
   d.onclick = function(){ location.replace(location.pathname + '?v=' + ver + location.hash); };
   document.body.appendChild(d);
 }
-setTimeout(function(){ checkForAppUpdate(true); }, 4000);
-document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') checkForAppUpdate(false); });
+// Vid start: kontrollera direkt (inte efter 4 s) och ladda om automatiskt om sidan är en gammal version
+checkForAppUpdate(true, true);
+try {
+  if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('firebase-messaging-sw.js').catch(function(){});
+} catch(e) {}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden') { _hiddenAt = Date.now(); return; }
+  // Väckt efter minst 2 minuter i bakgrunden: automatisk uppdatering om ny version finns
+  var longAway = _hiddenAt && (Date.now() - _hiddenAt > 2 * 60 * 1000);
+  checkForAppUpdate(longAway, longAway);
+});
 
 var RELEASE_TYPE_META = {
   new:      { label: 'Nytt',        color: '#0F6E56', bg: '#E1F5EE', icon: 'ti-sparkles' },
