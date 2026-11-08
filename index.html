@@ -19640,6 +19640,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '8 november 2026 (302)',
+    items: [
+      { type: 'fixed', text: 'Spelare: en admin som också spelar (t.ex. Jimmy) syntes inte i spelarlistan för vanliga spelare. Nu visas alla som spelar i klubbhuset, oavsett roll. Rena admin-konton som inte spelar är fortfarande dolda.' },
+    ]
+  },
+  {
     date: '8 november 2026 (301)',
     items: [
       { type: 'improved', text: 'Senaste scorekort på profilen: den stora siffran följer rondens spelform – nettoslag (med slag mot par) vid slagspel och poäng vid poängbogey. Brutto mot par visas i den mindre texten under.' },
@@ -22887,8 +22893,11 @@ function renderUsersList() {
   renderDbDiagnostics();
   var el = document.getElementById('users-list');
   var admin = isAdmin();
-  // Admin-kontot är en dold systemanvändare för vanliga spelare - visas bara för andra admins.
-  var users = getUsers().filter(function(u){ return admin || u.role !== 'admin'; });
+  // Rena admin-konton (som inte spelar) är dolda systemanvändare för vanliga spelare och visas
+  // bara för andra admins. En admin som ÄVEN är spelare (t.ex. Jimmy) syns för alla som en
+  // vanlig spelare i sina klubbhus.
+  var isPlayingUser = function(u){ return u.isPlayer != null ? !!u.isPlayer : (u.role !== 'admin'); };
+  var users = getUsers().filter(function(u){ return admin || u.role !== 'admin' || isPlayingUser(u); });
   // Klubbhus: spelare ser bara spelare i det aktiva klubbhuset. Admin ser det aktiva
   // klubbhuset som standard men kan välja "Alla klubbhus".
   var clubFilter = admin ? (_usersClubFilter || currentClubId()) : currentClubId();
@@ -22911,7 +22920,8 @@ function renderUsersList() {
   // istället för att använda loop-indexet, som nu skiljer sig från originalet
   // eftersom listan sorteras om för visningen.
   var sortedUsers = users.slice().sort(function(a, b){
-    var aAdmin = a.role === 'admin', bAdmin = b.role === 'admin';
+    // Bara admin ser admin-gruppen överst; för spelare sorteras alla i bokstavsordning
+    var aAdmin = admin && a.role === 'admin', bAdmin = admin && b.role === 'admin';
     if(aAdmin !== bAdmin) return aAdmin ? -1 : 1;
     return (a.name||a.username).localeCompare(b.name||b.username, 'sv');
   });
@@ -22919,7 +22929,7 @@ function renderUsersList() {
   el.innerHTML = sortedUsers.map(function(u, idx) {
     var origIdx = getUsers().indexOf(u);
     var i = origIdx; // openEditUser/delUser/openEditUser nedan förväntar sig detta
-    var divider = (idx > 0 && sortedUsers[idx-1].role==='admin' && u.role!=='admin')
+    var divider = (admin && idx > 0 && sortedUsers[idx-1].role==='admin' && u.role!=='admin')
       ? '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Spelare</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
       : '';
     var tourNames = (u.tourAccess||[]).map(function(tid){
