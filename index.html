@@ -1967,6 +1967,7 @@ function syncBottomNav() {
   var loggedIn = !!currentUser && !(loginEl && loginEl.style.display !== 'none');
   document.body.classList.toggle('has-bnav', loggedIn);
   if(!loggedIn) { closeBottomSheet(); return; }
+  try { if(window._bnavKbCheck) window._bnavKbCheck(); } catch(e) {}
   try { renderBnavMain(); } catch(e) {}
   try { syncOomLandscape(); } catch(e) {}
   var k = bnavActiveKey();
@@ -2076,7 +2077,14 @@ function setupBottomNav() {
   if(coarse) {
     document.addEventListener('focusin', function(e){ if(isTextField(e.target)) document.body.classList.add('kb-open'); });
     document.addEventListener('focusout', function(){ setTimeout(function(){ if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open'); }, 60); });
+    // Ett fokuserat fält som tas bort ur sidan (t.ex. när rondguiden stängs och ronden öppnas)
+    // ger ingen focusout i alla webbläsare – då fastnade menyraden dold. Kontrollera även vid tryck och skärmbyte.
+    document.addEventListener('pointerdown', function(){ setTimeout(function(){ if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open'); }, 80); }, true);
+    if(window.visualViewport) window.visualViewport.addEventListener('resize', function(){
+      if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open');
+    });
   }
+  window._bnavKbCheck = function(){ if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open'); };
   // Håll aktiv flik i synk med vilken skärm som visas
   var t = null;
   var mo = new MutationObserver(function(){ if(t) return; t = setTimeout(function(){ t = null; try { syncBottomNav(); } catch(e) {} }, 30); });
@@ -11513,11 +11521,18 @@ function subscribeCasualRounds() {
     var all = [];
     snap.forEach(function(d){ var x = d.data(); x.id = d.id; all.push(x); });
     _casualRaw = all;
-    _casualAll = all.filter(inCurrentClub);
+    _casualAll = all.filter(inCurrentClub).filter(casualVisibleToMe);
     _casualRounds = _casualAll.filter(function(r){ return r.status === 'finished'; });
     renderHomeCasualWidget();
     try { renderBnavMain(); } catch(e) {}
   }, function(err){ console.error('casualRounds', err); });
+}
+// Dold rond (r.hidden): syns bara för den som skapade den och spelarna i den – inte för andra
+// (inte heller admin), läggs aldrig på väggen och skickar inga notiser (r.noNotify för servern).
+function casualVisibleToMe(r) {
+  if(!r || !r.hidden) return true;
+  if(!currentUser) return false;
+  return r.createdBy === currentUser.username || casualIsParticipant(r, currentUser.username);
 }
 function casualIsParticipant(r, username) {
   return !!r && (r.players||[]).some(function(p){ return !p.guest && p.username === username; });
@@ -11600,7 +11615,7 @@ function startCasualRoundWizard() {
   var me = findUser(currentUser.username) || currentUser;
   _cwTab = 'fav'; // börja alltid på Favoriter
   _cwUserLimit = 8;
-  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', search:'',
+  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', hidden:false, search:'',
     format:{ primary:'stableford', secondary:null }, contests:[], teamOf:{}, teamShcp:{}, teamSize:2,
     players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
   if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
@@ -12117,7 +12132,8 @@ function createCasualRound() {
     createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(),
     clubhouse: currentClubId(),
     courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
-    sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active', players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
+    sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active',
+    hidden: !!_cw.hidden, noNotify: !!_cw.hidden, players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
     scores: {}, putts: {},
     format: { primary: _cw.format.primary, secondary: _cw.format.secondary || null },
     contests: (_cw.contests||[]).map(function(c){ return { id:c.id, type:c.type, hole:c.hole }; }), contestWin: {}, wolf: {}
@@ -12247,7 +12263,7 @@ function renderCasualRound() {
   setCasualTitle(finished ? 'Sällskapsrond · klar' : 'Sällskapsrond');
   var out = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
     (getCourseImage(r.courseName)?'<img src="'+getCourseImage(r.courseName)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
-    '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.hidden?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-eye-off"></i> Dold</span>':'')+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
     '<div style="font-size:12px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare · par '+r.holePars.reduce(function(a,b){return a+b;},0)+(finished?' · <strong>Avslutad</strong>':'')+'</div>'+
     (!casualFormat(r).legacy ? '<div style="font-size:12px;color:#B45309;font-weight:600;margin-top:2px"><i class="ti '+CF[casualFormat(r).primary].icon+'"></i> '+esc(cfLabel(casualFormat(r).primary))+(casualFormat(r).secondary?' <span style="color:#6D28D9">+ '+esc(cfLabel(casualFormat(r).secondary))+'</span>':'')+(r.roundType==='practice'?' · <span style="color:var(--text-3)">Träning</span>':'')+'</div>' : '')+'</div></div>';
   // Hålväljare
@@ -12318,7 +12334,7 @@ function renderCasualRound() {
   // Åtgärder
   out += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'+
     '<button class="btn btn-sm" onclick="showCasualScorecard()"><i class="ti ti-table"></i> Scorekort</button>'+
-    (finished && casualCanEdit(r) && !r.sharedToWall ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på '+esc(clubWallName())+'</button>' : '')+
+    (finished && casualCanEdit(r) && !r.sharedToWall && !r.hidden ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på '+esc(clubWallName())+'</button>' : '')+
     (finished && casualCanEdit(r) ? '<button class="btn btn-sm" onclick="reopenCasualRound()"><i class="ti ti-lock-open"></i> Öppna för ändring</button>' : '')+
     ((isAdmin() || r.createdBy === (currentUser&&currentUser.username)) ? '<button class="btn btn-sm btn-danger" onclick="deleteCasualRound()"><i class="ti ti-trash"></i> Ta bort ronden</button>' : '')+
   '</div>';
@@ -12346,6 +12362,7 @@ function finishCasualRound() {
   if(incomplete.length) msg += '\n\nObs! '+incomplete.map(function(p){ return p.name; }).join(', ')+' har inte alla hål ifyllda. Ofullständiga ronder räknas inte i statistiken.';
   if(!confirm(msg)) return;
   CASUAL_COL.doc(r.id).update({ status:'finished', finishedAt: Date.now(), finishedBy: currentUser.username }).then(function(){
+    if(r.hidden) { showPushToast('Ronden är sparad', 'Dold rond – delas inte på väggen.'); return; }
     if(confirm('Ronden är sparad! Vill du dela resultatet på '+clubWallName()+'?')) shareCasualRoundToWall();
   }).catch(function(e){ alert('Kunde inte avsluta: '+e.message); });
 }
@@ -12362,7 +12379,7 @@ function deleteCasualRound() {
   CASUAL_COL.doc(id).delete().then(function(){ leaveCasualScreen(); }).catch(function(e){ alert(e.message); });
 }
 function shareCasualRoundToWall() {
-  var r = _cr.data; if(!r || r.sharedToWall) return;
+  var r = _cr.data; if(!r || r.sharedToWall || r.hidden) return;
   var me = findUser(currentUser.username) || currentUser;
   var summary = (r.players||[]).map(function(p){ var t = casualTotals(r, p); return { name:p.name, guest:!!p.guest, poang:t.poang, brutto:t.brutto, netto:t.netto, thru:t.thru }; })
     .sort(function(a,b){ return b.poang - a.poang; });
@@ -12680,6 +12697,12 @@ function cwStep2HTML(c) {
     [['casual','ti-users-group','Sällskap'],['practice','ti-run','Träning'],['sim','ti-device-desktop','Simulator']].map(function(x){ var on = _cw.roundType === x[0];
       return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" style="flex:1;justify-content:center" onclick="_cw.roundType=\''+x[0]+'\';_cw.sim=(\''+x[0]+'\'===\'sim\');renderCasualWizard()"><i class="ti '+x[1]+'"></i> '+x[2]+'</button>'; }).join('')+'</div>'+
     '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">'+(_cw.roundType==='practice'?'Träningsronder sparas men räknas inte i någon statistik.':_cw.roundType==='sim'?'Simulatorronder räknas i simulatorstatistiken.':'Räknas i sällskapsstatistiken.')+'</p></div>';
+  h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
+    '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">'+
+      '<input type="checkbox" '+(_cw.hidden?'checked ':'')+'onchange="_cw.hidden=this.checked;renderCasualWizard()" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">'+
+      '<span><span style="font-weight:700;font-size:13px"><i class="ti ti-eye-off"></i> Dold rond</span>'+
+      '<span style="display:block;font-size:11px;color:var(--text-3);margin-top:2px">Syns bara för spelarna i ronden. Visas inte för andra, delas inte på väggen och skickar inga notiser.</span></span>'+
+    '</label></div>';
   h += '<div class="cf-head"><i class="ti ti-trophy"></i> Primärt spel</div>';
   CF_CATS.forEach(function(cat){
     h += '<div class="cf-cat"><i class="ti '+cat.icon+'"></i> '+cat.label+'</div><div class="cf-grid">'+Object.keys(CF).filter(function(k){ return CF[k].cat === cat.k; }).map(function(k){ return cwFormatCard(k, fm.primary); }).join('')+'</div>';
@@ -19326,6 +19349,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '6 november 2026 (294)',
+    items: [
+      { type: 'fixed', text: 'Menyraden längst ner kunde försvinna under en pågående sällskapsrond (den trodde att tangentbordet fortfarande var uppe efter rondguiden). Nu är den alltid kvar, och mittknappen "Fortsätt" tar dig direkt tillbaka till ronden.' },
+      { type: 'new', text: 'Dold rond: när du startar en sällskapsrond kan du kryssa i "Dold rond". Ronden syns då bara för spelarna i den – inte för andra – delas inte på väggen och skickar inga notiser.' },
+    ]
+  },
+  {
     date: '6 november 2026 (293)',
     items: [
       { type: 'fixed', text: 'Byt bana fungerar igen på deltävlingar som redan har anmälningar (t.ex. Saurines i Spanish Tour). Tidigare låstes bana och datum så fort någon anmält sig. Nu låses de först när scorekort lämnats in, resultat sparats eller live scoring startat – då hör hålpoängen till den gamla banan. Anmälda spelare följer med till den nya banan, och appen ber om bekräftelse innan bytet sparas.' },
@@ -23125,7 +23155,7 @@ function clubUsers(clubId) {
 // Sällskapsronder på väggen: Älvsjö behåller det gamla id:t så gamla inlägg syns kvar.
 function clubCasualFeedId() { var id = currentClubId(); return id === DEFAULT_CLUB_ID ? '__casual' : '__casual_' + id; }
 function applyClubFilters() {
-  _casualAll = (_casualRaw||[]).filter(inCurrentClub);
+  _casualAll = (_casualRaw||[]).filter(inCurrentClub).filter(casualVisibleToMe);
   _casualRounds = _casualAll.filter(function(r){ return r.status === 'finished'; });
   _chAll = (_chRaw||[]).filter(inCurrentClub);
 }
