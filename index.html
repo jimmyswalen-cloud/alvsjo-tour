@@ -15782,9 +15782,16 @@ function collectPlayerScorecards(username) {
       var isStab = e.type === 'stableford';
       var status = e.closed ? null : (isSubmissionApproved(sub) ? 'approved' : 'pending');
       var pos = (e.closed && res) ? (e.results.findIndex(function(x){ return x.pi === pi; }) + 1) : null;
+      var hasScore = rec.score != null && rec.score !== '';
+      var parTot = (course && course.holePars) ? course.holePars.reduce(function(a,b){ return a+(b||0); }, 0) : null;
+      var bruttoTxt = brutto != null ? 'brutto ' + brutto + (vsPar != null ? ' (' + cfVsPar(vsPar) + ')' : '') : '';
+      // Stor siffra = tävlingens primära resultat: poäng vid poängbogey, nettoslag vid slagspel
+      var main = !hasScore ? (brutto != null ? { val: brutto, vs: vsPar } : null)
+               : isStab ? { val: rec.score + ' p', vs: null }
+               : { val: rec.score, vs: (parTot && holes && holes.every(function(g){ return typeof g === 'number'; })) ? rec.score - parTot : null };
       out.push({ date: e.date || '', ts: 0, club: itemClub(t), kind: e.isFinal ? 'final' : (isSimTour(t) ? 'toursim' : 'tour'),
-        title: e.name, sub: t.name + (e.course ? ' · ' + e.course : ''), brutto: brutto, vsPar: vsPar,
-        extra: (rec.score != null && rec.score !== '') ? (isStab ? rec.score + ' p' : 'netto ' + rec.score) : '',
+        title: e.name, sub: t.name + (e.course ? ' · ' + e.course : ''), brutto: brutto, vsPar: vsPar, main: main,
+        extra: hasScore ? bruttoTxt : '',
         pos: pos, status: status,
         open: holes ? "openPastScorecardModal("+pi+",'"+e.id+"','"+t.id+"')" : null });
     });
@@ -15796,9 +15803,18 @@ function collectPlayerScorecards(username) {
     var st = casualUnitStats(r, p);
     if(!st.thru) return; // t.ex. lagformer där bara laget har score
     var kind = r.roundType === 'practice' ? 'practice' : ((r.sim || r.roundType === 'sim') ? 'sim' : 'casual');
+    var fmt = casualFormat(r), fk = fmt.legacy ? 'stableford' : fmt.primary;
+    var bVs = st.brutto - st.parPlayed, nVs = st.net - st.parPlayed;
+    // Stor siffra = rondens primära spelform: poäng vid poängbogey, nettoslag vid slagspel netto
+    var isPts = fk === 'stableford' || fk === 'bb_stableford';
+    var isNet = fk === 'stroke_net' || fk === 'bb_stroke' || fk === 'lowscratch';
+    var main = isPts ? { val: st.pts + ' p', vs: null } : isNet ? { val: st.net, vs: nVs } : { val: st.brutto, vs: bVs };
+    var extra = isPts ? 'brutto ' + st.brutto + ' (' + cfVsPar(bVs) + ') · netto ' + st.net
+              : isNet ? 'brutto ' + st.brutto + ' (' + cfVsPar(bVs) + ') · ' + st.pts + ' p'
+              : 'netto ' + st.net + ' · ' + st.pts + ' p';
     out.push({ date: r.date || '', ts: r.finishedAt || r.createdAt || 0, club: itemClub(r), kind: kind,
-      title: r.courseName, sub: (!casualFormat(r).legacy ? cfLabel(casualFormat(r).primary) : 'Sällskapsrond') + (st.thru < st.n ? ' · ' + st.thru + ' hål' : ''),
-      brutto: st.brutto, vsPar: st.brutto - st.parPlayed, extra: 'netto ' + st.net + ' · ' + st.pts + ' p',
+      title: r.courseName, sub: (!fmt.legacy ? cfLabel(fmt.primary) : 'Sällskapsrond') + (st.thru < st.n ? ' · ' + st.thru + ' hål' : ''),
+      brutto: st.brutto, vsPar: bVs, main: main, extra: extra,
       pos: null, status: null, open: "openCasualPlayerScorecard('"+r.id+"','"+p.key+"')" });
   });
   out.sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.ts - a.ts); });
@@ -15839,7 +15855,9 @@ function buildAllScorecardsHTML(username, uid) {
         '<div style="font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.sub||'')+'</div>'+
       '</div>'+
       '<div style="text-align:right;flex-shrink:0">'+
-        '<div style="font-weight:800;font-size:16px">'+(x.brutto != null ? x.brutto : '–')+(x.vsPar != null ? ' <span style="font-size:12px;font-weight:700;color:'+(x.vsPar<0?'#0F6E56':x.vsPar>0?'#A32D2D':'var(--text-2)')+'">('+cfVsPar(x.vsPar)+')</span>' : '')+'</div>'+
+        (function(){ var m = x.main || (x.brutto != null ? { val: x.brutto, vs: x.vsPar } : null);
+          if(!m) return '<div style="font-weight:800;font-size:16px">–</div>';
+          return '<div style="font-weight:800;font-size:16px">'+esc(String(m.val))+(m.vs != null ? ' <span style="font-size:12px;font-weight:700;color:'+(m.vs<0?'#0F6E56':m.vs>0?'#A32D2D':'var(--text-2)')+'">('+cfVsPar(m.vs)+')</span>' : '')+'</div>'; })()+
         '<div style="font-size:11px;color:var(--text-3)">'+esc(x.extra||'')+'</div>'+
         (stat ? '<div style="margin-top:2px">'+stat+'</div>' : '')+
       '</div>'+
@@ -19621,6 +19639,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '8 november 2026 (301)',
+    items: [
+      { type: 'improved', text: 'Senaste scorekort på profilen: den stora siffran följer rondens spelform – nettoslag (med slag mot par) vid slagspel och poäng vid poängbogey. Brutto mot par visas i den mindre texten under.' },
+    ]
+  },
   {
     date: '8 november 2026 (300)',
     items: [
