@@ -8059,6 +8059,26 @@ function dateMinusDays(dateStr, days) {
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
+// Betets faktiska speldag (release 311). Äldre bets kunde få deltävlingens
+// ordinarie datum (e.date, t.ex. 8 nov) som speldag fast alla anmälda spelar en
+// annan dag (t.ex. 15 nov) - skapa-formuläret använde e.date när det bara fanns
+// ett anmält datum. Här läses datumet utan att något ändras i datan:
+// - finns det anmälda spelare på betets datum gäller det datumet,
+// - annars, om alla deltagare i betet är anmälda till samma dag, gäller den dagen,
+// - annars null (ingen datumbegränsning, som för bets utan datum).
+function sideBetEffectiveDate(e, sb) {
+  if(!sb || !sb.date) return null;
+  var regs = (e.registrations||[]).filter(function(r){ return r && typeof r === 'object' && !r.declined; });
+  if(regs.some(function(r){ return r.date === sb.date; })) return sb.date;
+  var ds = {};
+  (sb.participants||[]).forEach(function(pi){
+    var r = regs.find(function(x){ return x.pi === pi; });
+    if(r && r.date) ds[r.date] = true;
+  });
+  var k = Object.keys(ds);
+  return k.length === 1 ? k[0] : null;
+}
+
 // Vilket datum spelas ronden som side betet gäller (release 310)? En deltävling kan
 // ha flera speldagar (t.ex. simulatorligan), och e.date är bara den första. I tur och ordning:
 // 1) betets eget datum (sb.date, när betet är kopplat till en viss speldag),
@@ -8066,7 +8086,8 @@ function dateMinusDays(dateStr, days) {
 // 3) spelarens boll (teeGroups) - bara om den matchar betets datum,
 // 4) deltävlingens ordinarie datum (e.date).
 function sideBetRoundDate(e, sb, pi) {
-  if(sb && sb.date) return sb.date;
+  var bd = sideBetEffectiveDate(e, sb);
+  if(bd) return bd;
   var reg = (e.registrations||[]).find(function(r){ return r.pi===pi && !r.declined && r.date; });
   if(reg) return reg.date;
   var grp = (e.teeGroups||[]).find(function(g){ return g.date && (g.playerPis||[]).indexOf(pi) >= 0; });
@@ -8775,7 +8796,7 @@ function openSideBets(ei) {
       var creator = sb.createdBy!=null ? players[sb.createdBy] : null;
       var box = '<div class="card" style="margin-bottom:10px;padding:12px 14px">'+
         '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">'+
-          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+(sb.scope==='specific'?' <span style="font-size:11px;font-weight:600;color:var(--text-3)"><i class="ti ti-users-group"></i> Utvald boll</span>':'')+'</div>'+
+          '<div><div style="font-weight:700;font-size:14px">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sideBetEffectiveDate(e, sb)&&sideBetEffectiveDate(e, sb)!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sideBetEffectiveDate(e, sb)+'</span>':'')+(sb.scope==='specific'?' <span style="font-size:11px;font-weight:600;color:var(--text-3)"><i class="ti ti-users-group"></i> Utvald boll</span>':'')+'</div>'+
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
           (creator?'<div style="font-size:11px;color:var(--text-3);margin-top:2px">Skapad av '+esc(creator.name)+'</div>':'')+
           (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt'+(sb.carriedOverPot?' · +'+sb.carriedOverPot+' kr vidareskickat = '+totalPot+' kr totalt':'')+'</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
@@ -8869,12 +8890,16 @@ function openSideBets(ei) {
     h += '<div class="field" id="sb-hole-field" style="display:none"><label>Hål</label><input type="number" id="sb-hole" min="1" max="18" placeholder="T.ex. 14" style="width:100px"><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Livescoringen frågar automatiskt vem som vann direkt när det hålet är klart.</p></div>';
     h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Hål 14"></div>';
     h += '<div class="field"><label>Avgift per deltagare (kr, 0 = gratis)</label><input type="number" id="sb-fee" min="0" value="0" style="width:120px"></div>';
+    // Förvalt speldatum: dagen skaparen själv är anmäld till, annars ordinarie datum
+    // om någon spelar då, annars första anmälda dagen (aldrig ett datum ingen spelar).
+    var myRegForDate = (e.registrations||[]).find(function(r){ return r && typeof r === 'object' && r.pi === myPi && !r.declined && r.date; });
+    var defaultSbDate = (myRegForDate && regDates.indexOf(myRegForDate.date) >= 0) ? myRegForDate.date : (regDates.indexOf(e.date) >= 0 ? e.date : regDates[0]);
     if(regDates.length > 1) {
       h += '<div class="field"><label>Speldatum</label><select id="sb-date" onchange="onSideBetDateChange('+ei+')">'+
-        regDates.map(function(d){ return '<option value="'+d+'" '+(d===e.date?'selected':'')+'>'+d+(d===e.date?' (ordinarie)':'')+'</option>'; }).join('')+
+        regDates.map(function(d){ return '<option value="'+d+'" '+(d===defaultSbDate?'selected':'')+'>'+d+(d===e.date?' (ordinarie)':'')+'</option>'; }).join('')+
       '</select><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Betet gäller bara spelare som spelar det här datumet - andra datum får skapa ett eget bet.</p></div>';
     } else {
-      h += '<input type="hidden" id="sb-date" value="'+esc(e.date)+'">';
+      h += '<input type="hidden" id="sb-date" value="'+esc(regDates[0] || e.date)+'">';
     }
     // Scope: öppet för alla som spelar samma dag, eller stängt för bara en
     // specifik boll/utvalda spelare. Spelare (utan adminroll) behöver detta
@@ -9228,7 +9253,7 @@ function buildSideBetsSummaryHTML(t, e, ei) {
     var canJoin = isSideBetJoinable(e, sb, myPi);
     var box = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     box += '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'+
-      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sb.date&&sb.date!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sb.date+'</span>':'')+'</div>'+
+      '<div><div style="font-weight:700;font-size:13px;color:var(--text)">'+esc(sb.name)+' '+sideBetEmoji(sb.betType)+(sb.hole?' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· Hål '+sb.hole+'</span>':'')+((sideBetEffectiveDate(e, sb)&&sideBetEffectiveDate(e, sb)!==e.date)?' <span style="font-size:11px;font-weight:600;color:var(--gold)">· '+sideBetEffectiveDate(e, sb)+'</span>':'')+'</div>'+
       (sb.description?'<div style="font-size:11px;color:var(--text-3)">'+esc(sb.description)+'</div>':'')+
       '</div>'+
       (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
@@ -9288,7 +9313,8 @@ function explainSideBetNotJoinable(e, sb, myPi) {
   // kopplat till (banförhållanden/vind/pinnplacering skiljer mellan dagar) -
   // sb.date saknas på äldre bets skapade innan det här fanns, då gäller ingen
   // datumbegränsning.
-  if(sb.date && reg.date !== sb.date) return 'Det här side betet gäller spelare som spelar '+sb.date+' - du är anmäld till ett annat datum. Be din boll skapa ett eget side bet för er speldag istället.';
+  var sbDate = sideBetEffectiveDate(e, sb);
+  if(sbDate && reg.date !== sbDate) return 'Det här side betet gäller spelare som spelar '+sbDate+' - du är anmäld till ett annat datum. Be din boll skapa ett eget side bet för er speldag istället.';
   // "specific"-scopade bets (skapade av en spelare för bara sin egen boll/utvalda
   // spelare, se scope-valet i "Lägg till side bet") är stängda för självanmälan -
   // skaparen (eller admin) får lägga till fler via "Lägg till deltagare" om det
@@ -9348,7 +9374,8 @@ function checkHoleNotPassedForSideBet(t, e, sb, myPi) {
   if(!sb.hole || SIDE_BET_HOLE_TYPES.indexOf(sb.betType) < 0) return Promise.resolve(true);
   var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===myPi; });
   if(sub && sub.holes && typeof sub.holes[sb.hole-1] === 'number') return Promise.resolve(false);
-  var myGroup = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(myPi) >= 0 && (!sb.date || g.date === sb.date); });
+  var sbDate = sideBetEffectiveDate(e, sb);
+  var myGroup = (e.teeGroups||[]).find(function(g){ return (g.playerPis||[]).indexOf(myPi) >= 0 && (!sbDate || g.date === sbDate); });
   if(!myGroup) return Promise.resolve(true); // inte ens tilldelad en boll än (för det datumet)
   var groupId = ensureTeeGroupId(myGroup);
   return LIVE_SCORING_COL.doc(liveScoringDocId(e.id, groupId)).get().then(function(doc){
@@ -14503,7 +14530,8 @@ function checkSideBetPromptForCurrentHole() {
   var groupDate = myGroup ? myGroup.date : null;
   var pending = ev.sideBets.filter(function(sb){
     if(sb.hole !== hole || asked[sb.id]) return false;
-    if(sb.date && groupDate && sb.date !== groupDate) return false;
+    var sbDate = sideBetEffectiveDate(ev, sb);
+    if(sbDate && groupDate && sbDate !== groupDate) return false;
     // Mätbara bets (Längsta drive/Närmast hål): fråga VARJE boll en gång var,
     // så alla bollars resultat kan jämföras mot varandra - till skillnad från
     // andra hål-bets, där det räcker att första bollen som svarar avgör det.
@@ -20136,6 +20164,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (311)',
+    items: [
+      { type: 'fixed', text: 'Side bets fick deltävlingens första datum som speldag (t.ex. 8 nov) när alla anmälda spelade en annan dag (t.ex. 15 nov). Därför blev sista betalningsdag fel, och betet kunde spärra "Gå med" och utebli som fråga i livescoringen för den riktiga speldagen. Nu används den dag deltagarna faktiskt spelar – sista betalningsdag blir dagen före den.' },
+      { type: 'fixed', text: 'Nya side bets får rätt speldatum direkt: dagen du själv är anmäld till, aldrig ett datum som ingen spelar.' },
+    ]
+  },
   {
     date: '9 november 2026 (310)',
     items: [
