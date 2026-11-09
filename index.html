@@ -9270,8 +9270,11 @@ function openSideBets(ei) {
       '<option value="'+esc(SIDE_BET_TYPE_OTHER)+'">'+esc(SIDE_BET_TYPE_OTHER)+'</option>'+
     '</select></div>';
     h += '<div class="field" id="sb-custom-name-field" style="display:none"><label>Eget namn</label><input type="text" id="sb-custom-name" placeholder="T.ex. Skip-tävlingen"></div>';
-    h += '<div class="field" id="sb-hole-field" style="display:none"><label>Hål</label><input type="number" id="sb-hole" min="1" max="18" placeholder="T.ex. 14" style="width:100px"><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Livescoringen frågar automatiskt vem som vann direkt när det hålet är klart.</p></div>';
-    h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Hål 14"></div>';
+    // Release 317: hålfältet syns direkt när förvald typ är ett hål-bet (Längsta drive är
+    // förvald) - tidigare visades det först om man bytte typ, så hålet hamnade i beskrivningen.
+    var firstIsHoleType = SIDE_BET_HOLE_TYPES.indexOf(SIDE_BET_TYPES[0]) >= 0;
+    h += '<div class="field" id="sb-hole-field" style="display:'+(firstIsHoleType?'':'none')+'"><label>Hål <span style="color:var(--danger-text)">*</span></label><input type="number" id="sb-hole" inputmode="numeric" min="1" max="18" placeholder="T.ex. 14" style="width:100px" oninput="this.style.borderColor=\'\'"><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Obligatoriskt. Livescoringen frågar automatiskt vem som vann direkt när det hålet är klart.</p></div>';
+    h += '<div class="field"><label>Beskrivning (valfritt)</label><input type="text" id="sb-desc" placeholder="T.ex. Från gul tee, måste ligga på fairway"></div>';
     h += '<div class="field"><label>Avgift per deltagare (kr, 0 = gratis)</label><input type="number" id="sb-fee" min="0" value="0" style="width:120px"></div>';
     // Förvalt speldatum: dagen skaparen själv är anmäld till, annars ordinarie datum
     // om någon spelar då, annars första anmälda dagen (aldrig ett datum ingen spelar).
@@ -9441,8 +9444,16 @@ function addSideBet(ei) {
   var fee = parseInt((document.getElementById('sb-fee')||{}).value)||0;
   var hole = null;
   if(SIDE_BET_HOLE_TYPES.indexOf(betType) >= 0) {
-    var holeVal = parseInt((document.getElementById('sb-hole')||{}).value);
-    if(!isNaN(holeVal)) hole = holeVal;
+    // Hålet är obligatoriskt för Längsta drive och Närmast hål: det avgör var betet spelas,
+    // när livescoringen frågar efter vinnaren och när man inte längre kan gå med.
+    var holeEl = document.getElementById('sb-hole');
+    var holeVal = parseInt((holeEl||{}).value);
+    if(isNaN(holeVal) || holeVal < 1 || holeVal > 18) {
+      if(holeEl) { holeEl.style.borderColor = 'var(--danger-text)'; holeEl.focus(); }
+      alert('Ange vilket hål "'+betType+'" spelas på (1–18).');
+      return;
+    }
+    hole = holeVal;
   }
   var checked = Array.prototype.map.call(document.querySelectorAll('.sb-participant-chk:checked'), function(el){ return parseInt(el.value); });
   var dateEl = document.getElementById('sb-date');
@@ -20562,6 +20573,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (317)',
+    items: [
+      { type: 'fixed', text: 'Side bets: fältet "Hål" syns nu direkt när du lägger till Längsta drive (som är förvalt). Tidigare dök det bara upp om man bytte typ, så hålet hamnade ofta i beskrivningen.' },
+      { type: 'improved', text: 'Hål är obligatoriskt för Längsta drive och Närmast hål – det styr när livescoringen frågar vem som vann och när det inte längre går att gå med. Beskrivningen är fortfarande valfri, för t.ex. regler.' },
+    ]
+  },
   {
     date: '9 november 2026 (316)',
     items: [
