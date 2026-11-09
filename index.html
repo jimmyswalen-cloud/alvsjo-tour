@@ -6974,7 +6974,7 @@ function renderEvents() {
   var html='';
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = liveStandingsHtml + top3Html + storyBanner + trackmanCardHTML(t) + feeCard + titleBlock + html;
+  el.innerHTML = liveStandingsHtml + top3Html + buildChickenCardHTML(t) + storyBanner + trackmanCardHTML(t) + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
   refreshMissingResultsWarnings();
 }
@@ -8097,7 +8097,10 @@ function renderHomeSideBetWidget() {
             '<div style="font-size:12px;color:var(--text-2)">'+esc(d.eventName)+' · '+esc(d.tourName)+'</div>'+
             '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+'</div>'+
           '</div>'+
-          '<button class="btn btn-sm" style="flex-shrink:0;white-space:nowrap" onclick="markMySideBetPaid(\''+d.tourId+'\',\''+d.eventId+'\',\''+d.betId+'\')"><i class="ti ti-check"></i> Jag har betalat</button>'+
+          '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'+
+            '<button class="btn btn-sm" style="white-space:nowrap;justify-content:center" onclick="markMySideBetPaid(\''+d.tourId+'\',\''+d.eventId+'\',\''+d.betId+'\')"><i class="ti ti-check"></i> Jag har betalat</button>'+
+            '<button class="btn btn-sm" style="white-space:nowrap;justify-content:center;background:#FFF4D6;color:#8A5A00;border-color:#E8B84A" onclick="declineMySideBet(\''+d.tourId+'\',\''+d.eventId+'\',\''+d.betId+'\')"><span style="font-size:14px;line-height:1">🐔</span> Vill ej betta!</button>'+
+          '</div>'+
         '</div>'+
       '</div>';
     }).join('')+
@@ -8124,6 +8127,110 @@ function markMySideBetPaid(tourId, eventId, betId) {
   sb.payments[myPi] = true;
   save();
   renderHomeSideBetWidget();
+}
+
+// ── VILL EJ BETTA! 🐔 (release 309) ─────────────────────────────────────────
+// Om någon skapat ett side bet där spelaren lagts till men inte vill vara med,
+// kan spelaren tacka nej direkt i avgiftsrutan på startsidan. Spelaren tas då
+// bort ur deltagarlistan (potten räknas om automatiskt) och nejet sparas på
+// betet i sb.declined = { användarnamn: tidpunkt } - på användarnamn, inte
+// spelarindex, så att det håller även om tourens spelarlista ändras. Nejen
+// visas i spelarens Side bets-statistik och ligger till grund för "Årets fegis"
+// när touren är slut. Går man med i betet igen (Gå med) stryks nejet.
+function declineMySideBet(tourId, eventId, betId) {
+  if(!currentUser) return;
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
+  if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb) return;
+  var myPi = getMyPi(t);
+  if(myPi < 0) return;
+  if(isSideBetDecided(sb)) { alert('Det här betet är redan avgjort - det går inte att hoppa av nu.'); return; }
+  if(!confirm('🐔 Vill ej betta?\n\nDu tas bort från "'+sb.name+'"'+(sb.fee>0?' ('+sb.fee+' kr)':'')+' och slipper avgiften.\n\nNejet sparas i din statistik – den som tackar nej till flest bets kan utses till årets fegis när touren är slut!')) return;
+  sb.participants = (sb.participants||[]).filter(function(pi){ return pi !== myPi; });
+  if(sb.payments && sb.payments[myPi]) delete sb.payments[myPi];
+  if(!sb.declined) sb.declined = {};
+  sb.declined[currentUser.username] = Date.now();
+  save();
+  renderHomeSideBetWidget();
+}
+
+// Nej som fortfarande gäller (spelaren har inte gått med igen efteråt).
+function sideBetDeclinedBy(sb, username, players) {
+  if(!sb || !sb.declined || !sb.declined[username]) return false;
+  var pi = (players||[]).findIndex(function(p){ return p && p.username === username; });
+  return !(pi >= 0 && (sb.participants||[]).indexOf(pi) !== -1);
+}
+
+// Antal nej per spelare i en tour, flest först: [{ username, name, count }]
+function computeTourChickens(t) {
+  var players = getPlayersForTour(t), by = {};
+  (t.events||[]).forEach(function(e){
+    (e.sideBets||[]).forEach(function(sb){
+      Object.keys(sb.declined||{}).forEach(function(u){
+        if(!sideBetDeclinedBy(sb, u, players)) return;
+        var p = players.find(function(x){ return x && x.username === u; });
+        var usr = findUser(u);
+        if(!by[u]) by[u] = { username: u, name: (p && p.name) || (usr && usr.name) || u, count: 0 };
+        by[u].count++;
+      });
+    });
+  });
+  return Object.keys(by).map(function(k){ return by[k]; })
+    .sort(function(a,b){ return b.count - a.count || a.name.localeCompare(b.name, 'sv'); });
+}
+
+// Kort i Tävlingar-fliken när touren är slut: vem som tackat nej till flest bets.
+// Admin trycker "Utse årets fegis" för att göra det officiellt - då sparas det
+// på touren (t.chickenOfYear) och postas på väggen. Delad förstaplats = flera fegisar.
+function buildChickenCardHTML(t) {
+  if(!isTourConcluded(t)) return '';
+  var list = computeTourChickens(t);
+  var named = t.chickenOfYear;
+  if(!list.length && !named) return '';
+  var top = list.length ? list.filter(function(x){ return x.count === list[0].count; }) : [];
+  var h = '<div class="card" style="margin-bottom:16px;padding:14px 16px;border-color:#E8B84A">'+
+    '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px"><span style="font-size:18px;line-height:1">🐔</span> Årets fegis</div>';
+  if(named) {
+    h += '<div style="font-size:15px;font-weight:800;color:var(--text)">'+esc(named.names.join(' & '))+'</div>'+
+      '<div style="font-size:12px;color:var(--text-2);margin-top:2px">Tackade nej till '+named.count+' bet'+(named.count===1?'':'s')+' under säsongen.</div>';
+  } else {
+    h += '<div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Flest nej just nu: <b style="color:var(--text)">'+esc(top.map(function(x){ return x.name; }).join(' & '))+'</b> ('+top[0].count+' st)</div>';
+    if(isAdmin()) h += '<button class="btn btn-sm" style="background:#FFF4D6;color:#8A5A00;border-color:#E8B84A" onclick="announceChickenOfYear()"><span style="font-size:14px;line-height:1">🐔</span> Utse årets fegis</button>';
+  }
+  if(list.length > 1 || (named && list.length)) {
+    h += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:6px">'+
+      list.slice(0, 5).map(function(x, i){
+        return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--text-2)"><span>'+(i+1)+'. '+esc(x.name)+'</span><span style="font-weight:700">'+x.count+' nej</span></div>';
+      }).join('')+
+    '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function announceChickenOfYear() {
+  if(!isAdmin()) return;
+  var t = getTour();
+  if(!t || !isTourConcluded(t) || t.chickenOfYear) return;
+  var list = computeTourChickens(t);
+  if(!list.length) return;
+  var top = list.filter(function(x){ return x.count === list[0].count; });
+  var names = top.map(function(x){ return x.name; });
+  if(!confirm('Utse '+names.join(' & ')+' till årets fegis i '+t.name+'? 🐔\n\n'+top[0].count+' nej till side bets. Det postas även på väggen.')) return;
+  t.chickenOfYear = { usernames: top.map(function(x){ return x.username; }), names: names, count: top[0].count, at: Date.now() };
+  save();
+  top.forEach(function(x){
+    ACTIVITY_FEED_COL.add({
+      tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''),
+      playerUsername: x.username, playerName: x.name,
+      category: 'tourchicken', count: x.count,
+      createdAt: Date.now(), likes: {}
+    }).catch(function(err){ console.error('Kunde inte posta årets fegis', err); });
+  });
+  renderEvents();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -8309,6 +8416,8 @@ function renderHomeActivityFeed(items) {
     } else if(it.category === 'tourchampion') {
       var ptsText = it.pts!=null ? ' med '+it.pts+' p' : '';
       lineHtml = '👑 <b>'+esc(it.playerName)+'</b> är säsongsmästare i <b>'+esc(it.tourName)+'</b>'+ptsText+'!';
+    } else if(it.category === 'tourchicken') {
+      lineHtml = '🐔 <b>'+esc(it.playerName)+'</b> är årets fegis i <b>'+esc(it.tourName)+'</b> – tackade nej till '+(it.count||0)+' bet'+(it.count===1?'':'s')+'!';
     } else if(it.category === 'sidebetwin') {
       var actionText = it.sideBetType === 'Närmast hål'
         ? 'placerade precis sin boll närmast flaggan på hål '+it.hole
@@ -9127,6 +9236,9 @@ function buildSideBetsSummaryHTML(t, e, ei) {
     } else {
       box += '<p style="font-size:11px;color:var(--text-3);margin:0 0 '+(canJoin?'8px':'0')+'">Inga deltagare inlagda.</p>';
     }
+    var nos = Object.keys(sb.declined||{}).filter(function(u){ return sideBetDeclinedBy(sb, u, players); })
+      .map(function(u){ var p = players.find(function(x){ return x && x.username === u; }); return p ? p.name : u; });
+    if(nos.length) box += '<div style="font-size:11px;color:#8A5A00;margin:6px 0 '+(canJoin?'8px':'0')+'">🐔 Vill ej betta: '+esc(nos.join(', '))+'</div>';
     if(canJoin) {
       box += '<button class="btn btn-sm btn-primary" onclick="joinSideBet('+ei+',\''+sb.id+'\')"><i class="ti ti-plus"></i> Gå med'+(sb.fee>0?' ('+sb.fee+' kr)':'')+'</button>';
     }
@@ -9180,6 +9292,7 @@ function joinSideBetCore(t, e, sb) {
   if(!confirm('Vill du gå med i "'+sb.name+'"'+(sb.fee>0?' för '+sb.fee+' kr':'')+'?')) return false;
   if(!sb.participants) sb.participants = [];
   sb.participants.push(myPi);
+  if(sb.declined && currentUser && sb.declined[currentUser.username]) delete sb.declined[currentUser.username];
   save();
   return true;
 }
@@ -15534,14 +15647,19 @@ function computeCourseHoleStats(courseName) {
 
 // ── SIDE BET-STATISTIK PER SPELARE (bets placerade, vunnet, balans) ────────
 function computePlayerSideBetStats(username) {
-  var stats = { betsPlaced: 0, totalStaked: 0, totalWon: 0, winsByType: {} };
+  var stats = { betsPlaced: 0, totalStaked: 0, totalWon: 0, winsByType: {}, declined: [], chickenTitles: [] };
   SIDE_BET_TYPES.forEach(function(bt){ stats.winsByType[bt] = 0; });
   clubTours().forEach(function(t){
     var players = getPlayersForTour(t);
     var myPi = players.findIndex(function(p){ return p && p.username===username; });
+    if(t.chickenOfYear && (t.chickenOfYear.usernames||[]).indexOf(username) >= 0) stats.chickenTitles.push(t.name + (t.season ? ' ' + t.season : ''));
     if(myPi < 0) return;
     (t.events||[]).forEach(function(e){
       (e.sideBets||[]).forEach(function(sb){
+        if(sideBetDeclinedBy(sb, username, players)) {
+          stats.declined.push({ betName: sb.name, betType: sb.betType, fee: sb.fee||0, eventName: e.name, tourName: t.name, at: sb.declined[username] });
+          return;
+        }
         var participants = sb.participants || [];
         if(participants.indexOf(myPi) === -1) return;
         stats.betsPlaced++;
@@ -15554,7 +15672,8 @@ function computePlayerSideBetStats(username) {
     });
   });
   stats.balance = stats.totalWon - stats.totalStaked;
-  stats.hasData = stats.betsPlaced > 0;
+  stats.declined.sort(function(a,b){ return (b.at||0) - (a.at||0); });
+  stats.hasData = stats.betsPlaced > 0 || stats.declined.length > 0 || stats.chickenTitles.length > 0;
   return stats;
 }
 
@@ -15564,11 +15683,26 @@ function buildSideBetStatsHTML(stats, title) {
   var balanceSign = stats.balance > 0 ? '+' : '';
   var h = '<div class="card" style="margin-bottom:12px;padding:14px 16px">';
   h += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px"><i class="ti ti-coin"></i> '+esc(title)+'</div>';
-  h += '<div class="stat-grid" style="margin-bottom:12px">'+
+  h += '<div class="stat-grid" style="margin-bottom:12px;grid-template-columns:repeat(2,1fr)">'+
     '<div class="stat-card"><div class="stat-val">'+stats.betsPlaced+'</div><div class="stat-lbl">Bets placerade</div></div>'+
     '<div class="stat-card"><div class="stat-val">'+stats.totalWon+' kr</div><div class="stat-lbl">Total earnings</div></div>'+
     '<div class="stat-card"><div class="stat-val" style="color:'+balanceColor+'">'+balanceSign+stats.balance+' kr</div><div class="stat-lbl">Balans</div></div>'+
+    '<div class="stat-card"><div class="stat-val">'+stats.declined.length+'</div><div class="stat-lbl">🐔 Tackat nej</div></div>'+
   '</div>';
+  if(stats.chickenTitles.length) {
+    h += '<div style="background:#FFF4D6;color:#8A5A00;border:1px solid #E8B84A;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;margin-bottom:12px">🐔 Årets fegis: '+esc(stats.chickenTitles.join(', '))+'</div>';
+  }
+  if(stats.declined.length) {
+    h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Bets man tackat nej till</div>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">'+
+      stats.declined.map(function(d){
+        return '<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="font-size:13px;color:var(--text-2);min-width:0">🐔 '+esc(d.betName)+' <span style="font-size:11px;color:var(--text-3)">· '+esc(d.eventName)+'</span></span>'+
+          '<span style="font-size:12px;color:var(--text-3);flex-shrink:0">'+(d.fee>0?d.fee+' kr':'Gratis')+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
   var typeRows = SIDE_BET_TYPES.filter(function(bt){ return stats.winsByType[bt] > 0; });
   if(typeRows.length) {
     h += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Vinster per typ</div>';
@@ -19984,6 +20118,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (309)',
+    items: [
+      { type: 'new', text: '🐔 "Vill ej betta!" – har någon lagt in dig i ett side bet du inte vill vara med på kan du tacka nej direkt i avgiftsrutan på startsidan. Du tas bort ur betet, slipper avgiften och potten räknas om. Nejet syns på side betet i tävlingskortet.' },
+      { type: 'new', text: 'Bets man tackat nej till sparas i spelarens Side bets-statistik på profilen ("Tackat nej" och en lista). Går man med i betet igen stryks nejet.' },
+      { type: 'new', text: 'Årets fegis: när en tour är slut visas i Tävlingar-fliken vem som tackat nej till flest bets. Admin trycker "Utse årets fegis" så blir det officiellt, syns på spelarens profil och postas på väggen.' },
+    ]
+  },
   {
     date: '8 november 2026 (308)',
     items: [
