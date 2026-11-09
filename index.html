@@ -80,6 +80,20 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
    lika breda, och texten krymper/kortas med … i stället för att trycka ut raden. */
 .nav-btn span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:380px){ .nav{gap:3px} .nav-btn{font-size:10px} .nav-btn i{font-size:17px} }
+/* Release 314: "Sanningen enligt siffrorna" - utfällbara styrkor/svagheter från statistiken */
+.dsw summary{list-style:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.dsw summary::-webkit-details-marker{display:none}
+.dsw .dsw-chev{transition:transform .2s ease}
+.dsw[open] .dsw-chev{transform:rotate(180deg)}
+/* Release 315: kompakta spelarkort - bild, namn och märkeslogga; resten fälls ut */
+.card.pc{padding:0;overflow:hidden;margin-bottom:8px;display:block}
+.pc-head{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pc-name{flex:1;min-width:0;font-weight:700;font-size:15px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-chev{font-size:18px;color:var(--text-3);transition:transform .2s ease;flex-shrink:0}
+.pc-body{display:none;border-top:1px solid var(--border)}
+.pc.pc-open .pc-body{display:block}
+.pc.pc-open .pc-chev{transform:rotate(180deg)}
+.pc-logo{background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:76px;overflow:hidden}
 .nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
 .view{display:none;padding-top:20px}.view.active{display:block}
 h2{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px}
@@ -1503,10 +1517,11 @@ function fmtHcp(v) { var n = Number(v); if(isNaN(n)) n = 0; return n.toFixed(1);
 // Styrkor/svagheter i spelarlistornas kort: visar bara ifyllda rader (inga
 // "Ingen styrka angiven"-platshållare). Saknas en kategori helt döljs dess
 // rubrik, och saknas båda visas inget grått block alls.
-function buildSwListBlockHTML(strengths, weaknesses, boxStyle) {
+function buildSwListBlockHTML(strengths, weaknesses, boxStyle, username) {
   var clean = function(arr){ return (arr||[]).filter(function(v){ return v && String(v).trim(); }); };
   var st = clean(strengths), wk = clean(weaknesses);
-  if(!st.length && !wk.length) return '';
+  var dataHtml = username ? buildDataSwHTML(username, !!(st.length || wk.length)) : '';
+  if(!st.length && !wk.length && !dataHtml) return '';
   var rows = function(items, dotColor){
     return items.map(function(val, idx){
       return '<div style="display:flex;gap:8px;margin-bottom:'+(idx===items.length-1?'0':'4px')+'">'+
@@ -1518,7 +1533,23 @@ function buildSwListBlockHTML(strengths, weaknesses, boxStyle) {
   var h = '<div style="background:var(--surface2);border-radius:0 0 12px 12px;'+boxStyle+'">';
   if(st.length) h += '<div style="font-size:11px;font-weight:700;color:#0F6E56;margin-bottom:6px"><i class="ti ti-trending-up" style="font-size:12px"></i> Styrkor</div>'+rows(st, '#1D9E75');
   if(wk.length) h += '<div style="font-size:11px;font-weight:700;color:#A32D2D;margin:'+(st.length?'10px':'0')+' 0 6px"><i class="ti ti-trending-down" style="font-size:12px"></i> Svagheter</div>'+rows(wk, '#E24B4A');
+  h += dataHtml;
   return h + '</div>';
+}
+
+// Kompakta spelarkort (release 315): öppna kort kommer ihåg sitt läge även när
+// listan ritas om (t.ex. när någon annan sparar), nyckel = lista + användarnamn.
+var _openPlayerCards = {};
+function togglePlayerCard(el, key) {
+  var card = el.closest('.pc'); if(!card) return;
+  var open = !card.classList.contains('pc-open');
+  card.classList.toggle('pc-open', open);
+  if(open) _openPlayerCards[key] = true; else delete _openPlayerCards[key];
+}
+function playerCardLogoHTML(username) {
+  var tag = playerBrandLogoTag(username, 16);
+  if(!tag) return '';
+  return '<div class="pc-logo brand-logo-box">'+tag.replace('max-width:90px','max-width:64px').replace('margin-left:6px','margin-left:0')+'</div>';
 }
 
 function isSimTour(t) { return !!(t && t.simulator); }
@@ -3984,6 +4015,176 @@ function computeAnalysisMetrics(rounds) {
   m.formLast5 = last.length ? last.reduce(function(a,b){return a+b;},0)/last.length : null;
   m.formTrend = (fv.length >= 3 && m.formAll != null) ? m.formLast5 - m.formAll : null; // negativ = bättre form
   return m;
+}
+
+// ── SANNINGEN ENLIGT SIFFRORNA (release 314) ──────────────────────────────────────────
+// Räknar fram en styrka och en svaghet per spelare ur faktiska rundor - separat
+// för riktig golf (tourer + sällskapsronder) och simulator (där puttar saknas,
+// så GIR/puttning används inte). Spelaren jämförs mot övriga spelare i klubbhuset
+// med samma typ av golf: för varje egenskap räknas hur långt spelaren ligger från
+// gruppens snitt i standardavvikelser, och den bästa resp. sämsta egenskapen
+// (med tydlig avvikelse) blir styrka och svaghet. Kräver minst 18 hål och minst
+// 3 spelare att jämföra med. Resultatet cachas en kort stund, eftersom spelarlistan
+// annars skulle räkna om allt för varje kort.
+var DSW_MIN_HOLES = 18, DSW_MIN_PLAYERS = 3, DSW_MIN_Z = 0.35;
+var _dswCache = null;
+
+function dswExtraMetrics(rounds, m) {
+  var holes = 0, birdies = 0, doubles = 0, putts = 0, puttHoles = 0, vals = [];
+  rounds.forEach(function(r){
+    if(r.nettoVsPar != null) vals.push(r.nettoVsPar);
+    if(!r.holes || !r.pars) return;
+    r.holes.forEach(function(g, i){
+      var par = r.pars[i];
+      if(g == null || !par) return;
+      holes++;
+      if(g - par <= -1) birdies++;
+      if(g - par >= 2) doubles++;
+      var pt = r.putts ? r.putts[i] : null;
+      if(pt != null) { putts += pt; puttHoles++; }
+    });
+  });
+  m.dHoles = holes;
+  m.birdiesPer18 = holes ? birdies / holes * 18 : null;
+  m.doublesPer18 = holes ? doubles / holes * 18 : null;
+  m.puttsPerHole = puttHoles >= DSW_MIN_HOLES ? putts / puttHoles : null;
+  m.puttHoles = puttHoles;
+  if(vals.length >= 4) {
+    var mean = vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
+    m.consistency = Math.sqrt(vals.reduce(function(a,v){ return a + (v-mean)*(v-mean); }, 0) / vals.length);
+  } else m.consistency = null;
+  m.backMinusFront = (m.fb.n >= 2 && m.frontAvg != null && m.backAvg != null) ? m.backAvg - m.frontAvg : null;
+  return m;
+}
+
+// Egenskaper som kan bli styrka/svaghet. low = lägre värde är bättre.
+var DSW_TRAITS = [
+  { k:'birdies', v:function(m){ return m.birdiesPer18; }, ok:function(m){ return m.dHoles >= DSW_MIN_HOLES; },
+    f:function(x){ return anFmt(x,1)+' birdies per 18 hål'; },
+    s:'Birdiemaskin', w:'Birdies är en sällsynthet' },
+  { k:'doubles', low:true, v:function(m){ return m.doublesPer18; }, ok:function(m){ return m.dHoles >= DSW_MIN_HOLES; },
+    f:function(x){ return anFmt(x,1)+' dubbelbogey eller sämre per 18 hål'; },
+    s:'Undviker katastrofhålen', w:'Dubbelbogeyn lurar bakom varje hörn' },
+  { k:'par3', low:true, v:function(m){ return m.par3Avg; }, ok:function(m){ return m.par3.n >= 8; },
+    f:function(x){ return anPm(x,2)+' mot par per par 3-hål'; },
+    s:'Par 3-specialist', w:'Par 3 är en mardröm' },
+  { k:'par4', low:true, v:function(m){ return m.par4Avg; }, ok:function(m){ return m.par4.n >= 20; },
+    f:function(x){ return anPm(x,2)+' mot par per par 4-hål'; },
+    s:'Stabil på par 4', w:'Par 4-hålen äter slag' },
+  { k:'par5', low:true, v:function(m){ return m.par5Avg; }, ok:function(m){ return m.par5.n >= 8; },
+    f:function(x){ return anPm(x,2)+' mot par per par 5-hål'; },
+    s:'Slår till på par 5', w:'Par 5 blir sällan någon fest' },
+  { k:'gir', noSim:true, v:function(m){ return m.girPct; }, ok:function(m){ return m.girHoles >= DSW_MIN_HOLES; },
+    f:function(x){ return anPct(x)+' träffade greener (GIR)'; },
+    s:'Hittar greenerna', w:'Greenerna är svåra att hitta' },
+  { k:'scr', v:function(m){ return m.scrPct; }, ok:function(m){ return m.scrOpp >= 10; },
+    f:function(x){ return anPct(x)+' scrambling (par trots missad green)'; },
+    s:'Räddar par som en tjuv', w:'Missad green blir tappat slag' },
+  { k:'putts', low:true, noSim:true, v:function(m){ return m.puttsPerHole; }, ok:function(m){ return m.puttsPerHole != null; },
+    f:function(x){ return anFmt(x,2)+' puttar per hål'; },
+    s:'Het putter', w:'Puttern sviker' },
+  { k:'bb', v:function(m){ return m.bbPct; }, ok:function(m){ return m.bbOpp >= 8; },
+    f:function(x){ return 'par eller bättre efter '+anPct(x)+' av bogeyhålen'; },
+    s:'Studsar tillbaka direkt', w:'En bogey föder nästa' },
+  { k:'finish', low:true, v:function(m){ return m.backMinusFront; }, ok:function(m){ return m.backMinusFront != null; },
+    f:function(x){ return anFmt(Math.abs(x),1)+' slag '+(x<=0?'bättre':'sämre')+' på sista 9 än första 9'; },
+    s:'Stark avslutare', w:'Tappar på slutet' },
+  { k:'cons', low:true, v:function(m){ return m.consistency; }, ok:function(m){ return m.consistency != null; },
+    f:function(x){ return 'resultaten varierar ±'+anFmt(x,1)+' slag mellan rundor'; },
+    s:'Stabil som en klippa', w:'Dagsformen styr allt' }
+];
+
+// Kort värde för "snittet"-jämförelsen
+var DSW_SHORT = {
+  birdies: function(x){ return anFmt(x,1); }, doubles: function(x){ return anFmt(x,1); },
+  par3: function(x){ return anPm(x,2); }, par4: function(x){ return anPm(x,2); }, par5: function(x){ return anPm(x,2); },
+  gir: function(x){ return anPct(x); }, scr: function(x){ return anPct(x); }, putts: function(x){ return anFmt(x,2); },
+  bb: function(x){ return anPct(x); }, finish: function(x){ return anPm(x,1)+' slag'; }, cons: function(x){ return '±'+anFmt(x,1); }
+};
+
+function dswComputeMode(rounds, sim) {
+  var ps = groupRoundsByPlayer(rounds);
+  ps.forEach(function(x){ dswExtraMetrics(x.rounds, x.m); });
+  var qual = ps.filter(function(x){ return x.m.dHoles >= DSW_MIN_HOLES; });
+  var traits = DSW_TRAITS.filter(function(t){ return !(sim && t.noSim); });
+  var stats = {};
+  traits.forEach(function(t){
+    var vals = qual.filter(function(x){ return t.ok(x.m) && t.v(x.m) != null && !isNaN(t.v(x.m)); }).map(function(x){ return t.v(x.m); });
+    if(vals.length < DSW_MIN_PLAYERS) return;
+    var mean = vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
+    var sd = Math.sqrt(vals.reduce(function(a,v){ return a + (v-mean)*(v-mean); }, 0) / vals.length);
+    if(!(sd > 1e-6)) return;
+    stats[t.k] = { mean: mean, sd: sd };
+  });
+  var out = {};
+  qual.forEach(function(x){
+    var scored = [];
+    traits.forEach(function(t){
+      var st = stats[t.k]; if(!st || !t.ok(x.m)) return;
+      var v = t.v(x.m); if(v == null || isNaN(v)) return;
+      var z = (v - st.mean) / st.sd; if(t.low) z = -z;
+      scored.push({ t: t, v: v, avg: st.mean, z: z });
+    });
+    scored.sort(function(a,b){ return b.z - a.z; });
+    var best = scored.length && scored[0].z >= DSW_MIN_Z ? scored[0] : null;
+    var worst = scored.length && scored[scored.length-1].z <= -DSW_MIN_Z ? scored[scored.length-1] : null;
+    if(best && worst && best.t.k === worst.t.k) worst = null;
+    out[x.username] = { best: best, worst: worst, rounds: x.rounds.length, holes: x.m.dHoles };
+  });
+  return out;
+}
+
+function dswData() {
+  var now = Date.now();
+  if(_dswCache && now - _dswCache.ts < 20000) return _dswCache;
+  var real = [], sim = [];
+  try { real = collectAnalysisRounds(false).concat(collectAnalysisRounds('casual')); } catch(e) { console.error('dsw real', e); }
+  try { sim = collectAnalysisRounds(true); } catch(e) { console.error('dsw sim', e); }
+  _dswCache = { ts: now, real: dswComputeMode(real, false), sim: dswComputeMode(sim, true),
+    realCount: {}, simCount: {} };
+  real.forEach(function(r){ _dswCache.realCount[r.username] = (_dswCache.realCount[r.username]||0) + 1; });
+  sim.forEach(function(r){ _dswCache.simCount[r.username] = (_dswCache.simCount[r.username]||0) + 1; });
+  return _dswCache;
+}
+
+// Utfällbart block "Sanningen enligt siffrorna" under spelarens egna styrkor/svagheter.
+// Stängt som standard - man fäller ut det för att se vad siffrorna faktiskt visar.
+function buildDataSwHTML(username, hasOwn) {
+  if(!username) return '';
+  var d = dswData();
+  var re = d.real[username], si = d.sim[username];
+  var hasReal = !!(re && (re.best || re.worst)), hasSim = !!(si && (si.best || si.worst));
+  if(!hasReal && !hasSim) return '';
+  var row = function(x, good){
+    var c = good ? '#0F6E56' : '#A32D2D', dot = good ? '#1D9E75' : '#E24B4A';
+    return '<div style="display:flex;gap:8px;margin-bottom:6px">'+
+      '<span style="width:5px;height:5px;border-radius:50%;background:'+dot+';margin-top:8px;flex-shrink:0"></span>'+
+      '<div style="min-width:0">'+
+        '<div style="font-size:12px;font-weight:700;color:'+c+'"><i class="ti '+(good?'ti-trending-up':'ti-trending-down')+'" style="font-size:12px"></i> '+esc(good ? x.t.s : x.t.w)+'</div>'+
+        '<div style="font-size:12px;color:var(--text);line-height:1.4">'+esc(x.t.f(x.v))+' <span style="color:var(--text-3)">(snittet '+esc(DSW_SHORT[x.t.k](x.avg))+')</span></div>'+
+      '</div>'+
+    '</div>';
+  };
+  var sec = function(icon, title, x, cnt){
+    if(!x || (!x.best && !x.worst)) return '';
+    return '<div style="margin-top:8px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><i class="ti '+icon+'" style="font-size:12px"></i> '+title+' <span style="font-weight:600;text-transform:none;letter-spacing:0;color:var(--text-3)">· '+cnt+' rund'+(cnt===1?'a':'or')+'</span></div>'+
+      (x.best ? row(x.best, true) : '')+
+      (x.worst ? row(x.worst, false) : '')+
+    '</div>';
+  };
+  return '<details class="dsw" onclick="event.stopPropagation()" style="margin-top:'+(hasOwn?'12px':'0')+';border-top:'+(hasOwn?'1px dashed var(--border)':'none')+';padding-top:'+(hasOwn?'10px':'0')+'">'+
+    '<summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)">'+
+      '<i class="ti ti-chart-dots" style="font-size:14px;color:var(--gold)"></i>'+
+      '<span style="flex:1">Sanningen enligt siffrorna</span>'+
+      '<i class="ti ti-chevron-down dsw-chev" style="font-size:15px;color:var(--text-3)"></i>'+
+    '</summary>'+
+    '<div style="padding-top:2px">'+
+      sec('ti-golf', 'Riktig golf', re, d.realCount[username]||0)+
+      sec('ti-device-desktop', 'Simulator', si, d.simCount[username]||0)+
+      '<div style="font-size:10px;color:var(--text-3);margin-top:6px;line-height:1.4">Räknat ur faktiska rundor och jämfört med övriga spelare i klubbhuset. Siffror ljuger inte – men de har ingen humor heller.</div>'+
+    '</div>'+
+  '</details>';
 }
 
 function groupRoundsByPlayer(rounds) {
@@ -6836,20 +7037,29 @@ function renderPlayers() {
     // listan får samma höjd oavsett hur många styrkor/svagheter en spelare
     // fyllt i - samma Alt 1-stil (punktlista på genomgående grå bakgrund)
     // som redan används på den fulla spelarprofilen.
-    var swBadges = buildSwListBlockHTML(strengths, weaknesses, 'margin:10px -16px -14px;padding:12px 16px 14px');
-    var pLogo = playerBrandLogoTag(p.username, 17);
-    return '<div class="card" style="flex-direction:column;align-items:flex-start;margin-bottom:10px;padding:14px 16px">'+
-      '<div class="row" style="width:100%;gap:12px;align-items:center;cursor:pointer" onclick="showPlayerProfile('+i+')">'+
-        (p.img?'<img src="'+p.img+'" class="avatar" alt="'+p.name+'">':'<div class="avatar-ph">'+ini(p.name)+'</div>')+
-        '<div style="flex:1"><div style="font-weight:600;font-size:15px">'+p.name+'</div>'+
-        (pLogo?'<div style="margin-top:2px">'+pLogo+'</div>':'')+
-        '<div style="font-size:13px;color:var(--text-2)">HCP '+fmtHcp(p.hcp)+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
-        (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
-        '</div>'+
-        (isAdmin() ? '<button class="btn btn-sm" onclick="event.stopPropagation();jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
-        (isAdmin() && tourStatusGroup(t) === 'upcoming' ? '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();removePlayerFromTour(&quot;'+p.username+'&quot;)" title="Ta bort från touren"><i class="ti ti-user-minus"></i></button>' : '')+
+    var swBadges = buildSwListBlockHTML(strengths, weaknesses, 'padding:12px 16px 14px', p.username);
+    var cardKey = 'tp:'+p.username;
+    var isOpen = !!_openPlayerCards[cardKey];
+    // Kompakt rad: bild, namn och märkeslogga. Tryck fäller ut resten.
+    return '<div class="card pc'+(isOpen?' pc-open':'')+'">'+
+      '<div class="pc-head" onclick="togglePlayerCard(this, \''+esc(cardKey)+'\')">'+
+        (p.img?'<img src="'+p.img+'" class="avatar" alt="'+esc(p.name)+'" style="width:40px;height:40px">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px">'+ini(p.name)+'</div>')+
+        '<div class="pc-name">'+esc(p.name)+'</div>'+
+        playerCardLogoHTML(p.username)+
+        '<i class="ti ti-chevron-down pc-chev"></i>'+
       '</div>'+
-      swBadges+
+      '<div class="pc-body">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px 12px">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;color:var(--text-2)">HCP '+fmtHcp(p.hcp)+(p.gender?' · '+(p.gender==='kvinna'?'Kvinna':'Man'):'')+'</div>'+
+            (p.golfId?'<div style="font-size:12px;color:var(--green-dark);font-weight:600;margin-top:2px"><i class="ti ti-id" style="font-size:12px"></i> '+esc(p.golfId)+'</div>':'')+
+          '</div>'+
+          '<button class="btn btn-sm btn-primary" onclick="showPlayerProfile('+i+')"><i class="ti ti-user"></i> Visa profil</button>'+
+          (isAdmin() ? '<button class="btn btn-sm" onclick="jumpToEditUserByUsername(&quot;'+p.username+'&quot;)" title="Redigera"><i class="ti ti-edit"></i></button>' : '')+
+          (isAdmin() && tourStatusGroup(t) === 'upcoming' ? '<button class="btn btn-sm btn-danger" onclick="removePlayerFromTour(&quot;'+p.username+'&quot;)" title="Ta bort från touren"><i class="ti ti-user-minus"></i></button>' : '')+
+        '</div>'+
+        swBadges+
+      '</div>'+
     '</div>';
   }).join('');
 
@@ -16079,6 +16289,7 @@ function buildProfileHTML(pi){
   // bakgrund som sträcker sig hela vägen till kortets nedre kanter (istället för
   // separata gråa boxar eller fristående färgade pills), vald efter förhandsvisning.
   var canEditSW = isAdmin() || (currentUser && tourUser && currentUser.username===tourUser.username);
+  var swDataUser = tourUser ? tourUser.username : null;
   var swHtml = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
   swHtml += '<div style="padding:14px 16px 10px;font-size:13px;font-weight:600;color:var(--text)">Styrkor och svagheter</div>';
   if(strengths.length||weaknesses.length) {
@@ -16105,6 +16316,8 @@ function buildProfileHTML(pi){
   } else {
     swHtml += '<div style="padding:0 16px 14px"><p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p></div>';
   }
+  var swDataHtml = swDataUser ? buildDataSwHTML(swDataUser, true) : '';
+  if(swDataHtml) swHtml += '<div style="background:var(--surface2);padding:0 16px 12px;margin-top:-1px">'+swDataHtml+'</div>';
   if(canEditSW) {
     swHtml += '<div style="padding:10px 16px 14px;border-top:1px solid var(--border)">'+
       '<button class="btn btn-sm" onclick="openStrengthsEdit(\''+esc(p.username||'')+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
@@ -20181,6 +20394,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '9 november 2026 (315)',
+    items: [
+      { type: 'improved', text: 'Spelarlistorna är kompaktare: varje spelare visas som en rad med bild, namn och märkeslogga. Tryck på raden för att fälla ut resten – HCP, styrkor och svagheter, Sanningen enligt siffrorna och knappen Visa profil (för admin även Redigera, Dela inloggning och Logga in som). Gäller både Spelare-listan och tourens Spelare-flik.' },
+    ]
+  },
+  {
+    date: '9 november 2026 (314)',
+    items: [
+      { type: 'new', text: '"Sanningen enligt siffrorna" – under varje spelares egna styrkor och svagheter finns nu ett utfällbart block med en styrka och en svaghet räknade ur faktiska rundor, separat för riktig golf och simulator. T.ex. birdies per 18 hål, par 3/4/5, GIR, scrambling, puttar, bounce-back, starka avslutningar och jämnhet – jämfört med övriga spelare i klubbhuset. Syns i spelarlistorna och på spelarprofilen.' },
+    ]
+  },
+  {
     date: '9 november 2026 (313)',
     items: [
       { type: 'new', text: 'Sällskapsrond: "Inga notiser" är nu ett eget val, skilt från "Dold rond". Då syns och sparas ronden för alla som vanligt och kan delas på väggen, men inga notiser skickas. En dold rond skickar som förut aldrig några notiser. Tysta ronder märks "Inga notiser" i listan.' },
@@ -23508,6 +23733,7 @@ function buildGlobalPlayerProfileHTML(username) {
 
   // Styrkor och svagheter - samma "Alt 1"-design (punktlista på genomgående grå
   // bakgrund) som på tourns spelarprofil, för konsekvens mellan de två vyerna.
+  var swDataUser = u.username;
   var swHtml = '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">';
   swHtml += '<div style="padding:14px 16px 10px;font-size:13px;font-weight:600;color:var(--text)">Styrkor och svagheter</div>';
   if(strengths.length||weaknesses.length) {
@@ -23534,6 +23760,8 @@ function buildGlobalPlayerProfileHTML(username) {
   } else {
     swHtml += '<div style="padding:0 16px 14px"><p style="font-size:13px;color:var(--text-3);margin:0 0 6px">Inga styrkor eller svagheter inlagda ännu.</p></div>';
   }
+  var swDataHtml = swDataUser ? buildDataSwHTML(swDataUser, true) : '';
+  if(swDataHtml) swHtml += '<div style="background:var(--surface2);padding:0 16px 12px;margin-top:-1px">'+swDataHtml+'</div>';
   if(canEditSW) {
     swHtml += '<div style="padding:10px 16px 14px;border-top:1px solid var(--border)">'+
       '<button class="btn btn-sm" onclick="editStrengthsFromGlobalProfile(\''+esc(u.username)+'\')" style="font-size:12px"><i class="ti ti-edit"></i> Redigera</button></div>';
@@ -23629,39 +23857,48 @@ function renderUsersList() {
     var swSection = '';
     if(isPlayer) {
       var strengths = u.strengths || [], weaknesses = u.weaknesses || [];
-      swSection = buildSwListBlockHTML(strengths, weaknesses, 'padding:12px 18px 14px');
+      swSection = buildSwListBlockHTML(strengths, weaknesses, 'padding:12px 14px 14px', u.username);
     }
 
-    return divider + '<div class="card" style="cursor:pointer;padding:0;overflow:hidden" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')">'+
-      '<div style="padding:16px 18px '+(swSection?'12px':'16px')+'">'+
-      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">'+
-        '<div class="row" style="gap:12px;align-items:center;flex:1;min-width:0">'+
-          avatar+
-          '<div style="min-width:0">'+
-            '<div style="font-weight:700;font-size:16px;color:var(--text)">'+esc(displayName)+'</div>'+
-            (admin && displayName !== u.username ? '<div style="font-size:12px;color:var(--text-3);margin-top:2px">Användarnamn: <span style="color:var(--text-2)">@'+esc(u.username)+'</span></div>' : '')+
-            (admin && u.email ? '<div style="font-size:12px;color:var(--text-3);margin-top:1px;overflow-wrap:anywhere">E-post: <span style="color:var(--text-2)">'+esc(u.email)+'</span></div>' : '')+
-            '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+
-              (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
-              (isPlayer ? '<span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
-            '</div>'+
-          '</div>'+
+    var cardKey = 'gp:'+u.username;
+    var isOpen = !!_openPlayerCards[cardKey];
+    var smallAvatar = img
+      ? '<img src="'+img+'" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--surface2)">'
+      : '<div class="avatar-ph" style="width:40px;height:40px;font-size:14px;flex-shrink:0">'+ini(displayName)+'</div>';
+    // Kompakt rad: bild, namn och märkeslogga (+ en liten timglasikon för admin om kontot väntar
+    // på klubbhus, så att det inte missas). Tryck fäller ut resten.
+    return divider + '<div class="card pc'+(isOpen?' pc-open':'')+'">'+
+      '<div class="pc-head" onclick="togglePlayerCard(this, \''+esc(cardKey)+'\')">'+
+        smallAvatar+
+        '<div class="pc-name">'+esc(displayName)+
+          (admin && isPendingUser(u) ? ' <i class="ti ti-hourglass" title="Väntar på klubbhus" style="color:#185FA5;font-size:14px"></i>' : '')+
+          (admin && u.role==='admin' ? ' <span class="badge badge-gold" style="font-size:10px;vertical-align:2px">Admin</span>' : '')+
         '</div>'+
-        (pLogo ? '<div class="brand-logo-box" style="background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:76px;overflow:hidden">'+playerBrandLogoTag(u.username, 16).replace('max-width:90px','max-width:64px').replace('margin-left:6px','margin-left:0')+'</div>' : '')+
+        playerCardLogoHTML(u.username)+
+        '<i class="ti ti-chevron-down pc-chev"></i>'+
       '</div>'+
-      (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-top:10px">Admin ser alltid alla tourer i översikten</div>' : '')+
-      (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
-        (isPendingUser(u)?'<div style="font-size:13px;font-weight:700;color:#0C447C;margin-top:4px"><i class="ti ti-hourglass"></i> Väntar på klubbhus – redigera kontot och kryssa i ett eller flera</div>':'')+
-        (clubList().length>1 && !isPendingUser(u)?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
-      // Admin-knappar på en egen rad (fick inte plats bredvid namnet på mobil)
-      (admin ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px" onclick="event.stopPropagation()">'+
-        '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i> Redigera</button>'+
-        '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela inloggning</button>'+
-        (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i> Logga in som</button>' : '')+
-        (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="delUser('+i+')" title="Ta bort"><i class="ti ti-trash"></i></button>' : '')+
-      '</div>' : '')+
+      '<div class="pc-body">'+
+        '<div style="padding:10px 14px 12px">'+
+          (admin && displayName !== u.username ? '<div style="font-size:12px;color:var(--text-3)">Användarnamn: <span style="color:var(--text-2)">@'+esc(u.username)+'</span></div>' : '')+
+          (admin && u.email ? '<div style="font-size:12px;color:var(--text-3);margin-top:1px;overflow-wrap:anywhere">E-post: <span style="color:var(--text-2)">'+esc(u.email)+'</span></div>' : '')+
+          '<div style="margin-top:'+(admin?'6px':'0')+';display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+            (admin ? '<span class="badge '+(u.role==='admin'?'badge-gold':'badge-green')+'">'+(u.role==='admin'?'Admin':'Användare')+'</span>' : '')+
+            (isPlayer ? '<span class="badge badge-green"><i class="ti ti-golf" style="font-size:10px"></i> Spelare</span>' : '')+
+            '<button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="showGlobalPlayerProfile(\''+esc(u.username)+'\')"><i class="ti ti-user"></i> Visa profil</button>'+
+          '</div>'+
+          (admin && u.role==='admin' ? '<div style="font-size:12px;color:var(--text-3);margin-top:10px">Admin ser alltid alla tourer i översikten</div>' : '')+
+          (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
+            (isPendingUser(u)?'<div style="font-size:13px;font-weight:700;color:#0C447C;margin-top:4px"><i class="ti ti-hourglass"></i> Väntar på klubbhus – redigera kontot och kryssa i ett eller flera</div>':'')+
+            (clubList().length>1 && !isPendingUser(u)?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
+          (admin ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+
+            '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i> Redigera</button>'+
+            '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela inloggning</button>'+
+            (u.role!=='admin' ? '<button class="btn btn-sm" onclick="impersonateUser(\''+u.username+'\')" title="Logga in som denna användare"><i class="ti ti-user-shield"></i> Logga in som</button>' : '')+
+            (u.username !== currentUser.username ? '<button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="delUser('+i+')" title="Ta bort"><i class="ti ti-trash"></i></button>' : '')+
+          '</div>' : '')+
+        '</div>'+
+        swSection+
       '</div>'+
-      swSection+
     '</div>';
   }).join('');
 }
