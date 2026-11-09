@@ -1036,6 +1036,9 @@ var COURSE_BANK_REF = db.collection('golfapp').doc('courseBank');
 var COURSE_DB_REF = db.collection('golfapp').doc('courseDb');
 var LOGO_BANK_REF = db.collection('golfapp').doc('logoBank');
 var TOUR_COVER_LABELS_REF = db.collection('golfapp').doc('tourCoverLabels');
+// Release 316: säkerhetskopia av toppnivådata som gamla appversioner inte känner till
+// (klubbhus + inställningar). Se "DATASKYDD" vid save().
+var STATE_BACKUP_REF = db.collection('golfapp').doc('stateBackup');
 var tourCoverLabels = {}; // { key: customLabel } -- admin-redigerbara namn på omslagsbilderna, laddade från Firestore
 var courseBank = {}; // { courseKey: {displayName, img} } -- image cache, loaded from Firestore
 var logoBank = {}; // { brandKey: {displayName, url} } -- märkeslogotyper, laddade från Firestore
@@ -1154,12 +1157,155 @@ function mergeBackMissing(server) {
     var haveC = byKey(S.clubhouses, 'id');
     server.clubhouses.forEach(function(c){ if(c && c.id && !haveC[c.id] && !_localDeleted.clubs[c.id]) { S.clubhouses.push(c); restored.push('klubbhus '+(c.name||c.id)); } });
   }
+  // Klubbhus som finns i säkerhetskopian men saknas både här och i molnet (t.ex. efter
+  // att en gammal appversion skrivit över listan) läggs också tillbaka.
+  restored = restored.concat(healFromBackup(true));
   var haveT = byKey(S.tours, 'id');
   (server.tours||[]).forEach(function(t){ if(t && t.id && !haveT[t.id] && !_localDeleted.tours[t.id]) { S.tours.push(t); restored.push('tour '+(t.name||t.id)); } });
   var haveU = byKey(S.users, 'username');
   (server.users||[]).forEach(function(u){ if(u && u.username && !haveU[u.username] && !_localDeleted.users[u.username]) { S.users.push(u); restored.push('spelare '+u.username); } });
   return restored;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATASKYDD (release 316)
+// All data ligger i ett enda dokument (golfapp/shared) som skrivs om helt vid varje
+// sparning. En telefon som kör en gammal, cachad appversion (från innan klubbhusen
+// fanns) känner inte till fältet "clubhouses" och skriver därför tillbaka tourer och
+// spelare utan klubbhuslistan - då försvinner klubbhusen för alla. Skydden:
+// 1. Säkerhetskopia (golfapp/stateBackup) av klubbhus och inställningar, som skrivs
+//    efter varje lyckad sparning med ny appversion.
+// 2. Självläkning: saknas klubbhus (eller alla inställningar) som finns i kopian läggs de
+//    tillbaka automatiskt och sparas - utan att admin behöver göra något. Klubbhus som
+//    raderats med flit (stateBackup.deleted) kommer inte tillbaka.
+// 3. Varning till admin med namn när någon sparar med en gammal appversion.
+// 4. Ingen blind sparning: går molnet inte att läsa före sparning försöker appen igen i
+//    stället för att skriva inaktuell data. Inget sparas innan första laddningen är klar.
+// 5. Ny version i molnet -> appen kontrollerar direkt om den själv behöver laddas om.
+// ═══════════════════════════════════════════════════════════════════════════
+var _stateBackup = null, _stateBackupLoaded = false, _serverMeta = {};
+var _saveAfterReady = false, _savePending = false, _saveRetryTimer = null, _saveRetryCount = 0;
+var _clubDeletedNow = {}, _healCount = {}, _lastBackupJson = '';
+
+function backupDeletedMap() {
+  var del = Object.assign({}, (_stateBackup && _stateBackup.deleted) || {}, _clubDeletedNow);
+  (S.clubhouses||[]).forEach(function(c){ if(c && c.id) delete del[c.id]; });
+  return del;
+}
+
+// Lägger tillbaka klubbhus/inställningar ur säkerhetskopian. quiet=true: anropas inifrån
+// save() (sparar inte själv). Returnerar en lista med vad som återställdes.
+function healFromBackup(quiet) {
+  var restored = [];
+  if(!_stateBackup) return restored;
+  var del = Object.assign({}, _stateBackup.deleted || {}, _clubDeletedNow);
+  var bk = Array.isArray(_stateBackup.clubhouses) ? _stateBackup.clubhouses : [];
+  if(bk.length) {
+    var have = {};
+    (S.clubhouses||[]).forEach(function(c){ if(c && c.id) have[c.id] = true; });
+    var missing = bk.filter(function(c){
+      return c && c.id && !have[c.id] && !del[c.id] && !_localDeleted.clubs[c.id] && (_healCount[c.id]||0) < 3;
+    });
+    if(missing.length) {
+      if(!S.clubhouses || !S.clubhouses.length) {
+        // Hela listan saknas: ta kopians version rakt av (med ikoner och headerbilder),
+        // inte appens standardlista som bara har Älvsjö utan utseende.
+        S.clubhouses = bk.filter(function(c){ return c && c.id && !del[c.id] && !_localDeleted.clubs[c.id]; })
+          .map(function(c){ return JSON.parse(JSON.stringify(c)); });
+      } else {
+        missing.forEach(function(c){ S.clubhouses.push(JSON.parse(JSON.stringify(c))); });
+      }
+      missing.forEach(function(c){ _healCount[c.id] = (_healCount[c.id]||0) + 1; restored.push('klubbhus '+(c.name||c.id)); });
+    }
+  }
+  var bs = _stateBackup.settings;
+  if(bs && typeof bs === 'object' && Object.keys(bs).length && (!S.settings || !Object.keys(S.settings).length) && (_healCount.__settings||0) < 3) {
+    S.settings = JSON.parse(JSON.stringify(bs));
+    _healCount.__settings = (_healCount.__settings||0) + 1;
+    restored.push('appinställningar');
+  }
+  if(restored.length && !quiet) console.warn('Dataskydd: återställde', restored);
+  return restored;
+}
+
+function writeStateBackup() {
+  if(!_stateBackupLoaded) return;
+  if(!S.clubhouses || !S.clubhouses.length) return; // skriv aldrig en tom lista över kopian
+  var data = { clubhouses: S.clubhouses, settings: S.settings || {}, deleted: backupDeletedMap() };
+  var json = JSON.stringify(data);
+  var cur = _stateBackup ? JSON.stringify({ clubhouses: _stateBackup.clubhouses||[], settings: _stateBackup.settings||{}, deleted: _stateBackup.deleted||{} }) : '';
+  if(json === cur || json === _lastBackupJson) return;
+  _lastBackupJson = json;
+  data.savedAt = Date.now();
+  data.by = (currentUser && currentUser.username) || null;
+  data.appVer = currentReleaseNo();
+  STATE_BACKUP_REF.set(data).catch(function(err){
+    _lastBackupJson = '';
+    // Saknar spelaren skrivrätt till kopian gör det inget - nästa admin-sparning skriver den.
+    console.warn('Kunde inte skriva säkerhetskopian', err && err.code);
+  });
+}
+
+function afterStateSnapshot() {
+  var meta = _serverMeta || {};
+  // 5. Någon har sparat med en nyare version: kontrollera direkt om vi själva ska laddas om
+  if(meta.appVer && meta.appVer > currentReleaseNo()) { try { checkForAppUpdate(true, true); } catch(e) {} }
+  // 3. Sparat av en gammal appversion (saknar versionsnummer) - varna admin en gång per sparning
+  if(!meta.fromCache && meta.lastActor && !meta.appVer && meta.via !== 'signup' && meta.savedAt) {
+    var key = 'stale-save-'+meta.savedAt;
+    var seen = false; try { seen = !!localStorage.getItem(key); } catch(e) {}
+    console.warn('Dataskydd: sparat med gammal appversion av', meta.lastActor, new Date(meta.savedAt));
+    if(!seen && isAdmin() && !impersonatorAdmin) {
+      try { localStorage.setItem(key, '1'); } catch(e) {}
+      var u = findUser(meta.lastActor);
+      showDataGuardBanner('<b>'+esc((u && u.name) || meta.lastActor)+'</b> sparade nyss med en gammal version av appen. Be '+((u && u.gender==='kvinna')?'henne':'honom')+' stänga appen helt och öppna den igen. Klubbhus och inställningar har kontrollerats automatiskt.');
+    }
+  }
+  // 1-2. Självläkning från säkerhetskopian
+  if(!_stateBackupLoaded || meta.fromCache) return;
+  var restored = healFromBackup(false);
+  if(restored.length) {
+    save();
+    try { applyClubFilters(); renderClubSwitcher(); applyClubBranding(); } catch(e) {}
+    if(isAdmin() && !impersonatorAdmin) showDataGuardBanner('Återställde automatiskt: '+esc(restored.join(', '))+'.'+(meta.lastActor && !meta.appVer ? ' Senast sparat av '+esc(meta.lastActor)+' med en gammal appversion.' : ''));
+  } else if(!_stateBackup && S.clubhouses && S.clubhouses.length && isAdmin()) {
+    writeStateBackup(); // första gången: skapa kopian
+  }
+}
+
+function showDataGuardBanner(html) {
+  var el = document.getElementById('data-guard-banner');
+  if(!el) {
+    el = document.createElement('div');
+    el.id = 'data-guard-banner';
+    el.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:9999;background:#FFF4D6;color:#5A3D00;border:1px solid #E8B84A;border-radius:12px;padding:12px 40px 12px 14px;font-size:13px;line-height:1.45;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:560px;margin:0 auto';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<i class="ti ti-shield-check" style="margin-right:4px"></i>'+html+
+    '<button onclick="this.parentNode.remove()" title="Stäng" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;color:#5A3D00;cursor:pointer"><i class="ti ti-x"></i></button>';
+}
+
+function scheduleSaveRetry() {
+  if(_saveRetryTimer) return;
+  _saveRetryCount++;
+  var wait = Math.min(30000, 2000 * _saveRetryCount);
+  if(_saveRetryCount >= 4) showSaveRetryBanner();
+  _saveRetryTimer = setTimeout(function(){ _saveRetryTimer = null; save(); }, wait);
+}
+function showSaveRetryBanner() {
+  if(document.getElementById('save-retry-banner')) return;
+  var el = document.createElement('div');
+  el.id = 'save-retry-banner';
+  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(var(--bnav-h,0px) + 16px + env(safe-area-inset-bottom,0px));z-index:9998;background:#FCEBEB;color:#7A1F1F;border:1px solid #E24B4A;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.2);max-width:560px;margin:0 auto';
+  el.innerHTML = '<i class="ti ti-cloud-off"></i> Din senaste ändring är inte sparad än – appen försöker igen så fort anslutningen fungerar. Stäng inte appen.';
+  document.body.appendChild(el);
+}
+function hideSaveRetryBanner() {
+  _saveRetryCount = 0;
+  if(_saveRetryTimer) { clearTimeout(_saveRetryTimer); _saveRetryTimer = null; }
+  var el = document.getElementById('save-retry-banner'); if(el) el.remove();
+}
+window.addEventListener('online', function(){ if(_savePending && firebaseReady) { if(_saveRetryTimer) { clearTimeout(_saveRetryTimer); _saveRetryTimer = null; } save(); } });
 
 function save() {
   // Write the full state to Firestore. Debounced slightly so rapid edits
@@ -1169,6 +1315,10 @@ function save() {
   // it with our current in-memory S (this narrows, but does not eliminate,
   // the race — a proper fix would use per-document writes instead of one blob).
   if (saveTimer) clearTimeout(saveTimer);
+  // Spara aldrig innan molnets data laddats första gången - då finns bara tomma startvärden
+  // i minnet. Sparningen görs i stället direkt efter första laddningen.
+  if (!firebaseReady) { _saveAfterReady = true; return; }
+  _savePending = true;
   saveTimer = setTimeout(function() {
     var payload = JSON.stringify(S);
     var sizeKB = Math.round(payload.length / 1024);
@@ -1178,7 +1328,10 @@ function save() {
     // lastActor: vem som sparade - pushservern skickar aldrig notiser till den som själv gjorde ändringen
     function doWrite() {
       payload = JSON.stringify(S);
-      DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now(), appVer: currentReleaseNo() }).catch(function(err) {
+      DOC_REF.set({ data: payload, lastActor: ((currentUser && currentUser.username) || null), savedAt: Date.now(), appVer: currentReleaseNo() }).then(function(){
+        _savePending = false; hideSaveRetryBanner();
+        writeStateBackup();
+      }).catch(function(err) {
         console.error('Firestore save failed', err);
         alert('Kunde inte spara till molnet. Kontrollera din internetanslutning.');
       });
@@ -1200,7 +1353,12 @@ function save() {
         if(r.length) console.warn('Återställde innan sparning:', r);
       } catch(e) { console.error('merge', e); }
       doWrite();
-    }).catch(function(){ doWrite(); });
+    }).catch(function(err){
+      // Molnet gick inte att läsa (t.ex. dålig täckning). Spara INTE blint - då kan inaktuell
+      // data skriva över andras ändringar. Försök igen strax; ändringen ligger kvar i minnet.
+      console.warn('Kunde inte läsa molnet före sparning – försöker igen', err);
+      scheduleSaveRetry();
+    });
   }, 250);
 }
 
@@ -1213,6 +1371,7 @@ function initFirebaseSync(onFirstLoad) {
       S.ideas = incoming.ideas || [];
       S.settings = incoming.settings || {};
       S.clubhouses = incoming.clubhouses || null;
+      _serverMeta = { appVer: doc.data().appVer || 0, lastActor: doc.data().lastActor || null, savedAt: doc.data().savedAt || 0, via: doc.data().via || null, fromCache: !!(doc.metadata && doc.metadata.fromCache) };
     } else {
       S.tours = [];
       S.users = [];
@@ -1229,7 +1388,10 @@ function initFirebaseSync(onFirstLoad) {
         }, 500);
       }
       onFirstLoad();
+      try { afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
+      if (_saveAfterReady) { _saveAfterReady = false; save(); }
     } else {
+      try { afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
       // Data changed remotely (another visitor edited something) — re-render current view.
       refreshCurrentView();
       try { renderHomeChampGreeting(); } catch(e) {}
@@ -1253,6 +1415,13 @@ function initFirebaseSync(onFirstLoad) {
     logoBank = (doc.exists && doc.data()) ? doc.data() : {};
   }, function(err) {
     console.error('Logo bank listen failed', err);
+  });
+  STATE_BACKUP_REF.onSnapshot(function(doc) {
+    _stateBackup = (doc.exists && doc.data()) ? doc.data() : null;
+    _stateBackupLoaded = true;
+    try { if(firebaseReady) afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
+  }, function(err) {
+    console.error('State backup listen failed', err);
   });
   TOUR_COVER_LABELS_REF.onSnapshot(function(doc) {
     tourCoverLabels = (doc.exists && doc.data()) ? doc.data() : {};
@@ -20394,6 +20563,15 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '9 november 2026 (316)',
+    items: [
+      { type: 'fixed', text: 'Klubbhus kunde försvinna när någon sparade med en gammal, cachad version av appen (t.ex. appen på hemskärmen som inte startats om på länge). Nu finns en säkerhetskopia av klubbhus och inställningar, och saknas något läggs det tillbaka automatiskt – du behöver inte längre återställa klubbhus under Inställningar. Raderade klubbhus kommer inte tillbaka.' },
+      { type: 'new', text: 'Admin får en varning med namn när någon sparar med en gammal appversion, så att du vet vem som behöver stänga och öppna appen igen.' },
+      { type: 'improved', text: 'Säkrare sparning: vid dålig täckning sparar appen inte längre blint (vilket kunde skriva över andras ändringar) utan försöker igen när anslutningen fungerar och visar en notis om ändringen ännu inte är sparad. Appen sparar heller aldrig innan molnets data har laddats.' },
+      { type: 'improved', text: 'Sparar någon med en nyare version kontrollerar appen direkt om den själv behöver uppdateras.' },
+    ]
+  },
+  {
     date: '9 november 2026 (315)',
     items: [
       { type: 'improved', text: 'Spelarlistorna är kompaktare: varje spelare visas som en rad med bild, namn och märkeslogga. Tryck på raden för att fälla ut resten – HCP, styrkor och svagheter, Sanningen enligt siffrorna och knappen Visa profil (för admin även Redigera, Dela inloggning och Logga in som). Gäller både Spelare-listan och tourens Spelare-flik.' },
@@ -24507,6 +24685,7 @@ function deleteClubhouse(id) {
   if(!confirm('Ta bort klubbhuset "'+c.name+'"? Spelarnas åtkomst till det tas också bort.')) return;
   ensureClubList();
   _localDeleted.clubs[id] = true;
+  _clubDeletedNow[id] = Date.now(); // så att självläkningen inte lägger tillbaka det
   S.clubhouses = S.clubhouses.filter(function(x){ return x.id !== id; });
   (S.users||[]).forEach(function(u){ if(u.clubhouses) u.clubhouses = u.clubhouses.filter(function(x){ return x !== id; }); });
   if(_clubId === id) { _clubId = null; try { localStorage.removeItem('agcc-club'); } catch(e) {} }
@@ -24524,13 +24703,17 @@ function orphanClubIds() {
 }
 function restoreClubhouse(id) {
   if(!isAdmin()) return;
-  var guess = id.replace(/-\d+$/, '').replace(/-/g, ' '); guess = guess.charAt(0).toUpperCase() + guess.slice(1);
+  var bkC = _stateBackup && Array.isArray(_stateBackup.clubhouses) ? _stateBackup.clubhouses.find(function(c){ return c && c.id === id; }) : null;
+  var guess = bkC && bkC.name ? bkC.name : id.replace(/-\d+$/, '').replace(/-/g, ' '); guess = guess.charAt(0).toUpperCase() + guess.slice(1);
   var name = (prompt('Namn på klubbhuset som återställs:', guess) || '').trim();
   if(!name) return;
   ensureClubList();
   if(clubById(id)) return;
   delete _localDeleted.clubs[id];
-  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), restoredAt: Date.now() });
+  delete _clubDeletedNow[id];
+  // Finns klubbhuset i säkerhetskopian återställs det med namn, ikon och headerbild
+  var fromBk = _stateBackup && Array.isArray(_stateBackup.clubhouses) ? _stateBackup.clubhouses.find(function(c){ return c && c.id === id; }) : null;
+  S.clubhouses.push(fromBk ? Object.assign(JSON.parse(JSON.stringify(fromBk)), { name: name, restoredAt: Date.now() }) : { id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), restoredAt: Date.now() });
   save(); renderClubSwitcher(); renderGlobalSettings();
   alert('"'+name+'" är återställt med sina tourer och spelare. Utseende (ikon och headerbild) behöver ställas in igen under Utseende.');
 }

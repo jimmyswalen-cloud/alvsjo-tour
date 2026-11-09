@@ -235,7 +235,11 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
         createdAt: Date.now()
       });
 
-      tx.set(DOC_REF, { data: JSON.stringify(state), lastActor: username, savedAt: Date.now() });
+      // Behåll appens versionsnummer (appVer) - annars slutar appens versionskontroll att
+      // fungera och gamla appversioner kan skriva över ny data. via:'signup' gör att appen
+      // inte varnar för den här sparningen som om den kom från en gammal appversion.
+      var prevVer = (doc.exists && doc.data().appVer) || 0;
+      tx.set(DOC_REF, { data: JSON.stringify(state), lastActor: username, savedAt: Date.now(), appVer: prevVer, via: 'signup' });
     });
   }).then(function() {
     // Notis till admin (push + popup i appen) om att ett nytt konto väntar
