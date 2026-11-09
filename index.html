@@ -93,7 +93,7 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 .pc-body{display:none;border-top:1px solid var(--border)}
 .pc.pc-open .pc-body{display:block}
 .pc.pc-open .pc-chev{transform:rotate(180deg)}
-.pc-logo{background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:76px;overflow:hidden}
+.pc-logo{background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:96px;overflow:hidden}
 .nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
 .view{display:none;padding-top:20px}.view.active{display:block}
 h2{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px}
@@ -842,9 +842,68 @@ var BRAND_LOGO_SIZE_ADJUST = {
   'ping': 0.65
 };
 
+function brandLogoScale(brand) {
+  var key = brandKey(brand), e = logoBank && logoBank[key];
+  if(e && typeof e.scale === 'number' && e.scale > 0) return e.scale; // satt av admin (release 319)
+  return BRAND_LOGO_SIZE_ADJUST[key] || 1;
+}
 function adjustedLogoSize(brand, size) {
-  var mult = BRAND_LOGO_SIZE_ADJUST[brandKey(brand)] || 1;
-  return Math.round(size * mult);
+  return Math.round(size * brandLogoScale(brand));
+}
+
+// ── AUTOBESKÄRNING AV MÄRKESLOGGOR (release 319) ─────────────────────────────
+// Många loggor laddas upp med mycket vit/transparent luft runt texten (t.ex. Cobra),
+// och eftersom loggan visas med fast höjd blir själva texten då pytteliten. Här beskärs
+// tomrummet bort automatiskt. Bilden läses via en separat kopia med crossOrigin - går
+// det inte (servern tillåter inte CORS) lämnas den synliga loggan helt orörd.
+var _logoFit = {};
+function trimLogoImage(img) {
+  var w = img.naturalWidth, h = img.naturalHeight;
+  if(!w || !h) return null;
+  var k = Math.min(1, 900 / Math.max(w, h)), cw = Math.max(1, Math.round(w*k)), ch = Math.max(1, Math.round(h*k));
+  var c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  var g = c.getContext('2d'); g.drawImage(img, 0, 0, cw, ch);
+  var d = g.getImageData(0, 0, cw, ch).data; // kastar SecurityError om bilden är "tainted"
+  var bg = [d[0], d[1], d[2], d[3]], tol = 28;
+  var isBg = function(i){
+    if(d[i+3] < 16 && bg[3] < 16) return true;
+    return Math.abs(d[i]-bg[0]) <= tol && Math.abs(d[i+1]-bg[1]) <= tol && Math.abs(d[i+2]-bg[2]) <= tol && Math.abs(d[i+3]-bg[3]) <= tol;
+  };
+  var x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+  for(var y = 0; y < ch; y++) for(var x = 0; x < cw; x++) {
+    if(!isBg((y*cw + x) * 4)) { if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+  }
+  if(x1 < 0) return null;
+  var bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  if(bw > cw * 0.94 && bh > ch * 0.94) return null; // redan tätt beskuren
+  var pad = Math.round(Math.max(bw, bh) * 0.03);
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+  bw = Math.min(cw - x0, bw + pad*2); bh = Math.min(ch - y0, bh + pad*2);
+  var o = document.createElement('canvas'); o.width = bw; o.height = bh;
+  o.getContext('2d').drawImage(c, x0, y0, bw, bh, 0, 0, bw, bh);
+  return o.toDataURL('image/png');
+}
+function fitBrandLogo(el) {
+  if(!el || el.getAttribute('data-fit')) return;
+  var src = el.getAttribute('src') || '';
+  if(!src || /^data:/.test(src)) { el.setAttribute('data-fit', '1'); return; }
+  el.setAttribute('data-fit', '1');
+  var f = _logoFit[src];
+  if(f && f.url) { el.src = f.url; return; }
+  if(f && f.none) return;
+  if(f && f.wait) { f.wait.push(el); return; }
+  f = _logoFit[src] = { wait: [el] };
+  var probe = new Image();
+  probe.crossOrigin = 'anonymous';
+  probe.onload = function(){
+    var url = null;
+    try { url = trimLogoImage(probe); } catch(e) { url = null; }
+    var waiting = f.wait || []; delete f.wait;
+    if(url) { f.url = url; waiting.forEach(function(x){ if(x.isConnected !== false) x.src = url; }); }
+    else f.none = true;
+  };
+  probe.onerror = function(){ delete f.wait; f.none = true; };
+  probe.src = src;
 }
 
 function brandKey(name) {
@@ -972,6 +1031,18 @@ function saveBrandLogo(name, imgData, cb) {
   if(!LOGO_BANK_REF) { if(cb) cb(null); return; }
   var key = brandKey(name);
   if(!key || !imgData) { if(cb) cb(null); return; }
+  // Beskär bort vit/transparent luft innan uppladdning (en gång per anrop)
+  if(!saveBrandLogo._trimmed) {
+    var im = new Image();
+    im.onload = function(){
+      var t = null; try { t = trimLogoImage(im); } catch(e) {}
+      saveBrandLogo._trimmed = true;
+      try { saveBrandLogo(name, t || imgData, cb); } finally { saveBrandLogo._trimmed = false; }
+    };
+    im.onerror = function(){ saveBrandLogo._trimmed = true; try { saveBrandLogo(name, imgData, cb); } finally { saveBrandLogo._trimmed = false; } };
+    im.src = imgData;
+    return;
+  }
   uploadImageToStorage(imgData, 'brand-logos/'+key+'.jpg').then(function(url){
     if(!url) { if(cb) cb(null); return; }
     var update = {};
@@ -1718,7 +1789,7 @@ function togglePlayerCard(el, key) {
 function playerCardLogoHTML(username) {
   var tag = playerBrandLogoTag(username, 16);
   if(!tag) return '';
-  return '<div class="pc-logo brand-logo-box">'+tag.replace('max-width:90px','max-width:64px').replace('margin-left:6px','margin-left:0')+'</div>';
+  return '<div class="pc-logo brand-logo-box">'+tag.replace('max-width:90px','max-width:84px').replace('margin-left:6px','margin-left:0')+'</div>';
 }
 
 function isSimTour(t) { return !!(t && t.simulator); }
@@ -3836,12 +3907,30 @@ function renderLogoManagerSection(targetId) {
         '</div>'+
       '</div>'+
       '<input type="file" id="logo-file-'+slug+'" accept="image/*" style="display:none" onchange="handleBrandLogoUpload(this.files[0],\''+esc(b).replace(/'/g,"\\'")+'\',\''+slug+'\');this.value=\'\'">'+
+      '<div class="row" style="gap:4px;align-items:center;flex-shrink:0" title="Loggans storlek i appen">'+
+        '<button type="button" class="btn btn-sm" style="padding:4px 9px" onclick="nudgeBrandLogoScale(\''+esc(b).replace(/'/g,"\\'")+'\',\''+slug+'\',-0.1)">−</button>'+
+        '<span id="logo-scale-'+slug+'" style="font-size:11px;font-weight:700;min-width:34px;text-align:center;color:var(--text-2)">'+Math.round(brandLogoScale(b)*100)+'%</span>'+
+        '<button type="button" class="btn btn-sm" style="padding:4px 9px" onclick="nudgeBrandLogoScale(\''+esc(b).replace(/'/g,"\\'")+'\',\''+slug+'\',0.1)">+</button>'+
+      '</div>'+
       '<button type="button" class="btn btn-sm" style="flex-shrink:0" title="Ladda upp logga" onclick="document.getElementById(\'logo-file-'+slug+'\').click()"><i class="ti ti-upload"></i></button>'+
     '</div>';
   });
   html += '</div>';
   el.innerHTML = html;
   setTimeout(function(){ detectBrandLogos(brands); }, 20);
+}
+
+// Storlek per märke (release 319): sparas i logoBank[märke].scale och används överallt
+// där loggan visas, i stället för de inbyggda justeringarna i BRAND_LOGO_SIZE_ADJUST.
+function nudgeBrandLogoScale(brand, slug, delta) {
+  if(!isAdmin() || !LOGO_BANK_REF) return;
+  var key = brandKey(brand); if(!key) return;
+  var next = Math.max(0.4, Math.min(3, Math.round((brandLogoScale(brand) + delta) * 10) / 10));
+  if(!logoBank[key]) logoBank[key] = { displayName: brand };
+  logoBank[key].scale = next;
+  var lbl = document.getElementById('logo-scale-'+slug); if(lbl) lbl.textContent = Math.round(next*100)+'%';
+  var upd = {}; upd[key] = { scale: next };
+  LOGO_BANK_REF.set(upd, { merge: true }).catch(function(err){ console.error('Kunde inte spara loggstorlek', err); });
 }
 
 function filterLogoManager(q) {
@@ -12015,7 +12104,7 @@ function playerBrandLogoTag(username, height) {
   if(!logo) return '';
   height = adjustedLogoSize(brand, height || 15);
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
-  return '<img class="brand-logo" src="'+logo+'" title="'+esc(brand)+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
+  return '<img class="brand-logo" src="'+logo+'" title="'+esc(brand)+'" onload="fitBrandLogo(this)" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
     'style="height:'+height+'px;width:auto;max-width:90px;object-fit:contain;vertical-align:middle;margin-left:6px">';
 }
 
@@ -12025,7 +12114,7 @@ function brandLogoTag(brand, size) {
   size = adjustedLogoSize(brand, size || 16);
   // Om den registrerade filändelsen inte finns, prova automatiskt den andra (jpg <-> png) innan loggan döljs helt.
   var alt = /\.png$/i.test(logo) ? logo.replace(/\.png$/i, '.jpg') : logo.replace(/\.jpg$/i, '.png');
-  return '<img class="brand-logo" src="'+logo+'" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
+  return '<img class="brand-logo" src="'+logo+'" onload="fitBrandLogo(this)" onerror="this.onerror=null;this.src=\''+alt+'\';this.onerror=function(){this.style.display=\'none\';};" '+
     'style="width:'+size+'px;height:'+size+'px;object-fit:contain;vertical-align:middle;margin-right:4px;border-radius:3px;background:#fff">';
 }
 
@@ -20716,6 +20805,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (319)',
+    items: [
+      { type: 'improved', text: 'Märkesloggor beskärs automatiskt: vit eller genomskinlig luft runt loggan (som på Cobra) tas bort, så att själva loggan blir lika tydlig som t.ex. Titleist. Nya loggor beskärs redan när de laddas upp.' },
+      { type: 'new', text: 'Admin kan justera storleken på varje märkes logga under Inställningar → Märkeslogotyper med − och + (40–300 %). Ändringen gäller överallt där loggan visas.' },
+    ]
+  },
   {
     date: '9 november 2026 (318)',
     items: [
