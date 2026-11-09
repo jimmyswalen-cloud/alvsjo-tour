@@ -73,9 +73,13 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 #active-tour-name{order:3;flex:0 0 100%;font-weight:700;font-size:clamp(17px,4.6vw,21px);line-height:1.25;color:var(--text);margin:4px 0 6px;overflow-wrap:break-word}
 #active-tour-name:empty{display:none}
 .nav-wrap{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:8px}
-.nav{display:flex;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--border);overflow-x:auto}
-.nav-btn{flex:1;min-width:72px;padding:8px 4px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);font-size:11px;color:var(--text-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .15s}
+.nav{display:flex;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--border);overflow-x:visible}
+.nav-btn{flex:1 1 0;min-width:0;padding:8px 2px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);font-size:11px;color:var(--text-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .15s}
 .nav-btn i{font-size:19px}
+/* Release 312: alla flikar (även admins Inst.) får plats på en rad utan sidscroll -
+   lika breda, och texten krymper/kortas med … i stället för att trycka ut raden. */
+.nav-btn span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:380px){ .nav{gap:3px} .nav-btn{font-size:10px} .nav-btn i{font-size:17px} }
 .nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
 .view{display:none;padding-top:20px}.view.active{display:block}
 h2{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px}
@@ -20164,6 +20168,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (312)',
+    items: [
+      { type: 'improved', text: 'Tourens flikar (Tävlingar, Spelare, Kalender, OoM och Inst.) får nu plats på en rad utan att behöva scrollas i sidled, även för admin med fem flikar.' },
+    ]
+  },
   {
     date: '9 november 2026 (311)',
     items: [
