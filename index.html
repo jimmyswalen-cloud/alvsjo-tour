@@ -12110,6 +12110,7 @@ function subscribeCasualRounds() {
 }
 // Dold rond (r.hidden): syns bara för den som skapade den och spelarna i den – inte för andra
 // (inte heller admin), läggs aldrig på väggen och skickar inga notiser (r.noNotify för servern).
+// Tyst rond (r.silent, release 313): syns för alla som vanligt men r.noNotify är satt, så inga notiser.
 function casualVisibleToMe(r) {
   if(!r || !r.hidden) return true;
   if(!currentUser) return false;
@@ -12196,7 +12197,7 @@ function startCasualRoundWizard() {
   var me = findUser(currentUser.username) || currentUser;
   _cwTab = 'fav'; // börja alltid på Favoriter
   _cwUserLimit = 8;
-  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', hidden:false, search:'',
+  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', hidden:false, silent:false, search:'',
     format:{ primary:'stableford', secondary:null }, contests:[], teamOf:{}, teamShcp:{}, teamSize:2,
     players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
   if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
@@ -12714,7 +12715,7 @@ function createCasualRound() {
     clubhouse: currentClubId(),
     courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
     sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active',
-    hidden: !!_cw.hidden, noNotify: !!_cw.hidden, players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
+    hidden: !!_cw.hidden, silent: !!(_cw.silent && !_cw.hidden), noNotify: !!(_cw.hidden || _cw.silent), players: _cw.players.map(function(p){ return { key:p.key, username:p.username||null, name:p.name, guest:!!p.guest, shcp: Math.round(p.shcp||0) }; }),
     scores: {}, putts: {},
     format: { primary: _cw.format.primary, secondary: _cw.format.secondary || null },
     contests: (_cw.contests||[]).map(function(c){ return { id:c.id, type:c.type, hole:c.hole }; }), contestWin: {}, wolf: {}
@@ -12877,7 +12878,7 @@ function renderCasualRound() {
   setCasualTitle(finished ? 'Sällskapsrond · klar' : 'Sällskapsrond');
   var out = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
     (getCourseImage(r.courseName)?'<img src="'+getCourseImage(r.courseName)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
-    '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.hidden?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-eye-off"></i> Dold</span>':'')+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.hidden?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-eye-off"></i> Dold</span>':(r.noNotify?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-bell-off"></i> Inga notiser</span>':''))+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
     '<div style="font-size:12px;color:var(--text-3)">'+hcpFmtDate(r.date)+' · '+(r.players||[]).length+' spelare · par '+r.holePars.reduce(function(a,b){return a+b;},0)+(finished?' · <strong>Avslutad</strong>':'')+'</div>'+
     (!casualFormat(r).legacy ? '<div style="font-size:12px;color:#B45309;font-weight:600;margin-top:2px"><i class="ti '+CF[casualFormat(r).primary].icon+'"></i> '+esc(cfLabel(casualFormat(r).primary))+(casualFormat(r).secondary?' <span style="color:#6D28D9">+ '+esc(cfLabel(casualFormat(r).secondary))+'</span>':'')+(r.roundType==='practice'?' · <span style="color:var(--text-3)">Träning</span>':'')+'</div>' : '')+'</div></div>';
   // Hålväljare
@@ -13058,6 +13059,7 @@ function shareCasualRoundToWall() {
     tourId: clubCasualFeedId(), clubhouse: currentClubId(), tourName: 'Sällskapsrond', eventId: r.id, eventName: r.courseName,
     playerUsername: currentUser.username, playerName: me.name || currentUser.username,
     category: 'casualround', course: r.courseName, sim: !!r.sim, holes: r.holePars.length, summary: summary,
+    noNotify: !!r.noNotify,
     createdAt: Date.now(), likes: {}
   }).then(function(){
     CASUAL_COL.doc(r.id).update({ sharedToWall: true }).catch(function(){});
@@ -13361,7 +13363,17 @@ function cwStep2HTML(c) {
     '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">'+
       '<input type="checkbox" '+(_cw.hidden?'checked ':'')+'onchange="_cw.hidden=this.checked;renderCasualWizard()" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">'+
       '<span><span style="font-weight:700;font-size:13px"><i class="ti ti-eye-off"></i> Dold rond</span>'+
-      '<span style="display:block;font-size:11px;color:var(--text-3);margin-top:2px">Syns bara för spelarna i ronden. Visas inte för andra, delas inte på väggen och skickar inga notiser.</span></span>'+
+      '<span style="display:block;font-size:11px;color:var(--text-3);margin-top:2px">Syns bara för spelarna i ronden. Visas inte för andra, delas inte på väggen och skickar aldrig några notiser.</span></span>'+
+    '</label>'+
+    // Release 313: "Inga notiser" separat från "Dold". Ronden syns och sparas för alla
+    // som vanligt, men servern skickar inga push-notiser för den (r.noNotify).
+    // En dold rond är alltid tyst, därför är rutan ikryssad och låst när Dold är vald.
+    '<label style="display:flex;align-items:flex-start;gap:10px;cursor:'+(_cw.hidden?'default':'pointer')+';margin-top:12px;padding-top:12px;border-top:1px solid var(--border);'+(_cw.hidden?'opacity:.55':'')+'">'+
+      '<input type="checkbox" '+((_cw.hidden||_cw.silent)?'checked ':'')+(_cw.hidden?'disabled ':'')+'onchange="_cw.silent=this.checked;renderCasualWizard()" style="margin-top:3px;width:18px;height:18px;flex-shrink:0">'+
+      '<span><span style="font-weight:700;font-size:13px"><i class="ti ti-bell-off"></i> Inga notiser</span>'+
+      '<span style="display:block;font-size:11px;color:var(--text-3);margin-top:2px">'+(_cw.hidden
+        ? 'Dolda ronder skickar aldrig notiser.'
+        : 'Ronden syns och sparas för alla som vanligt och kan delas på väggen – men inga notiser skickas, varken när ronden startar eller för birdies under ronden.')+'</span></span>'+
     '</label></div>';
   h += '<div class="cf-head"><i class="ti ti-trophy"></i> Primärt spel</div>';
   CF_CATS.forEach(function(cat){
@@ -20168,6 +20180,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (313)',
+    items: [
+      { type: 'new', text: 'Sällskapsrond: "Inga notiser" är nu ett eget val, skilt från "Dold rond". Då syns och sparas ronden för alla som vanligt och kan delas på väggen, men inga notiser skickas. En dold rond skickar som förut aldrig några notiser. Tysta ronder märks "Inga notiser" i listan.' },
+    ]
+  },
   {
     date: '9 november 2026 (312)',
     items: [
