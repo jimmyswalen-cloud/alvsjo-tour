@@ -839,7 +839,10 @@ var BRAND_LOGO_SIZE_ADJUST = {
   'taylormade': 1.3,
   'callaway': 1.15,
   'takomo': 0.5,
-  'ping': 0.65
+  'ping': 0.65,
+  // Release 320: Cobra är ett brett wordmark - efter autobeskärningen fyller den hela
+  // höjden och blev för stor bredvid Titleist. 0,6 lägger den mitt emellan.
+  'cobra': 0.6
 };
 
 function brandLogoScale(brand) {
@@ -20805,6 +20808,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (320)',
+    items: [
+      { type: 'improved', text: 'Cobra-loggan blev för stor efter autobeskärningen – den är nu nedskalad så att den ligger mitt emellan, i nivå med övriga loggor. Admin kan fortfarande finjustera under Märkeslogotyper.' },
+    ]
+  },
   {
     date: '9 november 2026 (319)',
     items: [
