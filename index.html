@@ -8051,9 +8051,27 @@ function undoSideBetPushOutcome(ei, betId) {
   openSideBets(ei);
 }
 function dateMinusDays(dateStr, days) {
-  var d = new Date(dateStr);
+  // Räknar på lokalt datum (inte UTC), så att svensk tid aldrig ger ett dygns fel.
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr||''));
+  var d = m ? new Date(+m[1], +m[2]-1, +m[3]) : new Date(dateStr);
+  if(isNaN(d.getTime())) return '';
   d.setDate(d.getDate()-days);
-  return d.toISOString().slice(0,10);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// Vilket datum spelas ronden som side betet gäller (release 310)? En deltävling kan
+// ha flera speldagar (t.ex. simulatorligan), och e.date är bara den första. I tur och ordning:
+// 1) betets eget datum (sb.date, när betet är kopplat till en viss speldag),
+// 2) spelarens egen anmälan till deltävlingen (reg.date),
+// 3) spelarens boll (teeGroups) - bara om den matchar betets datum,
+// 4) deltävlingens ordinarie datum (e.date).
+function sideBetRoundDate(e, sb, pi) {
+  if(sb && sb.date) return sb.date;
+  var reg = (e.registrations||[]).find(function(r){ return r.pi===pi && !r.declined && r.date; });
+  if(reg) return reg.date;
+  var grp = (e.teeGroups||[]).find(function(g){ return g.date && (g.playerPis||[]).indexOf(pi) >= 0; });
+  if(grp) return grp.date;
+  return e.date;
 }
 
 // Avgifter som väntar på betalning för den inloggade spelaren, tvärs över alla tourer.
@@ -8071,8 +8089,8 @@ function computeSideBetDues() {
         if(sb.fee > 0 && isParticipant && !hasPaid) {
           dues.push({
             tourId: t.id, eventId: e.id, betId: sb.id,
-            tourName: t.name+(t.season?' '+t.season:''), eventName: e.name, eventDate: e.date,
-            betName: sb.name, fee: sb.fee, deadline: dateMinusDays(e.date, 1)
+            tourName: t.name+(t.season?' '+t.season:''), eventName: e.name, eventDate: sideBetRoundDate(e, sb, myPi),
+            betName: sb.name, fee: sb.fee, deadline: dateMinusDays(sideBetRoundDate(e, sb, myPi), 1)
           });
         }
       });
@@ -8095,7 +8113,7 @@ function renderHomeSideBetWidget() {
           '<div>'+
             '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(d.betName)+' <span style="color:#dc2626">– '+d.fee+' kr</span></div>'+
             '<div style="font-size:12px;color:var(--text-2)">'+esc(d.eventName)+' · '+esc(d.tourName)+'</div>'+
-            '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+'</div>'+
+            '<div style="font-size:11px;color:#dc2626;margin-top:3px"><i class="ti ti-brand-cashapp"></i> Swisha tävlingsledningen senast '+d.deadline+(d.eventDate?' <span style="color:var(--text-3)">(ronden spelas '+esc(d.eventDate)+')</span>':'')+'</div>'+
           '</div>'+
           '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'+
             '<button class="btn btn-sm" style="white-space:nowrap;justify-content:center" onclick="markMySideBetPaid(\''+d.tourId+'\',\''+d.eventId+'\',\''+d.betId+'\')"><i class="ti ti-check"></i> Jag har betalat</button>'+
@@ -20118,6 +20136,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (310)',
+    items: [
+      { type: 'fixed', text: 'Sista betalningsdag för side bets räknades från deltävlingens första datum, även när ronden spelas en senare dag (t.ex. 7 nov fast ronden är 15 nov). Nu är sista dag dagen före den rond betet gäller: betets egen speldag, annars den dag du är anmäld till. Avgiftsrutan visar även vilket datum ronden spelas.' },
+    ]
+  },
   {
     date: '9 november 2026 (309)',
     items: [
