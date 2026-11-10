@@ -10212,7 +10212,8 @@ function eventCardHTML(i,e) {
       var tdStyle2 = opts.bg ? 'background:'+opts.bg : '';
       if(opts.lastInBlock) { tdStyle += (tdStyle?';':'')+'border-bottom:none'; tdStyle2 += (tdStyle2?';':'')+'border-bottom:none'; }
       return '<tr onclick="showPlayerProfile('+x.pi+')" style="cursor:pointer'+(x.status==='declined'?';opacity:0.55':'')+'">'+
-        '<td style="'+tdStyle+'">'+dotHtml(STATUS_DOT[x.status])+esc(x.p.name)+'</td>'+
+        '<td style="'+tdStyle+'">'+dotHtml(STATUS_DOT[x.status])+esc(x.p.name)+
+          (opts.venue ? '<div style="font-size:11px;color:var(--text-3);margin:1px 0 0 17px"><i class="ti ti-device-desktop" style="font-size:11px"></i> '+esc(opts.venue)+'</div>' : '')+'</td>'+
         '<td style="text-align:right;white-space:nowrap;'+tdStyle2+'">'+(opts.time ? '<span style="font-weight:600">'+esc(opts.time)+'</span>' : '<span style="color:var(--text-3)">–</span>')+'</td>'+
       '</tr>';
     };
@@ -10252,8 +10253,20 @@ function eventCardHTML(i,e) {
         var members = inDate.filter(function(x){ return x.gIdx===gIdx; });
         members.sort(function(a,b){ return (g.playerPis||[]).indexOf(a.pi)-(g.playerPis||[]).indexOf(b.pi); });
         rows += groupHdr('Boll '+(n+1), g.time||'', members.length, col.c, col.bg);
+        // Release 331: var bollen spelas och på vilken simulator (från spelarnas anmälan).
+        // Har alla samma plats visas en rad under bollrubriken; annars står platsen per spelare.
+        var vLabels = members.map(function(x){ return simVenueLabel(x.reg); });
+        var withV = vLabels.filter(Boolean);
+        var allSame = withV.length && withV.length === members.length && withV.every(function(v){ return v === withV[0]; });
+        if(withV.length) {
+          rows += '<tr><td colspan="2" style="border-left:3px solid '+col.c+';background:'+col.bg+';padding:0 10px 6px 12px;border-bottom:none;font-size:12px;color:var(--text-2)">'+
+            (allSame
+              ? '<i class="ti ti-device-desktop" style="font-size:12px;vertical-align:-1px"></i> <b style="color:var(--text)">'+esc(members[0].reg.venue || '')+'</b>'+(members[0].reg.simNo ? ' · <span style="font-weight:700;color:'+col.c+'">'+esc(members[0].reg.simNo)+'</span>' : '')
+              : '<i class="ti ti-device-desktop" style="font-size:12px;vertical-align:-1px"></i> Olika platser – se respektive spelare')+
+          '</td></tr>';
+        }
         members.forEach(function(x, k){
-          rows += playerRowHTML(x, { time:g.time||'', bar:col.c, bg:col.bg, lastInBlock: k===members.length-1 });
+          rows += playerRowHTML(x, { time:g.time||'', bar:col.c, bg:col.bg, lastInBlock: k===members.length-1, venue: (!allSame && vLabels[k]) ? vLabels[k] : '' });
         });
       });
       var loose = inDate.filter(function(x){ return x.gIdx<0; }).sort(byName);
@@ -21090,6 +21103,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (331)',
+    items: [
+      { type: 'improved', text: 'Startlistan i deltävlingskortet visar nu var varje boll spelas och på vilken simulator, på en egen rad under bollrubriken (t.ex. "Ekerö Tees And Taps · SIM 8"). Spelar bollens spelare på olika ställen visas platsen under varje spelares namn i stället.' },
+    ]
+  },
   {
     date: '9 november 2026 (330)',
     items: [
