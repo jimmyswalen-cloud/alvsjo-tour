@@ -7899,6 +7899,7 @@ function createRyderCupTour() {
   _rcw = null;
   save(); closeModal(); renderToursList();
   enterTour(tourId);
+  if(rcCaptainBg()) rcPostCaptainsToWall(tour, true);
   if(logoData) uploadImageToStorage(logoData, 'tour-logos/' + tourId + '.png').then(function(url){
     if(!url) return; tour.heroLogo = url; save(); updateHero(tourId); renderToursList();
     if(/^data:/.test(logoData)) saveHeroLogoToLibrary(url, tour.name);
@@ -8438,6 +8439,94 @@ function rcScorecardHTML(t, s, m, doc, ms) {
     '<div style="overflow-x:auto;margin-top:6px"><table style="border-collapse:collapse;font-size:11px;width:100%">' + head + rowsK + win + '</table></div></details>';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// KAPTENSBILDEN PÅ VÄGGEN (release 356)
+// En bakgrundsbild (t.ex. två kaptener som håller pokalen) där våra egna kaptener läggs
+// som runda profilbilder över huvudena. Bilden och ansiktenas placering sparas en gång
+// (golfapp/tourCoverLabels._rcCaptainBg) och används för alla cuper. När en cup skapas
+// postas bilden på väggen; admin kan även posta den igen från Inst. Profilbilderna läggs
+// ovanpå när inlägget visas (inte inbrända), så de följer med om någon byter bild.
+// Vänster ansikte = laget med EU-flagga (annars lag A), höger = det andra laget.
+// ═══════════════════════════════════════════════════════════════════════════
+var RC_CAPTAIN_HEADS_DEFAULT = [{ x: 19.9, y: 25.8, r: 10.6 }, { x: 80.3, y: 21.6, r: 10.8 }];
+function rcCaptainBg() { var b = tourCoverLabels && tourCoverLabels._rcCaptainBg; return b && b.url ? b : null; }
+function rcCaptainOrder(t) {
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+  return rcFlagKey(B) === 'eu' && rcFlagKey(A) !== 'eu' ? [B, A] : [A, B];
+}
+// Bilden med kaptenernas ansikten. caps = [{u, name, color}, …] (vänster, höger)
+function rcCaptainsImageHTML(bg, caps, heads) {
+  heads = heads || bg.heads || RC_CAPTAIN_HEADS_DEFAULT;
+  var ar = (bg.w && bg.h) ? bg.w / bg.h : 958 / 546;
+  return '<div style="position:relative;width:100%;aspect-ratio:' + ar.toFixed(4) + ';overflow:hidden;background:var(--surface2)">' +
+    '<img src="' + esc(bg.url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block">' +
+    caps.map(function(c, i){
+      var hd = heads[i] || RC_CAPTAIN_HEADS_DEFAULT[i], u = findUser(c.u) || {}, img = playerPhoto(c.u, u.img), rh = hd.r * ar;
+      var face = img ? '<img src="' + esc(img) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block">'
+        : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--green-dark);color:#fff;font-weight:800;font-size:clamp(14px,4vw,34px)">' + ini(c.name || c.u) + '</div>';
+      return '<div style="position:absolute;left:' + hd.x + '%;top:' + hd.y + '%;width:' + (hd.r * 2) + '%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;overflow:hidden;border:3px solid ' + esc(c.color || '#fff') + ';box-shadow:0 6px 18px rgba(0,0,0,.4)">' + face + '</div>' +
+        '<div style="position:absolute;left:' + hd.x + '%;top:calc(' + (hd.y + rh) + '% + 4px);transform:translateX(-50%);background:' + esc(c.color || 'var(--green-dark)') + ';color:#fff;font-size:clamp(9px,2.2vw,13px);font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.35)">' + esc(c.label || '') + '</div>';
+    }).join('') + '</div>';
+}
+function rcCaptainCaps(t) {
+  return rcCaptainOrder(t).map(function(tm){ return { u: tm.captain, name: rcUserName(tm.captain), color: tm.color, label: 'Kapten ' + tm.name }; });
+}
+function rcPostCaptainsToWall(t, quiet) {
+  var bg = rcCaptainBg();
+  if(!bg) { if(!quiet) alert('Ladda upp kaptensbilden först (Inst. → Kaptensbilden på väggen).'); return; }
+  var caps = rcCaptainCaps(t), ord = rcCaptainOrder(t), a = ord[0], b = ord[1];
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''), category: 'rccaptains',
+    playerUsername: a.captain, playerName: t.name + (t.season ? ' ' + t.season : ''), img: bg.url,
+    rcBg: { url: bg.url, w: bg.w || null, h: bg.h || null }, rcHeads: bg.heads || RC_CAPTAIN_HEADS_DEFAULT, rcCaps: caps,
+    caption: 'Kaptenerna är utsedda! ' + rcUserName(a.captain) + ' leder ' + a.name + ' och ' + rcUserName(b.captain) + ' leder ' + b.name + '. Må bästa lag vinna!',
+    createdAt: Date.now(), likes: {}
+  }).then(function(){ if(!quiet) alert('Kaptensbilden är postad på väggen.'); }).catch(function(e){ console.warn('Kaptensbild', e); if(!quiet) alert('Kunde inte posta just nu.'); });
+}
+// Inst.: ladda upp bakgrunden, justera ansiktena och posta
+function rcCaptainSettingsHTML(t) {
+  var bg = rcCaptainBg(), heads = (bg && bg.heads) || RC_CAPTAIN_HEADS_DEFAULT;
+  var num = function(i, k, label){ return '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px">' + label + '<input type="number" step="0.5" value="' + heads[i][k] + '" onchange="rcSetCaptainHead(' + i + ',\'' + k + '\',this.value)" style="width:70px;margin:0;font-size:12px"></label>'; };
+  return '<div class="card" style="padding:14px 16px;margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:6px"><i class="ti ti-photo-star"></i> Kaptensbilden på väggen</div>' +
+    '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">En bild där kaptenernas profilbilder läggs över huvudena. Postas på väggen när en cup skapas. Bilden gäller alla cuper.</p>' +
+    (bg ? '<div style="border-radius:10px;overflow:hidden;margin-bottom:10px">' + rcCaptainsImageHTML(bg, rcCaptainCaps(t)) + '</div>' +
+      '<details class="dsw" style="margin-bottom:10px"><summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)"><span style="flex:1">Justera ansiktenas placering</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
+        ['Vänster', 'Höger'].map(function(lbl, i){ return '<div class="row" style="gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;width:56px">' + lbl + '</span>' + num(i, 'x', 'Sidled %') + num(i, 'y', 'Höjd %') + num(i, 'r', 'Storlek %') + '</div>'; }).join('') +
+        '<button type="button" class="btn btn-sm" style="margin-top:8px" onclick="rcResetCaptainHeads()">Återställ</button></details>' : '') +
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn btn-sm" style="margin:0;cursor:pointer"><i class="ti ti-upload"></i> ' + (bg ? 'Byt bild' : 'Ladda upp bild') + '<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])rcUploadCaptainBg(this.files[0])"></label>' +
+      (bg ? '<button class="btn btn-sm btn-primary" onclick="rcPostCaptainsToWall(getTour())"><i class="ti ti-send"></i> Posta på väggen nu</button>' : '') + '</div></div>';
+}
+function rcUploadCaptainBg(file) {
+  if(!isAdmin()) return;
+  compressImage(file, 1600, 1100, 0.88, function(d){
+    var im = new Image();
+    im.onload = function(){
+      uploadImageToStorage(d, 'rc/captains-bg-' + Date.now() + '.jpg').then(function(url){
+        if(!url) return;
+        var v = { url: url, w: im.naturalWidth, h: im.naturalHeight, heads: (rcCaptainBg() && rcCaptainBg().heads) || RC_CAPTAIN_HEADS_DEFAULT };
+        tourCoverLabels._rcCaptainBg = v;
+        TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: v }, { merge: true }).catch(function(e){ console.warn('Kaptensbild', e); });
+        renderSettings();
+      });
+    };
+    im.src = d;
+  });
+}
+function rcSetCaptainHead(i, k, v) {
+  var bg = rcCaptainBg(); if(!bg || !isAdmin()) return;
+  var n = parseFloat(v); if(isNaN(n)) return;
+  var heads = JSON.parse(JSON.stringify(bg.heads || RC_CAPTAIN_HEADS_DEFAULT));
+  heads[i][k] = n; bg.heads = heads;
+  TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: bg }, { merge: true }).catch(function(){});
+  renderSettings();
+}
+function rcResetCaptainHeads() {
+  var bg = rcCaptainBg(); if(!bg || !isAdmin()) return;
+  bg.heads = JSON.parse(JSON.stringify(RC_CAPTAIN_HEADS_DEFAULT));
+  TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: bg }, { merge: true }).catch(function(){});
+  renderSettings();
+}
+
 // ── Inställningar för Ryder Cup (release 342) ─────────────────────────────
 // Lagnamn, färger, kaptener, försvarande lag och spelare. En spelare som redan står i
 // en inlämnad uppställning kan inte flyttas eller tas bort (det skulle rubba matcherna).
@@ -8469,6 +8558,7 @@ function rcSettingsHTML(t) {
     (free.length ? '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="rc-add-u" style="flex:1;min-width:180px;margin:0">' + free.map(function(u){ return '<option value="' + esc(u.username) + '">' + esc(u.name || u.username) + '</option>'; }).join('') + '</select>' +
       t.rc.teams.map(function(tm){ return '<button class="btn btn-sm" style="background:' + esc(tm.color) + ';color:#fff;border-color:' + esc(tm.color) + '" onclick="rcAddPlayer(\'' + tm.id + '\')">Till ' + esc(tm.name) + '</button>'; }).join('') + '</div>'
       : '<p style="font-size:12px;color:var(--text-3);margin:0">Alla spelare i klubbhuset är redan med.</p>') + '</div>';
+  h += rcCaptainSettingsHTML(t);
   h += '<div class="card" style="padding:14px 16px;margin-bottom:12px"><div class="field" style="margin:0"><label>Försvarande lag (behåller pokalen vid lika)</label><select onchange="rcSetHolder(this.value)">' +
     '<option value="">Ingen – lika är delad seger</option>' + t.rc.teams.map(function(tm){ return '<option value="' + tm.id + '" ' + (t.rc.holder === tm.id ? 'selected' : '') + '>' + esc(tm.name) + '</option>'; }).join('') + '</select></div></div>';
   return h;
@@ -10139,9 +10229,11 @@ function feedPhotoPostHTML(it, avatar, likeCount, iLiked) {
       (canDeleteFeedItem(it) ? '<button onclick="deleteActivityFeedItem(\''+it._id+'\')" title="Radera inlägget" style="background:none;border:none;cursor:pointer;padding:6px 2px;color:var(--text-3);flex-shrink:0"><i class="ti ti-trash" style="font-size:16px"></i></button>' : '')+
     '</div>'+
     // Bilden kant i kant (kortets sidomarginal är 16 px)
-    '<div style="margin:0 -16px;aspect-ratio:1;background:var(--surface2);overflow:hidden">'+
+    (it.category === 'rccaptains' && it.rcBg
+      ? '<div style="margin:0 -16px">' + rcCaptainsImageHTML(it.rcBg, it.rcCaps || [], it.rcHeads) + '</div>'
+      : '<div style="margin:0 -16px;aspect-ratio:1;background:var(--surface2);overflow:hidden">'+
       '<img src="'+esc(it.img)+'" onload="fitFeedPhoto(this)" onclick="openImageLightbox(\''+esc(it.img)+'\')" loading="lazy" alt="" style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in">'+
-    '</div>'+
+    '</div>')+
     // Gilla-raden under bilden
     '<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'+
       '<button onclick="toggleActivityFeedLike(\''+it._id+'\')" title="Gilla" style="background:none;border:none;cursor:pointer;padding:6px 6px 6px 0;color:'+(iLiked?'#1D9E75':'var(--text-2)')+'"><i class="ti '+(iLiked?'ti-thumb-up-filled':'ti-thumb-up')+'" style="font-size:24px"></i></button>'+
@@ -10150,7 +10242,7 @@ function feedPhotoPostHTML(it, avatar, likeCount, iLiked) {
         : '<span style="font-size:12px;color:var(--text-3)">Bli först att gilla</span>')+
     '</div>'+
     // Bildtext
-    (it.caption ? '<div style="font-size:13px;color:var(--text);line-height:1.45;margin-top:2px;overflow-wrap:anywhere"><b>'+esc(firstName)+'</b> '+esc(it.caption)+'</div>' : '')+
+    (it.caption ? '<div style="font-size:13px;color:var(--text);line-height:1.45;margin-top:2px;overflow-wrap:anywhere">'+(it.category === 'rccaptains' ? '🏆 ' : '<b>'+esc(firstName)+'</b> ')+esc(it.caption)+'</div>' : '')+
   '</div>';
 }
 
@@ -10181,7 +10273,7 @@ function renderHomeActivityFeed(items) {
     var likeCount = Object.keys(likes).length;
     var iLiked = currentUser && !!likes[currentUser.username];
     // Bildinlägg från chatten: egen layout med bilden i full bredd (release 306)
-    if((it.category === 'chatpost' || it.category === 'wallpost') && it.img) return feedPhotoPostHTML(it, avatar, likeCount, iLiked);
+    if(((it.category === 'chatpost' || it.category === 'wallpost') && it.img) || (it.category === 'rccaptains' && it.rcBg)) return feedPhotoPostHTML(it, avatar, likeCount, iLiked);
     var lineHtml;
     if(it.category === 'goodround') {
       var resultLabel = it.isStab
@@ -22336,6 +22428,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (356)',
+    items: [
+      { type: 'new', text: 'Kaptensbilden: när en Ryder Cup skapas postas en bild på väggen där våra egna kaptener ligger som runda profilbilder över huvudena på bilden, med "Kapten Europa"/"Kapten USA" under – och texten "Kaptenerna är utsedda!". Bilden laddas upp en gång under Inst. → Kaptensbilden på väggen (gäller alla cuper), där ansiktenas placering kan justeras och bilden postas igen med "Posta på väggen nu".' },
+    ]
+  },
   {
     date: '10 november 2026 (355)',
     items: [
