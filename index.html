@@ -4476,6 +4476,37 @@ function anCardHead(icon, title, color, sub, bigVal, bigLbl){
 }
 function anFoot(txt){ return '<div style="padding:7px 16px 9px;font-size:11px;color:var(--text-3);background:var(--surface2);border-top:1px solid var(--border);line-height:1.4">'+txt+'</div>'; }
 
+// ── MAJORSEGRAR (release 324) ───────────────────────────────────────────────
+// Räknar segrar i deltävlingar markerade som Major (e.isMajor, 1.5x OoM-poäng) över
+// alla tourer i klubbhuset - golf och simulator hålls åtskilda precis som övrig statistik.
+function computeMajorWins(sim) {
+  var by = {}, majorsPlayed = 0;
+  statsTours(sim).forEach(function(t){
+    var players = getPlayersForTour(t);
+    (t.events||[]).forEach(function(e){
+      if(!e.isMajor || !e.closed || !e.results || !e.results.length) return;
+      majorsPlayed++;
+      var w = players[e.results[0].pi];
+      if(!w || !w.username) return;
+      if(!by[w.username]) by[w.username] = { username: w.username, name: w.name, wins: 0, titles: [] };
+      by[w.username].wins++;
+      by[w.username].titles.push(e.name);
+    });
+  });
+  return { players: Object.keys(by).map(function(k){ return by[k]; }), majorsPlayed: majorsPlayed };
+}
+function buildMajorWinsBoardHTML(sim) {
+  var mw = computeMajorWins(sim);
+  if(!mw.majorsPlayed) return '';
+  var rows = mw.players.map(function(p){ return { username: p.username, name: p.name, value: p.wins, label: p.wins+' st', sub: p.titles.map(esc).join(' · ') }; });
+  var leader = rows.slice().sort(function(a,b){ return b.value - a.value; })[0];
+  return '<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden">'+
+    anCardHead('ti-star', 'Flest majorsegrar', '#D4A017', 'Vinster i deltävlingar markerade som Major.'+(leader ? ' Flest: <strong style="color:var(--text)">'+esc(leader.name)+'</strong>' : ''), mw.majorsPlayed, mw.majorsPlayed === 1 ? 'major spelad' : 'majors spelade')+
+    anBarBoard(rows, { color:'#D4A017', min:0 })+
+    anFoot('Räknar avgjorda majors i klubbhusets tourer. Finaler räknas inte som majors.')+
+  '</div>';
+}
+
 // Topplista med horisontella staplar. rows: {username,name,value,label,sub}
 function anBarBoard(rows, opts){
   opts = opts || {};
@@ -4550,6 +4581,9 @@ function renderAnalysisHTML(sim) {
     tile('Bounce-back', anPct(all.bbPct), 'par+ efter bogey', '#6D28D9')+
     tile('Längsta svit', all.streak ? all.streak+' hål' : '–', all.streakRound ? esc(all.streakRound.name)+' · '+esc(all.streakRound.course) : 'par eller bättre i rad', '#BA7517')+
   '</div>';
+
+  // 0. Flest majorsegrar (release 324) - bara tourstatistik, inte sällskapsronder
+  if(!statsModeIsCasual(sim)) h += buildMajorWinsBoardHTML(sim);
 
   // 1. GIR & 2. Scrambling (bara riktig golf - kräver puttar)
   if(!noPutts) {
@@ -11850,18 +11884,32 @@ function renderCalendarOverview(t) {
   var html = '<p class="section-title" style="margin-top:20px"><i class="ti ti-list"></i> Tävlingsöversikt</p>';
   html += '<p style="font-size:12px;color:var(--text-2);margin-bottom:10px">Alla tävlingar i denna tour</p>';
   html += '<div class="card" style="padding:0">';
+  // Release 325: kompakta rader med fast höjd - datumruta till vänster, namn och bana på två
+  // rader (avkortas med "…" i stället för att radbryta), Major/Final som små märken på samma
+  // rad som namnet och status som en liten pill till höger. Alla rader blir lika höga.
+  var MONTHS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
   html += sorted.map(function(e, idx){
     var origIdx = t.events.indexOf(e);
-    return '<div class="row" style="justify-content:space-between;padding:12px 16px;cursor:pointer;'+(idx<sorted.length-1?'border-bottom:1px solid var(--border)':'')+'" onclick="showCalEvent('+origIdx+')">'+
-      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;min-width:0">'+
-        '<span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.name)+'</span>'+
-        (e.isMajor?'<span class="badge badge-gold" style="flex-shrink:0">Major</span>':'')+
-        (e.isFinal?'<span class="badge badge-gold" style="flex-shrink:0"><i class="ti ti-flag" style="font-size:10px"></i> Final</span>':'')+
+    var d = e.date ? new Date(e.date+'T00:00:00') : null;
+    var ok = d && !isNaN(d.getTime());
+    var day = ok ? d.getDate() : '–', mon = ok ? MONTHS[d.getMonth()] : '';
+    var wd = ok ? weekdaySv(e.date) : '';
+    var sub = [e.course, wd ? wd.charAt(0).toUpperCase()+wd.slice(1) : ''].filter(Boolean).join(' · ');
+    var tag = function(icon, txt){ return '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:var(--gold);background:var(--gold-light);border-radius:6px;padding:1px 6px;line-height:1.5"><i class="ti '+icon+'" style="font-size:10px"></i>'+txt+'</span>'; };
+    return '<div style="display:flex;align-items:center;gap:12px;height:58px;box-sizing:border-box;padding:0 14px;cursor:pointer;'+(idx<sorted.length-1?'border-bottom:1px solid var(--border)':'')+(e.closed?';opacity:.6':'')+'" onclick="showCalEvent('+origIdx+')">'+
+      '<div style="width:40px;flex-shrink:0;text-align:center;line-height:1.05">'+
+        '<div style="font-size:17px;font-weight:800;color:var(--text)">'+day+'</div>'+
+        '<div style="font-size:10px;font-weight:700;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em">'+mon+'</div>'+
       '</div>'+
-      '<div class="row" style="gap:8px;flex-shrink:0;align-items:center">'+
-        '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="font-size:10px">'+(e.closed?'Avslutad':'Öppen')+'</span>'+
-        '<span style="font-size:13px;color:var(--text-2);white-space:nowrap"><i class="ti ti-calendar" style="color:var(--green-dark);font-size:13px"></i> '+dateLongSv(e.date)+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:center;gap:6px;min-width:0">'+
+          '<span style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+esc(e.name)+'</span>'+
+          (e.isMajor ? tag('ti-star', 'Major') : '')+
+          (e.isFinal ? tag('ti-flag', 'Final') : '')+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">'+esc(sub || ' ')+'</div>'+
       '</div>'+
+      '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="font-size:10px;flex-shrink:0;padding:2px 8px">'+(e.closed?'Avslutad':'Öppen')+'</span>'+
     '</div>';
   }).join('');
   html += '</div>';
@@ -11932,6 +11980,7 @@ function resultBothValues(e, pi, r) {
 function computeCareerStats(username, sim) {
   var perTour = [];
   var totalWins = 0, totalPodiums = 0, totalEvents = 0, bestPosEver = null, totalPts = 0;
+  var totalMajorWins = 0, totalMajorsPlayed = 0, majorTitles = [];
   var allSlagScores = [], allStabScores = [];
   statsTours(sim).forEach(function(t){ // golf och simulator hålls helt åtskilda (sim=true -> bara simulatortourer)
     var players = getPlayersForTour(t);
@@ -11946,6 +11995,11 @@ function computeCareerStats(username, sim) {
     });
     var nonFinal = results.filter(function(x){ return !x.event.isFinal; });
     var wins = results.filter(function(x){ return x.pos===1; }).length;
+    // Majors (release 324): deltävlingar markerade som Major (1.5x poäng)
+    var majorWins = results.filter(function(x){ return x.pos===1 && x.event.isMajor; });
+    totalMajorWins += majorWins.length;
+    totalMajorsPlayed += results.filter(function(x){ return x.event.isMajor; }).length;
+    majorWins.forEach(function(x){ majorTitles.push({ event: x.event.name, tour: t.name + (t.season ? ' ' + t.season : ''), date: x.event.date || '' }); });
     var podiums = results.filter(function(x){ return x.pos<=3; }).length;
     var bestPos = Math.min.apply(null, results.map(function(x){ return x.pos; }));
     // Samma "räkna bara bästa N deltävlingar"-regel som computeOomStandings() använder för den
@@ -11967,12 +12021,14 @@ function computeCareerStats(username, sim) {
     });
     totalWins += wins; totalPodiums += podiums; totalEvents += results.length; totalPts += tourPts;
     if(bestPosEver===null || bestPos<bestPosEver) bestPosEver = bestPos;
-    perTour.push({ tour:t, events:results.length, wins:wins, podiums:podiums, bestPos:bestPos, pts:tourPts });
+    perTour.push({ tour:t, events:results.length, wins:wins, podiums:podiums, bestPos:bestPos, pts:tourPts, majorWins:majorWins.length });
   });
   return {
     perTour: perTour,
     toursPlayed: perTour.filter(function(x){ return x.events>0; }).length,
     totalEvents: totalEvents, totalWins: totalWins, totalPodiums: totalPodiums,
+    totalMajorWins: totalMajorWins, totalMajorsPlayed: totalMajorsPlayed,
+    majorTitles: majorTitles.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }),
     bestPosEver: bestPosEver, totalPts: totalPts,
     avgSlag: allSlagScores.length ? (allSlagScores.reduce(function(a,b){return a+b;},0)/allSlagScores.length).toFixed(1) : null,
     avgStab: allStabScores.length ? (allStabScores.reduce(function(a,b){return a+b;},0)/allStabScores.length).toFixed(1) : null
@@ -11986,6 +12042,7 @@ function buildCareerStatsHTML(username, sim) {
     { val:c.toursPlayed,  lbl:'Tourer spelade',  icon:'ti-calendar-event', color:'#185FA5' },
     { val:c.totalEvents,  lbl:'Tävlingar totalt', icon:'ti-flag',           color:'#0F6E56' },
     { val:c.totalWins,    lbl:'Segrar totalt',    icon:'ti-trophy',         color:'#BA7517' },
+    { val:c.totalMajorWins, lbl:'Majorsegrar',    icon:'ti-star',           color:'#D4A017' },
     { val:c.totalPodiums, lbl:'Pallplatser totalt',icon:'ti-medal',         color:'#888780' }
   ];
   var statHtml = cards.map(function(s){
@@ -12007,6 +12064,7 @@ function buildCareerStatsHTML(username, sim) {
         '<td style="padding:9px 16px;font-weight:600">'+esc(x.tour.name)+(x.tour.season?' <span style="color:var(--text-3);font-weight:400">'+esc(x.tour.season)+'</span>':'')+'</td>'+
         '<td style="padding:9px 8px;text-align:right">'+x.events+'</td>'+
         '<td style="padding:9px 8px;text-align:right;color:#BA7517;font-weight:600">'+x.wins+'</td>'+
+        '<td style="padding:9px 8px;text-align:right;color:#D4A017;font-weight:600">'+(x.majorWins||0)+'</td>'+
         '<td style="padding:9px 8px;text-align:right">'+x.podiums+'</td>'+
         '<td style="padding:9px 16px;text-align:right;font-weight:600;color:#0F6E56">'+x.pts+'p</td>'+
       '</tr>';
@@ -12026,11 +12084,15 @@ function buildCareerStatsHTML(username, sim) {
         '</div>'+
         '<div>'+
           dRow2('OoM-poäng totalt (alla tourer)', c.totalPts+'p')+
+          dRow2('Majors spelade', c.totalMajorsPlayed)+
         '</div>'+
       '</div>'+
+      (c.majorTitles.length ? '<div style="padding:0 16px 14px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px"><i class="ti ti-star" style="color:#D4A017"></i> Majortitlar</div>'+
+        c.majorTitles.map(function(m){ return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:600;min-width:0">'+esc(m.event)+'</span><span style="color:var(--text-3);flex-shrink:0;font-size:12px">'+esc(m.tour)+'</span></div>'; }).join('')+
+      '</div>' : '')+
       (rows ? '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
         '<th style="padding:8px 16px">Tour</th><th style="padding:8px 8px;text-align:right">Tävl.</th>'+
-        '<th style="padding:8px 8px;text-align:right">Segrar</th><th style="padding:8px 8px;text-align:right">Pall</th>'+
+        '<th style="padding:8px 8px;text-align:right">Segrar</th><th style="padding:8px 8px;text-align:right">Majors</th><th style="padding:8px 8px;text-align:right">Pall</th>'+
         '<th style="padding:8px 16px;text-align:right">Poäng</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '')+
     '</div>';
 }
@@ -20827,6 +20889,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (325)',
+    items: [
+      { type: 'improved', text: 'Kalenderns tävlingsöversikt är snyggare: alla rader är lika höga, med datumet i en liten ruta till vänster, tävlingens namn och bana på två rader och mindre text. Major och Final visas som små märken på samma rad som namnet i stället för att radbryta, och avslutade tävlingar är nedtonade.' },
+    ]
+  },
+  {
+    date: '9 november 2026 (324)',
+    items: [
+      { type: 'new', text: 'Majors i statistiken: Stats har en ny topplista "Flest majorsegrar" överst (vem som vunnit flest deltävlingar markerade som Major, med vilka titlar). Spelarens karriärstatistik visar antal majorsegrar, majors spelade, en lista med majortitlar och en Majors-kolumn per tour. Golf och simulator räknas var för sig.' },
+    ]
+  },
   {
     date: '9 november 2026 (323)',
     items: [
