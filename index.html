@@ -7840,10 +7840,14 @@ function rcViewHTML(t) {
       '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:16px;color:' + rcInk(B.color) + ';text-align:center;padding:0 6px">' + rcTeamHead(t, p, 'B') + '</div>' +
     '</div>' +
     '<div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">' + status + '</div>' +
+    (function(){ var pr = rcProjection(t); if(!pr.live || p.winner) return '';
+      return '<div class="row" style="justify-content:space-between;align-items:center;margin:10px auto 0;max-width:360px;padding:8px 14px;border-radius:10px;background:var(--surface2);font-size:13px">' +
+        '<b style="color:' + rcInk(A.color) + '">' + rcFmt(pr.A) + '</b><span style="font-size:11px;letter-spacing:.1em;color:var(--text-3)">PROGNOS · ' + pr.live + ' PÅGÅR</span><b style="color:' + rcInk(B.color) + '">' + rcFmt(pr.B) + '</b></div>'; })() +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
       rcCaptainHTML(A) + rcCaptainHTML(B) + '</div>' +
   '</div>';
   h += (t.rc.sessions || []).map(function(s, si){ return rcSessionHTML(t, s, si, mine); }).join('');
+  h += rcLeaderboardHTML(t);
   h += rcRosterHTML(t);
   return h;
 }
@@ -8048,7 +8052,7 @@ function rcAutoFinalize(t) {
       } else if(cur && cur.auto) { delete s.results[m.i]; changed = true; }
     });
   });
-  if(changed) save();
+  if(changed) { rcPostPending(t); save(); }
 }
 
 // ── Livescoringfönstret ───────────────────────────────────────────────────
@@ -8068,7 +8072,9 @@ function rcRenderLive() {
   var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), doc = _rcLive[rcLiveId(t, s, m.i)] || {}, ms = rcMatchStatus(t, s, m, doc), can = rcCanScore(m);
   var h = _rcLm.h, info = rcHoleInfo(s, h), hd = (doc.holes && doc.holes[h]) || {}, g = hd.g || {}, keys = rcScoreKeys(s, m), course = rcCourse(s);
   var lcol = ms.leader ? (ms.leader === 'A' ? A : B).color : null;
-  var statusTxt = ms.decided ? (ms.w === 'H' ? 'Delad match (AS)' : esc((ms.w === 'A' ? A : B).name) + ' vann ' + esc(ms.label))
+  var fin = (s.results || {})[m.i];
+  if(fin && !ms.decided) lcol = fin.w === 'H' ? null : (fin.w === 'A' ? A : B).color;
+  var statusTxt = (fin && !ms.decided) ? (fin.w === 'H' ? 'Delad match (AS)' : esc((fin.w === 'A' ? A : B).name) + ' vann ' + esc(fin.m || '1UP')) : ms.decided ? (ms.w === 'H' ? 'Delad match (AS)' : esc((ms.w === 'A' ? A : B).name) + ' vann ' + esc(ms.label))
     : (ms.played ? (ms.leader ? esc((ms.leader === 'A' ? A : B).name) + ' ' + esc(ms.label) : 'Lika (AS)') + ' efter ' + ms.played : 'Matchen har inte börjat');
   var nameOf = function(k){ return k === 'A' || k === 'B' ? m[k === 'A' ? 'a' : 'b'].map(rcShortName).join(' & ') : rcShortName(k); };
   var row = function(k){
@@ -8107,6 +8113,7 @@ function rcRenderLive() {
     '<div style="font-size:11px;color:var(--text-3);margin:4px 0 6px">' + (computed ? 'Hålvinnaren räknas från slagen (netto).' : 'Vem vann hålet? Snabbval om alla inte för slag.') + '</div>' +
     '<div class="row" style="gap:6px;margin-bottom:12px">' + wbtn('A', esc(A.name), A.color) + wbtn('H', 'Delat') + wbtn('B', esc(B.name), B.color) + '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-bottom:10px">' + grid + '</div>' +
+    rcScorecardHTML(t, s, m, doc, ms) +
     '<details class="dsw"><summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)"><span style="flex:1">Handicapslag: ' + hcpLine + '</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
       '<div style="font-size:12px;color:var(--text-3);margin:6px 0">' + (s.format === 'foursome' ? 'Foursome: laget får 50 % av spelarnas sammanlagda spelhandicap; skillnaden mellan lagen avgör.' : s.format === 'fourball' ? 'Fyrboll: alla får 90 % av sitt spelhandicap; den bästa spelar på 0.' : 'Singlar: hela skillnaden i spelhandicap; den bättre spelar på 0.') + (course && course.slope && course.rating ? '' : ' Banan saknar slope/CR – spelhandicap = HCP.') + '</div>' +
       (can ? m.a.concat(m.b).map(function(u){ var ov = (doc.shcp || {})[u]; return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:4px 0"><span style="font-size:13px">' + esc(rcShortName(u)) + ' <span style="color:var(--text-3)">(HCP ' + fmtHcp((findUser(u) || {}).hcp) + ')</span></span><input type="number" step="1" value="' + (ov != null ? ov : rcCourseHcp(u, s)) + '" onchange="rcSetShcp(\'' + esc(u) + '\',this.value)" style="width:80px;margin:0" title="Spelhandicap"></div>'; }).join('') : '') +
@@ -8153,6 +8160,122 @@ function rcSetShcp(u, v) {
   if(!_rcLm) return;
   var n = parseInt(v, 10); if(isNaN(n)) return;
   var p = { shcp: {} }; p.shcp[u] = n; rcLiveWrite(p);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RYDER CUP – ETAPP 3 (release 350): prognos, väggen, poängligan och matchkort
+// Prognos: avgjorda matcher + pågående matcher som de står just nu (ledare 1, lika ½).
+// Väggen: ett inlägg när en match avgörs och ett när cupen är vunnen (en gång var,
+// markerat med posted på resultatet resp. t.rc.winPosted).
+// ═══════════════════════════════════════════════════════════════════════════
+function rcProjection(t) {
+  var p = rcPoints(t), pr = { A: p.A, B: p.B }, live = 0;
+  (t.rc.sessions || []).forEach(function(s){
+    rcMatches(t, s).forEach(function(m){
+      if(m.r) return;
+      var doc = _rcLive[rcLiveId(t, s, m.i)]; if(!doc) return;
+      var ms = rcMatchStatus(t, s, m, doc); if(!ms.played) return;
+      live++;
+      if(ms.leader) pr[ms.leader] += 1; else { pr.A += 0.5; pr.B += 0.5; }
+    });
+  });
+  return { A: pr.A, B: pr.B, live: live };
+}
+function rcPostMatchToWall(t, s, si, i) {
+  var r = (s.results || {})[i], m = rcMatches(t, s)[i];
+  if(!r || r.posted || !m) return;
+  r.posted = true;
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), p = rcPoints(t);
+  var win = r.w === 'H' ? null : r.w, wSide = win === 'B' ? m.b : m.a, lSide = win === 'B' ? m.a : m.b;
+  var lead = p.A === p.B ? 'Ställningen ' + rcFmt(p.A) + '–' + rcFmt(p.B) : (p.A > p.B ? A.name : B.name) + ' leder ' + rcFmt(Math.max(p.A, p.B)) + '–' + rcFmt(Math.min(p.A, p.B));
+  var first = (win ? wSide : m.a)[0], fu = findUser(first) || {};
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''), category: 'rcmatch',
+    playerUsername: first, playerName: fu.name || first,
+    rcWin: win ? (win === 'A' ? A.name : B.name) : null, rcColor: win ? (win === 'A' ? A.color : B.color) : null,
+    rcWinners: (win ? wSide : m.a).map(rcShortName).join(' & '), rcLosers: (win ? lSide : m.b).map(rcShortName).join(' & '),
+    rcLabel: r.w === 'H' ? 'AS' : (r.m || '1UP'), rcHalved: !win, rcStanding: lead, rcFormat: RC_FORMATS[s.format].label, rcPass: si + 1,
+    createdAt: Date.now(), likes: {}
+  }).catch(function(e){ console.warn('Ryder Cup vägg', e); });
+}
+function rcPostWinToWall(t) {
+  var p = rcPoints(t); if(!p.winner || t.rc.winPosted) return;
+  t.rc.winPosted = true;
+  var W = rcTeam(t, p.winner), cap = findUser(W.captain) || {};
+  ACTIVITY_FEED_COL.add({
+    tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''), category: 'rcwin',
+    playerUsername: W.captain, playerName: cap.name || W.captain,
+    rcWin: W.name, rcColor: W.color, rcScore: rcFmt(Math.max(p.A, p.B)) + '–' + rcFmt(Math.min(p.A, p.B)),
+    createdAt: Date.now(), likes: {}
+  }).catch(function(e){ console.warn('Ryder Cup vägg', e); });
+}
+// Går igenom cupen och postar det som inte postats än (anropas efter att resultat satts)
+function rcPostPending(t) {
+  var any = false;
+  // Bara färska resultat (senaste 3 timmarna) postas; äldre (t.ex. satta innan väggen fanns) markeras tyst
+  var fresh = Date.now() - 3 * 3600 * 1000;
+  (t.rc.sessions || []).forEach(function(s, si){ Object.keys(s.results || {}).forEach(function(i){ var r = s.results[i];
+    if(r.posted) return;
+    if((r.at || 0) < fresh) { r.posted = true; any = true; return; }
+    rcPostMatchToWall(t, s, si, +i); any = true; }); });
+  var p = rcPoints(t); if(p.winner && !t.rc.winPosted) { rcPostWinToWall(t); any = true; }
+  return any;
+}
+
+// Poängligan: poäng per spelare (vinst 1, delad ½) och facit V-F-D per format
+function rcPlayerStats(t) {
+  var st = {};
+  t.rc.teams.forEach(function(tm){ tm.players.forEach(function(u){ st[u] = { u: u, team: tm.id, pts: 0, w: 0, l: 0, h: 0, played: 0, fmt: {} }; }); });
+  (t.rc.sessions || []).forEach(function(s){
+    rcMatches(t, s).forEach(function(m){
+      if(!m.r) return;
+      [['A', m.a], ['B', m.b]].forEach(function(x){
+        x[1].forEach(function(u){
+          var o = st[u]; if(!o) return;
+          var f = o.fmt[s.format] = o.fmt[s.format] || { w: 0, l: 0, h: 0 };
+          o.played++;
+          if(m.r.w === 'H') { o.h++; f.h++; o.pts += 0.5; } else if(m.r.w === x[0]) { o.w++; f.w++; o.pts += 1; } else { o.l++; f.l++; }
+        });
+      });
+    });
+  });
+  return Object.keys(st).map(function(k){ return st[k]; }).sort(function(a, b){ return b.pts - a.pts || b.w - a.w || a.played - b.played || rcUserName(a.u).localeCompare(rcUserName(b.u), 'sv'); });
+}
+function rcLeaderboardHTML(t) {
+  var list = rcPlayerStats(t).filter(function(o){ return o.played; });
+  if(!list.length) return '';
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+  return '<details class="dsw" style="margin:6px 0 10px" open><summary style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text-2)"><i class="ti ti-trophy"></i><span style="flex:1">Poängligan</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
+    '<div class="card" style="padding:8px 12px;margin-top:8px">' +
+    '<div class="row" style="gap:8px;font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;padding:4px 0;border-bottom:1px solid var(--border)"><span style="flex:1">Spelare</span><span style="width:70px;text-align:center">V–F–D</span><span style="width:46px;text-align:right">Poäng</span></div>' +
+    list.map(function(o, i){
+      var tm = o.team === 'A' ? A : B;
+      var fm = Object.keys(o.fmt).map(function(k){ var f = o.fmt[k]; return RC_FORMATS[k].label + ' ' + f.w + '–' + f.l + '–' + f.h; }).join(' · ');
+      return '<div class="row" style="gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showGlobalPlayerProfile(\'' + esc(o.u) + '\')">' +
+        '<span style="width:18px;font-size:12px;color:var(--text-3)">' + (i + 1) + '</span>' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + esc(tm.color) + ';flex-shrink:0"></span>' +
+        '<span style="flex:1;min-width:0"><span style="display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(rcUserName(o.u)) + '</span><span style="display:block;font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(fm) + '</span></span>' +
+        '<span style="width:70px;text-align:center;font-size:13px">' + o.w + '–' + o.l + '–' + o.h + '</span>' +
+        '<span style="width:46px;text-align:right;font-weight:800;font-size:15px">' + rcFmt(o.pts) + '</span></div>';
+    }).join('') + '</div></details>';
+}
+
+// Scorekort för en match (i livefönstret): brutto per spelare och hålvinnare
+function rcScorecardHTML(t, s, m, doc, ms) {
+  if(!ms.played) return '';
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), keys = rcScoreKeys(s, m), holes = [];
+  for(var h = 1; h <= ms.n; h++) holes.push(h);
+  var nameOf = function(k){ return k === 'A' || k === 'B' ? (k === 'A' ? A.name : B.name) : rcShortName(k); };
+  var cell = 'padding:4px 3px;text-align:center;min-width:22px';
+  var head = '<tr><th style="' + cell + ';text-align:left">Hål</th>' + holes.map(function(h){ return '<th style="' + cell + '">' + h + '</th>'; }).join('') + '</tr>';
+  var rowsK = keys.map(function(k){
+    var tm = rcKeySide(m, k) === 'A' ? A : B;
+    return '<tr><td style="' + cell + ';text-align:left;white-space:nowrap;font-weight:700;color:' + rcInk(tm.color) + '">' + esc(nameOf(k)) + '</td>' + holes.map(function(h){ var g = ((doc.holes || {})[h] || {}).g || {}; return '<td style="' + cell + '">' + (g[k] != null ? g[k] : '·') + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  var win = '<tr><td style="' + cell + ';text-align:left;color:var(--text-3)">Vann</td>' + holes.map(function(h){ var r = ms.res[h]; var c = r === 'A' ? A.color : (r === 'B' ? B.color : null);
+    return '<td style="' + cell + '"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' + (c ? esc(c) : (r === 'H' ? 'color-mix(in srgb, var(--text-3) 50%, transparent)' : 'transparent')) + ';border:' + (r ? 'none' : '1px dashed var(--border)') + '"></span></td>'; }).join('') + '</tr>';
+  return '<details class="dsw" style="margin-bottom:10px"' + (ms.decided ? ' open' : '') + '><summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)"><i class="ti ti-table"></i><span style="flex:1">Scorekort</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
+    '<div style="overflow-x:auto;margin-top:6px"><table style="border-collapse:collapse;font-size:11px;width:100%">' + head + rowsK + win + '</table></div></details>';
 }
 
 // ── Inställningar för Ryder Cup (release 342) ─────────────────────────────
@@ -8316,6 +8439,7 @@ function rcSaveResult(si, i) {
   var w = sel.getAttribute('data-w');
   if(!s.results) s.results = {};
   s.results[i] = { w: w, m: w === 'H' ? 'AS' : document.getElementById('rc-m').value, by: currentUser ? currentUser.username : null, at: Date.now() };
+  rcPostPending(t);
   save(); closeModal(); renderEvents();
 }
 function rcClearResult(si, i) {
@@ -9908,6 +10032,13 @@ function renderHomeActivityFeed(items) {
     } else if(it.category === 'tourchampion') {
       var ptsText = it.pts!=null ? ' med '+it.pts+' p' : '';
       lineHtml = '👑 <b>'+esc(it.playerName)+'</b> är säsongsmästare i <b>'+esc(it.tourName)+'</b>'+ptsText+'!';
+    } else if(it.category === 'rcmatch') {
+      lineHtml = (it.rcHalved
+        ? '🤝 <b>' + esc(it.rcWinners) + '</b> och <b>' + esc(it.rcLosers) + '</b> delade matchen'
+        : '🏆 <b style="color:' + esc(it.rcColor || 'inherit') + '">' + esc(it.rcWinners) + '</b> vann <b>' + esc(it.rcLabel) + '</b> mot ' + esc(it.rcLosers)) +
+        ' <span style="color:var(--text-3)">(' + esc(it.rcFormat || '') + ', pass ' + esc(it.rcPass || '') + ')</span> – ' + esc(it.rcStanding || '');
+    } else if(it.category === 'rcwin') {
+      lineHtml = '🏆 <b style="color:' + esc(it.rcColor || 'inherit') + '">' + esc(it.rcWin) + '</b> har vunnit <b>' + esc(it.tourName) + '</b> med ' + esc(it.rcScore) + '! Kapten ' + esc(it.playerName) + ' lyfter pokalen.';
     } else if(it.category === 'tourchicken') {
       lineHtml = '🐔 <b>'+esc(it.playerName)+'</b> är årets fegis i <b>'+esc(it.tourName)+'</b> – tackade nej till '+(it.count||0)+' bet'+(it.count===1?'':'s')+'!';
     } else if(it.category === 'sidebetwin') {
@@ -22044,6 +22175,15 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (350)',
+    items: [
+      { type: 'new', text: 'Ryder Cup etapp 3 – prognos: när matcher pågår visar tavlan en prognos för hur det slutar om de står sig (ledande match ger 1, lika ½), t.ex. "17½ · PROGNOS · 3 PÅGÅR · 10½".' },
+      { type: 'new', text: 'Väggen: när en match avgörs postas t.ex. "🏆 A. J. Wrååk vann 3&2 mot B. DeChambeau (Singlar, pass 3) – Europa leder 9½–6½", och när cupen är avgjord "Europa har vunnit … med 15½–12½! Kapten … lyfter pokalen."' },
+      { type: 'new', text: 'Poängligan: under passen visas varje spelares poäng (vinst 1, delad ½) och facit vunna–förlorade–delade, totalt och per format. Tryck på en spelare för profilen.' },
+      { type: 'new', text: 'Scorekort: i en match visas hela scorekortet med varje spelares slag och hålvinnaren per hål (öppet när matchen är avgjord). En match med manuellt satt resultat visar resultatet överst.' },
+    ]
+  },
   {
     date: '10 november 2026 (349)',
     items: [
