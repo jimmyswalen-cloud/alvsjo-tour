@@ -2010,7 +2010,8 @@ function uploadImageToStorage(dataUrl, path) {
     if(!/^data:/.test(dataUrl)) { resolve(dataUrl); return; } // redan en URL - inget nytt att ladda upp
     if(!path) { resolve(null); return; }
     var ref = storage.ref().child(path);
-    ref.putString(dataUrl, 'data_url', { contentType: 'image/jpeg' }).then(function(snapshot){
+    var ctype = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || 'image/jpeg';
+    ref.putString(dataUrl, 'data_url', { contentType: ctype }).then(function(snapshot){
       return snapshot.ref.getDownloadURL();
     }).then(function(url){
       resolve(url);
@@ -5163,7 +5164,7 @@ function renderEditTourBtn() {
   var wrap = document.getElementById('edit-tour-btn-wrap');
   if(!wrap) return;
   if(!isAdmin()) { wrap.innerHTML = ''; return; }
-  if(!tourHasStarted(t)) {
+  if(!isRyderTour(t) && !tourHasStarted(t)) {
     wrap.innerHTML = '<button class="btn btn-sm" onclick="openEditTour()" style="margin-left:8px"><i class="ti ti-edit"></i> Redigera</button>';
   } else {
     // Touren är låst strukturellt (deltävlingar kan inte ändras), men namn/säsong/
@@ -5359,11 +5360,43 @@ function clearEditTourCover() {
 // inte att touren är ostartad. Egna hjälpfunktioner nedan (inte de för
 // openEditTour) eftersom de annars skulle trigga "touren har startat"-spärren
 // när de försöker rita om modalen efter en bildändring.
+// ── LOGGA I TOURHEADERN (release 340) ──────────────────────────────────────
+// En tour kan ha en egen logga (t.heroLogo) som visas i headern i stället för klubbhusets,
+// t.ex. Ryder Cup-märket. Läses som PNG så att en genomskinlig bakgrund behålls.
+function readLogoPng(file, cb) {
+  var r = new FileReader();
+  r.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var k = Math.min(1, 600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      cb(c.toDataURL('image/png'));
+    };
+    img.onerror = function(){ alert('Bilden kunde inte läsas.'); };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(file);
+}
+function heroLogoFieldHTML(src, pickJs, clearJs) {
+  return '<div class="field"><label>Logga i headern (valfritt)</label>' +
+    '<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">' +
+      (src ? '<img src="' + esc(src) + '" style="height:64px;width:auto;border-radius:8px;background:color-mix(in srgb, var(--text) 8%, transparent);padding:4px">' : '<span style="font-size:12px;color:var(--text-3)">Ingen – klubbhusets logga visas</span>') +
+      '<label class="btn btn-sm" style="margin:0;cursor:pointer"><i class="ti ti-upload"></i> ' + (src ? 'Byt' : 'Ladda upp') + '<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])' + pickJs + '(this.files[0])"></label>' +
+      (src ? '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="' + clearJs + '()"><i class="ti ti-trash"></i></button>' : '') +
+    '</div><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Visas bredvid tournamnet i headern. PNG med genomskinlig bakgrund blir snyggast.</p></div>';
+}
+function pickRenameHeroLogo(file) { syncEditTourDraftFields(); readLogoPng(file, function(d){ _editTourDraft.heroLogo = d; openRenameTour(); }); }
+function clearRenameHeroLogo() { syncEditTourDraftFields(); _editTourDraft.heroLogo = null; openRenameTour(); }
+function pickRcwHeroLogo(file) { var nm = document.getElementById('rcw-name'); if(nm) _rcw.name = nm.value; readLogoPng(file, function(d){ _rcw.logo = d; renderRyderCupWizard(); }); }
+function clearRcwHeroLogo() { _rcw.logo = null; renderRyderCupWizard(); }
+
 function openRenameTour() {
   if(!isAdmin()) return;
   var t = getTour();
   if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null, headerImg: t.headerImg||null, headerText: t.headerText||'auto', tileImg: t.tileImg||null };
   _editTourDraft.mode = 'rename';
+  if(!('heroLogo' in _editTourDraft)) _editTourDraft.heroLogo = t.heroLogo || null;
 
   var h = '<h3><i class="ti ti-edit"></i> Byt namn/bild</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Touren har startat, så deltävlingarna kan inte ändras längre - men namn, säsong och omslagsbild går fortfarande fint att uppdatera.</p>';
@@ -5378,6 +5411,7 @@ function openRenameTour() {
   h += '</div>';
   h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
   h += '</div>';
+  h += heroLogoFieldHTML(_editTourDraft.heroLogo, 'pickRenameHeroLogo', 'clearRenameHeroLogo');
   h += tourExtraImagesHTML();
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
     '<button class="btn" onclick="_editTourDraft=null;closeModal()">Avbryt</button>'+
@@ -5424,6 +5458,9 @@ function saveRenameTour() {
   _editTourDraft = null;
   uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
     t.img = url;
+    var lg = (draftSnap && 'heroLogo' in draftSnap) ? draftSnap.heroLogo : t.heroLogo;
+    return uploadImageToStorage(lg, 'tour-logos/'+t.id+'.png').then(function(lu){ if(lu) t.heroLogo = lu; else delete t.heroLogo; });
+  }).then(function(){
     return applyTourExtraImages(t, draftSnap);
   }).then(function(){
     save();
@@ -5515,6 +5552,9 @@ function saveEditTour() {
   document.getElementById('active-tour-name').textContent = t.name;
   uploadImageToStorage(newImg, 'tour-covers/'+t.id+'.jpg').then(function(url){
     t.img = url;
+    var lg = (draftSnap && 'heroLogo' in draftSnap) ? draftSnap.heroLogo : t.heroLogo;
+    return uploadImageToStorage(lg, 'tour-logos/'+t.id+'.png').then(function(lu){ if(lu) t.heroLogo = lu; else delete t.heroLogo; });
+  }).then(function(){
     return applyTourExtraImages(t, draftSnap);
   }).then(function(){
     save();
@@ -5548,6 +5588,9 @@ function enterTour(id) {
   // Ryder Cup har ingen OoM-tabell - lagställningen visas i Tävlingar-fliken
   var oomNav = document.getElementById('nav-oom');
   if(oomNav) oomNav.style.display = isRyderTour(getTour()) ? 'none' : '';
+  // ...och inga deltävlingar, så Kalender (som visar deltävlingarna) döljs också
+  var calNav = document.getElementById('nav-calendar');
+  if(calNav) calNav.style.display = isRyderTour(getTour()) ? 'none' : '';
   showView('tournament');
   window.scrollTo(0, 0);
 }
@@ -7537,6 +7580,29 @@ function rcwPlayers() {
   return clubUsers(currentClubId()).filter(function(u){ return u.isPlayer != null ? u.isPlayer : (u.role !== 'admin'); })
     .sort(function(a, b){ return (a.name || a.username).localeCompare(b.name || b.username, 'sv'); });
 }
+// Release 339: passen i guiden – formatet kommer från upplägget, och datum och bana
+// fylls i per pass (eller en bana för alla). Sparas per position, så att de ligger kvar
+// om man byter upplägg.
+function rcwSessionMeta(i) { if(!_rcw.meta) _rcw.meta = []; if(!_rcw.meta[i]) _rcw.meta[i] = { date: '', course: '' }; return _rcw.meta[i]; }
+function rcwSessionsHTML() {
+  var fs = rcwSessionsPreview();
+  return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin:-4px 0 14px">' +
+    '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><b style="font-size:13px">Passen</b>' +
+      '<span class="row" style="gap:6px;align-items:center"><input type="text" id="rcw-allcourse" list="rcw-courses" placeholder="Samma bana för alla…" style="margin:0;width:200px;font-size:12px"><button type="button" class="btn btn-sm" onclick="rcwFillCourse()">Fyll i</button></span></div>' +
+    '<datalist id="rcw-courses">' + (courseDb || []).map(function(c){ return '<option value="' + esc(c.name) + '">'; }).join('') + '</datalist>' +
+    fs.map(function(f, i){ var m = rcwSessionMeta(i);
+      return '<div class="row" style="gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border);flex-wrap:wrap">' +
+        '<span style="flex:0 0 150px;font-size:13px"><b>Pass ' + (i + 1) + '</b> · ' + RC_FORMATS[f].label + '</span>' +
+        '<input type="date" value="' + esc(m.date) + '" oninput="rcwSessionMeta(' + i + ').date=this.value" style="margin:0;width:150px;font-size:12px">' +
+        '<input type="text" list="rcw-courses" value="' + esc(m.course) + '" placeholder="Bana" oninput="rcwSessionMeta(' + i + ').course=this.value" class="rcw-course" style="margin:0;flex:1;min-width:160px;font-size:12px"></div>';
+    }).join('') +
+    '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Formatet följer upplägget ovan. Datum och bana kan också ändras senare med ✏️ på passet.</p></div>';
+}
+function rcwFillCourse() {
+  var v = (document.getElementById('rcw-allcourse').value || '').trim(); if(!v) return;
+  rcwSessionsPreview().forEach(function(f, i){ rcwSessionMeta(i).course = v; });
+  document.querySelectorAll('.rcw-course').forEach(function(el){ el.value = v; });
+}
 function rcwSessionsPreview() {
   return RC_PRESETS[_rcw.preset].s.map(function(f){ return f === 'foursome' && _rcw.replace !== 'keep' ? _rcw.replace : f; });
 }
@@ -7561,7 +7627,8 @@ function renderRyderCupWizard() {
       Object.keys(RC_PRESETS).map(function(k){ return '<option value="' + k + '" ' + (w.preset === k ? 'selected' : '') + '>' + RC_PRESETS[k].label + '</option>'; }).join('') + '</select></div>' +
       '<div class="field" style="flex:1;min-width:200px"><label>Ersätt foursome med</label><select onchange="_rcw.replace=this.value;renderRyderCupWizard()">' +
         '<option value="keep" ' + (w.replace === 'keep' ? 'selected' : '') + '>Behåll foursome</option><option value="fourball" ' + (w.replace === 'fourball' ? 'selected' : '') + '>Fyrboll (egen boll)</option><option value="singles" ' + (w.replace === 'singles' ? 'selected' : '') + '>Singlar</option></select></div></div>' +
-    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px">' + rcwSessionsPreview().map(function(f, i){ return '<span class="badge" style="background:var(--surface2);color:var(--text-2)">Pass ' + (i + 1) + ': ' + RC_FORMATS[f].label + '</span>'; }).join('') + '</div>' +
+    rcwSessionsHTML() +
+    heroLogoFieldHTML(_rcw.logo, 'pickRcwHeroLogo', 'clearRcwHeroLogo') +
     '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:stretch;margin-bottom:12px">' + teamBox(w.teams[0]) + teamBox(w.teams[1]) + '</div>' +
     '<label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Spelare – tryck för att välja lag</label>' +
     '<div id="rcw-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
@@ -7605,9 +7672,9 @@ function createRyderCupTour() {
   if(players.A.length > 12 || players.B.length > 12) { alert('Högst 12 spelare per lag.'); return; }
   if(!w.teams[0].captain || !w.teams[1].captain) { alert('Välj en kapten i varje lag.'); return; }
   var tourId = uid();
-  var sessions = RC_PRESETS[w.preset].s.map(function(f){
-    var fmt = f === 'foursome' && w.replace !== 'keep' ? w.replace : f;
-    return { id: uid(), format: fmt, origFormat: f, date: '', course: '', lineups: { A: null, B: null }, results: {} };
+  var sessions = RC_PRESETS[w.preset].s.map(function(f, i){
+    var fmt = f === 'foursome' && w.replace !== 'keep' ? w.replace : f, m = (w.meta || [])[i] || {};
+    return { id: uid(), format: fmt, origFormat: f, date: m.date || '', course: (m.course || '').trim(), lineups: { A: null, B: null }, results: {} };
   });
   var tour = { id: tourId, name: w.name.trim(), season: (w.season || '').trim(), img: null, format: 'rydercup', locked: true,
     players: [], events: [], pointsScale: [], finalTable: [], fee: 0, payments: {},
@@ -7616,11 +7683,15 @@ function createRyderCupTour() {
       teams: w.teams.map(function(tm){ return { id: tm.id, name: tm.name, color: tm.color, captain: tm.captain, players: players[tm.id] }; }),
       sessions: sessions } };
   tour.clubhouse = currentClubId();
+  var logoData = w.logo || null;
   players.A.concat(players.B).forEach(function(u){ var x = findUser(u); if(x) { if(!x.tourAccess) x.tourAccess = []; if(x.tourAccess.indexOf(tourId) < 0) x.tourAccess.push(tourId); } });
   S.tours.push(tour);
   _rcw = null;
   save(); closeModal(); renderToursList();
   enterTour(tourId);
+  if(logoData) uploadImageToStorage(logoData, 'tour-logos/' + tourId + '.png').then(function(url){
+    if(!url) return; tour.heroLogo = url; save(); updateHero(tourId); renderToursList();
+  });
 }
 
 // ── Tävlingsvyn ───────────────────────────────────────────────────────────
@@ -21242,6 +21313,13 @@ function updateHero(tourId) {
     heroTitle.textContent=t.name; heroSub.textContent=''; heroSub.style.display='none';
     heroEye.textContent='';
   }
+  // Tourens egen logga (release 340) ersätter klubbhusets i headern, lite större
+  var hl0 = document.getElementById('hero-logo');
+  var tl0 = tourId ? S.tours.find(function(x){ return x.id === tourId; }) : null;
+  if(hl0) {
+    if(tl0 && tl0.heroLogo) { hl0.src = tl0.heroLogo; hl0.style.display = ''; hl0.style.height = 'clamp(64px,15vw,120px)'; }
+    else hl0.style.height = 'clamp(44px,9vw,72px)';
+  }
 }
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
@@ -21505,6 +21583,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (340)',
+    items: [
+      { type: 'new', text: 'Egen logga i tourheadern: en tour kan få en egen logga (t.ex. Ryder Cup-märket) som visas bredvid tournamnet i stället för klubbhusets. Ladda upp den i guiden för Ny Ryder Cup, eller i efterhand via Redigera/Byt namn och bild på touren. Genomskinlig bakgrund behålls.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (339)',
+    items: [
+      { type: 'improved', text: 'Ny Ryder Cup: guiden har nu en ruta "Passen" där du anger datum och bana för varje pass direkt, eller fyller i samma bana för alla med ett tryck. Formatet för varje pass följer upplägget och visas på raden.' },
+      { type: 'fixed', text: 'Ryder Cup har inga deltävlingar: Redigera öppnar nu bara namn, säsong och bild (inte deltävlingar), och fliken Kalender döljs. Pass ändras som förut med ✏️ på passet.' },
+    ]
+  },
   {
     date: '10 november 2026 (338)',
     items: [
