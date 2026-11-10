@@ -4479,6 +4479,14 @@ function anFoot(txt){ return '<div style="padding:7px 16px 9px;font-size:11px;co
 // ── MAJORSEGRAR (release 324) ───────────────────────────────────────────────
 // Räknar segrar i deltävlingar markerade som Major (e.isMajor, 1.5x OoM-poäng) över
 // alla tourer i klubbhuset - golf och simulator hålls åtskilda precis som övrig statistik.
+// Årtal för en vunnen major (release 326): deltävlingens datum, annars tourens säsong.
+function majorYear(e, t) {
+  var y = (e && e.date ? String(e.date).slice(0,4) : '');
+  if(!/^\d{4}$/.test(y)) { var m = String((t && t.season) || '').match(/\d{4}/); y = m ? m[0] : ''; }
+  return y;
+}
+function majorYearSuffix(e, t) { var y = majorYear(e, t); return y ? ' ' + y : ''; }
+
 function computeMajorWins(sim) {
   var by = {}, majorsPlayed = 0;
   statsTours(sim).forEach(function(t){
@@ -4490,7 +4498,7 @@ function computeMajorWins(sim) {
       if(!w || !w.username) return;
       if(!by[w.username]) by[w.username] = { username: w.username, name: w.name, wins: 0, titles: [] };
       by[w.username].wins++;
-      by[w.username].titles.push(e.name);
+      by[w.username].titles.push(e.name + majorYearSuffix(e, t));
     });
   });
   return { players: Object.keys(by).map(function(k){ return by[k]; }), majorsPlayed: majorsPlayed };
@@ -11999,7 +12007,7 @@ function computeCareerStats(username, sim) {
     var majorWins = results.filter(function(x){ return x.pos===1 && x.event.isMajor; });
     totalMajorWins += majorWins.length;
     totalMajorsPlayed += results.filter(function(x){ return x.event.isMajor; }).length;
-    majorWins.forEach(function(x){ majorTitles.push({ event: x.event.name, tour: t.name + (t.season ? ' ' + t.season : ''), date: x.event.date || '' }); });
+    majorWins.forEach(function(x){ majorTitles.push({ event: x.event.name, year: majorYear(x.event, t), tour: t.name + (t.season ? ' ' + t.season : ''), date: x.event.date || '' }); });
     var podiums = results.filter(function(x){ return x.pos<=3; }).length;
     var bestPos = Math.min.apply(null, results.map(function(x){ return x.pos; }));
     // Samma "räkna bara bästa N deltävlingar"-regel som computeOomStandings() använder för den
@@ -12088,7 +12096,7 @@ function buildCareerStatsHTML(username, sim) {
         '</div>'+
       '</div>'+
       (c.majorTitles.length ? '<div style="padding:0 16px 14px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px"><i class="ti ti-star" style="color:#D4A017"></i> Majortitlar</div>'+
-        c.majorTitles.map(function(m){ return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:600;min-width:0">'+esc(m.event)+'</span><span style="color:var(--text-3);flex-shrink:0;font-size:12px">'+esc(m.tour)+'</span></div>'; }).join('')+
+        c.majorTitles.map(function(m){ return '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:600;min-width:0">'+esc(m.event)+(m.year?' <span style="color:#D4A017;font-weight:700">'+esc(m.year)+'</span>':'')+'</span><span style="color:var(--text-3);flex-shrink:0;font-size:12px">'+esc(m.tour)+'</span></div>'; }).join('')+
       '</div>' : '')+
       (rows ? '<div style="overflow-x:auto"><table class="hist-table" style="white-space:nowrap"><thead><tr>'+
         '<th style="padding:8px 16px">Tour</th><th style="padding:8px 8px;text-align:right">Tävl.</th>'+
@@ -20889,6 +20897,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (326)',
+    items: [
+      { type: 'improved', text: 'Majorsegrar visar nu vilket år tävlingen vanns, både i topplistan "Flest majorsegrar" (t.ex. "Masters 2026") och bland majortitlarna i spelarens karriärstatistik.' },
+    ]
+  },
   {
     date: '9 november 2026 (325)',
     items: [
