@@ -1218,6 +1218,10 @@ var STATIC_PLAYER_PHOTOS = {
 function playerPhoto(username, fallbackImg) {
   if(fallbackImg) return fallbackImg;
   if(username && STATIC_PLAYER_PHOTOS[username.toLowerCase()]) return STATIC_PLAYER_PHOTOS[username.toLowerCase()];
+  // Testgolfare i Labbet (release 345): en kopia utan egen bild visar originalets bild,
+  // även när originalets bild kommer från den statiska listan ovan (t.ex. Andreas).
+  var tu = (typeof findUser === 'function' && username) ? findUser(username) : null;
+  if(tu && tu.isTest && tu.testOf && tu.testOf !== username) { var o = findUser(tu.testOf); return playerPhoto(tu.testOf, o && o.img); }
   return null;
 }
 
@@ -21786,6 +21790,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '10 november 2026 (345)',
+    items: [
+      { type: 'fixed', text: 'Labbet: testkopior av spelare vars profilbild kommer från appens inbyggda bildlista (t.ex. Andreas Jonsson Wrååk) fick ingen bild. Nu visar en testkopia alltid originalets bild, även för redan skapade kopior.' },
+    ]
+  },
+  {
     date: '10 november 2026 (344)',
     items: [
       { type: 'improved', text: 'Ryder Cup: lagen visas nu som i TV-grafiken – två kolumner med lagens färg och flagga överst och en bricka per spelare med profilbild, förnamn, efternamn i versaler och HCP. Spelarna sorteras på HCP (lägst först), kaptenen har ett C, och ett tryck öppnar profilen. Under lagen visas "Bäst på pappret?" med lagens snitt-HCP och lägsta HCP.' },
@@ -26140,7 +26150,7 @@ function createLabPlayers(clubId) {
     made++;
   };
   document.querySelectorAll('.lab-pro:checked').forEach(function(x){ var p = LAB_PROS[+x.value]; if(p) mk(p[0], p[1], null, 'man', null); });
-  document.querySelectorAll('.lab-fr:checked').forEach(function(x){ var u = findUser(x.value); if(u) mk(u.name || u.username, u.hcp != null ? u.hcp : 0, u.img || null, u.gender || '', u.username); });
+  document.querySelectorAll('.lab-fr:checked').forEach(function(x){ var u = findUser(x.value); if(u) mk(u.name || u.username, u.hcp != null ? u.hcp : 0, playerPhoto(u.username, u.img) || null, u.gender || '', u.username); });
   if(!made) { alert('Välj minst en golfare.'); return; }
   save(); closeModal(); renderGlobalSettings();
   alert(made + ' testgolfare skapade i ' + clubById(clubId).name + '. Lägg till dem i en tour som vanligt, och prova som dem med "Logga in som".');
