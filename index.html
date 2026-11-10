@@ -93,6 +93,10 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 .pc-body{display:none;border-top:1px solid var(--border)}
 .pc.pc-open .pc-body{display:block}
 .pc.pc-open .pc-chev{transform:rotate(180deg)}
+/* Release 322: tävlingsscoren markeras som en tonad kolumn i live- och slutresultatstabeller */
+.sc-col{width:30px !important;background:rgba(29,158,117,.13);align-self:stretch;margin:-6px 0;padding:6px 0;display:flex;align-items:center;justify-content:center;font-size:13px !important}
+.sc-head{width:30px !important;background:rgba(29,158,117,.13);color:var(--green-dark);font-weight:700;border-radius:6px 6px 0 0;padding:3px 0 4px;margin-bottom:-4px}
+.sc-note{font-size:10px;color:var(--text-3);margin-top:6px;display:flex;align-items:center;gap:4px}
 .pc-logo{background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:96px;overflow:hidden}
 .nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
 .view{display:none;padding-top:20px}.view.active{display:block}
@@ -15801,6 +15805,14 @@ function abbreviateFirstName(fullName) {
   if(firstSpace < 1) return fullName; // inget mellanslag - bara ett ord, lämna orört
   var first = fullName.slice(0, firstSpace);
   var rest = fullName.slice(firstSpace + 1);
+  // Release 321: långa dubbla efternamn (fler än 12 tecken, t.ex. "Jonsson Wrååk") kortas
+  // till initial + sista ordet, så att slagförsprånget (-10) får plats i tabellerna:
+  // "Andreas Jonsson Wrååk" -> "A. J. Wrååk". Kortare dubbla efternamn behålls hela,
+  // t.ex. "Mari-ann Swalén Hult" -> "M. Swalén Hult".
+  var parts = rest.split(' ').filter(Boolean);
+  if(parts.length > 1 && rest.length > 12) {
+    rest = parts.slice(0, -1).map(function(w){ return w.charAt(0) + '.'; }).join(' ') + ' ' + parts[parts.length - 1];
+  }
   return first.charAt(0) + '. ' + rest;
 }
 
@@ -15828,6 +15840,11 @@ var _liveStandingsRowsCache = [];
 // renderTourLiveStandingsHTML() eftersom den tabellen inte ligger i en modal
 // alls - där ska ett klick på en spelare bara kunna stängas, inte "gå tillbaka".
 var _liveStandingsBackTo = null;
+
+function scoreNoteHTML(isStab, isFinal) {
+  return '<div class="sc-note"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:rgba(29,158,117,.35)"></span>'+
+    'Score = '+(isStab?'poäng mot hcp':'netto mot par')+(isFinal?' inkl. slagförsprång':'')+' – avgör placeringen.</div>';
+}
 
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
@@ -15863,7 +15880,7 @@ function buildLiveStandingsRowsHTML(rows) {
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
-        '<span style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="'+(r.isStab?'Poäng mot hcp':'Netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'">'+diffFmt.text+'</span>'+
+        '<span class="sc-col" style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="Score – '+(r.isStab?'poäng mot hcp':'netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'. Avgör placeringen.">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Netto">'+(r.thru?r.netto:'–')+'</span>'+
         (rawDiffFmt ? '<span style="width:26px;text-align:center;font-weight:700;color:'+rawDiffFmt.color+'" title="Rått resultat mot par/hcp, UTAN slagförsprång">'+rawDiffFmt.text+'</span>' : '')+
@@ -15964,9 +15981,10 @@ function renderLiveFollowHTML(e, players, t) {
   var rows = computeLiveStandingsRows(_liveFollow.docs, t, e);
   var body = rows.length
     ? '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(e.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
+        '<span class="sc-head" style="width:26px;text-align:center">Score</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(e.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
-      buildLiveStandingsRowsHTML(rows)
+      buildLiveStandingsRowsHTML(rows)+
+      scoreNoteHTML(isStab, e.isFinal)
     : '<p style="color:var(--text-3);font-size:13px;text-align:center;padding:20px 0">Ingen livescoring har startats för den här deltävlingen ännu.</p>';
 
   var periodLabel = formatEventPeriodLabel(e);
@@ -16188,9 +16206,10 @@ function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
       '</div>'+
       '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">'+subLine+'</div>'+
       '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">'+(isStab?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(ev && ev.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
+        '<span class="sc-head" style="width:26px;text-align:center">Score</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span>'+(ev && ev.isFinal?'<span style="width:26px;text-align:center">Rått</span>':'')+'<span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>'+
       body+
+      scoreNoteHTML(isStab, ev && ev.isFinal)+
       buildSideBetsLiveSummaryHTML(ev, players)+
     '</div>';
   }).join('');
@@ -17602,11 +17621,11 @@ function buildTop3HTML(t, compact) {
     var shownRows = compact ? finalRows.slice(0,3) : finalRows;
     var isStabFinal = finalEv.type === 'stableford';
     var headerRow = '<div class="row" style="justify-content:flex-end;gap:7px;font-size:10px;color:var(--text-3);text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border)">'+
-        '<span style="width:26px;text-align:center">'+(isStabFinal?'+/-':'Par')+'</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:26px;text-align:center">Rått</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
+        '<span class="sc-head" style="width:26px;text-align:center">Score</span><span style="width:22px;text-align:center">Brt</span><span style="width:22px;text-align:center">Nto</span><span style="width:26px;text-align:center">Rått</span><span style="width:22px;text-align:center">Pts</span><span style="width:30px;text-align:right">Hål</span>'+
       '</div>';
     return '<div class="card" style="margin-bottom:'+(compact?'12px':'16px')+';padding:'+(compact?'10px 12px':'14px 16px')+'">'+
       '<div style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px"><i class="ti ti-medal" style="color:var(--gold)"></i> Slutresultat</div>'+
-      headerRow + buildLiveStandingsRowsHTML(shownRows) +
+      headerRow + buildLiveStandingsRowsHTML(shownRows) + scoreNoteHTML(isStabFinal, true) +
     '</div>';
   }
 
@@ -20808,6 +20827,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (322)',
+    items: [
+      { type: 'improved', text: 'Det framgår nu tydligt vilken kolumn som är tävlingsscoren: kolumnen heter "Score" i stället för Par/+/-, är tonad grön genom hela tabellen och har lite större siffror. En rad under tabellen förklarar vad den betyder (t.ex. "netto mot par inkl. slagförsprång – avgör placeringen"). Gäller slutresultat och live-tabeller.' },
+    ]
+  },
+  {
+    date: '9 november 2026 (321)',
+    items: [
+      { type: 'improved', text: 'Långa dubbla efternamn kortas i live- och slutresultatstabellerna, så att slagförsprånget syns: "Andreas Jonsson Wrååk" visas som "A. J. Wrååk (-10)". Kortare dubbla efternamn, som "M. Swalén Hult", visas som förut.' },
+    ]
+  },
   {
     date: '9 november 2026 (320)',
     items: [
