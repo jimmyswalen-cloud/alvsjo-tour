@@ -719,12 +719,14 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="nav-wrap">
     <nav class="nav">
       <button class="nav-btn active" onclick="showView('tournament')" id="nav-tournament"><i class="ti ti-trophy"></i><span>Tävlingar</span></button>
+      <button class="nav-btn" onclick="showView('teams')" id="nav-teams" style="display:none"><i class="ti ti-users-group"></i><span>Lagen</span></button>
       <button class="nav-btn" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
       <button class="nav-btn" onclick="showView('calendar')" id="nav-calendar"><i class="ti ti-calendar"></i><span>Kalender</span></button>
       <button class="nav-btn" onclick="showView('oom')" id="nav-oom"><i class="ti ti-medal"></i><span>OoM</span></button>
       <button class="nav-btn" onclick="showView('settings')" id="nav-settings"><i class="ti ti-settings"></i><span>Inst.</span></button>
     </nav>
   </div>
+  <div id="view-teams" class="view"><div id="teams-content"></div></div>
   <div id="view-players" class="view">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
       <h2 style="margin:0">Spelare</h2>
@@ -5435,6 +5437,35 @@ function heroLogoFieldHTML(src, pickJs, clearJs, chooseJs, reopenJs) {
 }
 function chooseRenameHeroLogo(i) { var x = heroLogoLibrary()[i]; if(!x) return; syncEditTourDraftFields(); _editTourDraft.heroLogo = x.url; openRenameTour(); }
 function chooseRcwHeroLogo(i) { var x = heroLogoLibrary()[i]; if(!x) return; var nm = document.getElementById('rcw-name'); if(nm) _rcw.name = nm.value; _rcw.logo = x.url; renderRyderCupWizard(); }
+// ── LOGGA PÅ OMSLAGET (release 351) ───────────────────────────────────────
+// En logga (t.ex. Ryder Cup-märket) kan läggas ovanpå tourens omslagsbild på tourkortet,
+// till vänster, i mitten eller till höger: t.coverLogo = { url, pos }. Väljs bland de
+// sparade loggorna eller laddas upp (sparas då i loggbiblioteket).
+function coverLogoFieldHTML() {
+  var d = _editTourDraft, lib = heroLogoLibrary(), src = d.coverLogo, pos = d.coverLogoPos || 'center';
+  var posBtn = function(v, label, icon){ var on = pos === v;
+    return '<button type="button" class="btn btn-sm" style="flex:1;justify-content:center;' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="setCoverLogoPos(\'' + v + '\')"><i class="ti ' + icon + '"></i> ' + label + '</button>'; };
+  var prev = d.img ? '<div style="position:relative;border-radius:10px;overflow:hidden;margin-top:8px"><img src="' + esc(d.img) + '" style="width:100%;height:90px;object-fit:cover;display:block">' + (src ? coverLogoOverlayHTML(src, pos, 90) : '') + '</div>' : '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Välj en omslagsbild ovan för att se loggan på den.</p>';
+  return '<div class="field"><label>Logga på omslaget (valfritt)</label>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">' +
+      lib.map(function(x, i){ var on = src === x.url;
+        return '<button type="button" title="' + esc(x.name) + '" onclick="chooseCoverLogo(' + i + ')" style="width:60px;height:60px;border-radius:10px;padding:5px;cursor:pointer;background:color-mix(in srgb, var(--text) 6%, transparent);border:2px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';display:flex;align-items:center;justify-content:center"><img src="' + esc(x.url) + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain"></button>'; }).join('') +
+      '<label class="btn btn-sm" style="margin:0;cursor:pointer"><i class="ti ti-upload"></i> Ladda upp<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])pickCoverLogo(this.files[0])"></label>' +
+      (src ? '<button type="button" class="btn btn-sm" style="color:#dc2626" onclick="clearCoverLogo()"><i class="ti ti-trash"></i></button>' : '') +
+    '</div>' +
+    (src ? '<div class="row" style="gap:6px;margin-top:8px">' + posBtn('left', 'Vänster', 'ti-layout-align-left') + posBtn('center', 'Mitten', 'ti-layout-align-center') + posBtn('right', 'Höger', 'ti-layout-align-right') + '</div>' : '') +
+    prev + '</div>';
+}
+function coverLogoOverlayHTML(url, pos, h) {
+  var lh = Math.round((h || 110) * 0.78);
+  var place = pos === 'left' ? 'left:12px' : (pos === 'right' ? 'right:12px' : 'left:50%;transform:translate(-50%,-50%)');
+  return '<img src="' + esc(url) + '" alt="" style="position:absolute;top:50%;' + place + (pos === 'center' ? '' : ';transform:translateY(-50%)') + ';height:' + lh + 'px;width:auto;max-width:45%;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.45));pointer-events:none">';
+}
+function chooseCoverLogo(i) { var x = heroLogoLibrary()[i]; if(!x) return; syncEditTourDraftFields(); _editTourDraft.coverLogo = x.url; openRenameTour(); }
+function pickCoverLogo(file) { syncEditTourDraftFields(); readLogoPng(file, function(dd){ _editTourDraft.coverLogo = dd; openRenameTour(); }); }
+function clearCoverLogo() { syncEditTourDraftFields(); _editTourDraft.coverLogo = null; openRenameTour(); }
+function setCoverLogoPos(v) { syncEditTourDraftFields(); _editTourDraft.coverLogoPos = v; openRenameTour(); }
+
 function pickRenameHeroLogo(file) { syncEditTourDraftFields(); readLogoPng(file, function(d){ _editTourDraft.heroLogo = d; openRenameTour(); }); }
 function clearRenameHeroLogo() { syncEditTourDraftFields(); _editTourDraft.heroLogo = null; openRenameTour(); }
 function pickRcwHeroLogo(file) { var nm = document.getElementById('rcw-name'); if(nm) _rcw.name = nm.value; readLogoPng(file, function(d){ _rcw.logo = d; renderRyderCupWizard(); }); }
@@ -5446,6 +5477,7 @@ function openRenameTour() {
   if(!_editTourDraft) _editTourDraft = { name: t.name, season: t.season||'', img: t.img||null, headerImg: t.headerImg||null, headerText: t.headerText||'auto', tileImg: t.tileImg||null };
   _editTourDraft.mode = 'rename';
   if(!('heroLogo' in _editTourDraft)) _editTourDraft.heroLogo = t.heroLogo || null;
+  if(!('coverLogo' in _editTourDraft)) { _editTourDraft.coverLogo = (t.coverLogo && t.coverLogo.url) || null; _editTourDraft.coverLogoPos = (t.coverLogo && t.coverLogo.pos) || 'center'; }
 
   var h = '<h3><i class="ti ti-edit"></i> Byt namn/bild</h3>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Touren har startat, så deltävlingarna kan inte ändras längre - men namn, säsong och omslagsbild går fortfarande fint att uppdatera.</p>';
@@ -5461,6 +5493,7 @@ function openRenameTour() {
   h += '<input type="file" id="edit-tour-img-inp" accept="image/*" style="display:none">';
   h += '</div>';
   h += heroLogoFieldHTML(_editTourDraft.heroLogo, 'pickRenameHeroLogo', 'clearRenameHeroLogo', 'chooseRenameHeroLogo', 'openRenameTour');
+  h += coverLogoFieldHTML();
   h += tourExtraImagesHTML();
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">'+
     '<button class="btn" onclick="_editTourDraft=null;closeModal()">Avbryt</button>'+
@@ -5509,6 +5542,12 @@ function saveRenameTour() {
     t.img = url;
     var lg = (draftSnap && 'heroLogo' in draftSnap) ? draftSnap.heroLogo : t.heroLogo;
     return uploadImageToStorage(lg, 'tour-logos/'+t.id+'.png').then(function(lu){ if(lu) { t.heroLogo = lu; if(/^data:/.test(lg || '')) saveHeroLogoToLibrary(lu, t.name); } else delete t.heroLogo; });
+  }).then(function(){
+    if(!draftSnap || !('coverLogo' in draftSnap)) return;
+    var cl = draftSnap.coverLogo;
+    return uploadImageToStorage(cl, 'tour-logos/'+t.id+'-cover.png').then(function(cu){
+      if(cu) { t.coverLogo = { url: cu, pos: draftSnap.coverLogoPos || 'center' }; if(/^data:/.test(cl || '')) saveHeroLogoToLibrary(cu, t.name); } else delete t.coverLogo;
+    });
   }).then(function(){
     return applyTourExtraImages(t, draftSnap);
   }).then(function(){
@@ -5604,6 +5643,12 @@ function saveEditTour() {
     var lg = (draftSnap && 'heroLogo' in draftSnap) ? draftSnap.heroLogo : t.heroLogo;
     return uploadImageToStorage(lg, 'tour-logos/'+t.id+'.png').then(function(lu){ if(lu) { t.heroLogo = lu; if(/^data:/.test(lg || '')) saveHeroLogoToLibrary(lu, t.name); } else delete t.heroLogo; });
   }).then(function(){
+    if(!draftSnap || !('coverLogo' in draftSnap)) return;
+    var cl = draftSnap.coverLogo;
+    return uploadImageToStorage(cl, 'tour-logos/'+t.id+'-cover.png').then(function(cu){
+      if(cu) { t.coverLogo = { url: cu, pos: draftSnap.coverLogoPos || 'center' }; if(/^data:/.test(cl || '')) saveHeroLogoToLibrary(cu, t.name); } else delete t.coverLogo;
+    });
+  }).then(function(){
     return applyTourExtraImages(t, draftSnap);
   }).then(function(){
     save();
@@ -5640,6 +5685,9 @@ function enterTour(id) {
   // ...och inga deltävlingar, så Kalender (som visar deltävlingarna) döljs också
   var calNav = document.getElementById('nav-calendar');
   if(calNav) calNav.style.display = isRyderTour(getTour()) ? 'none' : '';
+  // Release 352: Ryder Cup får fliken Lagen (laguppställningen i TV-stil)
+  var teamsNav = document.getElementById('nav-teams');
+  if(teamsNav) teamsNav.style.display = isRyderTour(getTour()) ? '' : 'none';
   showView('tournament');
   window.scrollTo(0, 0);
 }
@@ -5653,6 +5701,7 @@ function showView(v) {
   _currentAppView = v;
   if(v==='players')    renderPlayers();
   if(v==='tournament') renderEvents();
+  if(v==='teams')      { var tt = getTour(); var tc = document.getElementById('teams-content'); if(tc) tc.innerHTML = isRyderTour(tt) ? rcRosterHTML(tt) : ''; }
   if(v==='calendar')   renderCalendar();
   if(v==='oom')        { showOOMMain(); subscribeTourLiveStandings(getTour()); renderOOM(); }
   if(v==='settings')   renderSettings();
@@ -6399,7 +6448,7 @@ function renderToursList() {
     var totalCount = events.length;
     var closedCount = events.filter(function(e){return e.closed;}).length;
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
-      (t.img?'<img src="'+t.img+'" onload="fitCoverImg(this)" style="width:100%;height:110px;object-fit:cover;display:block">':'')+
+      (t.img?'<div style="position:relative"><img src="'+t.img+'" onload="fitCoverImg(this)" style="width:100%;height:110px;object-fit:cover;display:block">'+(t.coverLogo&&t.coverLogo.url?coverLogoOverlayHTML(t.coverLogo.url, t.coverLogo.pos, 110):'')+'</div>':'')+
       '<div style="padding:14px 16px 16px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
           '<div style="font-weight:700;font-size:17px">'+t.name+'</div>'+
@@ -7848,7 +7897,6 @@ function rcViewHTML(t) {
   '</div>';
   h += (t.rc.sessions || []).map(function(s, si){ return rcSessionHTML(t, s, si, mine); }).join('');
   h += rcLeaderboardHTML(t);
-  h += rcRosterHTML(t);
   return h;
 }
 // ── Lagen på pappret (release 344) ────────────────────────────────────────
@@ -22175,6 +22223,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (352)',
+    items: [
+      { type: 'improved', text: 'Ryder Cup har fått en egen flik, Lagen, bredvid Tävlingar. Där visas laguppställningen i TV-stil med båda lagen sida vid sida och "Bäst på pappret?". Tävlingar-fliken visar nu bara tavlan, passen och poängligan.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (351)',
+    items: [
+      { type: 'new', text: 'Logga på omslaget: i Redigera kan en logga (t.ex. Ryder Cup-märket) läggas ovanpå tourens omslagsbild på tourkortet. Välj bland de sparade loggorna eller ladda upp en ny, och placera den till vänster, i mitten eller till höger – en förhandsvisning visar hur det blir.' },
+    ]
+  },
   {
     date: '10 november 2026 (350)',
     items: [
