@@ -9917,7 +9917,8 @@ var _homeFeedLatest = [], _homeChampItems = [], _homeChampUnsub = null;
 function subscribeHomeChampions(tourIds) {
   if(_homeChampUnsub) { try { _homeChampUnsub(); } catch(e) {} _homeChampUnsub = null; }
   _homeChampItems = [];
-  _homeChampUnsub = ACTIVITY_FEED_COL.where('category','==','tourchampion').onSnapshot(function(snap){
+  // Release 353: även Ryder Cup-vinnaren (rcwin) fästs överst, guldig som säsongsmästaren
+  _homeChampUnsub = ACTIVITY_FEED_COL.where('category','in',['tourchampion','rcwin']).onSnapshot(function(snap){
     var all = snap.docs.map(function(doc){ var d = doc.data(); d._id = doc.id; return d; })
       .filter(function(d){ return tourIds.indexOf(d.tourId) >= 0; })
       .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
@@ -22223,6 +22224,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (353)',
+    items: [
+      { type: 'improved', text: 'Ryder Cup-vinnaren fästs nu överst på väggen med guldig bakgrund och märket "Fäst", precis som säsongsmästaren i en vanlig tour.' },
+    ]
+  },
   {
     date: '10 november 2026 (352)',
     items: [
