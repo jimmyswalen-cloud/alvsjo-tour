@@ -9344,14 +9344,18 @@ function openSideBets(ei) {
             '<button class="btn btn-sm" '+(eligibleToAdd.length?'':'disabled')+' onclick="adminAddSideBetParticipant('+ei+',\''+sb.id+'\',document.getElementById(\'sb-add-pi-'+sb.id+'\').value)"><i class="ti ti-user-plus"></i> Lägg till</button>'+
           '</div>';
         }
-        if(sb.fee > 0 && participants.length) {
-          box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">Betalning</div>';
+        // Release 327: deltagarlistan visas för alla bets (även gratis) och varje deltagare
+        // kan tas bort med ✕ så länge betet inte är avgjort. Betalt/Ej betalt bara när insats finns.
+        if(participants.length) {
+          var canRemove = !isSideBetDecided(sb);
+          box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">'+(sb.fee > 0 ? 'Deltagare &amp; betalning' : 'Deltagare')+'</div>';
           box += participants.map(function(pi){
             var p = players[pi]; if(!p) return '';
             var paid = !!(sb.payments && sb.payments[pi]);
-            return '<div class="row" style="justify-content:space-between;align-items:center;padding:3px 0">'+
-              '<span style="font-size:12px">'+esc(p.name)+'</span>'+
-              '<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:'+(paid?'#1D9E75':'transparent')+';color:'+(paid?'#fff':'var(--text-3)')+';border-color:'+(paid?'#1D9E75':'var(--border)')+'" onclick="toggleSideBetPayment('+ei+',\''+sb.id+'\','+pi+')">'+(paid?'Betalt':'Ej betalt')+'</button>'+
+            return '<div class="row" style="justify-content:space-between;align-items:center;padding:3px 0;gap:6px">'+
+              '<span style="font-size:12px;flex:1;min-width:0">'+esc(p.name)+'</span>'+
+              (sb.fee > 0 ? '<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:'+(paid?'#1D9E75':'transparent')+';color:'+(paid?'#fff':'var(--text-3)')+';border-color:'+(paid?'#1D9E75':'var(--border)')+'" onclick="toggleSideBetPayment('+ei+',\''+sb.id+'\','+pi+')">'+(paid?'Betalt':'Ej betalt')+'</button>' : '')+
+              (canRemove ? '<button class="btn btn-sm" title="Ta bort ur betet" style="padding:2px 7px;font-size:12px;color:var(--danger-text);border-color:var(--border)" onclick="adminRemoveSideBetParticipant('+ei+',\''+sb.id+'\','+pi+')"><i class="ti ti-x"></i></button>' : '')+
             '</div>';
           }).join('');
         }
@@ -10031,6 +10035,27 @@ function adminAddSideBetParticipant(ei, betId, piStr) {
   if(!sb.participants) sb.participants = [];
   if(sb.participants.indexOf(pi) !== -1) { alert('Spelaren är redan med i det här betet.'); return; }
   sb.participants.push(pi);
+  save();
+  renderEvents();
+  renderHomeSideBetWidget();
+  openSideBets(ei);
+}
+
+// Tar bort en deltagare ur ett side bet (admin eller betets skapare). Potten räknas om
+// automatiskt eftersom den bygger på antal deltagare. Har spelaren redan markerats som
+// betald påminns man om att pengarna behöver betalas tillbaka.
+function adminRemoveSideBetParticipant(ei, betId, pi) {
+  var t = getTour(), e = t && t.events[ei];
+  if(!e) return;
+  var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
+  if(!sb || !canManageSideBet(t, sb)) return;
+  if(isSideBetDecided(sb)) { alert('Det här betet är redan avgjort - ångra vinnaren först om du behöver ändra deltagarna.'); return; }
+  var players = getPlayersForTour(t), p = players[pi];
+  var paid = !!(sb.payments && sb.payments[pi]);
+  if(!confirm('Ta bort '+(p ? p.name : 'spelaren')+' från "'+sb.name+'"?'+(paid ? '\n\nSpelaren är markerad som betald ('+sb.fee+' kr) – kom ihåg att betala tillbaka.' : ''))) return;
+  sb.participants = (sb.participants||[]).filter(function(x){ return x !== pi; });
+  if(sb.payments) delete sb.payments[pi];
+  if(sb.measurements) delete sb.measurements[pi];
   save();
   renderEvents();
   renderHomeSideBetWidget();
@@ -20897,6 +20922,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (327)',
+    items: [
+      { type: 'new', text: 'Side bets: admin och den som skapat betet kan ta bort en deltagare med ✕ bredvid namnet under "Deltagare & betalning". Potten räknas om direkt. Går så länge betet inte är avgjort. Deltagarlistan visas nu även för gratis-bets.' },
+    ]
+  },
   {
     date: '9 november 2026 (326)',
     items: [
