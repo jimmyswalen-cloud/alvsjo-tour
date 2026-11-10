@@ -6226,6 +6226,7 @@ function renderHomeRyderWidget() {
         '<div style="font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(t.name) + ' · Pass ' + (x.si + 1) + ' ' + RC_FORMATS[s.format].label + '</div>' +
         '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--text-2)">' +
           '<span><i class="ti ti-calendar" style="font-size:11px"></i> ' + (s.date ? esc(formatSvDateFull(s.date)) : 'Datum ej satt') + '</span>' +
+          (x.m && (s.teeTimes || {})[x.m.i] ? '<span style="font-weight:700;color:var(--text)"><i class="ti ti-clock" style="font-size:11px"></i> ' + esc(s.teeTimes[x.m.i]) + '</span>' : '') +
           (s.course ? '<span><i class="ti ti-map-pin" style="font-size:11px"></i> ' + esc(s.course) + '</span>' : '') +
           '<span style="font-weight:700"><span style="color:' + rcInk(A.color) + '">' + esc(A.name) + ' ' + rcFmt(p.A) + '</span> – <span style="color:' + rcInk(B.color) + '">' + rcFmt(p.B) + ' ' + esc(B.name) + '</span></span>' +
         '</div>' + body +
@@ -8071,7 +8072,9 @@ function rcSessionHTML(t, s, si, mine) {
         (isAdmin() ? '<button class="btn btn-sm" title="Ändra passet" onclick="rcEditSession(' + si + ')"><i class="ti ti-edit"></i></button>' : '') + '</div>' +
     '</div>';
   if(ms.length) {
-    h += ms.map(function(m){ return rcMatchRowHTML(t, si, m); }).join('');
+    if(isAdmin()) h += '<div class="row" style="justify-content:flex-end;margin:-2px 0 6px"><button class="btn btn-sm" onclick="rcOpenTeeTimes(' + si + ')"><i class="ti ti-clock"></i> ' + (Object.keys(s.teeTimes || {}).length ? 'Ändra starttider' : 'Sätt starttider') + '</button></div>';
+    h += ms.map(function(m){ var tt = (s.teeTimes || {})[m.i];
+      return '<div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text-3);margin:8px 2px 3px;letter-spacing:.04em"><span>MATCH ' + (m.i + 1) + '</span>' + (tt ? '<span style="color:var(--text)"><i class="ti ti-clock" style="font-size:11px"></i> ' + esc(tt) + '</span>' : '') + '</div>' + rcMatchRowHTML(t, si, m); }).join('');
   } else {
     h += '<div style="display:flex;flex-direction:column;gap:6px">' + ['A', 'B'].map(function(id){
       var tm = rcTeam(t, id), lu = s.lineups && s.lineups[id], canSee = (mine === id) || (isAdmin() && !rcMyTeamId(t)) || rcIsCaptain(t, id);
@@ -8262,7 +8265,7 @@ function rcRenderLive() {
   }
   var hcpLine = keys.map(function(k){ return esc(nameOf(k)) + ' ' + (ms.st.recv[k] || 0); }).join(' · ');
   var html = '<div id="rc-live-root"></div><div style="text-align:center;margin-bottom:10px">' +
-      '<div style="font-size:11px;letter-spacing:.12em;font-weight:700;color:var(--gold)">PASS ' + (_rcLm.si + 1) + ' · ' + RC_FORMATS[s.format].label.toUpperCase() + ' · MATCH ' + (m.i + 1) + '</div>' +
+      '<div style="font-size:11px;letter-spacing:.12em;font-weight:700;color:var(--gold)">PASS ' + (_rcLm.si + 1) + ' · ' + RC_FORMATS[s.format].label.toUpperCase() + ' · MATCH ' + (m.i + 1) + ((s.teeTimes || {})[m.i] ? ' · START ' + esc(s.teeTimes[m.i]) : '') + '</div>' +
       '<div style="font-size:14px;margin-top:6px"><b style="color:' + rcInk(A.color) + '">' + esc(m.a.map(rcShortName).join(' & ')) + '</b> <span style="color:var(--text-3)">mot</span> <b style="color:' + rcInk(B.color) + '">' + esc(m.b.map(rcShortName).join(' & ')) + '</b></div>' +
       '<div style="display:inline-block;margin-top:8px;padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;background:' + (lcol ? esc(lcol) : 'var(--surface2)') + ';color:' + (lcol ? '#fff' : 'var(--text)') + '">' + statusTxt + '</div></div>' +
     (!course ? '<p style="font-size:12px;color:#8A5A00;background:#FFF4D6;border-radius:8px;padding:8px 10px;margin-bottom:10px">Passet saknar bana i bandatabasen – hålindex och par saknas, så handicapslagen läggs på hål 1, 2, 3… Sätt banan med ✏️ på passet.</p>' : '') +
@@ -8525,6 +8528,41 @@ function rcResetCaptainHeads() {
   bg.heads = JSON.parse(JSON.stringify(RC_CAPTAIN_HEADS_DEFAULT));
   TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: bg }, { merge: true }).catch(function(){});
   renderSettings();
+}
+
+// ── STARTTIDER PER MATCH (release 357) ────────────────────────────────────
+// Varje match i ett pass är en egen boll med egen starttid (s.teeTimes = { matchindex: 'HH:MM' }).
+// Admin sätter första start och intervall så fylls alla i, eller ändrar dem en och en.
+function rcOpenTeeTimes(si) {
+  var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  var s = t.rc.sessions[si], ms = rcMatches(t, s), tt = s.teeTimes || {};
+  var first = tt[0] || '10:00';
+  var h = '<h3><i class="ti ti-clock"></i> Starttider – Pass ' + (si + 1) + '</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">' + (s.date ? esc(formatSvDateFull(s.date)) : 'Datum ej satt') + (s.course ? ' · ' + esc(s.course) : '') + '. Varje match är en egen boll.</p>' +
+    '<div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding:10px;border-radius:10px;background:var(--surface2)">' +
+      '<label style="font-size:12px;display:flex;flex-direction:column;gap:2px">Första start<input type="time" id="rc-tt-first" value="' + esc(first) + '" style="margin:0;width:120px"></label>' +
+      '<label style="font-size:12px;display:flex;flex-direction:column;gap:2px">Intervall<select id="rc-tt-int" style="margin:0;width:110px">' + [8, 9, 10, 11, 12, 15].map(function(n){ return '<option value="' + n + '" ' + (n === 10 ? 'selected' : '') + '>' + n + ' min</option>'; }).join('') + '</select></label>' +
+      '<button type="button" class="btn btn-sm" onclick="rcFillTeeTimes(' + ms.length + ')">Fyll i alla</button></div>' +
+    ms.map(function(m){
+      var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+      return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="font-size:13px;min-width:0"><b>Match ' + (m.i + 1) + '</b> <span style="color:' + rcInk(A.color) + '">' + esc(m.a.map(rcShortName).join(' & ')) + '</span> – <span style="color:' + rcInk(B.color) + '">' + esc(m.b.map(rcShortName).join(' & ')) + '</span></span>' +
+        '<input type="time" class="rc-tt" data-i="' + m.i + '" value="' + esc(tt[m.i] || '') + '" style="margin:0;width:110px;flex-shrink:0"></div>';
+    }).join('') +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveTeeTimes(' + si + ')"><i class="ti ti-check"></i> Spara</button></div>';
+  showModal(h, true);
+}
+function rcFillTeeTimes(n) {
+  var f = (document.getElementById('rc-tt-first').value || '10:00').split(':'), step = parseInt(document.getElementById('rc-tt-int').value, 10) || 10;
+  var base = (+f[0]) * 60 + (+f[1] || 0);
+  document.querySelectorAll('.rc-tt').forEach(function(el){ var i = +el.getAttribute('data-i'), m = base + i * step; el.value = String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); });
+}
+function rcSaveTeeTimes(si) {
+  var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  var s = t.rc.sessions[si], tt = {};
+  document.querySelectorAll('.rc-tt').forEach(function(el){ if(el.value) tt[el.getAttribute('data-i')] = el.value; });
+  s.teeTimes = tt;
+  save(); closeModal(); renderEvents();
 }
 
 // ── Inställningar för Ryder Cup (release 342) ─────────────────────────────
@@ -22428,6 +22466,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (357)',
+    items: [
+      { type: 'new', text: 'Ryder Cup: starttider per match. Varje match är en egen boll – admin trycker "Sätt starttider" på passet, anger första start och intervall (t.ex. 10:00 var 10:e minut) så fylls alla i, och kan ändra dem en och en. Starttiden visas ovanför matchen, i matchens livescoring och på startsidans kort för kommande pass.' },
+    ]
+  },
   {
     date: '10 november 2026 (356)',
     items: [
