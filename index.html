@@ -7922,19 +7922,237 @@ function rcSessionHTML(t, s, si, mine) {
 }
 function rcMatchRowHTML(t, si, m) {
   var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), r = m.r;
-  var lead = r ? r.w : null;
+  var s0 = t.rc.sessions[si], doc0 = _rcLive[rcLiveId(t, s0, m.i)], live = (!r && doc0) ? rcMatchStatus(t, s0, m, doc0) : null;
+  if(live && !live.played) live = null;
+  var lead = r ? r.w : (live ? live.leader : null);
   var canEdit = isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0);
   var side = function(us, id, right){
     var tm = id === 'A' ? A : B, on = lead === id;
     return '<div style="background:' + (on ? esc(tm.color) : 'var(--surface2)') + ';padding:9px 10px;font-weight:700;font-size:13px;color:' + (on ? '#fff' : rcInk(tm.color)) + ';' + (right ? 'text-align:right;' : '') + 'min-width:0">' +
       us.map(function(u){ return '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(rcShortName(u)) + '</div>'; }).join('') + '</div>';
   };
-  return '<div style="display:grid;grid-template-columns:1fr 70px 1fr;border-radius:10px;overflow:hidden;margin-bottom:6px;' + (canEdit ? 'cursor:pointer' : '') + '"' + (canEdit ? ' onclick="rcOpenResult(' + si + ',' + m.i + ')"' : '') + '>' +
+  var midBg = r ? (r.w === 'H' ? 'color-mix(in srgb, var(--text-3) 45%, var(--surface2))' : esc((r.w === 'A' ? A : B).color))
+    : (live ? (live.leader ? 'color-mix(in srgb, ' + esc((live.leader === 'A' ? A : B).color) + ' 70%, var(--surface2))' : 'color-mix(in srgb, var(--text-3) 35%, var(--surface2))') : 'var(--surface2)');
+  return '<div style="display:grid;grid-template-columns:1fr 70px 1fr;border-radius:10px;overflow:hidden;margin-bottom:6px;cursor:pointer" onclick="rcOpenLive(' + si + ',' + m.i + ')">' +
     side(m.a, 'A', false) +
-    '<div style="background:' + (r ? (r.w === 'H' ? 'color-mix(in srgb, var(--text-3) 45%, var(--surface2))' : esc((r.w === 'A' ? A : B).color)) : 'var(--surface2)') + ';display:flex;flex-direction:column;align-items:center;justify-content:center;color:' + (r ? '#fff' : 'var(--text-3)') + ';border-left:1px solid var(--border);border-right:1px solid var(--border)">' +
-      '<div style="font-weight:800;font-size:15px">' + (r ? esc(rcResultLabel(t, r)) : '–') + '</div><div style="font-size:9px;letter-spacing:.06em;opacity:.85">' + (r ? 'AVSLUTAD' : (canEdit ? 'SÄTT' : 'EJ KLAR')) + '</div></div>' +
+    '<div style="background:' + midBg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;color:' + (r || live ? '#fff' : 'var(--text-3)') + ';border-left:1px solid var(--border);border-right:1px solid var(--border)">' +
+      '<div style="font-weight:800;font-size:15px">' + (r ? esc(rcResultLabel(t, r)) : (live ? esc(live.label) : '–')) + '</div><div style="font-size:9px;letter-spacing:.06em;opacity:.85">' + (r ? 'AVSLUTAD' : (live ? 'EFTER ' + live.played : (canEdit ? 'STARTA' : 'EJ START'))) + '</div></div>' +
     side(m.b, 'B', true) +
   '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RYDER CUP – LIVESCORING PER MATCH (release 349, etapp 2)
+// Varje match förs hål för hål i en egen dokument i livescoring-samlingen
+// (id rc_<tour>_<pass>_<match>, eventId 'rc_<pass>' så att den vanliga livescoringen
+// aldrig plockar upp den). Spelarna för slag per spelare (foursome: per lag) och/eller
+// trycker bara vem som vann hålet. Har alla i matchen fört slag räknar appen hålvinnaren
+// med handicapslag; annars gäller snabbvalet.
+// Handicap (WHS, matchspel): spelhandicap = HCP × slope/113 + (CR − par) när banan har
+// slope och course rating, annars HCP avrundat (går att ändra per spelare i matchen).
+//   Singlar 100 %: skillnaden, den bättre spelar på 0.
+//   Fyrboll 90 %: alla får 90 %, den bästa av fyra spelar på 0.
+//   Foursome 50 %: lagets 50 % av summan, skillnaden mellan lagen.
+// Slagen läggs på hålen med lägst hålindex (computeHcpStrokesForHole).
+// När matchen är avgjord (t.ex. 3&2) skrivs resultatet in i cupen automatiskt.
+// ═══════════════════════════════════════════════════════════════════════════
+var _rcLive = {}, _rcLiveUnsub = null, _rcLiveTour = null, _rcLm = null, _rcLiveRenderTimer = null;
+function rcLiveId(t, s, i) { return 'rc_' + t.id + '_' + s.id + '_' + i; }
+function rcCourse(s) { var n = (s.course || '').trim().toLowerCase(); return n ? (courseDb || []).find(function(c){ return (c.name || '').toLowerCase() === n; }) || null : null; }
+function rcHoleCount(s) { var c = rcCourse(s); return (c && c.holePars && c.holePars.length) ? c.holePars.length : 18; }
+function rcHoleInfo(s, h) {
+  var c = rcCourse(s);
+  return { par: c && c.holePars ? c.holePars[h - 1] : null, idx: (c && c.holeHcpIndex && c.holeHcpIndex[h - 1] != null) ? c.holeHcpIndex[h - 1] : h };
+}
+function rcCourseHcp(u, s) {
+  var x = findUser(u) || {}, hcp = Number(x.hcp) || 0, c = rcCourse(s);
+  if(c && c.slope && c.rating && c.par) return Math.round(hcp * c.slope / 113 + (c.rating - c.par));
+  return Math.round(hcp);
+}
+function rcScoreKeys(s, m) { return s.format === 'foursome' ? ['A', 'B'] : m.a.concat(m.b); }
+function rcKeySide(m, k) { return k === 'A' || k === 'B' ? k : (m.a.indexOf(k) >= 0 ? 'A' : 'B'); }
+// Mottagna slag totalt per nyckel (spelare, eller lag i foursome)
+function rcStrokesRecv(t, s, m, doc) {
+  var ov = (doc && doc.shcp) || {}, ch = function(u){ return ov[u] != null ? Number(ov[u]) : rcCourseHcp(u, s); };
+  var recv = {}, ph = {};
+  if(s.format === 'foursome') {
+    ph.A = Math.round(0.5 * (ch(m.a[0]) + ch(m.a[1] || m.a[0]))); ph.B = Math.round(0.5 * (ch(m.b[0]) + ch(m.b[1] || m.b[0])));
+  } else {
+    var k = s.format === 'fourball' ? 0.9 : 1;
+    m.a.concat(m.b).forEach(function(u){ ph[u] = Math.round(k * ch(u)); });
+  }
+  var min = Math.min.apply(null, Object.keys(ph).map(function(x){ return ph[x]; }));
+  Object.keys(ph).forEach(function(x){ recv[x] = ph[x] - min; });
+  return { recv: recv, ph: ph };
+}
+function rcHoleResult(t, s, m, doc, h, st) {
+  var hd = (doc && doc.holes && doc.holes[h]) || {}, g = hd.g || {}, info = rcHoleInfo(s, h), n = rcHoleCount(s);
+  st = st || rcStrokesRecv(t, s, m, doc);
+  var keys = rcScoreKeys(s, m), all = keys.every(function(k){ return g[k] != null && !isNaN(g[k]); });
+  if(all) {
+    var net = function(k){ return Number(g[k]) - computeHcpStrokesForHole(st.recv[k], info.idx, n); };
+    var best = function(side){ var v = keys.filter(function(k){ return rcKeySide(m, k) === side; }).map(net); return Math.min.apply(null, v); };
+    var a = best('A'), b = best('B');
+    return a < b ? 'A' : (b < a ? 'B' : 'H');
+  }
+  return hd.w || null;
+}
+function rcMatchStatus(t, s, m, doc) {
+  var n = rcHoleCount(s), st = rcStrokesRecv(t, s, m, doc), diff = 0, played = 0, res = {};
+  for(var h = 1; h <= n; h++) {
+    var r = rcHoleResult(t, s, m, doc, h, st);
+    res[h] = r;
+    if(!r) break;
+    played = h; if(r === 'A') diff++; else if(r === 'B') diff--;
+    if(Math.abs(diff) > n - played) break;
+  }
+  var left = n - played, decided = played > 0 && (Math.abs(diff) > left || left === 0);
+  var label = decided ? (left === 0 ? (diff ? Math.abs(diff) + 'UP' : 'AS') : Math.abs(diff) + '&' + left) : (diff ? Math.abs(diff) + 'UP' : 'AS');
+  return { n: n, played: played, diff: diff, left: left, decided: decided, label: label, leader: diff > 0 ? 'A' : (diff < 0 ? 'B' : null), w: diff > 0 ? 'A' : (diff < 0 ? 'B' : 'H'), res: res, st: st };
+}
+function rcCanScore(m) { return isAdmin() || !!(currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0); }
+
+// Prenumerera på tourens matcher medan Ryder Cup-vyn är öppen
+function rcSubscribeLive(t) {
+  if(_rcLiveTour === t.id && _rcLiveUnsub) return;
+  if(_rcLiveUnsub) { try { _rcLiveUnsub(); } catch(e) {} }
+  _rcLive = {}; _rcLiveTour = t.id;
+  _rcLiveUnsub = LIVE_SCORING_COL.where('tourId', '==', t.id).onSnapshot(function(snap){
+    var m0 = {};
+    snap.forEach(function(d){ var x = d.data(); if(x && x.kind === 'rydercup') m0[d.id] = x; });
+    _rcLive = m0;
+    var tt = getTour();
+    if(!tt || tt.id !== _rcLiveTour) return;
+    rcAutoFinalize(tt);
+    // Rita bara om livefönstret om det fortfarande är öppet (stängt med krysset = släpp det)
+    if(_rcLm) { if(document.getElementById('rc-live-root')) rcRenderLive(); else _rcLm = null; }
+    if(_currentAppView === 'tournament' && !document.querySelector('.modal-overlay.show, #modal-mc.show')) {
+      clearTimeout(_rcLiveRenderTimer); _rcLiveRenderTimer = setTimeout(function(){ try { renderEvents(); } catch(e) {} }, 150);
+    }
+  }, function(err){ console.warn('Ryder Cup livescoring', err); });
+}
+// Avgjord match -> resultatet in i cupen (bara admin eller spelare i matchen skriver)
+function rcAutoFinalize(t) {
+  var changed = false;
+  (t.rc.sessions || []).forEach(function(s){
+    rcMatches(t, s).forEach(function(m){
+      var doc = _rcLive[rcLiveId(t, s, m.i)]; if(!doc || !rcCanScore(m)) return;
+      var ms = rcMatchStatus(t, s, m, doc), cur = (s.results || {})[m.i];
+      if(ms.decided) {
+        if(!cur || (cur.auto && (cur.w !== ms.w || cur.m !== ms.label))) {
+          if(cur && !cur.auto) return; // manuellt satt resultat skrivs inte över
+          if(!s.results) s.results = {};
+          s.results[m.i] = { w: ms.w, m: ms.w === 'H' ? 'AS' : ms.label, auto: true, by: currentUser ? currentUser.username : null, at: Date.now() };
+          changed = true;
+        }
+      } else if(cur && cur.auto) { delete s.results[m.i]; changed = true; }
+    });
+  });
+  if(changed) save();
+}
+
+// ── Livescoringfönstret ───────────────────────────────────────────────────
+function rcOpenLive(si, i) {
+  var t = getTour(); if(!isRyderTour(t)) return;
+  var s = t.rc.sessions[si], m = rcMatches(t, s)[i]; if(!m) return;
+  rcSubscribeLive(t);
+  var doc = _rcLive[rcLiveId(t, s, i)], ms = rcMatchStatus(t, s, m, doc);
+  _rcLm = { si: si, i: i, h: Math.min(ms.n, ms.played + 1) || 1 };
+  rcRenderLive();
+}
+function rcCloseLive() { _rcLm = null; closeModal(); renderEvents(); }
+function rcRenderLive() {
+  if(!_rcLm) return;
+  var t = getTour(); if(!isRyderTour(t)) return;
+  var s = t.rc.sessions[_rcLm.si], m = rcMatches(t, s)[_rcLm.i]; if(!m) return;
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), doc = _rcLive[rcLiveId(t, s, m.i)] || {}, ms = rcMatchStatus(t, s, m, doc), can = rcCanScore(m);
+  var h = _rcLm.h, info = rcHoleInfo(s, h), hd = (doc.holes && doc.holes[h]) || {}, g = hd.g || {}, keys = rcScoreKeys(s, m), course = rcCourse(s);
+  var lcol = ms.leader ? (ms.leader === 'A' ? A : B).color : null;
+  var statusTxt = ms.decided ? (ms.w === 'H' ? 'Delad match (AS)' : esc((ms.w === 'A' ? A : B).name) + ' vann ' + esc(ms.label))
+    : (ms.played ? (ms.leader ? esc((ms.leader === 'A' ? A : B).name) + ' ' + esc(ms.label) : 'Lika (AS)') + ' efter ' + ms.played : 'Matchen har inte börjat');
+  var nameOf = function(k){ return k === 'A' || k === 'B' ? m[k === 'A' ? 'a' : 'b'].map(rcShortName).join(' & ') : rcShortName(k); };
+  var row = function(k){
+    var side = rcKeySide(m, k), tm = side === 'A' ? A : B, sr = computeHcpStrokesForHole(ms.st.recv[k], info.idx, ms.n), v = g[k];
+    return '<div class="row" style="justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;margin-bottom:8px;background:var(--surface2);border-left:5px solid ' + esc(tm.color) + '">' +
+      '<div style="min-width:0;flex:1"><div style="font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(nameOf(k)) + '</div>' +
+        '<div style="font-size:12px;color:var(--text-3)">' + (sr ? '<span style="color:var(--gold);font-weight:700">' + '●'.repeat(Math.min(sr, 3)) + '</span> ' + sr + ' slag på hålet' : 'Inget slag på hålet') + '</div></div>' +
+      (can ? '<div class="row" style="gap:6px;align-items:center;flex-shrink:0">' +
+          '<button class="btn" style="width:46px;height:46px;font-size:22px;justify-content:center;padding:0" onclick="rcStep(\'' + esc(k) + '\',-1)">−</button>' +
+          '<div style="width:44px;text-align:center;font-size:26px;font-weight:800">' + (v != null ? v : '–') + '</div>' +
+          '<button class="btn" style="width:46px;height:46px;font-size:22px;justify-content:center;padding:0" onclick="rcStep(\'' + esc(k) + '\',1)">+</button></div>'
+        : '<div style="width:44px;text-align:center;font-size:26px;font-weight:800">' + (v != null ? v : '–') + '</div>') +
+    '</div>';
+  };
+  var hr = ms.res[h] || rcHoleResult(t, s, m, doc, h, ms.st), computed = keys.every(function(k){ return g[k] != null; });
+  var wbtn = function(w, label, color){
+    var on = hr === w;
+    return '<button class="btn" style="flex:1;justify-content:center;padding:10px 4px;font-weight:700;' + (on ? 'background:' + (color || 'var(--text-3)') + ';color:#fff;border-color:transparent' : '') + '"' + (can && !computed ? ' onclick="rcSetHoleWinner(\'' + w + '\')"' : ' disabled') + '>' + label + '</button>';
+  };
+  var grid = '';
+  for(var x = 1; x <= ms.n; x++) {
+    var r = (ms.res[x] !== undefined) ? ms.res[x] : rcHoleResult(t, s, m, doc, x, ms.st), bg = r === 'A' ? A.color : (r === 'B' ? B.color : (r === 'H' ? 'color-mix(in srgb, var(--text-3) 50%, var(--surface2))' : 'var(--surface2)'));
+    grid += '<button onclick="rcGoHole(' + x + ')" style="border:' + (x === h ? '2px solid var(--text)' : '1px solid var(--border)') + ';background:' + bg + ';color:' + (r ? '#fff' : 'var(--text-2)') + ';border-radius:8px;height:34px;font-weight:700;font-size:13px;cursor:pointer">' + x + '</button>';
+  }
+  var hcpLine = keys.map(function(k){ return esc(nameOf(k)) + ' ' + (ms.st.recv[k] || 0); }).join(' · ');
+  var html = '<div id="rc-live-root"></div><div style="text-align:center;margin-bottom:10px">' +
+      '<div style="font-size:11px;letter-spacing:.12em;font-weight:700;color:var(--gold)">PASS ' + (_rcLm.si + 1) + ' · ' + RC_FORMATS[s.format].label.toUpperCase() + ' · MATCH ' + (m.i + 1) + '</div>' +
+      '<div style="font-size:14px;margin-top:6px"><b style="color:' + rcInk(A.color) + '">' + esc(m.a.map(rcShortName).join(' & ')) + '</b> <span style="color:var(--text-3)">mot</span> <b style="color:' + rcInk(B.color) + '">' + esc(m.b.map(rcShortName).join(' & ')) + '</b></div>' +
+      '<div style="display:inline-block;margin-top:8px;padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;background:' + (lcol ? esc(lcol) : 'var(--surface2)') + ';color:' + (lcol ? '#fff' : 'var(--text)') + '">' + statusTxt + '</div></div>' +
+    (!course ? '<p style="font-size:12px;color:#8A5A00;background:#FFF4D6;border-radius:8px;padding:8px 10px;margin-bottom:10px">Passet saknar bana i bandatabasen – hålindex och par saknas, så handicapslagen läggs på hål 1, 2, 3… Sätt banan med ✏️ på passet.</p>' : '') +
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<button class="btn" onclick="rcGoHole(' + (h - 1) + ')"' + (h <= 1 ? ' disabled' : '') + '><i class="ti ti-chevron-left"></i></button>' +
+      '<div style="text-align:center"><div style="font-size:24px;font-weight:800">Hål ' + h + '</div><div style="font-size:12px;color:var(--text-3)">' + (info.par ? 'Par ' + info.par + ' · ' : '') + 'Index ' + info.idx + '</div></div>' +
+      '<button class="btn" onclick="rcGoHole(' + (h + 1) + ')"' + (h >= ms.n ? ' disabled' : '') + '><i class="ti ti-chevron-right"></i></button></div>' +
+    keys.map(row).join('') +
+    '<div style="font-size:11px;color:var(--text-3);margin:4px 0 6px">' + (computed ? 'Hålvinnaren räknas från slagen (netto).' : 'Vem vann hålet? Snabbval om alla inte för slag.') + '</div>' +
+    '<div class="row" style="gap:6px;margin-bottom:12px">' + wbtn('A', esc(A.name), A.color) + wbtn('H', 'Delat') + wbtn('B', esc(B.name), B.color) + '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-bottom:10px">' + grid + '</div>' +
+    '<details class="dsw"><summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)"><span style="flex:1">Handicapslag: ' + hcpLine + '</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
+      '<div style="font-size:12px;color:var(--text-3);margin:6px 0">' + (s.format === 'foursome' ? 'Foursome: laget får 50 % av spelarnas sammanlagda spelhandicap; skillnaden mellan lagen avgör.' : s.format === 'fourball' ? 'Fyrboll: alla får 90 % av sitt spelhandicap; den bästa spelar på 0.' : 'Singlar: hela skillnaden i spelhandicap; den bättre spelar på 0.') + (course && course.slope && course.rating ? '' : ' Banan saknar slope/CR – spelhandicap = HCP.') + '</div>' +
+      (can ? m.a.concat(m.b).map(function(u){ var ov = (doc.shcp || {})[u]; return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:4px 0"><span style="font-size:13px">' + esc(rcShortName(u)) + ' <span style="color:var(--text-3)">(HCP ' + fmtHcp((findUser(u) || {}).hcp) + ')</span></span><input type="number" step="1" value="' + (ov != null ? ov : rcCourseHcp(u, s)) + '" onchange="rcSetShcp(\'' + esc(u) + '\',this.value)" style="width:80px;margin:0" title="Spelhandicap"></div>'; }).join('') : '') +
+    '</details>' +
+    '<div class="row" style="justify-content:space-between;gap:8px;margin-top:14px">' +
+      (can ? '<button class="btn btn-sm" onclick="_rcLm=null;rcOpenResult(' + _rcLm.si + ',' + m.i + ')"><i class="ti ti-pencil"></i> Sätt resultat manuellt</button>' : '<span></span>') +
+      '<button class="btn btn-primary" onclick="rcCloseLive()">Klar</button></div>';
+  showModal(html, true, true);
+}
+function rcGoHole(h) { if(!_rcLm) return; var t = getTour(), s = t.rc.sessions[_rcLm.si]; _rcLm.h = Math.max(1, Math.min(rcHoleCount(s), h)); rcRenderLive(); }
+function rcLiveWrite(patch) {
+  var t = getTour(), s = t.rc.sessions[_rcLm.si], id = rcLiveId(t, s, _rcLm.i);
+  var base = { tourId: t.id, eventId: 'rc_' + s.id, kind: 'rydercup', noNotify: true, sessionId: s.id, match: _rcLm.i, updatedAt: Date.now(), by: currentUser ? currentUser.username : null };
+  // Optimistisk lokal uppdatering så att fönstret svarar direkt
+  var cur = _rcLive[id] = _rcLive[id] || {};
+  if(patch.holes) { cur.holes = cur.holes || {}; Object.keys(patch.holes).forEach(function(h){ var ph = patch.holes[h]; var ch = cur.holes[h] = cur.holes[h] || {};
+    if(ph.g) { ch.g = ch.g || {}; Object.keys(ph.g).forEach(function(k){ if(ph.g[k] === null) delete ch.g[k]; else ch.g[k] = ph.g[k]; }); }
+    if('w' in ph) { if(ph.w === null) delete ch.w; else ch.w = ph.w; } }); }
+  if(patch.shcp) { cur.shcp = Object.assign(cur.shcp || {}, patch.shcp); }
+  var del = firebase.firestore.FieldValue.delete();
+  var fsPatch = JSON.parse(JSON.stringify(patch), function(k, v){ return v === null ? del : v; });
+  LIVE_SCORING_COL.doc(id).set(Object.assign(base, fsPatch), { merge: true }).catch(function(e){ console.error('Ryder Cup livescoring', e); alert('Kunde inte spara – kontrollera anslutningen.'); });
+  rcAutoFinalize(t);
+  rcRenderLive();
+}
+function rcStep(k, d) {
+  if(!_rcLm) return;
+  var t = getTour(), s = t.rc.sessions[_rcLm.si], m = rcMatches(t, s)[_rcLm.i]; if(!rcCanScore(m)) return;
+  var doc = _rcLive[rcLiveId(t, s, m.i)] || {}, hd = (doc.holes && doc.holes[_rcLm.h]) || {}, cur = (hd.g || {})[k], par = rcHoleInfo(s, _rcLm.h).par || 4;
+  var v = cur == null ? par : Number(cur) + d;
+  var p = { holes: {} }; p.holes[_rcLm.h] = { g: {} };
+  p.holes[_rcLm.h].g[k] = v < 1 ? null : Math.min(v, 15);
+  rcLiveWrite(p);
+}
+function rcSetHoleWinner(w) {
+  if(!_rcLm) return;
+  var t = getTour(), s = t.rc.sessions[_rcLm.si], m = rcMatches(t, s)[_rcLm.i]; if(!rcCanScore(m)) return;
+  var doc = _rcLive[rcLiveId(t, s, m.i)] || {}, hd = (doc.holes && doc.holes[_rcLm.h]) || {};
+  var p = { holes: {} }; p.holes[_rcLm.h] = { w: hd.w === w ? null : w };
+  rcLiveWrite(p);
+  if(hd.w !== w) setTimeout(function(){ if(_rcLm && _rcLm.h < rcHoleCount(s)) rcGoHole(_rcLm.h + 1); }, 250);
+}
+function rcSetShcp(u, v) {
+  if(!_rcLm) return;
+  var n = parseInt(v, 10); if(isNaN(n)) return;
+  var p = { shcp: {} }; p.shcp[u] = n; rcLiveWrite(p);
 }
 
 // ── Inställningar för Ryder Cup (release 342) ─────────────────────────────
@@ -8140,7 +8358,7 @@ function rcResetLineups(si) {
 
 function renderEvents() {
   var t=getTour(), el=document.getElementById('events-list');
-  if(isRyderTour(t)) { el.innerHTML = rcViewHTML(t); return; }
+  if(isRyderTour(t)) { rcSubscribeLive(t); el.innerHTML = rcViewHTML(t); return; }
   var titleBlock = '<h2>Deltävlingar</h2>'+
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
   var top3Html = buildTop3HTML(t, false);
@@ -21826,6 +22044,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (349)',
+    items: [
+      { type: 'new', text: 'Ryder Cup etapp 2 – livescoring per match: tryck på en match för att föra den hål för hål. Varje spelare (i foursome: varje lag) för sina slag med − och +, eller tryck bara vem som vann hålet. Har alla fört slag räknar appen hålvinnaren netto med handicapslag. Hålrutnätet visar varje hål i vinnarlagets färg.' },
+      { type: 'new', text: 'Handicap enligt WHS för matchspel: spelhandicap räknas från HCP, slope och course rating (annars HCP). Singlar ger hela skillnaden, fyrboll 90 % (den bästa spelar på 0) och foursome 50 % av lagets summa. Slagen läggs efter hålindex och visas som prickar på hålet; spelhandicap kan justeras per spelare i matchen.' },
+      { type: 'new', text: 'Matchställningen uppdateras live (t.ex. "Europa 2UP efter 11") och syns direkt på tavlan i ledarens färg. När matchen är avgjord, t.ex. 3&2, skrivs resultatet in i cupen automatiskt. "Sätt resultat manuellt" finns kvar.' },
+    ]
+  },
   {
     date: '10 november 2026 (348)',
     items: [
