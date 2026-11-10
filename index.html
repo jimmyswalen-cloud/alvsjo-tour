@@ -7803,13 +7803,55 @@ function rcViewHTML(t) {
       rcCaptainHTML(A) + rcCaptainHTML(B) + '</div>' +
   '</div>';
   h += (t.rc.sessions || []).map(function(s, si){ return rcSessionHTML(t, s, si, mine); }).join('');
-  h += '<details class="dsw" style="margin:6px 0 20px"><summary style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text-2)"><i class="ti ti-users-group"></i><span style="flex:1">Lagen</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
-    '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:10px">' + [A, B].map(function(tm){
-      return '<div class="card" style="flex:1;min-width:220px;padding:12px 14px;border-top:4px solid ' + esc(tm.color) + '"><div style="font-weight:800;margin-bottom:6px;color:' + rcInk(tm.color) + '">' + esc(tm.name) + ' <span style="color:var(--text-3);font-weight:500;font-size:12px">· ' + tm.players.length + ' spelare</span></div>' +
-        tm.players.map(function(u){ return '<div style="font-size:13px;padding:3px 0">' + esc(rcUserName(u)) + (tm.captain === u ? ' <span class="badge badge-gold" style="font-size:10px">Kapten</span>' : '') + '</div>'; }).join('') + '</div>';
-    }).join('') + '</div></details>';
+  h += rcRosterHTML(t);
   return h;
 }
+// ── Lagen på pappret (release 344) ────────────────────────────────────────
+// Två kolumner med en bricka per spelare: profilbild, förnamn, efternamn i versaler och
+// HCP, sorterade på HCP (lägst först) så att lagens bästa möts överst. Kaptenen får ett C.
+// Längst ner "Bäst på pappret?" med lagens snitt-HCP och lägsta HCP.
+function rcPlayerHcp(u) { var x = findUser(u); var v = x && x.hcp != null ? Number(x.hcp) : null; return (v == null || isNaN(v)) ? null : v; }
+function rcRosterTile(tm, u) {
+  var x = findUser(u) || {}, full = rcUserName(u), sp = full.indexOf(' ');
+  var first = sp > 0 ? full.slice(0, sp) : full, last = sp > 0 ? full.slice(sp + 1) : '';
+  var img = playerPhoto(u, x.img), hcp = rcPlayerHcp(u);
+  return '<div onclick="showGlobalPlayerProfile(\'' + esc(u) + '\')" style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer;padding:8px 8px 8px 9px;border-radius:10px;background:color-mix(in srgb, ' + esc(tm.color) + ' 16%, var(--surface2));border-left:4px solid ' + esc(tm.color) + '">' +
+    '<div style="position:relative;flex-shrink:0">' +
+      (img ? '<img src="' + esc(img) + '" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;display:block">' : '<div class="avatar-ph" style="width:38px;height:38px;font-size:13px">' + ini(full) + '</div>') +
+      (tm.captain === u ? '<span title="Kapten" style="position:absolute;right:-4px;bottom:-3px;width:19px;height:19px;border-radius:50%;background:var(--gold);color:#13231C;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)">C</span>' : '') +
+    '</div>' +
+    '<div style="min-width:0;flex:1;line-height:1.15">' +
+      // Förnamn och HCP på första raden, efternamnet på egen rad som får bryta (högst två rader)
+      '<div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3)"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(first) + '</span><span style="flex-shrink:0;letter-spacing:0">' + (hcp == null ? '' : fmtHcp(hcp)) + '</span></div>' +
+      '<div style="font-size:' + (Math.max.apply(null, (last || first).split(' ').map(function(w){ return w.length; })) > 9 ? 12 : 14) + 'px;font-weight:800;text-transform:uppercase;color:var(--text);overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + esc(last || first) + '</div>' +
+    '</div></div>';
+}
+function rcRosterHTML(t) {
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+  var sorted = function(tm){ return tm.players.slice().sort(function(a, b){ var x = rcPlayerHcp(a), y = rcPlayerHcp(b); return (x == null ? 99 : x) - (y == null ? 99 : y); }); };
+  var la = sorted(A), lb = sorted(B), n = Math.max(la.length, lb.length);
+  var stats = function(list){ var v = list.map(rcPlayerHcp).filter(function(x){ return x != null; }); if(!v.length) return null;
+    var avg = v.reduce(function(a, b){ return a + b; }, 0) / v.length, lo = list.filter(function(u){ return rcPlayerHcp(u) === Math.min.apply(null, v); })[0];
+    return { avg: avg, low: lo, lowV: Math.min.apply(null, v) }; };
+  var sa = stats(la), sb = stats(lb);
+  var h = '<div class="card" style="padding:14px 12px 12px;margin:6px 0 20px">' +
+    '<div style="text-align:center;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--gold);margin-bottom:10px"><i class="ti ti-users-group"></i> LAGEN</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      [A, B].map(function(tm){ return '<div style="background:' + esc(tm.color) + ';color:#fff;border-radius:10px;padding:8px 6px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;min-width:0">' + rcFlagSVG(tm, 26) + '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(tm.name) + '</span></div>'; }).join('');
+  for(var i = 0; i < n; i++) h += (la[i] ? rcRosterTile(A, la[i]) : '<div></div>') + (lb[i] ? rcRosterTile(B, lb[i]) : '<div></div>');
+  h += '</div>';
+  if(sa && sb) {
+    // Lägre snitt-HCP = starkare lag; stapeln visar andelen "styrka" per lag
+    var wa = 1 / (sa.avg + 10), wb = 1 / (sb.avg + 10), pa = Math.round(wa / (wa + wb) * 100);
+    h += '<div style="margin-top:12px;background:var(--surface2);border-radius:12px;padding:12px">' +
+      '<div style="text-align:center;font-size:11px;letter-spacing:.12em;font-weight:700;color:var(--text-3);margin-bottom:8px">BÄST PÅ PAPPRET?</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px"><span style="color:' + rcInk(A.color) + '">Snitt-HCP ' + fmtHcp(sa.avg) + '</span><span style="color:' + rcInk(B.color) + '">' + fmtHcp(sb.avg) + ' Snitt-HCP</span></div>' +
+      '<div style="display:flex;height:10px;border-radius:5px;overflow:hidden"><div style="width:' + pa + '%;background:' + esc(A.color) + '"></div><div style="width:' + (100 - pa) + '%;background:' + esc(B.color) + '"></div></div>' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3);margin-top:6px"><span>Lägst: ' + esc(rcShortName(sa.low)) + ' ' + fmtHcp(sa.lowV) + '</span><span>Lägst: ' + esc(rcShortName(sb.low)) + ' ' + fmtHcp(sb.lowV) + '</span></div></div>';
+  }
+  return h + '</div>';
+}
+
 function rcSessionHTML(t, s, si, mine) {
   var f = RC_FORMATS[s.format], n = rcMatchCount(t, s), ms = rcMatches(t, s);
   var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
@@ -21743,6 +21785,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (344)',
+    items: [
+      { type: 'improved', text: 'Ryder Cup: lagen visas nu som i TV-grafiken – två kolumner med lagens färg och flagga överst och en bricka per spelare med profilbild, förnamn, efternamn i versaler och HCP. Spelarna sorteras på HCP (lägst först), kaptenen har ett C, och ett tryck öppnar profilen. Under lagen visas "Bäst på pappret?" med lagens snitt-HCP och lägsta HCP.' },
+    ]
+  },
   {
     date: '10 november 2026 (343)',
     items: [
