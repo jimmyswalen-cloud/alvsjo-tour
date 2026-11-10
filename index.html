@@ -7468,6 +7468,9 @@ var RC_PRESETS = {
 };
 var RC_MARGINS = ['1UP', '2UP', '2&1', '3&1', '3&2', '4&2', '4&3', '5&3', '5&4', '6&4', '6&5', '7&5', '7&6', '8&6', '8&7', '9&7', '9&8', '10&8'];
 
+// Release 338: lagfärgen som TEXT blandas med appens textfärg, så att t.ex. mörkblått blir
+// ljusare och läsbart på mörk bakgrund (och mörkare på ljus). Bakgrunder behåller ren lagfärg.
+function rcInk(c) { return 'color-mix(in srgb, ' + esc(c) + ' 55%, var(--text))'; }
 function isRyderTour(t) { return !!(t && t.format === 'rydercup' && t.rc); }
 function rcTeam(t, id) { return (t.rc.teams || []).find(function(x){ return x.id === id; }); }
 function rcOther(id) { return id === 'A' ? 'B' : 'A'; }
@@ -7516,7 +7519,7 @@ function rcAllDecided(t) {
 function rcCardBadgeHTML(t) {
   if(!isRyderTour(t)) return '';
   var p = rcPoints(t), A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
-  return '<span class="badge" style="background:var(--surface2);color:var(--text)"><span style="color:' + esc(A.color) + ';font-weight:800">' + esc(A.name) + ' ' + rcFmt(p.A) + '</span> – <span style="color:' + esc(B.color) + ';font-weight:800">' + rcFmt(p.B) + ' ' + esc(B.name) + '</span></span>';
+  return '<span class="badge" style="background:var(--surface2);color:var(--text)"><span style="color:' + rcInk(A.color) + ';font-weight:800">' + esc(A.name) + ' ' + rcFmt(p.A) + '</span> – <span style="color:' + rcInk(B.color) + ';font-weight:800">' + rcFmt(p.B) + ' ' + esc(B.name) + '</span></span>';
 }
 function rcBadgeHTML(t) {
   return isRyderTour(t) ? '<span class="badge" style="background:#FDF0E1;color:#8A4B00;margin-left:4px;white-space:nowrap"><i class="ti ti-trophy"></i> Ryder Cup</span>' : '';
@@ -7561,7 +7564,7 @@ function renderRyderCupWizard() {
     '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px">' + rcwSessionsPreview().map(function(f, i){ return '<span class="badge" style="background:var(--surface2);color:var(--text-2)">Pass ' + (i + 1) + ': ' + RC_FORMATS[f].label + '</span>'; }).join('') + '</div>' +
     '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:stretch;margin-bottom:12px">' + teamBox(w.teams[0]) + teamBox(w.teams[1]) + '</div>' +
     '<label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Spelare – tryck för att välja lag</label>' +
-    '<div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
+    '<div id="rcw-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
       users.map(function(u){
         var a = w.assign[u.username] || '';
         var b = function(id){ var tm = id ? rcTeam({ rc: { teams: w.teams } }, id) : null; var on = a === id;
@@ -7573,7 +7576,18 @@ function renderRyderCupWizard() {
     '<div class="field" style="margin-top:12px"><label>Försvarande lag (behåller pokalen vid lika)</label><select onchange="_rcw.holder=this.value">' +
       '<option value="">Ingen – lika är delad seger</option><option value="A" ' + (w.holder === 'A' ? 'selected' : '') + '>' + esc(w.teams[0].name) + '</option><option value="B" ' + (w.holder === 'B' ? 'selected' : '') + '>' + esc(w.teams[1].name) + '</option></select></div>' +
     '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="createRyderCupTour()"><i class="ti ti-check"></i> Skapa</button></div>';
+  // Release 336: behåll scrollläget (fönstret och spelarlistan) när guiden ritas om,
+  // så att man inte hamnar högst upp varje gång man väljer lag för en spelare.
+  var mc0 = document.getElementById('modal-mc'), box0 = mc0 && mc0.querySelector('.modal'), list0 = document.getElementById('rcw-list');
+  var keep = mc0 ? { ov: mc0.scrollTop, box: box0 ? box0.scrollTop : 0, list: list0 ? list0.scrollTop : 0, win: window.pageYOffset } : null;
   showModal(h, true, true);
+  if(keep) {
+    var mc1 = document.getElementById('modal-mc'), box1 = mc1 && mc1.querySelector('.modal'), list1 = document.getElementById('rcw-list');
+    if(mc1) mc1.scrollTop = keep.ov;
+    if(box1) box1.scrollTop = keep.box;
+    if(list1) list1.scrollTop = keep.list;
+    window.scrollTo(0, keep.win);
+  }
 }
 function rcwAssign(username, teamId) {
   if(teamId) _rcw.assign[username] = teamId; else delete _rcw.assign[username];
@@ -7623,10 +7637,10 @@ function rcViewHTML(t) {
   var h = '<div class="card" style="padding:16px;margin-bottom:16px">' +
     '<div style="text-align:center;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--gold);margin-bottom:10px">' + esc(RC_PRESETS[t.rc.preset] ? RC_PRESETS[t.rc.preset].label.toUpperCase() : 'RYDER CUP') + '</div>' +
     '<div style="display:grid;grid-template-columns:1fr auto auto 1fr;align-items:stretch">' +
-      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + esc(A.color) + ';text-align:center;padding:0 6px">' + esc(A.name) + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + rcInk(A.color) + ';text-align:center;padding:0 6px">' + esc(A.name) + '</div>' +
       '<div style="background:' + esc(A.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:12px 0 0 12px;min-width:76px;text-align:center">' + rcFmt(p.A) + '</div>' +
       '<div style="background:' + esc(B.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:0 12px 12px 0;min-width:76px;text-align:center">' + rcFmt(p.B) + '</div>' +
-      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + esc(B.color) + ';text-align:center;padding:0 6px">' + esc(B.name) + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + rcInk(B.color) + ';text-align:center;padding:0 6px">' + esc(B.name) + '</div>' +
     '</div>' +
     '<div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">' + status + '</div>' +
     '<div class="row" style="justify-content:center;gap:16px;margin-top:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap">' +
@@ -7636,7 +7650,7 @@ function rcViewHTML(t) {
   h += (t.rc.sessions || []).map(function(s, si){ return rcSessionHTML(t, s, si, mine); }).join('');
   h += '<details class="dsw" style="margin:6px 0 20px"><summary style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text-2)"><i class="ti ti-users-group"></i><span style="flex:1">Lagen</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
     '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:10px">' + [A, B].map(function(tm){
-      return '<div class="card" style="flex:1;min-width:220px;padding:12px 14px;border-top:4px solid ' + esc(tm.color) + '"><div style="font-weight:800;margin-bottom:6px;color:' + esc(tm.color) + '">' + esc(tm.name) + ' <span style="color:var(--text-3);font-weight:500;font-size:12px">· ' + tm.players.length + ' spelare</span></div>' +
+      return '<div class="card" style="flex:1;min-width:220px;padding:12px 14px;border-top:4px solid ' + esc(tm.color) + '"><div style="font-weight:800;margin-bottom:6px;color:' + rcInk(tm.color) + '">' + esc(tm.name) + ' <span style="color:var(--text-3);font-weight:500;font-size:12px">· ' + tm.players.length + ' spelare</span></div>' +
         tm.players.map(function(u){ return '<div style="font-size:13px;padding:3px 0">' + esc(rcUserName(u)) + (tm.captain === u ? ' <span class="badge badge-gold" style="font-size:10px">Kapten</span>' : '') + '</div>'; }).join('') + '</div>';
     }).join('') + '</div></details>';
   return h;
@@ -7650,7 +7664,7 @@ function rcSessionHTML(t, s, si, mine) {
     '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
       '<div style="min-width:0"><div style="font-weight:800;font-size:15px">Pass ' + (si + 1) + ' · ' + f.label + (s.origFormat !== s.format ? ' <span style="font-size:11px;font-weight:600;color:var(--text-3)">(i stället för foursome)</span>' : '') + '</div>' +
         '<div style="font-size:12px;color:var(--text-3);margin-top:2px">' + (s.date ? esc(formatSvDateFull(s.date)) : 'Datum ej satt') + (s.course ? ' · ' + esc(s.course) : '') + ' · ' + n + ' matcher</div></div>' +
-      '<div class="row" style="gap:6px;flex-shrink:0">' + (ms.length ? '<span style="font-weight:800;font-size:14px"><span style="color:' + esc(A.color) + '">' + rcFmt(sp.A) + '</span> – <span style="color:' + esc(B.color) + '">' + rcFmt(sp.B) + '</span></span>' : '') +
+      '<div class="row" style="gap:6px;flex-shrink:0">' + (ms.length ? '<span style="font-weight:800;font-size:14px"><span style="color:' + rcInk(A.color) + '">' + rcFmt(sp.A) + '</span> – <span style="color:' + rcInk(B.color) + '">' + rcFmt(sp.B) + '</span></span>' : '') +
         (isAdmin() ? '<button class="btn btn-sm" title="Ändra passet" onclick="rcEditSession(' + si + ')"><i class="ti ti-edit"></i></button>' : '') + '</div>' +
     '</div>';
   if(ms.length) {
@@ -7659,7 +7673,7 @@ function rcSessionHTML(t, s, si, mine) {
     h += '<div style="display:flex;flex-direction:column;gap:6px">' + ['A', 'B'].map(function(id){
       var tm = rcTeam(t, id), lu = s.lineups && s.lineups[id], canSee = (mine === id) || (isAdmin() && !rcMyTeamId(t)) || rcIsCaptain(t, id);
       var row = '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--surface2)">' +
-        '<span style="font-size:13px"><b style="color:' + esc(tm.color) + '">' + esc(tm.name) + '</b> · ' + (lu ? '<i class="ti ti-circle-check" style="color:#1D9E75"></i> Uppställning inlämnad' : '<span style="color:var(--text-3)">Väntar på uppställning</span>') + '</span>' +
+        '<span style="font-size:13px"><b style="color:' + rcInk(tm.color) + '">' + esc(tm.name) + '</b> · ' + (lu ? '<i class="ti ti-circle-check" style="color:#1D9E75"></i> Uppställning inlämnad' : '<span style="color:var(--text-3)">Väntar på uppställning</span>') + '</span>' +
         (rcCanSubmit(t, id) ? '<button class="btn btn-sm' + (lu ? '' : ' btn-primary') + '" onclick="rcOpenLineup(' + si + ',\'' + id + '\')">' + (lu ? 'Ändra' : 'Lämna in') + '</button>' : '') + '</div>';
       if(lu && canSee) row += '<div style="font-size:12px;color:var(--text-2);padding:2px 10px 4px">' + lu.slots.map(function(sl, i){ return (i + 1) + '. ' + sl.map(rcShortName).map(esc).join(' & '); }).join(' · ') + ' <span style="color:var(--text-3)">(dold för motståndarna)</span></div>';
       return row;
@@ -7674,7 +7688,7 @@ function rcMatchRowHTML(t, si, m) {
   var canEdit = isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0);
   var side = function(us, id, right){
     var tm = id === 'A' ? A : B, on = lead === id;
-    return '<div style="background:' + (on ? esc(tm.color) : 'var(--surface2)') + ';padding:9px 10px;font-weight:700;font-size:13px;color:' + (on ? '#fff' : esc(tm.color)) + ';' + (right ? 'text-align:right;' : '') + 'min-width:0">' +
+    return '<div style="background:' + (on ? esc(tm.color) : 'var(--surface2)') + ';padding:9px 10px;font-weight:700;font-size:13px;color:' + (on ? '#fff' : rcInk(tm.color)) + ';' + (right ? 'text-align:right;' : '') + 'min-width:0">' +
       us.map(function(u){ return '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(rcShortName(u)) + '</div>'; }).join('') + '</div>';
   };
   return '<div style="display:grid;grid-template-columns:1fr 70px 1fr;border-radius:10px;overflow:hidden;margin-bottom:6px;' + (canEdit ? 'cursor:pointer' : '') + '"' + (canEdit ? ' onclick="rcOpenResult(' + si + ',' + m.i + ')"' : '') + '>' +
@@ -7690,17 +7704,40 @@ function rcOpenLineup(si, teamId) {
   var t = getTour(); if(!isRyderTour(t) || !rcCanSubmit(t, teamId)) return;
   var s = t.rc.sessions[si], tm = rcTeam(t, teamId), n = rcMatchCount(t, s), pairs = RC_FORMATS[s.format].pairs;
   var cur = (s.lineups && s.lineups[teamId]) ? s.lineups[teamId].slots : [];
-  var opt = function(sel){ return '<option value="">Välj spelare…</option>' + tm.players.map(function(u){ return '<option value="' + esc(u) + '" ' + (sel === u ? 'selected' : '') + '>' + esc(rcUserName(u)) + '</option>'; }).join(''); };
+  var opt = function(sel){ return '<option value="">Välj spelare…</option>' + tm.players.map(function(u){ return '<option value="' + esc(u) + '" ' + (sel === u ? 'selected' : '') + '>' + esc(rcShortName(u)) + '</option>'; }).join(''); };
   var h = '<h3><i class="ti ti-list-numbers"></i> Uppställning – ' + esc(tm.name) + '</h3>' +
     '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Pass ' + (si + 1) + ' · ' + RC_FORMATS[s.format].label + ' · ' + n + ' matcher. ' + (pairs ? 'Välj två spelare per match.' : 'Välj en spelare per match, i den ordning de ska spela.') + ' Motståndarna ser inte din uppställning förrän båda lagen lämnat in. Match 1 möter motståndarnas match 1, osv.</p>';
   for(var i = 0; i < n; i++) {
     var sl = cur[i] || [];
     h += '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><span style="flex:0 0 74px;font-size:13px;font-weight:700">Match ' + (i + 1) + '</span>' +
-      '<select class="rc-lu" data-i="' + i + '" data-k="0" style="flex:1;margin:0">' + opt(sl[0]) + '</select>' +
-      (pairs ? '<select class="rc-lu" data-i="' + i + '" data-k="1" style="flex:1;margin:0">' + opt(sl[1]) + '</select>' : '') + '</div>';
+      '<select class="rc-lu" data-i="' + i + '" data-k="0" style="flex:1;min-width:0;margin:0" onchange="rcLuSync()">' + opt(sl[0]) + '</select>' +
+      (pairs ? '<select class="rc-lu" data-i="' + i + '" data-k="1" style="flex:1;min-width:0;margin:0" onchange="rcLuSync()">' + opt(sl[1]) + '</select>' : '') + '</div>';
   }
+  h += '<div id="rc-lu-left" style="font-size:12px;color:var(--text-3);margin-top:4px"></div>';
   h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveLineup(' + si + ',\'' + teamId + '\')"><i class="ti ti-send"></i> Lämna in</button></div>';
   showModal(h, true);
+  rcLuSync();
+}
+// Release 337: en spelare som redan är vald i en match går inte att välja igen - den
+// grånas ut i alla andra listor direkt. Under listan står vilka som är kvar att placera.
+function rcLuSync() {
+  var sels = Array.prototype.slice.call(document.querySelectorAll('.rc-lu'));
+  var chosen = {};
+  sels.forEach(function(el){ if(el.value) chosen[el.value] = el; });
+  sels.forEach(function(el){
+    Array.prototype.forEach.call(el.options, function(o){
+      if(!o.value) return;
+      var taken = chosen[o.value] && chosen[o.value] !== el;
+      o.disabled = !!taken;
+      o.textContent = o.textContent.replace(/ \(vald\)$/, '') + (taken ? ' (vald)' : '');
+    });
+  });
+  var left = document.getElementById('rc-lu-left');
+  if(left && sels.length) {
+    var all = Array.prototype.map.call(sels[0].options, function(o){ return o.value; }).filter(Boolean);
+    var rest = all.filter(function(u){ return !chosen[u]; });
+    left.textContent = rest.length ? 'Ej placerade: ' + rest.map(rcShortName).join(', ') : 'Alla spelare är placerade.';
+  }
 }
 function rcSaveLineup(si, teamId) {
   var t = getTour(); if(!isRyderTour(t) || !rcCanSubmit(t, teamId)) return;
@@ -7728,10 +7765,10 @@ function rcOpenResult(si, i) {
   if(!(isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0))) return;
   var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), r = m.r || {};
   var h = '<h3><i class="ti ti-flag"></i> Resultat – Pass ' + (si + 1) + ', match ' + (i + 1) + '</h3>' +
-    '<p style="font-size:13px;margin-bottom:12px"><b style="color:' + esc(A.color) + '">' + m.a.map(rcUserName).map(esc).join(' & ') + '</b> mot <b style="color:' + esc(B.color) + '">' + m.b.map(rcUserName).map(esc).join(' & ') + '</b></p>' +
+    '<p style="font-size:13px;margin-bottom:12px"><b style="color:' + rcInk(A.color) + '">' + m.a.map(rcUserName).map(esc).join(' & ') + '</b> mot <b style="color:' + rcInk(B.color) + '">' + m.b.map(rcUserName).map(esc).join(' & ') + '</b></p>' +
     '<div class="row" style="gap:6px;margin-bottom:12px">' +
       [['A', esc(A.name) + ' vann', A.color], ['H', 'Delad (AS)', ''], ['B', esc(B.name) + ' vann', B.color]].map(function(o){
-        return '<button type="button" class="btn rc-w' + (r.w === o[0] ? ' btn-primary' : '') + '" data-w="' + o[0] + '" style="flex:1;justify-content:center' + (o[2] ? ';border-color:' + esc(o[2]) : '') + '" onclick="document.querySelectorAll(\'.rc-w\').forEach(function(b){b.classList.toggle(\'btn-primary\',b===this)}.bind(this));document.getElementById(\'rc-m-wrap\').style.display=this.getAttribute(\'data-w\')===\'H\'?\'none\':\'\'">' + o[1] + '</button>';
+        return '<button type="button" class="btn rc-w' + (r.w === o[0] ? ' btn-primary' : '') + '" data-w="' + o[0] + '" style="flex:1;justify-content:center' + (o[2] ? ';border-color:' + rcInk(o[2]) : '') + '" onclick="document.querySelectorAll(\'.rc-w\').forEach(function(b){b.classList.toggle(\'btn-primary\',b===this)}.bind(this));document.getElementById(\'rc-m-wrap\').style.display=this.getAttribute(\'data-w\')===\'H\'?\'none\':\'\'">' + o[1] + '</button>';
       }).join('') + '</div>' +
     '<div class="field" id="rc-m-wrap" style="' + (r.w === 'H' ? 'display:none' : '') + '"><label>Marginal</label><select id="rc-m">' + RC_MARGINS.map(function(x){ return '<option ' + (r.m === x ? 'selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' +
       '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">T.ex. 3&2 = vann med tre hål kvar att spela två. 1UP/2UP = avgjort på sista hålet.</p></div>' +
@@ -21469,6 +21506,31 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '10 november 2026 (338)',
+    items: [
+      { type: 'improved', text: 'Ryder Cup: lagens namn och spelarnamn i lagfärg blandas nu med appens textfärg, så att t.ex. mörkblått syns tydligt på mörk bakgrund (och fortfarande läses bra i ljust läge). Färgade rutor behåller lagets rena färg.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (337)',
+    items: [
+      { type: 'fixed', text: 'Ryder Cup-uppställningen: en spelare som redan är vald i en match grånas ut och går inte att välja igen. Namnen är kortade (t.ex. "A. J. Wrååk") så att de får plats, och under listan står vilka spelare som ännu inte är placerade.' },
+      { type: 'fixed', text: 'Labbet-bannern ligger nu nertill ovanför menyn, så att den inte täcker raden "Du är inloggad som …" när admin testar som en spelare.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (336)',
+    items: [
+      { type: 'fixed', text: 'Ny Ryder Cup: när du väljer lag för en spelare stannar fönstret och spelarlistan där du är, i stället för att hoppa upp till toppen varje gång.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (335)',
+    items: [
+      { type: 'fixed', text: 'Inställningar → Klubbhus: knapparna på klubbhusraden bryts nu till en ny rad när de inte får plats, så att alla syns även på mobilen (t.ex. Testgolfare och Töm på Labbet).' },
+    ]
+  },
+  {
     date: '10 november 2026 (334)',
     items: [
       { type: 'new', text: 'Labbet – testklubbhus: ett klubbhus kan markeras som testklubbhus med 🧪 under Inställningar → Klubbhus. Det syns bara för admin, visar en gul banner "LABBET – testmiljö", och inget som spelas där räknas i statistik utanför klubbhuset.' },
@@ -25716,7 +25778,7 @@ function renderLabBanner() {
   if(!el) {
     el = document.createElement('div');
     el.id = 'lab-banner';
-    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 6px);z-index:9990;pointer-events:none;background:#F2C14E;color:#3A2A00;font-size:12px;font-weight:800;letter-spacing:.06em;padding:5px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--bnav-h,0px) + 14px + env(safe-area-inset-bottom,0px));z-index:9990;pointer-events:none;background:#F2C14E;color:#3A2A00;font-size:12px;font-weight:800;letter-spacing:.06em;padding:5px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap';
     document.body.appendChild(el);
   }
   el.textContent = '🧪 LABBET – testmiljö, inget här räknas';
@@ -25886,7 +25948,7 @@ function clubhouseSettingsHTML() {
       '<div style="width:42px;height:42px;border-radius:12px;background:'+(clubLogoSrc(c)?'#1a2e22':(c.id===cur?'var(--green-light)':'var(--surface2)'))+';color:var(--green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+(clubLogoSrc(c)?'<img src="'+esc(clubLogoSrc(c))+'" style="max-width:36px;max-height:36px;object-fit:contain">':'<i class="ti ti-building-community" style="font-size:22px"></i>')+'</div>'+
       '<div style="flex:1 1 170px;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.isTest?' <span style="font-size:11px;font-weight:800;color:#3A2A00;background:#F2C14E;padding:1px 7px;border-radius:10px;margin-left:4px">🧪 Test</span>':'')+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
         '<div style="font-size:12px;color:var(--text-3)">Kort namn: '+esc(clubShort(c))+' · '+nT+' tour'+(nT===1?'':'er')+' · '+nU+' spelare</div></div>'+
-      '<div class="row" style="gap:6px;flex-shrink:0;margin-left:auto">'+
+      '<div class="row" style="gap:6px;flex:1 1 100%;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;min-width:0">'+
         (c.id!==cur?'<button class="btn btn-sm" title="Växla hit" onclick="switchClub(\''+c.id+'\')"><i class="ti ti-arrows-exchange"></i></button>':'')+
         '<button class="btn btn-sm btn-primary" title="Utseende (ikon, headerbild)" onclick="openClubLook(\''+c.id+'\')"><i class="ti ti-palette"></i> Utseende</button>'+
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
