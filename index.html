@@ -93,6 +93,9 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 .pc-body{display:none;border-top:1px solid var(--border)}
 .pc.pc-open .pc-body{display:block}
 .pc.pc-open .pc-chev{transform:rotate(180deg)}
+/* Release 348: pokalen bredvid flaggan på Ryder Cup-tavlan (mindre på smala skärmar) */
+.rc-cup{position:absolute;top:50%;transform:translateY(-50%)} .rc-cup-A{right:calc(50% + 37px)} .rc-cup-B{left:calc(50% + 37px)}
+@media (max-width:440px){ .rc-head-row > svg{width:40px;height:27px} .rc-cup svg{width:26px;height:42px} .rc-cup-A{right:calc(50% + 26px)} .rc-cup-B{left:calc(50% + 26px)} }
 /* Release 322: tävlingsscoren markeras som en tonad kolumn i live- och slutresultatstabeller */
 .sc-col{width:40px !important;flex-shrink:0;background:rgba(29,158,117,.13);align-self:stretch;margin:-6px 0;padding:6px 0;display:flex;align-items:center;justify-content:center;font-size:13px !important}
 .sc-head{width:40px !important;flex-shrink:0;box-sizing:border-box;background:rgba(29,158,117,.13);color:var(--green-dark);font-weight:700;letter-spacing:.02em;border-radius:6px 6px 0 0;padding:4px 0 4px;margin-bottom:-4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -7777,6 +7780,38 @@ function rcFlagSVG(tm, w) {
   if(k === 'se') return wrap('<rect width="60" height="40" fill="#006AA7"/><rect x="18" width="8" height="40" fill="#FECC00"/><rect y="16" width="60" height="8" fill="#FECC00"/>');
   return '';
 }
+// Release 347: pokalen hos laget som vunnit (eller behåller den vid lika som försvarare).
+// En egen ritad guldpokal med handtag och en liten golfare på locket.
+function rcTrophySVG(h) {
+  h = h || 64; var w = Math.round(h * 0.62);
+  return '<svg viewBox="0 0 62 100" width="' + w + '" height="' + h + '" aria-hidden="true" style="display:block;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45))">' +
+    '<defs><linearGradient id="rc-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8A6410"/><stop offset=".35" stop-color="#F4D46A"/><stop offset=".6" stop-color="#E2B33A"/><stop offset="1" stop-color="#7A5608"/></linearGradient></defs>' +
+    '<path d="M31 2 c2 0 3 1.5 3 3 c0 1.6-1 2.4-1.6 3 l3.4 6.5 h-1.8 l-2-3.6 l-1 5.6 h-1.6 l.6-6 l-3.4 4 l-1.2-1 l3.8-5 c-.8-.6-1.2-1.4-1.2-2.5 c0-1.5 1-3 3-3 Z" fill="url(#rc-gold)"/>' +
+    '<rect x="25" y="16" width="12" height="3" rx="1.5" fill="url(#rc-gold)"/>' +
+    '<path d="M16 22 h30 l-2 4 h-26 Z" fill="url(#rc-gold)"/>' +
+    '<path d="M13 26 h36 c0 14-6 24-18 26 c-12-2-18-12-18-26 Z" fill="url(#rc-gold)"/>' +
+    '<path d="M13 30 c-8 0-10 4-10 8 c0 6 6 10 12 10" fill="none" stroke="url(#rc-gold)" stroke-width="3"/>' +
+    '<path d="M49 30 c8 0 10 4 10 8 c0 6-6 10-12 10" fill="none" stroke="url(#rc-gold)" stroke-width="3"/>' +
+    '<rect x="27" y="52" width="8" height="4" rx="2" fill="url(#rc-gold)"/>' +
+    '<path d="M28.5 56 h5 l1.5 22 h-8 Z" fill="url(#rc-gold)"/>' +
+    '<path d="M22 78 h18 l4 8 h-26 Z" fill="url(#rc-gold)"/>' +
+    '<rect x="15" y="86" width="32" height="10" rx="2" fill="url(#rc-gold)"/>' +
+    '<path d="M20 34 c1 8 4 13 8 15" fill="none" stroke="#FFF3C4" stroke-width="2" stroke-linecap="round" opacity=".7"/></svg>';
+}
+function rcTrophyWinner(t, p) { return p.winner || (rcAllDecided(t) && t.rc.holder ? t.rc.holder : null); }
+// Release 348: pokalen bredvid flaggan – till vänster om vänsterlagets flagga och till
+// höger om högerlagets – och raden har samma höjd i båda kolumnerna, så att flaggorna
+// och lagnamnen ligger i linje. "Vinnare"/"Behåller pokalen" står under lagnamnet.
+function rcTeamHead(t, p, id) {
+  var tm = rcTeam(t, id), wid = rcTrophyWinner(t, p), cup = wid === id ? rcTrophySVG(54) : '';
+  // Flaggan står kvar mitt ovanför lagnamnet; pokalen hänger utanför flaggans kant
+  var row = '<div class="rc-head-row" style="position:relative;display:flex;align-items:center;justify-content:center;' + (wid ? 'min-height:56px' : '') + '">' + rcFlagSVG(tm) +
+    (cup ? '<span class="rc-cup rc-cup-' + id + '">' + cup + '</span>' : '') + '</div>';
+  var lbl = wid === id ? '<span style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)">' + (p.winner ? 'Vinnare' : 'Behåller pokalen') + '</span>'
+    : (wid ? '<span style="font-size:10px;visibility:hidden">–</span>' : '');
+  return row + '<span>' + esc(tm.name) + '</span>' + lbl;
+}
+
 function rcCaptainHTML(tm) {
   var u = findUser(tm.captain) || {}, img = playerPhoto(tm.captain, u.img), nm = rcUserName(tm.captain);
   return '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0">' +
@@ -7798,11 +7833,11 @@ function rcViewHTML(t) {
     : rcFmt(p.need) + ' poäng vinner · ' + p.played + ' av ' + p.total + ' matcher klara');
   var h = '<div class="card" style="padding:16px;margin-bottom:16px">' +
     '<div style="text-align:center;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--gold);margin-bottom:10px">' + esc(RC_PRESETS[t.rc.preset] ? RC_PRESETS[t.rc.preset].label.toUpperCase() : 'RYDER CUP') + '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr auto auto 1fr;align-items:stretch">' +
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:16px;color:' + rcInk(A.color) + ';text-align:center;padding:0 6px">' + rcFlagSVG(A) + esc(A.name) + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr auto auto 1fr;align-items:center">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:16px;color:' + rcInk(A.color) + ';text-align:center;padding:0 6px">' + rcTeamHead(t, p, 'A') + '</div>' +
       '<div style="background:' + esc(A.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:12px 0 0 12px;min-width:76px;text-align:center">' + rcFmt(p.A) + '</div>' +
       '<div style="background:' + esc(B.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:0 12px 12px 0;min-width:76px;text-align:center">' + rcFmt(p.B) + '</div>' +
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:16px;color:' + rcInk(B.color) + ';text-align:center;padding:0 6px">' + rcFlagSVG(B) + esc(B.name) + '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-weight:800;font-size:16px;color:' + rcInk(B.color) + ';text-align:center;padding:0 6px">' + rcTeamHead(t, p, 'B') + '</div>' +
     '</div>' +
     '<div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">' + status + '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
@@ -21791,6 +21826,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (348)',
+    items: [
+      { type: 'improved', text: 'Ryder Cup-tavlan: pokalen står nu bredvid flaggan – till vänster om flaggan för laget till vänster och till höger om flaggan för laget till höger – så att båda flaggorna och lagnamnen ligger i linje. "Vinnare" står under lagnamnet.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (347)',
+    items: [
+      { type: 'new', text: 'Ryder Cup: när tävlingen är avgjord står pokalen hos det vinnande laget på tavlan, under flaggan och lagnamnet, med texten "Vinnare". Slutar det lika och ett lag är försvarare står pokalen hos dem med "Behåller pokalen".' },
+    ]
+  },
   {
     date: '10 november 2026 (346)',
     items: [
