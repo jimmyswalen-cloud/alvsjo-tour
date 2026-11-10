@@ -618,6 +618,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <button class="btn btn-sm" onclick="showHomeScreen()"><i class="ti ti-arrow-left"></i> Hem</button>
       <h2 style="margin:0;flex:1;text-align:center">Tourer</h2>
       <button class="btn btn-primary btn-sm" id="new-tour-btn" onclick="openNewTourWizard()" style="display:none"><i class="ti ti-plus"></i> Ny tour</button>
+      <button class="btn btn-sm" id="new-rc-btn" onclick="openRyderCupWizard()" style="display:none"><i class="ti ti-trophy"></i> Ny Ryder Cup</button>
     </div>
     <div class="home-card" onclick="showTourSearch()" style="background:#CFE8FB;border:none;margin-bottom:16px;flex-direction:row;align-items:center;justify-content:flex-start;text-align:left;gap:14px;padding:0.9rem 1.1rem">
       <i class="ti ti-search" style="font-size:24px;color:#0C447C;flex-shrink:0" aria-hidden="true"></i>
@@ -1836,8 +1837,9 @@ function casualRoundToTour(r) {
 function statsTours(mode, allClubs) {
   var sim = statsModeIsSim(mode), casual = statsModeIsCasual(mode);
   var out = [];
-  var tourSrc = allClubs ? (S.tours||[]) : clubTours();
-  var casualSrc = allClubs ? (_casualRaw||[]).filter(function(r){ return r && r.status === 'finished' && casualVisibleToMe(r); }) : (_casualRounds||[]);
+  var inLab = currentClubIsTest();
+  var tourSrc = allClubs ? (S.tours||[]).filter(function(t){ return inLab ? isTestClub(itemClub(t)) : !isTestClub(itemClub(t)); }) : clubTours();
+  var casualSrc = allClubs ? (_casualRaw||[]).filter(function(r){ return r && r.status === 'finished' && casualVisibleToMe(r) && (inLab ? isTestClub(itemClub(r)) : !isTestClub(itemClub(r))); }) : (_casualRounds||[]);
   if(!casual) tourSrc.forEach(function(t){ if(isSimTour(t) === sim) out.push(t); });
   if(casual || sim) casualSrc.forEach(function(r){
     if(r.roundType === 'practice') return; // träningsronder räknas aldrig i statistiken
@@ -1871,6 +1873,7 @@ function isSimEventId(eid) {
   return !!(f && f.tour && f.tour.simulator);
 }
 function simBadgeHTML(t) {
+  if(isRyderTour(t)) return rcBadgeHTML(t);
   if(!isSimTour(t)) return '';
   return '<span class="badge" style="background:#EEEDFE;color:#534AB7;margin-left:4px;white-space:nowrap"><i class="ti ti-device-gamepad-2"></i> Simulator</span>';
 }
@@ -3417,6 +3420,7 @@ function showToursList() {
     if(el) el.style.display = id === 'tours-list-screen' ? '' : 'none';
   });
   document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
+  if(document.getElementById('new-rc-btn')) document.getElementById('new-rc-btn').style.display = isAdmin() ? '' : 'none';
   renderToursList();
   updateHero(null);
   window.scrollTo(0, 0);
@@ -5541,6 +5545,9 @@ function enterTour(id) {
   // Avgift/prispott och antal räknade rundor är admin-inställningar - vanliga spelare ska inte ens se fliken.
   var settingsNav = document.getElementById('nav-settings');
   if(settingsNav) settingsNav.style.display = isAdmin() ? '' : 'none';
+  // Ryder Cup har ingen OoM-tabell - lagställningen visas i Tävlingar-fliken
+  var oomNav = document.getElementById('nav-oom');
+  if(oomNav) oomNav.style.display = isRyderTour(getTour()) ? 'none' : '';
   showView('tournament');
   window.scrollTo(0, 0);
 }
@@ -6279,6 +6286,7 @@ function renderToursList() {
   var el = document.getElementById('tours-list');
   var tours = visibleTours();
   document.getElementById('new-tour-btn').style.display = isAdmin() ? '' : 'none';
+  if(document.getElementById('new-rc-btn')) document.getElementById('new-rc-btn').style.display = isAdmin() ? '' : 'none';
   if(!tours.length){
     el.innerHTML = isAdmin()
       ? '<p class="empty">Inga tourer ännu. Skapa din första!</p>'
@@ -6308,6 +6316,7 @@ function renderToursList() {
         (t.season?'<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">'+t.season+'</div>':'<div style="margin-bottom:10px"></div>')+
         '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            rcCardBadgeHTML(t)+
             (regularCount?'<span class="badge badge-green"><i class="ti ti-calendar-event" style="font-size:11px"></i> '+regularCount+' deltävling'+(regularCount!==1?'ar':'')+'</span>':'')+
             (finalsCount?'<span class="badge badge-gold"><i class="ti ti-flag" style="font-size:11px"></i> '+finalsCount+' final'+(finalsCount!==1?'er':'')+'</span>':'')+
             (closedCount?'<span class="badge badge-gray">'+closedCount+' av '+totalCount+' genomförda</span>':'')+
@@ -6351,6 +6360,12 @@ function renderToursList() {
 // 'ongoing' innebär att något redan hänt (en deltävling stängd) eller att speltiden inletts
 // enligt kalendern, även om inget resultat är inrapporterat än.
 function tourStatusGroup(t) {
+  if(isRyderTour(t)) {
+    if(rcPoints(t).winner || rcAllDecided(t)) return 'finished';
+    var today0 = new Date().toISOString().slice(0,10);
+    var started0 = (t.rc.sessions||[]).some(function(s){ return (s.date && s.date <= today0) || Object.keys(s.results||{}).length; });
+    return started0 ? 'ongoing' : 'upcoming';
+  }
   var events = t.events || [];
   if(events.length && events.every(function(e){ return e.closed; })) return 'finished';
   var range = tourDateRange(t);
@@ -7427,8 +7442,356 @@ function isTourConcluded(t) {
   return hasFinal ? t.events.some(function(e){ return e.isFinal && e.closed; }) : t.events.every(function(e){ return e.closed; });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RYDER CUP – LAGTÄVLING (release 333, etapp 1)
+// Två lag (8–12 spelare var, 2–12 tillåts), en kapten per lag och ett antal pass
+// (foursome, fyrboll, singlar) i matchspel. Varje match ger 1 poäng (delad = ½).
+// Kaptenerna lämnar in sin uppställning per pass; den är dold för motståndarna tills
+// båda lagen har lämnat in, sedan paras plats 1 mot plats 1 osv. Etapp 1: resultat
+// förs manuellt per match (vinnare + marginal, t.ex. 2&1). Livescoring med
+// handicapslag (WHS 100/90/50 %) kommer i etapp 2, prognos/vägg/statistik i etapp 3.
+// Data: t.format = 'rydercup', t.rc = { preset, replaceFoursome, holder,
+//   teams:[{id:'A'|'B', name, color, captain, players:[username]}],
+//   sessions:[{ id, format, origFormat, date, course, lineups:{A,B}, results:{i:{w,m,by,at}} }] }
+// Spelarna får tourAccess som vanligt, så resten av appen (spelarlista, åtkomst) fungerar.
+// ═══════════════════════════════════════════════════════════════════════════
+var RC_FORMATS = {
+  foursome: { label: 'Foursome', pairs: true,  desc: 'Två mot två, varannat slag med en boll' },
+  fourball: { label: 'Fyrboll',  pairs: true,  desc: 'Två mot två, egen boll, bästa resultatet räknas' },
+  singles:  { label: 'Singlar',  pairs: false, desc: 'En mot en' }
+};
+var RC_PRESETS = {
+  classic:  { label: 'Klassiskt (5 pass)', s: ['foursome', 'fourball', 'foursome', 'fourball', 'singles'] },
+  extended: { label: 'Utökat (6 pass)',    s: ['foursome', 'fourball', 'foursome', 'fourball', 'fourball', 'singles'] },
+  compact4: { label: 'Kompakt (4 pass)',   s: ['foursome', 'fourball', 'fourball', 'singles'] },
+  compact3: { label: 'Kompakt (3 pass)',   s: ['fourball', 'foursome', 'singles'] }
+};
+var RC_MARGINS = ['1UP', '2UP', '2&1', '3&1', '3&2', '4&2', '4&3', '5&3', '5&4', '6&4', '6&5', '7&5', '7&6', '8&6', '8&7', '9&7', '9&8', '10&8'];
+
+function isRyderTour(t) { return !!(t && t.format === 'rydercup' && t.rc); }
+function rcTeam(t, id) { return (t.rc.teams || []).find(function(x){ return x.id === id; }); }
+function rcOther(id) { return id === 'A' ? 'B' : 'A'; }
+function rcUserName(u) { var x = findUser(u); return x ? (x.name || x.username) : u; }
+function rcShortName(u) { return abbreviateFirstName(rcUserName(u)); }
+function rcMyTeamId(t) {
+  if(!currentUser) return null;
+  var tm = (t.rc.teams || []).find(function(x){ return (x.players || []).indexOf(currentUser.username) >= 0; });
+  return tm ? tm.id : null;
+}
+function rcIsCaptain(t, teamId) { var tm = rcTeam(t, teamId); return !!(tm && currentUser && tm.captain === currentUser.username); }
+function rcCanSubmit(t, teamId) { return isAdmin() || rcIsCaptain(t, teamId); }
+
+// Antal matcher i ett pass: parformat högst 4 (och högst hälften av minsta laget),
+// singlar en per spelare i minsta laget - utom singlar som ersatt ett foursome-pass: högst 8.
+function rcMatchCount(t, s) {
+  var nA = (rcTeam(t, 'A').players || []).length, nB = (rcTeam(t, 'B').players || []).length, m = Math.min(nA, nB);
+  if(RC_FORMATS[s.format].pairs) return Math.max(1, Math.min(4, Math.floor(m / 2)));
+  return s.origFormat === 'foursome' ? Math.max(1, Math.min(8, m)) : Math.max(1, m);
+}
+function rcMatches(t, s) {
+  var A = s.lineups && s.lineups.A, B = s.lineups && s.lineups.B;
+  if(!A || !B) return [];
+  var n = Math.min(A.slots.length, B.slots.length), out = [];
+  for(var i = 0; i < n; i++) out.push({ i: i, a: A.slots[i], b: B.slots[i], r: (s.results || {})[i] || null });
+  return out;
+}
+function rcPoints(t) {
+  var p = { A: 0, B: 0 }, total = 0, played = 0;
+  (t.rc.sessions || []).forEach(function(s){
+    total += rcMatchCount(t, s);
+    rcMatches(t, s).forEach(function(m){
+      if(!m.r) return;
+      played++;
+      if(m.r.w === 'H') { p.A += 0.5; p.B += 0.5; } else p[m.r.w] += 1;
+    });
+  });
+  var need = total / 2 + 0.5;
+  var winner = p.A >= need ? 'A' : (p.B >= need ? 'B' : null);
+  return { A: p.A, B: p.B, total: total, need: need, winner: winner, played: played };
+}
+function rcFmt(x) { var w = Math.floor(x), h = x - w >= 0.5; return (w || !h ? String(w) : '') + (h ? '½' : ''); }
+function rcAllDecided(t) {
+  return (t.rc.sessions || []).every(function(s){ var ms = rcMatches(t, s); return ms.length === rcMatchCount(t, s) && ms.every(function(m){ return !!m.r; }); });
+}
+function rcCardBadgeHTML(t) {
+  if(!isRyderTour(t)) return '';
+  var p = rcPoints(t), A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+  return '<span class="badge" style="background:var(--surface2);color:var(--text)"><span style="color:' + esc(A.color) + ';font-weight:800">' + esc(A.name) + ' ' + rcFmt(p.A) + '</span> – <span style="color:' + esc(B.color) + ';font-weight:800">' + rcFmt(p.B) + ' ' + esc(B.name) + '</span></span>';
+}
+function rcBadgeHTML(t) {
+  return isRyderTour(t) ? '<span class="badge" style="background:#FDF0E1;color:#8A4B00;margin-left:4px;white-space:nowrap"><i class="ti ti-trophy"></i> Ryder Cup</span>' : '';
+}
+
+// ── Guiden ────────────────────────────────────────────────────────────────
+var _rcw = null;
+function openRyderCupWizard() {
+  if(!isAdmin()) return;
+  _rcw = { name: '', season: '', preset: 'classic', replace: 'keep', holder: '',
+    teams: [{ id: 'A', name: 'Europa', color: '#1F4E8C', captain: '' }, { id: 'B', name: 'USA', color: '#B8312F', captain: '' }], assign: {} };
+  renderRyderCupWizard();
+}
+function rcwPlayers() {
+  return clubUsers(currentClubId()).filter(function(u){ return u.isPlayer != null ? u.isPlayer : (u.role !== 'admin'); })
+    .sort(function(a, b){ return (a.name || a.username).localeCompare(b.name || b.username, 'sv'); });
+}
+function rcwSessionsPreview() {
+  return RC_PRESETS[_rcw.preset].s.map(function(f){ return f === 'foursome' && _rcw.replace !== 'keep' ? _rcw.replace : f; });
+}
+function renderRyderCupWizard() {
+  var w = _rcw, users = rcwPlayers();
+  var cnt = { A: 0, B: 0 };
+  Object.keys(w.assign).forEach(function(u){ if(w.assign[u]) cnt[w.assign[u]]++; });
+  var teamBox = function(tm){
+    var opts = users.filter(function(u){ return w.assign[u.username] === tm.id; });
+    return '<div style="flex:1;min-width:240px;border:2px solid ' + esc(tm.color) + ';border-radius:12px;padding:12px">' +
+      '<div class="row" style="gap:8px;margin-bottom:8px"><input type="color" value="' + esc(tm.color) + '" onchange="_rcw.teams[' + (tm.id === 'A' ? 0 : 1) + '].color=this.value;renderRyderCupWizard()" style="width:44px;height:38px;padding:2px;margin:0">' +
+        '<input type="text" value="' + esc(tm.name) + '" maxlength="24" onchange="_rcw.teams[' + (tm.id === 'A' ? 0 : 1) + '].name=this.value.trim()||\'Lag ' + tm.id + '\';renderRyderCupWizard()" style="flex:1;margin:0;font-weight:700"></div>' +
+      '<div style="font-size:12px;color:var(--text-3);margin-bottom:6px">' + cnt[tm.id] + ' spelare</div>' +
+      '<label style="font-size:12px;font-weight:700">Kapten</label><select onchange="_rcw.teams[' + (tm.id === 'A' ? 0 : 1) + '].captain=this.value" style="margin:4px 0 0">' +
+        '<option value="">Välj kapten…</option>' + opts.map(function(u){ return '<option value="' + esc(u.username) + '" ' + (tm.captain === u.username ? 'selected' : '') + '>' + esc(u.name || u.username) + '</option>'; }).join('') + '</select></div>';
+  };
+  var h = '<h3><i class="ti ti-trophy"></i> Ny Ryder Cup</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Lagtävling i matchspel: två lag, kaptener och pass med foursome, fyrboll och singlar.</p>' +
+    '<div class="row" style="gap:10px;flex-wrap:wrap"><div class="field" style="flex:2;min-width:200px"><label>Namn</label><input id="rcw-name" type="text" value="' + esc(w.name) + '" placeholder="t.ex. Älvsjö Ryder Cup" oninput="_rcw.name=this.value"></div>' +
+      '<div class="field" style="flex:1;min-width:120px"><label>Säsong (valfritt)</label><input type="text" value="' + esc(w.season) + '" placeholder="2027" oninput="_rcw.season=this.value"></div></div>' +
+    '<div class="row" style="gap:10px;flex-wrap:wrap"><div class="field" style="flex:1;min-width:200px"><label>Upplägg</label><select onchange="_rcw.preset=this.value;renderRyderCupWizard()">' +
+      Object.keys(RC_PRESETS).map(function(k){ return '<option value="' + k + '" ' + (w.preset === k ? 'selected' : '') + '>' + RC_PRESETS[k].label + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field" style="flex:1;min-width:200px"><label>Ersätt foursome med</label><select onchange="_rcw.replace=this.value;renderRyderCupWizard()">' +
+        '<option value="keep" ' + (w.replace === 'keep' ? 'selected' : '') + '>Behåll foursome</option><option value="fourball" ' + (w.replace === 'fourball' ? 'selected' : '') + '>Fyrboll (egen boll)</option><option value="singles" ' + (w.replace === 'singles' ? 'selected' : '') + '>Singlar</option></select></div></div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px">' + rcwSessionsPreview().map(function(f, i){ return '<span class="badge" style="background:var(--surface2);color:var(--text-2)">Pass ' + (i + 1) + ': ' + RC_FORMATS[f].label + '</span>'; }).join('') + '</div>' +
+    '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:stretch;margin-bottom:12px">' + teamBox(w.teams[0]) + teamBox(w.teams[1]) + '</div>' +
+    '<label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Spelare – tryck för att välja lag</label>' +
+    '<div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">' +
+      users.map(function(u){
+        var a = w.assign[u.username] || '';
+        var b = function(id){ var tm = id ? rcTeam({ rc: { teams: w.teams } }, id) : null; var on = a === id;
+          return '<button type="button" class="btn btn-sm" style="padding:4px 10px;' + (on ? 'background:' + (tm ? esc(tm.color) : 'var(--surface2)') + ';color:' + (tm ? '#fff' : 'var(--text)') + ';border-color:transparent' : '') + '" onclick="rcwAssign(\'' + esc(u.username) + '\',\'' + id + '\')">' + (tm ? esc(tm.name) : '–') + '</button>'; };
+        return '<div class="row" style="justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);gap:8px">' +
+          '<span style="font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(u.name || u.username) + '</span>' +
+          '<span class="row" style="gap:4px;flex-shrink:0">' + b('') + b('A') + b('B') + '</span></div>';
+      }).join('') + '</div>' +
+    '<div class="field" style="margin-top:12px"><label>Försvarande lag (behåller pokalen vid lika)</label><select onchange="_rcw.holder=this.value">' +
+      '<option value="">Ingen – lika är delad seger</option><option value="A" ' + (w.holder === 'A' ? 'selected' : '') + '>' + esc(w.teams[0].name) + '</option><option value="B" ' + (w.holder === 'B' ? 'selected' : '') + '>' + esc(w.teams[1].name) + '</option></select></div>' +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="createRyderCupTour()"><i class="ti ti-check"></i> Skapa</button></div>';
+  showModal(h, true, true);
+}
+function rcwAssign(username, teamId) {
+  if(teamId) _rcw.assign[username] = teamId; else delete _rcw.assign[username];
+  _rcw.teams.forEach(function(tm){ if(tm.captain === username && _rcw.assign[username] !== tm.id) tm.captain = ''; });
+  var nm = document.getElementById('rcw-name'); if(nm) _rcw.name = nm.value;
+  renderRyderCupWizard();
+}
+function createRyderCupTour() {
+  var w = _rcw; if(!w || !isAdmin()) return;
+  var nm = document.getElementById('rcw-name'); if(nm) w.name = nm.value;
+  if(!w.name.trim()) { alert('Ge tävlingen ett namn.'); return; }
+  var players = { A: [], B: [] };
+  Object.keys(w.assign).forEach(function(u){ players[w.assign[u]].push(u); });
+  if(players.A.length < 2 || players.B.length < 2) { alert('Varje lag behöver minst 2 spelare (normalt 8–12).'); return; }
+  if(players.A.length > 12 || players.B.length > 12) { alert('Högst 12 spelare per lag.'); return; }
+  if(!w.teams[0].captain || !w.teams[1].captain) { alert('Välj en kapten i varje lag.'); return; }
+  var tourId = uid();
+  var sessions = RC_PRESETS[w.preset].s.map(function(f){
+    var fmt = f === 'foursome' && w.replace !== 'keep' ? w.replace : f;
+    return { id: uid(), format: fmt, origFormat: f, date: '', course: '', lineups: { A: null, B: null }, results: {} };
+  });
+  var tour = { id: tourId, name: w.name.trim(), season: (w.season || '').trim(), img: null, format: 'rydercup', locked: true,
+    players: [], events: [], pointsScale: [], finalTable: [], fee: 0, payments: {},
+    calYear: new Date().getFullYear(), calMonth: new Date().getMonth(),
+    rc: { preset: w.preset, replaceFoursome: w.replace, holder: w.holder || null,
+      teams: w.teams.map(function(tm){ return { id: tm.id, name: tm.name, color: tm.color, captain: tm.captain, players: players[tm.id] }; }),
+      sessions: sessions } };
+  tour.clubhouse = currentClubId();
+  players.A.concat(players.B).forEach(function(u){ var x = findUser(u); if(x) { if(!x.tourAccess) x.tourAccess = []; if(x.tourAccess.indexOf(tourId) < 0) x.tourAccess.push(tourId); } });
+  S.tours.push(tour);
+  _rcw = null;
+  save(); closeModal(); renderToursList();
+  enterTour(tourId);
+}
+
+// ── Tävlingsvyn ───────────────────────────────────────────────────────────
+function rcResultLabel(t, r) {
+  if(!r) return '';
+  if(r.w === 'H') return 'AS';
+  return r.m || '1UP';
+}
+function rcViewHTML(t) {
+  var p = rcPoints(t), A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), mine = rcMyTeamId(t);
+  var status = p.winner ? (esc(rcTeam(t, p.winner).name) + ' har vunnit!')
+    : (rcAllDecided(t) ? (t.rc.holder ? 'Lika – ' + esc(rcTeam(t, t.rc.holder).name) + ' behåller pokalen' : 'Lika – delad seger')
+    : rcFmt(p.need) + ' poäng vinner · ' + p.played + ' av ' + p.total + ' matcher klara');
+  var h = '<div class="card" style="padding:16px;margin-bottom:16px">' +
+    '<div style="text-align:center;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--gold);margin-bottom:10px">' + esc(RC_PRESETS[t.rc.preset] ? RC_PRESETS[t.rc.preset].label.toUpperCase() : 'RYDER CUP') + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr auto auto 1fr;align-items:stretch">' +
+      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + esc(A.color) + ';text-align:center;padding:0 6px">' + esc(A.name) + '</div>' +
+      '<div style="background:' + esc(A.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:12px 0 0 12px;min-width:76px;text-align:center">' + rcFmt(p.A) + '</div>' +
+      '<div style="background:' + esc(B.color) + ';color:#fff;font-size:34px;font-weight:800;padding:8px 16px;border-radius:0 12px 12px 0;min-width:76px;text-align:center">' + rcFmt(p.B) + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:' + esc(B.color) + ';text-align:center;padding:0 6px">' + esc(B.name) + '</div>' +
+    '</div>' +
+    '<div style="text-align:center;font-size:12px;color:var(--text-2);margin-top:10px">' + status + '</div>' +
+    '<div class="row" style="justify-content:center;gap:16px;margin-top:10px;font-size:12px;color:var(--text-3);flex-wrap:wrap">' +
+      '<span>Kapten ' + esc(A.name) + ': <b style="color:var(--text)">' + esc(rcUserName(A.captain)) + '</b></span>' +
+      '<span>Kapten ' + esc(B.name) + ': <b style="color:var(--text)">' + esc(rcUserName(B.captain)) + '</b></span></div>' +
+  '</div>';
+  h += (t.rc.sessions || []).map(function(s, si){ return rcSessionHTML(t, s, si, mine); }).join('');
+  h += '<details class="dsw" style="margin:6px 0 20px"><summary style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text-2)"><i class="ti ti-users-group"></i><span style="flex:1">Lagen</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
+    '<div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:10px">' + [A, B].map(function(tm){
+      return '<div class="card" style="flex:1;min-width:220px;padding:12px 14px;border-top:4px solid ' + esc(tm.color) + '"><div style="font-weight:800;margin-bottom:6px;color:' + esc(tm.color) + '">' + esc(tm.name) + ' <span style="color:var(--text-3);font-weight:500;font-size:12px">· ' + tm.players.length + ' spelare</span></div>' +
+        tm.players.map(function(u){ return '<div style="font-size:13px;padding:3px 0">' + esc(rcUserName(u)) + (tm.captain === u ? ' <span class="badge badge-gold" style="font-size:10px">Kapten</span>' : '') + '</div>'; }).join('') + '</div>';
+    }).join('') + '</div></details>';
+  return h;
+}
+function rcSessionHTML(t, s, si, mine) {
+  var f = RC_FORMATS[s.format], n = rcMatchCount(t, s), ms = rcMatches(t, s);
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B');
+  var sp = { A: 0, B: 0 };
+  ms.forEach(function(m){ if(m.r) { if(m.r.w === 'H') { sp.A += 0.5; sp.B += 0.5; } else sp[m.r.w]++; } });
+  var h = '<div class="card" style="padding:14px 16px;margin-bottom:14px">' +
+    '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">' +
+      '<div style="min-width:0"><div style="font-weight:800;font-size:15px">Pass ' + (si + 1) + ' · ' + f.label + (s.origFormat !== s.format ? ' <span style="font-size:11px;font-weight:600;color:var(--text-3)">(i stället för foursome)</span>' : '') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-3);margin-top:2px">' + (s.date ? esc(formatSvDateFull(s.date)) : 'Datum ej satt') + (s.course ? ' · ' + esc(s.course) : '') + ' · ' + n + ' matcher</div></div>' +
+      '<div class="row" style="gap:6px;flex-shrink:0">' + (ms.length ? '<span style="font-weight:800;font-size:14px"><span style="color:' + esc(A.color) + '">' + rcFmt(sp.A) + '</span> – <span style="color:' + esc(B.color) + '">' + rcFmt(sp.B) + '</span></span>' : '') +
+        (isAdmin() ? '<button class="btn btn-sm" title="Ändra passet" onclick="rcEditSession(' + si + ')"><i class="ti ti-edit"></i></button>' : '') + '</div>' +
+    '</div>';
+  if(ms.length) {
+    h += ms.map(function(m){ return rcMatchRowHTML(t, si, m); }).join('');
+  } else {
+    h += '<div style="display:flex;flex-direction:column;gap:6px">' + ['A', 'B'].map(function(id){
+      var tm = rcTeam(t, id), lu = s.lineups && s.lineups[id], canSee = (mine === id) || (isAdmin() && !rcMyTeamId(t)) || rcIsCaptain(t, id);
+      var row = '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--surface2)">' +
+        '<span style="font-size:13px"><b style="color:' + esc(tm.color) + '">' + esc(tm.name) + '</b> · ' + (lu ? '<i class="ti ti-circle-check" style="color:#1D9E75"></i> Uppställning inlämnad' : '<span style="color:var(--text-3)">Väntar på uppställning</span>') + '</span>' +
+        (rcCanSubmit(t, id) ? '<button class="btn btn-sm' + (lu ? '' : ' btn-primary') + '" onclick="rcOpenLineup(' + si + ',\'' + id + '\')">' + (lu ? 'Ändra' : 'Lämna in') + '</button>' : '') + '</div>';
+      if(lu && canSee) row += '<div style="font-size:12px;color:var(--text-2);padding:2px 10px 4px">' + lu.slots.map(function(sl, i){ return (i + 1) + '. ' + sl.map(rcShortName).map(esc).join(' & '); }).join(' · ') + ' <span style="color:var(--text-3)">(dold för motståndarna)</span></div>';
+      return row;
+    }).join('') + '</div>' +
+    '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">Matcherna visas när båda lagen har lämnat in sin uppställning.</p>';
+  }
+  return h + '</div>';
+}
+function rcMatchRowHTML(t, si, m) {
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), r = m.r;
+  var lead = r ? r.w : null;
+  var canEdit = isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0);
+  var side = function(us, id, right){
+    var tm = id === 'A' ? A : B, on = lead === id;
+    return '<div style="background:' + (on ? esc(tm.color) : 'var(--surface2)') + ';padding:9px 10px;font-weight:700;font-size:13px;color:' + (on ? '#fff' : esc(tm.color)) + ';' + (right ? 'text-align:right;' : '') + 'min-width:0">' +
+      us.map(function(u){ return '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(rcShortName(u)) + '</div>'; }).join('') + '</div>';
+  };
+  return '<div style="display:grid;grid-template-columns:1fr 70px 1fr;border-radius:10px;overflow:hidden;margin-bottom:6px;' + (canEdit ? 'cursor:pointer' : '') + '"' + (canEdit ? ' onclick="rcOpenResult(' + si + ',' + m.i + ')"' : '') + '>' +
+    side(m.a, 'A', false) +
+    '<div style="background:' + (r ? (r.w === 'H' ? 'color-mix(in srgb, var(--text-3) 45%, var(--surface2))' : esc((r.w === 'A' ? A : B).color)) : 'var(--surface2)') + ';display:flex;flex-direction:column;align-items:center;justify-content:center;color:' + (r ? '#fff' : 'var(--text-3)') + ';border-left:1px solid var(--border);border-right:1px solid var(--border)">' +
+      '<div style="font-weight:800;font-size:15px">' + (r ? esc(rcResultLabel(t, r)) : '–') + '</div><div style="font-size:9px;letter-spacing:.06em;opacity:.85">' + (r ? 'AVSLUTAD' : (canEdit ? 'SÄTT' : 'EJ KLAR')) + '</div></div>' +
+    side(m.b, 'B', true) +
+  '</div>';
+}
+
+// ── Uppställning ──────────────────────────────────────────────────────────
+function rcOpenLineup(si, teamId) {
+  var t = getTour(); if(!isRyderTour(t) || !rcCanSubmit(t, teamId)) return;
+  var s = t.rc.sessions[si], tm = rcTeam(t, teamId), n = rcMatchCount(t, s), pairs = RC_FORMATS[s.format].pairs;
+  var cur = (s.lineups && s.lineups[teamId]) ? s.lineups[teamId].slots : [];
+  var opt = function(sel){ return '<option value="">Välj spelare…</option>' + tm.players.map(function(u){ return '<option value="' + esc(u) + '" ' + (sel === u ? 'selected' : '') + '>' + esc(rcUserName(u)) + '</option>'; }).join(''); };
+  var h = '<h3><i class="ti ti-list-numbers"></i> Uppställning – ' + esc(tm.name) + '</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Pass ' + (si + 1) + ' · ' + RC_FORMATS[s.format].label + ' · ' + n + ' matcher. ' + (pairs ? 'Välj två spelare per match.' : 'Välj en spelare per match, i den ordning de ska spela.') + ' Motståndarna ser inte din uppställning förrän båda lagen lämnat in. Match 1 möter motståndarnas match 1, osv.</p>';
+  for(var i = 0; i < n; i++) {
+    var sl = cur[i] || [];
+    h += '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><span style="flex:0 0 74px;font-size:13px;font-weight:700">Match ' + (i + 1) + '</span>' +
+      '<select class="rc-lu" data-i="' + i + '" data-k="0" style="flex:1;margin:0">' + opt(sl[0]) + '</select>' +
+      (pairs ? '<select class="rc-lu" data-i="' + i + '" data-k="1" style="flex:1;margin:0">' + opt(sl[1]) + '</select>' : '') + '</div>';
+  }
+  h += '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveLineup(' + si + ',\'' + teamId + '\')"><i class="ti ti-send"></i> Lämna in</button></div>';
+  showModal(h, true);
+}
+function rcSaveLineup(si, teamId) {
+  var t = getTour(); if(!isRyderTour(t) || !rcCanSubmit(t, teamId)) return;
+  var s = t.rc.sessions[si], n = rcMatchCount(t, s), pairs = RC_FORMATS[s.format].pairs, slots = [], used = {};
+  for(var i = 0; i < n; i++) slots.push([]);
+  var bad = false;
+  document.querySelectorAll('.rc-lu').forEach(function(el){
+    var i = +el.getAttribute('data-i'), v = el.value;
+    if(!v) { bad = 'Fyll i alla platser.'; return; }
+    if(used[v]) { bad = rcUserName(v) + ' är vald två gånger.'; return; }
+    used[v] = true; slots[i].push(v);
+  });
+  if(bad) { alert(bad); return; }
+  if(!s.lineups) s.lineups = { A: null, B: null };
+  var other = s.lineups[rcOther(teamId)];
+  if(other && rcMatches(t, s).some(function(m){ return !!m.r; })) { alert('Matcherna i passet har redan resultat – uppställningen kan inte ändras.'); return; }
+  s.lineups[teamId] = { slots: slots, at: Date.now(), by: currentUser ? currentUser.username : null };
+  save(); closeModal(); renderEvents();
+}
+
+// ── Resultat (etapp 1: manuellt) ──────────────────────────────────────────
+function rcOpenResult(si, i) {
+  var t = getTour(); if(!isRyderTour(t)) return;
+  var s = t.rc.sessions[si], m = rcMatches(t, s)[i]; if(!m) return;
+  if(!(isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0))) return;
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), r = m.r || {};
+  var h = '<h3><i class="ti ti-flag"></i> Resultat – Pass ' + (si + 1) + ', match ' + (i + 1) + '</h3>' +
+    '<p style="font-size:13px;margin-bottom:12px"><b style="color:' + esc(A.color) + '">' + m.a.map(rcUserName).map(esc).join(' & ') + '</b> mot <b style="color:' + esc(B.color) + '">' + m.b.map(rcUserName).map(esc).join(' & ') + '</b></p>' +
+    '<div class="row" style="gap:6px;margin-bottom:12px">' +
+      [['A', esc(A.name) + ' vann', A.color], ['H', 'Delad (AS)', ''], ['B', esc(B.name) + ' vann', B.color]].map(function(o){
+        return '<button type="button" class="btn rc-w' + (r.w === o[0] ? ' btn-primary' : '') + '" data-w="' + o[0] + '" style="flex:1;justify-content:center' + (o[2] ? ';border-color:' + esc(o[2]) : '') + '" onclick="document.querySelectorAll(\'.rc-w\').forEach(function(b){b.classList.toggle(\'btn-primary\',b===this)}.bind(this));document.getElementById(\'rc-m-wrap\').style.display=this.getAttribute(\'data-w\')===\'H\'?\'none\':\'\'">' + o[1] + '</button>';
+      }).join('') + '</div>' +
+    '<div class="field" id="rc-m-wrap" style="' + (r.w === 'H' ? 'display:none' : '') + '"><label>Marginal</label><select id="rc-m">' + RC_MARGINS.map(function(x){ return '<option ' + (r.m === x ? 'selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' +
+      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">T.ex. 3&2 = vann med tre hål kvar att spela två. 1UP/2UP = avgjort på sista hålet.</p></div>' +
+    '<div class="row" style="justify-content:space-between;gap:8px;margin-top:14px">' +
+      (m.r ? '<button class="btn btn-danger" onclick="rcClearResult(' + si + ',' + i + ')"><i class="ti ti-trash"></i> Ta bort resultat</button>' : '<span></span>') +
+      '<span class="row" style="gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveResult(' + si + ',' + i + ')"><i class="ti ti-check"></i> Spara</button></span></div>';
+  showModal(h);
+}
+function rcSaveResult(si, i) {
+  var t = getTour(); if(!isRyderTour(t)) return;
+  var s = t.rc.sessions[si], m = rcMatches(t, s)[i]; if(!m) return;
+  if(!(isAdmin() || (currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0))) return;
+  var sel = document.querySelector('.rc-w.btn-primary');
+  if(!sel) { alert('Välj vem som vann, eller delad match.'); return; }
+  var w = sel.getAttribute('data-w');
+  if(!s.results) s.results = {};
+  s.results[i] = { w: w, m: w === 'H' ? 'AS' : document.getElementById('rc-m').value, by: currentUser ? currentUser.username : null, at: Date.now() };
+  save(); closeModal(); renderEvents();
+}
+function rcClearResult(si, i) {
+  var t = getTour(); if(!isRyderTour(t)) return;
+  if(!confirm('Ta bort resultatet för matchen?')) return;
+  var s = t.rc.sessions[si];
+  if(s.results) delete s.results[i];
+  save(); closeModal(); renderEvents();
+}
+
+// ── Passets inställningar (admin) ─────────────────────────────────────────
+function rcEditSession(si) {
+  var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  var s = t.rc.sessions[si], locked = !!(s.lineups && (s.lineups.A || s.lineups.B));
+  var h = '<h3><i class="ti ti-edit"></i> Pass ' + (si + 1) + '</h3>' +
+    '<div class="field"><label>Format</label><select id="rc-es-f" ' + (locked ? 'disabled' : '') + '>' + Object.keys(RC_FORMATS).map(function(k){ return '<option value="' + k + '" ' + (s.format === k ? 'selected' : '') + '>' + RC_FORMATS[k].label + ' – ' + RC_FORMATS[k].desc + '</option>'; }).join('') + '</select>' +
+      (locked ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Formatet kan inte ändras när en uppställning är inlämnad.</p>' : '') + '</div>' +
+    '<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>Datum</label><input type="date" id="rc-es-d" value="' + esc(s.date || '') + '"></div>' +
+      '<div class="field" style="flex:2"><label>Bana</label><input type="text" id="rc-es-c" list="rc-es-cl" value="' + esc(s.course || '') + '" placeholder="Välj eller skriv bana"><datalist id="rc-es-cl">' + (courseDb || []).map(function(c){ return '<option value="' + esc(c.name) + '">'; }).join('') + '</datalist></div></div>' +
+    (locked && isAdmin() ? '<button class="btn btn-sm" style="margin-bottom:10px" onclick="rcResetLineups(' + si + ')"><i class="ti ti-refresh"></i> Nollställ uppställningarna</button>' : '') +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveSession(' + si + ')"><i class="ti ti-check"></i> Spara</button></div>';
+  showModal(h);
+}
+function rcSaveSession(si) {
+  var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  var s = t.rc.sessions[si];
+  var f = document.getElementById('rc-es-f'); if(f && !f.disabled) s.format = f.value;
+  s.date = document.getElementById('rc-es-d').value || '';
+  s.course = (document.getElementById('rc-es-c').value || '').trim();
+  save(); closeModal(); renderEvents();
+}
+function rcResetLineups(si) {
+  var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  var s = t.rc.sessions[si];
+  if(Object.keys(s.results || {}).length && !confirm('Passet har redan resultat. Nollställ ändå? Resultaten tas också bort.')) return;
+  if(!confirm('Nollställ båda lagens uppställningar för passet?')) return;
+  s.lineups = { A: null, B: null }; s.results = {};
+  save(); closeModal(); renderEvents();
+}
+
 function renderEvents() {
   var t=getTour(), el=document.getElementById('events-list');
+  if(isRyderTour(t)) { el.innerHTML = rcViewHTML(t); return; }
   var titleBlock = '<h2>Deltävlingar</h2>'+
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
   var top3Html = buildTop3HTML(t, false);
@@ -21106,6 +21469,20 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '10 november 2026 (334)',
+    items: [
+      { type: 'new', text: 'Labbet – testklubbhus: ett klubbhus kan markeras som testklubbhus med 🧪 under Inställningar → Klubbhus. Det syns bara för admin, visar en gul banner "LABBET – testmiljö", och inget som spelas där räknas i statistik utanför klubbhuset.' },
+      { type: 'new', text: 'Testgolfare: skapa testkonton i testklubbhuset – kända proffs (t.ex. Scheffler, McIlroy, Åberg) och kopior av riktiga spelare (namn, bild, HCP). De kan inte logga in och får inga notiser; prova som dem med "Logga in som". "Töm" rensar klubbhusets tourer, ronder, utmaningar och vägginlägg för att börja om.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (333)',
+    items: [
+      { type: 'new', text: 'Ryder Cup (etapp 1): admin kan skapa en lagtävling med "Ny Ryder Cup" i tourlistan. Två lag med eget namn och färg, 2–12 spelare per lag och en kapten var. Välj upplägg – Klassiskt (5 pass), Utökat (6 pass), Kompakt (4 pass) eller Kompakt (3 pass) – och om foursome ska ersättas med fyrboll eller singlar så att alla spelar egen boll.' },
+      { type: 'new', text: 'Kaptenerna lämnar in sin uppställning per pass. Den är dold för motståndarna tills båda lagen lämnat in – då paras match 1 mot match 1 osv. Resultatet per match (vinnare och marginal, t.ex. 2&1 eller AS) förs in av spelarna i matchen eller admin, och lagställningen räknas direkt med vinstgräns. Admin sätter datum, bana och format per pass.' },
+    ]
+  },
+  {
     date: '9 november 2026 (332)',
     items: [
       { type: 'improved', text: 'Platsraden under varje boll i startlistan visar nu även tiden ni är på anläggningen, t.ex. "Ekerö Tees And Taps · SIM 8 · 18:00–20:00".' },
@@ -24106,6 +24483,11 @@ function doLogin() {
     errEl.style.display = '';
     return;
   }
+  if(user.isTest) {
+    errEl.textContent = 'Det här är en testgolfare i Labbet och kan inte logga in.';
+    errEl.style.display = '';
+    return;
+  }
   if(isPendingUser(user)) {
     errEl.innerHTML = '<b>Ditt konto väntar på godkännande.</b><br>En admin behöver ge dig tillgång till ett klubbhus innan du kan logga in. Du kan logga in direkt när det är klart.';
     errEl.style.display = '';
@@ -24693,6 +25075,7 @@ function renderUsersList() {
         '<div class="pc-name">'+esc(displayName)+
           (admin && isPendingUser(u) ? ' <i class="ti ti-hourglass" title="Väntar på klubbhus" style="color:#185FA5;font-size:14px"></i>' : '')+
           (admin && u.role==='admin' ? ' <span class="badge badge-gold" style="font-size:10px;vertical-align:2px">Admin</span>' : '')+
+          (u.isTest ? ' <span class="badge" style="font-size:10px;vertical-align:2px;background:#F2C14E;color:#3A2A00">🧪 Test</span>' : '')+
         '</div>'+
         playerCardLogoHTML(u.username)+
         '<i class="ti ti-chevron-down pc-chev"></i>'+
@@ -25240,8 +25623,10 @@ function pendingUsers() { return (S.users||[]).filter(isPendingUser); }
 function accessibleClubs() {
   if(!currentUser) return [];
   if(isAdmin()) return clubList();
-  var ids = userClubIds(findUser(currentUser.username) || currentUser);
-  return clubList().filter(function(c){ return ids.indexOf(c.id) >= 0; });
+  var me0 = findUser(currentUser.username) || currentUser;
+  var ids = userClubIds(me0);
+  // Testklubbhus (Labbet) syns bara för admin och testgolfare
+  return clubList().filter(function(c){ return ids.indexOf(c.id) >= 0 && (!c.isTest || me0.isTest); });
 }
 function currentClubId() {
   var acc = accessibleClubs();
@@ -25277,6 +25662,7 @@ function switchClub(id) {
   window.scrollTo(0, 0);
 }
 function renderClubSwitcher() {
+  try { renderLabBanner(); } catch(e) {}
   var el = document.getElementById('club-switcher');
   if(!el) return;
   var acc = accessibleClubs();
@@ -25294,6 +25680,124 @@ function clubSlug(name) {
   return (name||'').trim().toLowerCase().replace(/å/g,'a').replace(/ä/g,'a').replace(/ö/g,'o').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || ('klubbhus-' + Date.now());
 }
 function ensureClubList() { if(!S.clubhouses || !S.clubhouses.length) S.clubhouses = clubList().map(function(c){ return Object.assign({}, c); }); }
+// ═══════════════════════════════════════════════════════════════════════════
+// LABBET – TESTKLUBBHUS (release 334)
+// Ett klubbhus kan markeras som testklubbhus (c.isTest). Det syns bara för admin och
+// testgolfare, visar en gul "LABBET"-banner, räknas aldrig i statistik över klubbhusen
+// och kan tömmas med ett tryck. Testgolfare (u.isTest) är egna konton som bara hör till
+// testklubbhuset: kopior av riktiga spelare (namn, bild, HCP) eller kända proffs. De kan
+// inte logga in och har inga telefoner kopplade, så ingen riktig person får notiser.
+// Admin provar funktionerna genom "Logga in som" på en testgolfare.
+// ═══════════════════════════════════════════════════════════════════════════
+var LAB_PROS = [
+  ['Scottie Scheffler', -6.5], ['Xander Schauffele', -5.4], ['J.J. Spaun', -4.1], ['Russell Henley', -4.3], ['Bryson DeChambeau', -5.0], ['Harris English', -3.9],
+  ['Justin Thomas', -4.6], ['Patrick Cantlay', -4.8], ['Collin Morikawa', -4.9], ['Ben Griffin', -3.8], ['Cameron Young', -4.2], ['Sam Burns', -4.0],
+  ['Rory McIlroy', -6.0], ['Shane Lowry', -4.4], ['Robert MacIntyre', -4.2], ['Matt Fitzpatrick', -4.5], ['Tommy Fleetwood', -5.1], ['Jon Rahm', -5.6],
+  ['Justin Rose', -4.0], ['Sepp Straka', -4.1], ['Rasmus Højgaard', -3.9], ['Ludvig Åberg', -5.3], ['Tyrrell Hatton', -4.7], ['Viktor Hovland', -4.6]
+];
+function isTestClub(id) { var c = clubById(id); return !!(c && c.isTest); }
+function currentClubIsTest() { return isTestClub(currentClubId()); }
+function toggleTestClub(id) {
+  if(!isAdmin() || id === DEFAULT_CLUB_ID) return;
+  ensureClubList();
+  var c = clubById(id); if(!c) return;
+  if(!c.isTest && !confirm('Markera "' + c.name + '" som testklubbhus?\n\nDet syns då bara för admin och testgolfare, och inget som spelas där räknas i statistik utanför klubbhuset. Riktiga spelare tas bort ur klubbhuset (deras konton påverkas inte annars).')) return;
+  if(c.isTest) { if(!confirm('Gör "' + c.name + '" till ett vanligt klubbhus igen?')) return; delete c.isTest; }
+  else {
+    c.isTest = true;
+    (S.users || []).forEach(function(u){ if(u.role !== 'admin' && !u.isTest && Array.isArray(u.clubhouses) && u.clubhouses.indexOf(id) >= 0) u.clubhouses = u.clubhouses.filter(function(x){ return x !== id; }); });
+  }
+  save(); renderClubSwitcher(); renderGlobalSettings();
+}
+function renderLabBanner() {
+  var on = !!(currentUser && currentClubIsTest());
+  var el = document.getElementById('lab-banner');
+  if(!on) { if(el) el.remove(); return; }
+  if(!el) {
+    el = document.createElement('div');
+    el.id = 'lab-banner';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 6px);z-index:9990;pointer-events:none;background:#F2C14E;color:#3A2A00;font-size:12px;font-weight:800;letter-spacing:.06em;padding:5px 14px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap';
+    document.body.appendChild(el);
+  }
+  el.textContent = '🧪 LABBET – testmiljö, inget här räknas';
+}
+
+// ── Testgolfare ───────────────────────────────────────────────────────────
+function openLabSeeder(clubId) {
+  if(!isAdmin() || !isTestClub(clubId)) return;
+  var existing = (S.users || []).filter(function(u){ return u.isTest && userClubIds(u).indexOf(clubId) >= 0; });
+  var haveName = {}; existing.forEach(function(u){ haveName[u.name] = true; });
+  var friends = (S.users || []).filter(function(u){ return !u.isTest && u.role !== 'admin' && !isPendingUser(u) && !userClubIds(u).every(isTestClub); })
+    .sort(function(a, b){ return (a.name || a.username).localeCompare(b.name || b.username, 'sv'); });
+  var row = function(cls, val, label, sub, checked, dis){
+    return '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;' + (dis ? 'opacity:.45' : '') + '">' +
+      '<input type="checkbox" class="' + cls + '" value="' + esc(val) + '" ' + (checked ? 'checked ' : '') + (dis ? 'disabled ' : '') + 'style="width:17px;height:17px;flex-shrink:0">' +
+      '<span style="flex:1;min-width:0;font-size:13px">' + esc(label) + '</span><span style="font-size:12px;color:var(--text-3)">' + sub + '</span></label>';
+  };
+  var h = '<h3>🧪 Testgolfare i ' + esc(clubById(clubId).name) + '</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Testgolfare är egna konton som bara finns i testklubbhuset. De kan inte logga in och får inga notiser – du provar som dem med "Logga in som". ' + existing.length + ' finns redan.</p>' +
+    '<div class="row" style="justify-content:space-between;align-items:center"><b style="font-size:13px">Proffs</b><span class="row" style="gap:6px"><button type="button" class="btn btn-sm" onclick="document.querySelectorAll(\'.lab-pro:not(:disabled)\').forEach(function(x){x.checked=true})">Alla</button><button type="button" class="btn btn-sm" onclick="document.querySelectorAll(\'.lab-pro\').forEach(function(x){x.checked=false})">Inga</button></span></div>' +
+    '<div style="max-height:220px;overflow-y:auto;margin-bottom:14px">' + LAB_PROS.map(function(p, i){ return row('lab-pro', String(i), p[0], 'HCP +' + Math.abs(p[1]).toFixed(1), !haveName[p[0]] && (i % 12) < 6, !!haveName[p[0]]); }).join('') + '</div>' +
+    '<div class="row" style="justify-content:space-between;align-items:center"><b style="font-size:13px">Kopiera vänner</b><span class="row" style="gap:6px"><button type="button" class="btn btn-sm" onclick="document.querySelectorAll(\'.lab-fr:not(:disabled)\').forEach(function(x){x.checked=true})">Alla</button><button type="button" class="btn btn-sm" onclick="document.querySelectorAll(\'.lab-fr\').forEach(function(x){x.checked=false})">Inga</button></span></div>' +
+    '<p style="font-size:11px;color:var(--text-3);margin:2px 0 6px">Namn, bild och HCP kopieras. Det riktiga kontot påverkas inte.</p>' +
+    '<div style="max-height:260px;overflow-y:auto">' + friends.map(function(u){ var nm = u.name || u.username; return row('lab-fr', u.username, nm, 'HCP ' + fmtHcp(u.hcp), false, !!haveName[nm]); }).join('') + '</div>' +
+    '<div class="row" style="justify-content:space-between;gap:8px;margin-top:14px">' +
+      (existing.length ? '<button class="btn btn-danger btn-sm" onclick="removeLabPlayers(\'' + esc(clubId) + '\')"><i class="ti ti-trash"></i> Ta bort alla testgolfare</button>' : '<span></span>') +
+      '<span class="row" style="gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="createLabPlayers(\'' + esc(clubId) + '\')"><i class="ti ti-user-plus"></i> Skapa</button></span></div>';
+  showModal(h, true);
+}
+function labUsername(name) {
+  var base = 'test-' + clubSlug(name).slice(0, 24), u = base, n = 2;
+  while(findUser(u)) { u = base + '-' + n; n++; }
+  return u;
+}
+function createLabPlayers(clubId) {
+  if(!isAdmin() || !isTestClub(clubId)) return;
+  var made = 0;
+  var mk = function(name, hcp, img, gender, from){
+    S.users.push({ username: labUsername(name), name: name, role: 'user', isPlayer: true, isTest: true, testOf: from || null,
+      hcp: hcp, img: img || null, gender: gender || '', clubhouses: [clubId], tourAccess: [],
+      passHash: simpleHash('test-' + Math.random().toString(36).slice(2) + Date.now()), createdAt: Date.now() });
+    made++;
+  };
+  document.querySelectorAll('.lab-pro:checked').forEach(function(x){ var p = LAB_PROS[+x.value]; if(p) mk(p[0], p[1], null, 'man', null); });
+  document.querySelectorAll('.lab-fr:checked').forEach(function(x){ var u = findUser(x.value); if(u) mk(u.name || u.username, u.hcp != null ? u.hcp : 0, u.img || null, u.gender || '', u.username); });
+  if(!made) { alert('Välj minst en golfare.'); return; }
+  save(); closeModal(); renderGlobalSettings();
+  alert(made + ' testgolfare skapade i ' + clubById(clubId).name + '. Lägg till dem i en tour som vanligt, och prova som dem med "Logga in som".');
+}
+function removeLabPlayers(clubId) {
+  if(!isAdmin() || !isTestClub(clubId)) return;
+  var list = (S.users || []).filter(function(u){ return u.isTest && userClubIds(u).indexOf(clubId) >= 0; });
+  if(!list.length || !confirm('Ta bort alla ' + list.length + ' testgolfare i klubbhuset?')) return;
+  list.forEach(function(u){ _localDeleted.users[u.username] = true; });
+  S.users = S.users.filter(function(u){ return list.indexOf(u) < 0; });
+  save(); closeModal(); renderGlobalSettings();
+}
+
+// ── Töm Labbet ────────────────────────────────────────────────────────────
+// Tar bort klubbhusets tourer, sällskapsronder, utmaningar och vägginlägg. Testgolfarna
+// och klubbhuset finns kvar, så att man kan börja om direkt.
+function emptyTestClub(clubId) {
+  if(!isAdmin() || !isTestClub(clubId)) return;
+  var c = clubById(clubId);
+  var tours = (S.tours || []).filter(function(t){ return itemClub(t) === clubId; });
+  if(!confirm('Töm "' + c.name + '"?\n\n' + tours.length + ' tour(er), alla sällskapsronder, utmaningar och vägginlägg i klubbhuset tas bort. Testgolfarna finns kvar. Går inte att ångra.')) return;
+  var ids = tours.map(function(t){ return t.id; });
+  ids.forEach(function(id){ _localDeleted.tours[id] = true; });
+  S.tours = S.tours.filter(function(t){ return ids.indexOf(t.id) < 0; });
+  (S.users || []).forEach(function(u){ if(u.tourAccess) u.tourAccess = u.tourAccess.filter(function(x){ return ids.indexOf(x) < 0; }); });
+  save();
+  var feedIds = ids.concat(['__casual_' + clubId]);
+  for(var i = 0; i < feedIds.length; i += 10) {
+    ACTIVITY_FEED_COL.where('tourId', 'in', feedIds.slice(i, i + 10)).get().then(function(snap){ snap.forEach(function(d){ d.ref.delete().catch(function(){}); }); }).catch(function(e){ console.warn('Labbet: vägg', e); });
+  }
+  CASUAL_COL.where('clubhouse', '==', clubId).get().then(function(snap){ snap.forEach(function(d){ d.ref.delete().catch(function(){}); }); }).catch(function(e){ console.warn('Labbet: ronder', e); });
+  CH_COL.where('clubhouse', '==', clubId).get().then(function(snap){ snap.forEach(function(d){ d.ref.delete().catch(function(){}); }); }).catch(function(e){ console.warn('Labbet: utmaningar', e); });
+  renderGlobalSettings();
+  alert('"' + c.name + '" är tömt.');
+}
+
 function createClubhouse() {
   if(!isAdmin()) return;
   var name = (prompt('Namn på det nya klubbhuset (t.ex. "Familjen"):') || '').trim();
@@ -25380,12 +25884,14 @@ function clubhouseSettingsHTML() {
     var nU = clubUsers(c.id).length;
     h += '<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap">'+
       '<div style="width:42px;height:42px;border-radius:12px;background:'+(clubLogoSrc(c)?'#1a2e22':(c.id===cur?'var(--green-light)':'var(--surface2)'))+';color:var(--green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+(clubLogoSrc(c)?'<img src="'+esc(clubLogoSrc(c))+'" style="max-width:36px;max-height:36px;object-fit:contain">':'<i class="ti ti-building-community" style="font-size:22px"></i>')+'</div>'+
-      '<div style="flex:1 1 170px;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
+      '<div style="flex:1 1 170px;min-width:0"><div style="font-weight:700;font-size:15px">'+esc(c.name)+(c.isTest?' <span style="font-size:11px;font-weight:800;color:#3A2A00;background:#F2C14E;padding:1px 7px;border-radius:10px;margin-left:4px">🧪 Test</span>':'')+(c.id===cur?' <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:1px 7px;border-radius:10px;margin-left:4px">Aktivt</span>':'')+'</div>'+
         '<div style="font-size:12px;color:var(--text-3)">Kort namn: '+esc(clubShort(c))+' · '+nT+' tour'+(nT===1?'':'er')+' · '+nU+' spelare</div></div>'+
       '<div class="row" style="gap:6px;flex-shrink:0;margin-left:auto">'+
         (c.id!==cur?'<button class="btn btn-sm" title="Växla hit" onclick="switchClub(\''+c.id+'\')"><i class="ti ti-arrows-exchange"></i></button>':'')+
         '<button class="btn btn-sm btn-primary" title="Utseende (ikon, headerbild)" onclick="openClubLook(\''+c.id+'\')"><i class="ti ti-palette"></i> Utseende</button>'+
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
+        (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="'+(c.isTest?'Gör till vanligt klubbhus':'Gör till testklubbhus')+'" onclick="toggleTestClub(\''+c.id+'\')" style="'+(c.isTest?'background:#F2C14E;color:#3A2A00;border-color:#F2C14E':'')+'">🧪</button>':'')+
+        (c.isTest?'<button class="btn btn-sm" onclick="openLabSeeder(\''+c.id+'\')"><i class="ti ti-user-plus"></i> Testgolfare</button><button class="btn btn-sm" title="Töm klubbhuset" onclick="emptyTestClub(\''+c.id+'\')"><i class="ti ti-eraser"></i> Töm</button>':'')+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="Ta bort" onclick="deleteClubhouse(\''+c.id+'\')"><i class="ti ti-trash" style="color:var(--danger-text)"></i></button>':'')+
       '</div></div>';
   });
