@@ -212,6 +212,13 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .ch-chip{display:inline-flex;align-items:center;gap:5px;background:var(--green-light);color:var(--green-dark);border-radius:14px;padding:4px 10px;font-size:12px;font-weight:600}
 .ch-chip i{cursor:pointer}
 .ch-hit{padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px}
+/* Release 355: bansök med träfflista och besked om banan finns i bandatabasen */
+.cs-hits{position:absolute;left:0;right:0;top:100%;z-index:60;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:240px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.cs-hits:empty{display:none}
+.cs-hits .ch-hit{padding:9px 12px}
+.cs-hits .ch-hit:hover{background:var(--surface2)}
+.cs-st{font-size:11px;margin-top:4px;line-height:1.35}
+.cs-st:empty{display:none}
 .chw-type{display:flex;align-items:center;gap:14px;padding:12px 14px;cursor:pointer;margin-bottom:8px}
 .chw-card{padding:16px}
 .chw-radio{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px}
@@ -7170,18 +7177,7 @@ function wizStep2() {
   h += '<div class="field"><label>Namn</label><input id="w-ev-name" type="text" value="'+esc(ev.name)+'" placeholder="t.ex. Vårens öppning"></div>';
   var courseField = '';
   if(courseDb.length) {
-    var manualSelected = ev.course && !courseDb.find(function(c){ return c.name.toLowerCase()===ev.course.toLowerCase(); });
-    courseField = '<div class="field"><label>Bana</label>' +
-      '<select id="w-ev-course-sel" onchange="onWizCourseSelChange()" style="margin-bottom:4px">' +
-        '<option value="">-- Välj bana ur databas --</option>' +
-        courseDb.map(function(c){
-          var sel = c.name.toLowerCase()===(ev.course||'').toLowerCase() ? ' selected' : '';
-          return '<option value="'+esc(c.name)+'"'+sel+'>'+esc(c.name)+' (Par '+c.par+')</option>';
-        }).join('') +
-        '<option value="__manual__"'+(manualSelected?' selected':'')+'> ✏ Skriv in manuellt...</option>' +
-      '</select>' +
-      '<input id="w-ev-course" type="text" placeholder="Bannamn" value="'+esc(ev.course||'')+'" style="display:'+(manualSelected||!ev.course?'':'none')+';" oninput="saveDraft()">' +
-    '</div>';
+    courseField = '<div class="field"><label>Bana</label>' + courseSearchHTML('w-ev-course', ev.course || '', 'wizCoursePick') + '</div>';
   } else {
     courseField = '<div class="field"><label>Bana</label><input id="w-ev-course" type="text" list="course-bank-list" value="'+esc(ev.course)+'" placeholder="t.ex. Haninge GK" onchange="onWizCourseChange()"></div>' +
       '<datalist id="course-bank-list">'+Object.values(courseBank).map(function(c){ return '<option value="'+esc(c.displayName||'')+'">'; }).join('')+'</datalist>';
@@ -7256,6 +7252,63 @@ function pickWizEvCover() {
     wizStep2();
   }, function(){ wizStep2(); });
 }
+
+// ── BANSÖK (release 355) ──────────────────────────────────────────────────
+// Ett textfält som söker i bandatabasen medan man skriver (namn, klubb eller kommun),
+// visar träffar att välja och ger besked direkt under fältet om namnet träffar en
+// bana i databasen – med hål, par och slope – eller inte. pickJs(name, valdIListan, arg)
+// anropas vid varje ändring så att värdet sparas.
+function courseFind(name) { var n = (name || '').trim().toLowerCase(); return n ? (courseDb || []).find(function(c){ return (c.name || '').toLowerCase() === n; }) || null : null; }
+function courseSearchStatus(v) {
+  if(!(v || '').trim()) return '';
+  var c = courseFind(v);
+  if(!c) return '<span style="color:#B7791F"><i class="ti ti-alert-triangle"></i> Ingen bana i bandatabasen heter så. Välj i listan, annars saknas par och hålindex.</span>';
+  var bits = [];
+  if(c.holePars && c.holePars.length) bits.push(c.holePars.length + ' hål');
+  if(c.par) bits.push('Par ' + c.par);
+  if(c.slope) bits.push('Slope ' + c.slope);
+  var noIdx = !(c.holeHcpIndex && c.holeHcpIndex.length);
+  return '<span style="color:#1D9E75"><i class="ti ti-circle-check"></i> Finns i bandatabasen' + (bits.length ? ' · ' + bits.join(' · ') : '') + '</span>' + (noIdx ? ' <span style="color:#B7791F">· saknar hålindex</span>' : '');
+}
+function courseSearchHTML(id, value, pickJs, arg, placeholder) {
+  var a = arg == null ? '' : String(arg);
+  return '<div class="cs-wrap" style="flex:1;min-width:160px"><div style="position:relative">' +
+    '<input id="' + id + '" type="text" autocomplete="off" value="' + esc(value || '') + '" placeholder="' + esc(placeholder || 'Sök bana – namn, klubb eller ort') + '" data-pick="' + esc(pickJs || '') + '" data-arg="' + esc(a) + '" oninput="courseSearchInput(this)" onfocus="courseSearchInput(this)" onblur="setTimeout(function(){var h=document.getElementById(\'' + id + '-hits\');if(h)h.innerHTML=\'\'},200)" style="margin:0;width:100%">' +
+    '<div id="' + id + '-hits" class="cs-hits"></div></div><div id="' + id + '-st" class="cs-st">' + courseSearchStatus(value) + '</div></div>';
+}
+function courseSearchInput(inp) {
+  var id = inp.id, q = inp.value.trim().toLowerCase(), hits = document.getElementById(id + '-hits'), st = document.getElementById(id + '-st');
+  if(st) st.innerHTML = courseSearchStatus(inp.value);
+  var fn = window[inp.getAttribute('data-pick')]; if(fn) fn(inp.value, false, inp.getAttribute('data-arg'));
+  if(!hits) return;
+  if(q.length < 2 || courseFind(inp.value)) { hits.innerHTML = ''; return; }
+  var list = (courseDb || []).filter(function(c){ return [c.name, c.klubb, c.kommun].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0; })
+    .sort(function(a, b){ var as = (a.name || '').toLowerCase().indexOf(q) === 0 ? 0 : 1, bs = (b.name || '').toLowerCase().indexOf(q) === 0 ? 0 : 1; return as - bs || (a.name || '').localeCompare(b.name || '', 'sv'); }).slice(0, 8);
+  if(list.length && st) st.innerHTML = '<span style="color:var(--text-3)"><i class="ti ti-hand-finger"></i> Välj banan i listan</span>';
+  hits.innerHTML = list.length ? list.map(function(c){
+    return '<div class="ch-hit" data-n="' + esc(c.name) + '" onmousedown="event.preventDefault()" onclick="courseSearchPick(\'' + id + '\',this.getAttribute(\'data-n\'))"><b>' + esc(c.name) + '</b>' +
+      '<span style="font-size:12px;color:var(--text-3)">' + (c.kommun ? ' · ' + esc(c.kommun) : '') + (c.par ? ' · Par ' + c.par : '') + '</span></div>';
+  }).join('') : '<div class="ch-hit" style="color:var(--text-3);cursor:default">Ingen träff i bandatabasen</div>';
+}
+function courseSearchPick(id, name) {
+  var inp = document.getElementById(id); if(!inp) return;
+  inp.value = name;
+  var hits = document.getElementById(id + '-hits'), st = document.getElementById(id + '-st');
+  if(hits) hits.innerHTML = '';
+  if(st) st.innerHTML = courseSearchStatus(name);
+  var fn = window[inp.getAttribute('data-pick')]; if(fn) fn(name, true, inp.getAttribute('data-arg'));
+}
+function courseSearchNoop() {}
+// Tourguiden: banan för deltävlingen
+function wizCoursePick(name, picked) {
+  if(!wiz || wiz.stepIdx == null) return;
+  var ev = wiz.events[wiz.stepIdx]; ev.course = (name || '').trim();
+  if(picked && !ev.img) { var img = getCourseImage(ev.course); if(img) { ev.img = img; var ne = document.getElementById('w-ev-name'); if(ne) ev.name = ne.value.trim(); saveDraft(); wizStep2(); return; } }
+  saveDraft();
+}
+// Ryder Cup-guiden: bana per pass och "samma bana för alla"
+function rcwPickCourse(name, picked, i) { rcwSessionMeta(+i).course = name; }
+function rcwPickAll(name, picked) { if(picked) rcwFillCourse(); }
 
 function onWizCourseSelChange() {
   var sel = document.getElementById('w-ev-course-sel');
@@ -7745,20 +7798,20 @@ function rcwSessionsHTML() {
   var fs = rcwSessionsPreview();
   return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin:-4px 0 14px">' +
     '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><b style="font-size:13px">Passen</b>' +
-      '<span class="row" style="gap:6px;align-items:center"><input type="text" id="rcw-allcourse" list="rcw-courses" placeholder="Samma bana för alla…" style="margin:0;width:200px;font-size:12px"><button type="button" class="btn btn-sm" onclick="rcwFillCourse()">Fyll i</button></span></div>' +
+      '<span class="row" style="gap:6px;align-items:flex-start;min-width:240px;flex:1;max-width:340px">' + courseSearchHTML('rcw-allcourse', '', 'rcwPickAll', null, 'Samma bana för alla…') + '<button type="button" class="btn btn-sm" onclick="rcwFillCourse()">Fyll i</button></span></div>' +
     '<datalist id="rcw-courses">' + (courseDb || []).map(function(c){ return '<option value="' + esc(c.name) + '">'; }).join('') + '</datalist>' +
     fs.map(function(f, i){ var m = rcwSessionMeta(i);
       return '<div class="row" style="gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border);flex-wrap:wrap">' +
         '<span style="flex:0 0 150px;font-size:13px"><b>Pass ' + (i + 1) + '</b> · ' + RC_FORMATS[f].label + '</span>' +
         '<input type="date" value="' + esc(m.date) + '" oninput="rcwSessionMeta(' + i + ').date=this.value" style="margin:0;width:150px;font-size:12px">' +
-        '<input type="text" list="rcw-courses" value="' + esc(m.course) + '" placeholder="Bana" oninput="rcwSessionMeta(' + i + ').course=this.value" class="rcw-course" style="margin:0;flex:1;min-width:160px;font-size:12px"></div>';
+        courseSearchHTML('rcw-course-' + i, m.course, 'rcwPickCourse', i, 'Bana') + '</div>';
     }).join('') +
     '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Formatet följer upplägget ovan. Datum och bana kan också ändras senare med ✏️ på passet.</p></div>';
 }
 function rcwFillCourse() {
   var v = (document.getElementById('rcw-allcourse').value || '').trim(); if(!v) return;
   rcwSessionsPreview().forEach(function(f, i){ rcwSessionMeta(i).course = v; });
-  document.querySelectorAll('.rcw-course').forEach(function(el){ el.value = v; });
+  rcwSessionsPreview().forEach(function(f, i){ var el = document.getElementById('rcw-course-' + i); if(el) { el.value = v; var st = document.getElementById('rcw-course-' + i + '-st'); if(st) st.innerHTML = courseSearchStatus(v); } });
 }
 function rcwSessionsPreview() {
   return RC_PRESETS[_rcw.preset].s.map(function(f){ return f === 'foursome' && _rcw.replace !== 'keep' ? _rcw.replace : f; });
@@ -8565,7 +8618,7 @@ function rcEditSession(si) {
     '<div class="field"><label>Format</label><select id="rc-es-f" ' + (locked ? 'disabled' : '') + '>' + Object.keys(RC_FORMATS).map(function(k){ return '<option value="' + k + '" ' + (s.format === k ? 'selected' : '') + '>' + RC_FORMATS[k].label + ' – ' + RC_FORMATS[k].desc + '</option>'; }).join('') + '</select>' +
       (locked ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Formatet kan inte ändras när en uppställning är inlämnad.</p>' : '') + '</div>' +
     '<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>Datum</label><input type="date" id="rc-es-d" value="' + esc(s.date || '') + '"></div>' +
-      '<div class="field" style="flex:2"><label>Bana</label><input type="text" id="rc-es-c" list="rc-es-cl" value="' + esc(s.course || '') + '" placeholder="Välj eller skriv bana"><datalist id="rc-es-cl">' + (courseDb || []).map(function(c){ return '<option value="' + esc(c.name) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div class="field" style="flex:2"><label>Bana</label>' + courseSearchHTML('rc-es-c', s.course || '', 'courseSearchNoop') + '</div></div>' +
     (locked && isAdmin() ? '<button class="btn btn-sm" style="margin-bottom:10px" onclick="rcResetLineups(' + si + ')"><i class="ti ti-refresh"></i> Nollställ uppställningarna</button>' : '') +
     '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="rcSaveSession(' + si + ')"><i class="ti ti-check"></i> Spara</button></div>';
   showModal(h);
@@ -22283,6 +22336,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (355)',
+    items: [
+      { type: 'improved', text: 'Bansök: när du anger bana – i guiden för ny tour, i Ny Ryder Cup och när du ändrar ett pass – söker fältet i bandatabasen medan du skriver (namn, klubb eller ort) och visar träffar att välja. Under fältet står direkt om banan finns i databasen ("✓ Finns i bandatabasen · 18 hål · Par 72 · Slope 128") eller inte, så att du vet att par och hålindex följer med.' },
+    ]
+  },
   {
     date: '10 november 2026 (354)',
     items: [
