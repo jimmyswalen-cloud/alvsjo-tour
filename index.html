@@ -10255,13 +10255,15 @@ function eventCardHTML(i,e) {
         rows += groupHdr('Boll '+(n+1), g.time||'', members.length, col.c, col.bg);
         // Release 331: var bollen spelas och på vilken simulator (från spelarnas anmälan).
         // Har alla samma plats visas en rad under bollrubriken; annars står platsen per spelare.
-        var vLabels = members.map(function(x){ return simVenueLabel(x.reg); });
+        // Release 332: även anläggningstiden (t.ex. 18:00–20:00) från anmälan/verktyget
+        var vLabels = members.map(function(x){ var tl = regTimeLabel(x.reg); return [simVenueLabel(x.reg), tl ? 'kl '+tl : ''].filter(Boolean).join(' · '); });
         var withV = vLabels.filter(Boolean);
         var allSame = withV.length && withV.length === members.length && withV.every(function(v){ return v === withV[0]; });
         if(withV.length) {
           rows += '<tr><td colspan="2" style="border-left:3px solid '+col.c+';background:'+col.bg+';padding:0 10px 6px 12px;border-bottom:none;font-size:12px;color:var(--text-2)">'+
             (allSame
-              ? '<i class="ti ti-device-desktop" style="font-size:12px;vertical-align:-1px"></i> <b style="color:var(--text)">'+esc(members[0].reg.venue || '')+'</b>'+(members[0].reg.simNo ? ' · <span style="font-weight:700;color:'+col.c+'">'+esc(members[0].reg.simNo)+'</span>' : '')
+              ? '<i class="ti ti-device-desktop" style="font-size:12px;vertical-align:-1px"></i> <b style="color:var(--text)">'+esc(members[0].reg.venue || '')+'</b>'+(members[0].reg.simNo ? ' · <span style="font-weight:700;color:'+col.c+'">'+esc(members[0].reg.simNo)+'</span>' : '')+
+                (regTimeLabel(members[0].reg) ? ' · <i class="ti ti-clock" style="font-size:12px;vertical-align:-1px"></i> '+esc(regTimeLabel(members[0].reg)) : '')
               : '<i class="ti ti-device-desktop" style="font-size:12px;vertical-align:-1px"></i> Olika platser – se respektive spelare')+
           '</td></tr>';
         }
@@ -21103,6 +21105,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (332)',
+    items: [
+      { type: 'improved', text: 'Platsraden under varje boll i startlistan visar nu även tiden ni är på anläggningen, t.ex. "Ekerö Tees And Taps · SIM 8 · 18:00–20:00".' },
+    ]
+  },
   {
     date: '9 november 2026 (331)',
     items: [
