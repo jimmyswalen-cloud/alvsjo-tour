@@ -727,6 +727,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="nav-wrap">
     <nav class="nav">
       <button class="nav-btn active" onclick="showView('tournament')" id="nav-tournament"><i class="ti ti-trophy"></i><span>Tävlingar</span></button>
+      <button class="nav-btn" onclick="showView('rcboard')" id="nav-rcboard" style="display:none"><i class="ti ti-list-numbers"></i><span>Ledartavla</span></button>
       <button class="nav-btn" onclick="showView('teams')" id="nav-teams" style="display:none"><i class="ti ti-users-group"></i><span>Lagen</span></button>
       <button class="nav-btn" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
       <button class="nav-btn" onclick="showView('calendar')" id="nav-calendar"><i class="ti ti-calendar"></i><span>Kalender</span></button>
@@ -734,6 +735,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <button class="nav-btn" onclick="showView('settings')" id="nav-settings"><i class="ti ti-settings"></i><span>Inst.</span></button>
     </nav>
   </div>
+  <div id="view-rcboard" class="view"><div id="rcboard-content"></div></div>
   <div id="view-teams" class="view"><div id="teams-content"></div></div>
   <div id="view-players" class="view">
     <div class="row" style="justify-content:space-between;margin-bottom:16px">
@@ -5696,6 +5698,8 @@ function enterTour(id) {
   // Release 352: Ryder Cup får fliken Lagen (laguppställningen i TV-stil)
   var teamsNav = document.getElementById('nav-teams');
   if(teamsNav) teamsNav.style.display = isRyderTour(getTour()) ? '' : 'none';
+  var boardNav = document.getElementById('nav-rcboard');
+  if(boardNav) boardNav.style.display = isRyderTour(getTour()) ? '' : 'none';
   showView('tournament');
   window.scrollTo(0, 0);
 }
@@ -5709,6 +5713,7 @@ function showView(v) {
   _currentAppView = v;
   if(v==='players')    renderPlayers();
   if(v==='tournament') renderEvents();
+  if(v==='rcboard')    { _rcBoardSi = null; renderRcBoard(); }
   if(v==='teams')      { var tt = getTour(); var tc = document.getElementById('teams-content'); if(tc) tc.innerHTML = isRyderTour(tt) ? rcRosterHTML(tt) : ''; }
   if(v==='calendar')   renderCalendar();
   if(v==='oom')        { showOOMMain(); subscribeTourLiveStandings(getTour()); renderOOM(); }
@@ -8194,6 +8199,7 @@ function rcSubscribeLive(t) {
     rcAutoFinalize(tt);
     // Rita bara om livefönstret om det fortfarande är öppet (stängt med krysset = släpp det)
     if(_rcLm) { if(document.getElementById('rc-live-root')) rcRenderLive(); else _rcLm = null; }
+    if(_currentAppView === 'rcboard') { try { renderRcBoard(); } catch(e) {} }
     if(_currentAppView === 'tournament' && !document.querySelector('.modal-overlay.show, #modal-mc.show')) {
       clearTimeout(_rcLiveRenderTimer); _rcLiveRenderTimer = setTimeout(function(){ try { renderEvents(); } catch(e) {} }, 150);
     }
@@ -8228,7 +8234,7 @@ function rcOpenLive(si, i) {
   _rcLm = { si: si, i: i, h: Math.min(ms.n, ms.played + 1) || 1 };
   rcRenderLive();
 }
-function rcCloseLive() { _rcLm = null; closeModal(); renderEvents(); }
+function rcCloseLive() { _rcLm = null; closeModal(); renderEvents(); if(_currentAppView === 'rcboard') renderRcBoard(); }
 function rcRenderLive() {
   if(!_rcLm) return;
   var t = getTour(); if(!isRyderTour(t)) return;
@@ -8528,6 +8534,87 @@ function rcResetCaptainHeads() {
   bg.heads = JSON.parse(JSON.stringify(RC_CAPTAIN_HEADS_DEFAULT));
   TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: bg }, { merge: true }).catch(function(){});
   renderSettings();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEDARTAVLA FÖR RYDER CUP (release 358)
+// En kompakt vy (egen flik) med totalen, prognosen, hur många poäng varje lag behöver
+// och varje match i det valda passet på en rad – som OoM på en vanlig tour, fast för
+// lagtävlingen. Passet väljs med knappar; som standard visas passet som pågår.
+// Uppdateras live när matcherna förs.
+// ═══════════════════════════════════════════════════════════════════════════
+var _rcBoardSi = null;
+function rcBoardDefaultSession(t) {
+  var ss = t.rc.sessions || [], live = -1, open = -1, last = -1;
+  ss.forEach(function(s, si){
+    var ms = rcMatches(t, s);
+    if(!ms.length) return;
+    last = si;
+    if(live < 0 && ms.some(function(m){ if(m.r) return false; var d = _rcLive[rcLiveId(t, s, m.i)]; return d && rcMatchStatus(t, s, m, d).played > 0; })) live = si;
+    if(open < 0 && ms.some(function(m){ return !m.r; })) open = si;
+  });
+  return live >= 0 ? live : (open >= 0 ? open : (last >= 0 ? last : 0));
+}
+function rcBoardSelect(si) { _rcBoardSi = si; renderRcBoard(); }
+function renderRcBoard() {
+  var el = document.getElementById('rcboard-content'); if(!el) return;
+  var t = getTour(); if(!isRyderTour(t)) { el.innerHTML = ''; return; }
+  rcSubscribeLive(t);
+  el.innerHTML = rcBoardHTML(t);
+}
+function rcBoardHTML(t) {
+  var A = rcTeam(t, 'A'), B = rcTeam(t, 'B'), p = rcPoints(t), pr = rcProjection(t);
+  var si = (_rcBoardSi != null && t.rc.sessions[_rcBoardSi]) ? _rcBoardSi : rcBoardDefaultSession(t), s = t.rc.sessions[si];
+  var needA = Math.max(0, p.need - p.A), needB = Math.max(0, p.need - p.B);
+  var prWin = pr.live && !p.winner ? (pr.A >= p.need ? 'A' : (pr.B >= p.need ? 'B' : null)) : null;
+  var h = '<div class="card" style="padding:14px 16px;margin-bottom:12px">' +
+    // Totalen
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px">' +
+      '<div style="display:flex;align-items:center;gap:8px;min-width:0">' + rcFlagSVG(A, 34) + '<b style="font-size:15px;color:' + rcInk(A.color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(A.name) + '</b></div>' +
+      '<div style="display:flex;border-radius:10px;overflow:hidden;font-size:28px;font-weight:800;color:#fff"><span style="background:' + esc(A.color) + ';padding:4px 14px;min-width:60px;text-align:center">' + rcFmt(p.A) + '</span><span style="background:' + esc(B.color) + ';padding:4px 14px;min-width:60px;text-align:center">' + rcFmt(p.B) + '</span></div>' +
+      '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0"><b style="font-size:15px;color:' + rcInk(B.color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(B.name) + '</b>' + rcFlagSVG(B, 34) + '</div>' +
+    '</div>' +
+    // Prognos och behov
+    (p.winner ? '<div style="text-align:center;margin-top:10px;font-weight:800;color:var(--gold)">🏆 ' + esc(rcTeam(t, p.winner).name) + ' har vunnit</div>' :
+      '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-top:10px;font-size:12px">' +
+        '<span style="color:var(--text-2)">Behöver <b style="color:var(--text)">' + rcFmt(needA) + '</b></span>' +
+        '<span style="text-align:center;color:var(--text-3);letter-spacing:.06em;font-size:11px">' + rcFmt(p.need) + ' VINNER</span>' +
+        '<span style="text-align:right;color:var(--text-2)">Behöver <b style="color:var(--text)">' + rcFmt(needB) + '</b></span></div>' +
+      (pr.live ? '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--surface2)">' +
+        '<b style="color:' + rcInk(A.color) + '">' + rcFmt(pr.A) + '</b><span style="text-align:center;font-size:11px;letter-spacing:.08em;color:var(--text-3)">PROGNOS · ' + pr.live + ' PÅGÅR' + (prWin ? '<br><span style="color:var(--gold);font-weight:800">' + esc(rcTeam(t, prWin).name) + ' vinner om det står sig</span>' : '') + '</span><b style="text-align:right;color:' + rcInk(B.color) + '">' + rcFmt(pr.B) + '</b></div>' : '')) +
+  '</div>';
+  // Passväljare
+  h += '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">' + (t.rc.sessions || []).map(function(x, i){
+    var on = i === si;
+    return '<button class="btn btn-sm" style="' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="rcBoardSelect(' + i + ')">Pass ' + (i + 1) + ' · ' + RC_FORMATS[x.format].label + '</button>';
+  }).join('') + '</div>';
+  // Matcherna i passet
+  var ms = rcMatches(t, s), sp = { A: 0, B: 0 };
+  ms.forEach(function(m){ if(m.r) { if(m.r.w === 'H') { sp.A += 0.5; sp.B += 0.5; } else sp[m.r.w]++; } });
+  h += '<div class="card" style="padding:6px 10px 8px">' +
+    '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 2px 8px;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:12px;color:var(--text-3)">' + (s.date ? esc(formatSvDateFull(s.date)) : 'Datum ej satt') + (s.course ? ' · ' + esc(s.course) : '') + '</span>' +
+      (ms.length ? '<b style="font-size:13px"><span style="color:' + rcInk(A.color) + '">' + rcFmt(sp.A) + '</span> – <span style="color:' + rcInk(B.color) + '">' + rcFmt(sp.B) + '</span></b>' : '') + '</div>';
+  if(!ms.length) {
+    h += '<p style="font-size:13px;color:var(--text-3);text-align:center;padding:16px 0;margin:0">Matcherna visas när båda lagen har lämnat in sin uppställning.</p>';
+  } else {
+    h += ms.map(function(m){
+      var doc = _rcLive[rcLiveId(t, s, m.i)], st = (!m.r && doc) ? rcMatchStatus(t, s, m, doc) : null;
+      if(st && !st.played) st = null;
+      var lead = m.r ? (m.r.w === 'H' ? null : m.r.w) : (st ? st.leader : null);
+      var mid = m.r ? (m.r.w === 'H' ? 'AS' : (m.r.m || '1UP')) : (st ? st.label : ((s.teeTimes || {})[m.i] || '–'));
+      var sub = m.r ? 'KLAR' : (st ? 'EFTER ' + st.played : ((s.teeTimes || {})[m.i] ? 'START' : ''));
+      var col = lead ? (lead === 'A' ? A : B).color : null;
+      var nm = function(us, id){ var tm = id === 'A' ? A : B, on = lead === id;
+        return '<span style="min-width:0;font-size:13px;font-weight:' + (on ? 800 : 600) + ';color:' + (on ? rcInk(tm.color) : 'var(--text-2)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + (id === 'B' ? 'text-align:right' : '') + '">' + esc(us.map(rcShortName).join(' & ')) + '</span>'; };
+      return '<div onclick="rcOpenLive(' + si + ',' + m.i + ')" style="display:grid;grid-template-columns:1fr 64px 1fr;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);cursor:pointer">' +
+        nm(m.a, 'A') +
+        '<span style="text-align:center;border-radius:8px;padding:3px 0;background:' + (col ? esc(col) : 'var(--surface2)') + ';color:' + (col ? '#fff' : 'var(--text-2)') + ';line-height:1.1"><b style="font-size:13px">' + esc(mid) + '</b>' + (sub ? '<br><span style="font-size:9px;letter-spacing:.06em;opacity:.85">' + sub + '</span>' : '') + '</span>' +
+        nm(m.b, 'B') + '</div>';
+    }).join('');
+  }
+  h += '</div>';
+  return h;
 }
 
 // ── STARTTIDER PER MATCH (release 357) ────────────────────────────────────
@@ -22466,6 +22553,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (358)',
+    items: [
+      { type: 'new', text: 'Ryder Cup: ny flik Ledartavla – en kompakt tavla som OoM på en vanlig tour. Överst totalen med flaggor, hur många poäng varje lag behöver för att vinna och prognosen ("Europa vinner om det står sig"). Under den varje match i det pågående passet på en rad med ställning och hål (t.ex. 2UP efter 11), starttid innan start och KLAR när den är avgjord. Byt pass med knapparna; tavlan uppdateras live och ett tryck på en match öppnar den.' },
+    ]
+  },
   {
     date: '10 november 2026 (357)',
     items: [
