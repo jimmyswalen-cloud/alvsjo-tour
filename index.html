@@ -94,8 +94,8 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 .pc.pc-open .pc-body{display:block}
 .pc.pc-open .pc-chev{transform:rotate(180deg)}
 /* Release 322: tävlingsscoren markeras som en tonad kolumn i live- och slutresultatstabeller */
-.sc-col{width:30px !important;background:rgba(29,158,117,.13);align-self:stretch;margin:-6px 0;padding:6px 0;display:flex;align-items:center;justify-content:center;font-size:13px !important}
-.sc-head{width:30px !important;background:rgba(29,158,117,.13);color:var(--green-dark);font-weight:700;border-radius:6px 6px 0 0;padding:3px 0 4px;margin-bottom:-4px}
+.sc-col{width:40px !important;flex-shrink:0;background:rgba(29,158,117,.13);align-self:stretch;margin:-6px 0;padding:6px 0;display:flex;align-items:center;justify-content:center;font-size:13px !important}
+.sc-head{width:40px !important;flex-shrink:0;box-sizing:border-box;background:rgba(29,158,117,.13);color:var(--green-dark);font-weight:700;letter-spacing:.02em;border-radius:6px 6px 0 0;padding:4px 0 4px;margin-bottom:-4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .sc-note{font-size:10px;color:var(--text-3);margin-top:6px;display:flex;align-items:center;gap:4px}
 .pc-logo{background:#fff;border-radius:6px;padding:3px 6px;display:flex;align-items:center;flex-shrink:0;max-width:96px;overflow:hidden}
 .nav-btn.active{background:var(--green-light);border-color:var(--green);color:var(--green-dark);font-weight:500}
@@ -20827,6 +20827,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '9 november 2026 (323)',
+    items: [
+      { type: 'improved', text: 'Score-kolumnen är lite bredare så att rubriken "SCORE" ryms helt i den gröna markeringen och står centrerad över siffrorna.' },
+    ]
+  },
   {
     date: '9 november 2026 (322)',
     items: [
