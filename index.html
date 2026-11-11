@@ -2378,6 +2378,14 @@ function bnavMainState() {
     .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
   if(mine.length) return { kind:'casual', id: mine[0].id, round: mine[0] };
   var today = hcpTodayISO(), access = currentUser.tourAccess || [], cands = [], order = 0;
+  // Release 361: Ryder Cup-match som spelas idag (eller redan har börjat) och inte är klar
+  try {
+    var rx = rcMyNextSession();
+    if(rx && rx.m && !rx.m.r) {
+      var rdoc = _rcLive[rcLiveId(rx.t, rx.s, rx.m.i)], started = rdoc && rcMatchStatus(rx.t, rx.s, rx.m, rdoc).played > 0;
+      if(started || rx.s.date === today) return { kind:'ryder', tourId: rx.t.id, si: rx.si, i: rx.m.i, t: rx.t, s: rx.s };
+    }
+  } catch(e) {}
   clubTours().forEach(function(t){
     if(!t || access.indexOf(t.id) < 0) return;
     var myPi = getMyPi(t);
@@ -2405,9 +2413,10 @@ function renderBnavMain() {
   if(!btn || !ic || !lb) return;
   var st = bnavMainState();
   btn.classList.toggle('st-casual', st.kind === 'casual');
-  btn.classList.toggle('st-tour', st.kind === 'tour');
+  btn.classList.toggle('st-tour', st.kind === 'tour' || st.kind === 'ryder');
   if(st.kind === 'casual') { ic.className = 'ti ti-player-play'; lb.textContent = 'Fortsätt'; btn.title = 'Fortsätt sällskapsronden på ' + (st.round.courseName || ''); }
   else if(st.kind === 'tour') { ic.className = 'ti ti-broadcast'; lb.textContent = 'Livescore'; btn.title = 'Livescore – ' + (st.event.name || 'dagens rond'); }
+  else if(st.kind === 'ryder') { ic.className = 'ti ti-broadcast'; lb.textContent = 'Livescore'; btn.title = 'Livescore – ' + (st.t.name || 'Ryder Cup') + ', pass ' + (st.si + 1); }
   else { ic.className = 'ti ti-golf'; lb.textContent = 'Ny rond'; btn.title = 'Starta en ny sällskapsrond'; }
 }
 function bnavGo(k) {
@@ -2416,7 +2425,7 @@ function bnavGo(k) {
   if(k === 'hem') showHomeScreen();
   else if(k === 'tour') showToursList();
   else if(k === 'stat') showCourseStats();
-  else if(k === 'rond') { var st = bnavMainState(); if(st.kind === 'casual') openCasualRound(st.id); else if(st.kind === 'tour') goToMyLiveScoring(st.tourId, st.eventId, st.gIdx); else startCasualRoundWizard(); }
+  else if(k === 'rond') { var st = bnavMainState(); if(st.kind === 'casual') openCasualRound(st.id); else if(st.kind === 'tour') goToMyLiveScoring(st.tourId, st.eventId, st.gIdx); else if(st.kind === 'ryder') { enterTour(st.tourId); setTimeout(function(){ rcOpenLive(st.si, st.i); }, 250); } else startCasualRoundWizard(); }
   else if(k === 'mer') { if(document.getElementById('bsheet').classList.contains('open')) closeBottomSheet(); else openBottomSheet(); }
   syncBottomNav();
 }
@@ -8202,6 +8211,7 @@ function rcSubscribeLive(t) {
     // Rita bara om livefönstret om det fortfarande är öppet (stängt med krysset = släpp det)
     if(_rcLm) { if(document.getElementById('rc-live-root')) rcRenderLive(); else _rcLm = null; }
     if(_currentAppView === 'rcboard') { try { renderRcBoard(); } catch(e) {} }
+    try { renderBnavMain(); } catch(e) {}
     if(_currentAppView === 'tournament' && !document.querySelector('.modal-overlay.show, #modal-mc.show')) {
       clearTimeout(_rcLiveRenderTimer); _rcLiveRenderTimer = setTimeout(function(){ try { renderEvents(); } catch(e) {} }, 150);
     }
@@ -22572,6 +22582,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (361)',
+    items: [
+      { type: 'improved', text: 'Mittknappen i menyraden fungerar nu även för Ryder Cup: har du en match som spelas idag eller redan pågår blir knappen "Livescore" och öppnar din match direkt – precis som för en vanlig tourrond. En pågående sällskapsrond går fortfarande först.' },
+    ]
+  },
   {
     date: '10 november 2026 (360)',
     items: [
