@@ -22604,6 +22604,18 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '10 november 2026 (365)',
+    items: [
+      { type: 'fixed', text: 'Spelarlistan visade alltid appens admin själv, även i klubbhus där admin inte är spelare ("Bara admin"). Nu syns du bara i spelarlistan i de klubbhus där du är spelare – i övriga klubbhus är du osynlig men fortfarande admin.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (364)',
+    items: [
+      { type: 'new', text: 'Spelare eller bara admin: under Inställningar → Klubbhus finns en knapp per klubbhus, "Spelare här" / "Bara admin". Du kan ta bort dig själv som spelare i ett klubbhus och fortsätta vara admin där – du syns då inte i klubbhusets spelarlistor, tourer eller statistik. Fungerar för appens admin och för klubbhusadmin.' },
+    ]
+  },
+  {
     date: '10 november 2026 (363)',
     items: [
       { type: 'new', text: 'Klubbhusadmin: under Användare → Redigera kan en spelare göras till admin i ett eller flera valda klubbhus. Hen kan då skapa och sköta tourer och Ryder Cup, resultat, side bets och väggen samt ändra klubbhusets namn och utseende – men bara i sina egna klubbhus. Användare, nya klubbhus, Labbet och appens gemensamma inställningar sköts fortfarande bara av appens admin.' },
@@ -26327,7 +26339,7 @@ function renderUsersList() {
   // Klubbhus: spelare ser bara spelare i det aktiva klubbhuset. Admin ser det aktiva
   // klubbhuset som standard men kan välja "Alla klubbhus".
   var clubFilter = admin ? (_usersClubFilter || currentClubId()) : currentClubId();
-  if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && u.role === 'admin' && u.username === currentUser.username) || (admin && isPendingUser(u)); });
+  if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && isPendingUser(u)); }); // release 365: admin syns bara där hen är spelare
   var clubBarEl = document.getElementById('users-club-filter');
   if(clubBarEl) clubBarEl.innerHTML = (admin && clubList().length > 1) ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
     [{id:'all', name:'Alla klubbhus'}].concat(clubList()).map(function(c){
@@ -26950,7 +26962,7 @@ function accessibleClubs() {
   if(!currentUser) return [];
   if(isSuperAdmin()) return clubList();
   var me0 = findUser(currentUser.username) || currentUser;
-  var ids = userClubIds(me0);
+  var ids = userClubIds(me0).concat(Array.isArray(me0.clubAdminOf) ? me0.clubAdminOf : []);
   // Testklubbhus (Labbet) syns bara för admin och testgolfare
   return clubList().filter(function(c){ return ids.indexOf(c.id) >= 0 && (!c.isTest || me0.isTest); });
 }
@@ -27189,6 +27201,35 @@ function restoreClubhouse(id) {
   save(); renderClubSwitcher(); renderGlobalSettings();
   alert('"'+name+'" är återställt med sina tourer och spelare. Utseende (ikon och headerbild) behöver ställas in igen under Utseende.');
 }
+// ── SPELARE ELLER BARA ADMIN I ETT KLUBBHUS (release 364) ─────────────────
+// Att vara spelare i ett klubbhus = att klubbhuset finns i u.clubhouses. Adminrätten är
+// separat: superadmin når alla klubbhus, klubbhusadmin sina klubbhus (clubAdminOf). Därför
+// kan man ta bort sig själv som spelare i ett klubbhus men fortsätta vara admin där – man
+// syns då inte i klubbhusets spelarlistor, tourer eller statistik.
+function iAmPlayerIn(clubId) { var me = findUser(currentUser.username) || currentUser; return userClubIds(me).indexOf(clubId) >= 0; }
+function myPlayerToggleHTML(clubId) {
+  var on = iAmPlayerIn(clubId);
+  return '<button class="btn btn-sm" title="' + (on ? 'Du är med som spelare här – tryck för att bara vara admin' : 'Du är bara admin här – tryck för att bli spelare') + '" onclick="toggleMyPlayerIn(\'' + clubId + '\')" style="' + (on ? '' : 'opacity:.8') + '">' +
+    '<i class="ti ' + (on ? 'ti-user-check' : 'ti-user-off') + '"></i> ' + (on ? 'Spelare här' : 'Bara admin') + '</button>';
+}
+function toggleMyPlayerIn(clubId) {
+  var me = findUser(currentUser.username); if(!me) return;
+  if(!isSuperAdmin() && !isClubAdminOf(clubId, me)) return;
+  var c = clubById(clubId); if(!c) return;
+  var ids = userClubIds(me).slice();
+  if(ids.indexOf(clubId) >= 0) {
+    var tours = (S.tours || []).filter(function(t){ return itemClub(t) === clubId && (me.tourAccess || []).indexOf(t.id) >= 0; });
+    if(!confirm('Ta bort dig som spelare i "' + c.name + '"?\n\nDu är fortfarande admin där, men syns inte i klubbhusets spelarlistor' + (tours.length ? ' och tas bort från ' + tours.length + ' tour' + (tours.length === 1 ? '' : 'er') + ' (' + tours.map(function(t){ return t.name; }).join(', ') + ')' : '') + '.')) return;
+    if(ids.length <= 1 && !isSuperAdmin()) { alert('Du måste vara spelare i minst ett klubbhus.'); return; }
+    me.clubhouses = ids.filter(function(x){ return x !== clubId; });
+    if(tours.length) me.tourAccess = (me.tourAccess || []).filter(function(id){ return !tours.some(function(t){ return t.id === id; }); });
+  } else {
+    ids.push(clubId); me.clubhouses = ids;
+  }
+  if(currentUser.username === me.username) currentUser = me;
+  save(); renderGlobalSettings(); try { renderClubSwitcher(); } catch(e) {}
+}
+
 // Klubbhusadminens vy av Klubbhus: bara de egna klubbhusen, med namn och utseende
 function clubAdminClubsHTML() {
   var me = findUser(currentUser.username) || currentUser, cur = currentClubId();
@@ -27201,6 +27242,7 @@ function clubAdminClubsHTML() {
         '<div style="font-size:12px;color:var(--text-3)">' + n + ' medlemmar · ' + (S.tours || []).filter(function(t){ return itemClub(t) === c.id; }).length + ' tourer</div></div>' +
         '<button class="btn btn-sm btn-primary" onclick="openClubLook(\'' + c.id + '\')"><i class="ti ti-palette"></i> Utseende</button>' +
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\'' + c.id + '\')"><i class="ti ti-edit"></i></button>' +
+        myPlayerToggleHTML(c.id) +
         (c.id !== cur ? '<button class="btn btn-sm" onclick="switchClub(\'' + c.id + '\')">Byt till</button>' : '') + '</div>';
     }).join('');
 }
@@ -27232,6 +27274,7 @@ function clubhouseSettingsHTML() {
         (c.id!==cur?'<button class="btn btn-sm" title="Växla hit" onclick="switchClub(\''+c.id+'\')"><i class="ti ti-arrows-exchange"></i></button>':'')+
         '<button class="btn btn-sm btn-primary" title="Utseende (ikon, headerbild)" onclick="openClubLook(\''+c.id+'\')"><i class="ti ti-palette"></i> Utseende</button>'+
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
+        myPlayerToggleHTML(c.id)+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="'+(c.isTest?'Gör till vanligt klubbhus':'Gör till testklubbhus')+'" onclick="toggleTestClub(\''+c.id+'\')" style="'+(c.isTest?'background:#F2C14E;color:#3A2A00;border-color:#F2C14E':'')+'">🧪</button>':'')+
         (c.isTest?'<button class="btn btn-sm" onclick="openLabSeeder(\''+c.id+'\')"><i class="ti ti-user-plus"></i> Testgolfare</button><button class="btn btn-sm" title="Töm klubbhuset" onclick="emptyTestClub(\''+c.id+'\')"><i class="ti ti-eraser"></i> Töm</button>':'')+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="Ta bort" onclick="deleteClubhouse(\''+c.id+'\')"><i class="ti ti-trash" style="color:var(--danger-text)"></i></button>':'')+
