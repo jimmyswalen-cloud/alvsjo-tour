@@ -60,6 +60,19 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 @media (max-width:699px){
   img.cover-banner{min-height:clamp(110px,32vw,150px)}
 }
+/* Release 362: headern 10 % lägre överallt (inkl. toningen nedtill) för mer plats i mitten */
+.hero{height:180px}
+.hero-scroll{height:43px}
+.hero.hero-sticky .hero-scroll{height:36px}
+.hero.hero-sticky::after{bottom:-23px;height:23px}
+.hero.hero-banner{max-height:234px}
+.hero.hero-banner .hero-scroll{height:20px}
+img.cover-banner{max-height:216px}
+@media (max-width:699px){
+  .hero{height:151px}
+  .hero.hero-banner{height:clamp(108px,30.6vw,153px)}
+  img.cover-banner{min-height:clamp(99px,28.8vw,135px)}
+}
 .wrap{max-width:700px;margin:0 auto;padding:0 16px 4rem}
 .tours-header{display:flex;align-items:center;justify-content:space-between;margin:20px 0 16px}
 .tour-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s}
@@ -283,7 +296,14 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 /* ── Bottenmeny (fast menyrad längst ner) + "Mer"-ark ── */
 #bnav{position:fixed;left:0;right:0;bottom:0;z-index:150;background:rgba(255,255,255,.96);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:none;justify-content:space-around;align-items:flex-end;padding:6px 4px max(20px, calc(10px + env(safe-area-inset-bottom)));box-shadow:0 -4px 18px rgba(0,0,0,.06)}
 body.has-bnav #bnav{display:flex}
-body.has-bnav{padding-bottom:calc(98px + env(safe-area-inset-bottom));--bnav-h:84px}
+/* Release 362: bottenmenyn lite lägre – mindre luft och något mindre ikoner, men knapparna är fortsatt stora att trycka på */
+#bnav{padding:5px 4px max(14px, calc(6px + env(safe-area-inset-bottom)))}
+#bnav button{gap:1px;padding:3px 0}
+#bnav button i{font-size:21px}
+#bnav .bn-main{top:-12px}
+#bnav .bn-main .bn-c{width:50px;height:50px}
+#bnav .bn-main .bn-c i{font-size:25px}
+body.has-bnav{padding-bottom:calc(88px + env(safe-area-inset-bottom));--bnav-h:74px}
 body.has-bnav.kb-open #bnav{display:none}
 #bnav button{flex:1;min-width:0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;font-size:10.5px;font-weight:600;color:#7a827d;padding:4px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #bnav button i{font-size:23px;line-height:1}
@@ -463,7 +483,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow">TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
-      <img id="hero-logo" src="logo-hero.png" style="height:clamp(44px,9vw,72px);width:auto" alt="ÄGCC Tour">
+      <img id="hero-logo" src="logo-hero.png" style="height:clamp(40px,8.1vw,65px);width:auto" alt="ÄGCC Tour">
       <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
@@ -22316,8 +22336,8 @@ function updateHero(tourId) {
   var hl0 = document.getElementById('hero-logo');
   var tl0 = tourId ? S.tours.find(function(x){ return x.id === tourId; }) : null;
   if(hl0) {
-    if(tl0 && tl0.heroLogo) { hl0.src = tl0.heroLogo; hl0.style.display = ''; hl0.style.height = 'clamp(64px,15vw,120px)'; }
-    else hl0.style.height = 'clamp(44px,9vw,72px)';
+    if(tl0 && tl0.heroLogo) { hl0.src = tl0.heroLogo; hl0.style.display = ''; hl0.style.height = 'clamp(58px,13.5vw,108px)'; }
+    else hl0.style.height = 'clamp(40px,8.1vw,65px)';
   }
 }
 
@@ -22582,6 +22602,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '10 november 2026 (362)',
+    items: [
+      { type: 'improved', text: 'Mer plats i mitten: headern är 10 % lägre på alla sidor (inklusive toningen nedtill och loggan), och bottenmenyn är lite lägre med något mindre ikoner – knapparna är fortfarande lika breda och lätta att träffa med tummen.' },
+    ]
+  },
   {
     date: '10 november 2026 (361)',
     items: [
