@@ -3648,6 +3648,7 @@ var GS_TILES = [
 ];
 function gsTileSub(key) {
   try {
+    if(key === 'users' && !isSuperAdmin()) { var np2 = pendingUsers().length; return clubUsers().length + ' spelare' + (np2 ? ' · ' + np2 + ' ansökningar' : ''); }
     if(key === 'users') { var np = pendingUsers().length; return (S.users||[]).length + ' konton' + (np ? ' · ' + np + ' väntar' : ''); }
     if(key === 'clubs') return clubList().length + ' st · aktivt: ' + clubShort(currentClub());
     if(key === 'courses') {
@@ -3683,13 +3684,14 @@ function renderGlobalSettings() {
   if(title) title.textContent = sec ? sec.label : 'Inställningar';
   var html = '';
 
-  if(!isSuperAdmin() && sec && sec.key !== 'clubs') { _gsSection = null; sec = null; }
+  var CADMIN_TILES = ['clubs', 'users', 'courses'];
+  if(!isSuperAdmin() && sec && CADMIN_TILES.indexOf(sec.key) < 0) { _gsSection = null; sec = null; }
   if(!sec) {
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
-    GS_TILES.filter(function(t){ return isSuperAdmin() || t.key === 'clubs'; }).forEach(function(t){
+    GS_TILES.filter(function(t){ return isSuperAdmin() || CADMIN_TILES.indexOf(t.key) >= 0; }).forEach(function(t){
       html += '<div class="home-card" onclick="openGsSection(\''+t.key+'\')" style="background:'+t.bg+';border:none;padding:1.3rem .8rem">'+
         '<i class="ti '+t.icon+'" style="font-size:32px;color:'+t.fg+'" aria-hidden="true"></i>'+
-        '<div class="home-card-label" style="color:'+t.fg+'">'+t.label+'</div>'+
+        '<div class="home-card-label" style="color:'+t.fg+'">'+(t.key === 'users' && !isSuperAdmin() ? 'Spelare' : t.label)+'</div>'+
         '<div class="home-card-sub" style="color:'+t.sub2+'">'+esc(gsTileSub(t.key))+'</div>'+
       '</div>';
     });
@@ -22604,6 +22606,19 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '10 november 2026 (367)',
+    items: [
+      { type: 'new', text: 'Inbjudningslänk per klubbhus: under Inställningar → Klubbhus finns "Bjud in" som kopierar (eller delar) en länk till registreringen med klubbhuset förvalt – skicka den i sällskapets chatt. Den som skapar konto via länken märks med klubbhuset, och klubbhusets admin ser och godkänner ansökan på startsidan och under Spelare. ↻ skapar en ny länk så att den gamla slutar fungera.' },
+      { type: 'improved', text: 'Appens admin ser fortfarande alla nya konton, med "Via inbjudan till …" och det klubbhuset först bland knapparna. Klubbhusadmin ser bara ansökningar via sitt klubbhus länk.' },
+    ]
+  },
+  {
+    date: '10 november 2026 (366)',
+    items: [
+      { type: 'new', text: 'Klubbhusadmin har fått två nya rutor under Inställningar: Spelare och Banor. Under Spelare kan klubbhusadmin ta in nya ansökningar i sitt klubbhus, ändra namn, HCP och tour-åtkomst för sina medlemmar och ta bort någon ur klubbhuset. Under Banor kan hen lägga in egna banor – banorna delas med alla klubbhus. Roller, lösenord och att radera konton sköter fortfarande bara appens admin.' },
+    ]
+  },
+  {
     date: '10 november 2026 (365)',
     items: [
       { type: 'fixed', text: 'Spelarlistan visade alltid appens admin själv, även i klubbhus där admin inte är spelare ("Bara admin"). Nu syns du bara i spelarlistan i de klubbhus där du är spelare – i övriga klubbhus är du osynlig men fortfarande admin.' },
@@ -26339,6 +26354,7 @@ function renderUsersList() {
   // Klubbhus: spelare ser bara spelare i det aktiva klubbhuset. Admin ser det aktiva
   // klubbhuset som standard men kan välja "Alla klubbhus".
   var clubFilter = admin ? (_usersClubFilter || currentClubId()) : currentClubId();
+  var cadmin = !admin && isClubAdminOf(currentClubId()); // release 366: klubbhusadmin
   if(clubFilter !== 'all') users = users.filter(function(u){ return userClubIds(u).indexOf(clubFilter) >= 0 || (admin && isPendingUser(u)); }); // release 365: admin syns bara där hen är spelare
   var clubBarEl = document.getElementById('users-club-filter');
   if(clubBarEl) clubBarEl.innerHTML = (admin && clubList().length > 1) ? '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
@@ -26350,7 +26366,15 @@ function renderUsersList() {
   if(newUserBtn) newUserBtn.style.display = admin ? '' : 'none';
   var headerEl = document.getElementById('users-screen-title');
   if(headerEl) headerEl.textContent = admin ? 'Användare' : 'Spelare';
-  if(!users.length) { el.innerHTML = '<p class="empty">Inga användare ännu.</p>'; return; }
+  var pendHTML = '';
+  if(cadmin) {
+    var club0 = currentClubId();
+    var pend = pendingUsers().filter(function(u){ return u.requestedClub === club0; });
+    if(pend.length) pendHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;border:2px solid #185FA5"><div style="font-weight:700;margin-bottom:6px"><i class="ti ti-hourglass"></i> Nya ansökningar</div>' +
+      '<p style="font-size:12px;color:var(--text-3);margin:0 0 8px">Konton som skapats via er inbjudningslänk. Lägg till dem du känner igen.</p>' +
+      pend.map(function(u){ return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border)"><span style="font-size:13px"><b>' + esc(u.name || u.username) + '</b> <span style="color:var(--text-3)">@' + esc(u.username) + '</span></span><button class="btn btn-sm btn-primary" onclick="clubAdminApprove(\'' + esc(u.username) + '\')"><i class="ti ti-user-plus"></i> Lägg till</button></div>'; }).join('') + '</div>';
+  }
+  if(!users.length) { el.innerHTML = pendHTML + '<p class="empty">Inga användare ännu.</p>'; return; }
 
   // Admin-profiler först, spelare därefter - båda grupperna i bokstavsordning
   // på namn. openEditUser/delUser förväntar sig index i den ORÖRDA S.users-
@@ -26364,7 +26388,7 @@ function renderUsersList() {
     return (a.name||a.username).localeCompare(b.name||b.username, 'sv');
   });
 
-  el.innerHTML = sortedUsers.map(function(u, idx) {
+  el.innerHTML = pendHTML + sortedUsers.map(function(u, idx) {
     var origIdx = getUsers().indexOf(u);
     var i = origIdx; // openEditUser/delUser/openEditUser nedan förväntar sig detta
     var divider = (admin && idx > 0 && sortedUsers[idx-1].role==='admin' && u.role!=='admin')
@@ -26422,6 +26446,7 @@ function renderUsersList() {
           (admin ? '<div style="font-size:13px;color:var(--text-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><i class="ti ti-flag"></i> Tour-åtkomst: '+(tourNames.length?tourNames.join(', '):'Ingen ännu')+'</div>'+
             (isPendingUser(u)?'<div style="font-size:13px;font-weight:700;color:#0C447C;margin-top:4px"><i class="ti ti-hourglass"></i> Väntar på klubbhus – redigera kontot och kryssa i ett eller flera</div>':'')+
             (clubList().length>1 && !isPendingUser(u)?'<div style="font-size:13px;color:var(--text-2);margin-top:4px"><i class="ti ti-building-community"></i> Klubbhus: '+userClubIds(u).map(function(id){ var c = clubById(id); return c ? esc(clubShort(c)) : null; }).filter(Boolean).join(', ')+'</div>':'') : '')+
+          (cadmin && u.role !== 'admin' && !(Array.isArray(u.clubAdminOf) && u.clubAdminOf.length && u.username !== currentUser.username) ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"><button class="btn btn-sm" onclick="openClubMemberEdit(\''+esc(u.username)+'\')"><i class="ti ti-edit"></i> Redigera</button></div>' : '')+
           (admin ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'+
             '<button class="btn btn-sm" onclick="openEditUser('+i+')"><i class="ti ti-edit"></i> Redigera</button>'+
             '<button class="btn btn-sm" onclick="shareLoginLink(\''+esc(u.username)+'\')"><i class="ti ti-share"></i> Dela inloggning</button>'+
@@ -27230,11 +27255,97 @@ function toggleMyPlayerIn(clubId) {
   save(); renderGlobalSettings(); try { renderClubSwitcher(); } catch(e) {}
 }
 
+// ── INBJUDNINGSLÄNK PER KLUBBHUS (release 367) ────────────────────────────
+// Varje klubbhus har en hemlig kod (c.inviteCode). Länken signup.html?club=<id>&k=<kod>
+// märker ansökan med klubbhuset (u.requestedClub) så att klubbhusets admin ser och
+// godkänner den. Utan länk hamnar ansökan som förut bara hos appens admin.
+function clubInviteCode(clubId) {
+  ensureClubList();
+  var c = clubById(clubId); if(!c) return null;
+  if(!c.inviteCode) { c.inviteCode = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); save(); }
+  return c.inviteCode;
+}
+function clubInviteLink(clubId) {
+  var code = clubInviteCode(clubId); if(!code) return '';
+  return location.origin + location.pathname.replace(/[^\/]*$/, '') + 'signup.html?club=' + encodeURIComponent(clubId) + '&k=' + encodeURIComponent(code);
+}
+function copyClubInvite(clubId) {
+  if(!isSuperAdmin() && !isClubAdminOf(clubId)) return;
+  var c = clubById(clubId), link = clubInviteLink(clubId); if(!link) return;
+  var txt = 'Välkommen till ' + c.name + ' i golfappen! Skapa ditt konto här: ' + link;
+  if(navigator.share) { navigator.share({ title: 'Inbjudan till ' + c.name, text: txt }).catch(function(){}); return; }
+  if(navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function(){ alert('Inbjudan är kopierad – klistra in den i er chatt eller ett sms.'); }, function(){ prompt('Kopiera inbjudan:', txt); });
+  } else prompt('Kopiera inbjudan:', txt);
+}
+function resetClubInvite(clubId) {
+  if(!isSuperAdmin() && !isClubAdminOf(clubId)) return;
+  if(!confirm('Skapa en ny inbjudningslänk? Den gamla slutar fungera direkt.')) return;
+  ensureClubList(); var c = clubById(clubId); if(!c) return;
+  delete c.inviteCode; clubInviteCode(clubId); renderGlobalSettings();
+  copyClubInvite(clubId);
+}
+function clubInviteButtonsHTML(clubId) {
+  return '<button class="btn btn-sm" onclick="copyClubInvite(\'' + clubId + '\')" title="Dela en länk så att kompisar kan skapa konto direkt till klubbhuset"><i class="ti ti-link"></i> Bjud in</button>' +
+    '<button class="btn btn-sm" onclick="resetClubInvite(\'' + clubId + '\')" title="Ny länk – den gamla slutar fungera"><i class="ti ti-refresh"></i></button>';
+}
+
+// ── KLUBBHUSADMIN: SPELARE (release 366) ──────────────────────────────────
+// En klubbhusadmin sköter spelarna i sitt klubbhus: tar in nya ansökningar (väntande konton)
+// i klubbhuset, ändrar namn, HCP och om personen är spelare, vilka av klubbhusets tourer hen
+// har tillgång till, och kan ta bort hen ur klubbhuset. Roller, lösenord, andra klubbhus och
+// att radera konton sköter fortfarande bara appens admin.
+function clubAdminApprove(username) {
+  var club = currentClubId(); if(!isClubAdminOf(club) && !isSuperAdmin()) return;
+  var u = findUser(username); if(!u || !isPendingUser(u)) return;
+  if(!isSuperAdmin() && u.requestedClub !== club) return;
+  if(!confirm('Lägg till ' + (u.name || u.username) + ' i ' + currentClub().name + '?')) return;
+  approvePendingUser(username, club);
+}
+function openClubMemberEdit(username) {
+  var club = currentClubId(); if(!isClubAdminOf(club) && !isSuperAdmin()) return;
+  var u = findUser(username); if(!u || userClubIds(u).indexOf(club) < 0 || u.role === 'admin') return;
+  var tours = (S.tours || []).filter(function(t){ return itemClub(t) === club; });
+  var isPl = u.isPlayer != null ? u.isPlayer : true;
+  var h = '<h3><i class="ti ti-user-edit"></i> ' + esc(u.name || u.username) + '</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">@' + esc(u.username) + ' · medlem i ' + esc(currentClub().name) + '</p>' +
+    '<div class="field"><label>Namn</label><input type="text" id="cm-name" value="' + esc(u.name || '') + '" maxlength="60"></div>' +
+    '<div class="row" style="gap:10px;align-items:flex-end"><div class="field" style="flex:1"><label>HCP</label><input type="number" step="0.1" id="cm-hcp" value="' + (u.hcp != null ? u.hcp : 0) + '"><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Plus-HCP skrivs med minus.</p></div>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-bottom:22px;cursor:pointer"><input type="checkbox" id="cm-player" ' + (isPl ? 'checked' : '') + ' style="width:auto;margin:0"> Spelare</label></div>' +
+    '<div class="field"><label>Tour-åtkomst i ' + esc(currentClub().name) + '</label>' +
+      (tours.length ? tours.map(function(t){ return '<label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:4px 0;cursor:pointer"><input type="checkbox" class="cm-tour" value="' + esc(t.id) + '" ' + ((u.tourAccess || []).indexOf(t.id) >= 0 ? 'checked' : '') + ' style="width:auto;margin:0"> ' + esc(t.name) + (t.season ? ' ' + esc(t.season) : '') + '</label>'; }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:0">Klubbhuset har inga tourer än.</p>') + '</div>' +
+    '<div class="row" style="justify-content:space-between;gap:8px;margin-top:12px">' +
+      '<button class="btn btn-danger btn-sm" onclick="clubAdminRemoveMember(\'' + esc(u.username) + '\')"><i class="ti ti-user-minus"></i> Ta bort ur klubbhuset</button>' +
+      '<span class="row" style="gap:8px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="saveClubMemberEdit(\'' + esc(u.username) + '\')"><i class="ti ti-check"></i> Spara</button></span></div>';
+  showModal(h, true);
+}
+function saveClubMemberEdit(username) {
+  var club = currentClubId(); if(!isClubAdminOf(club) && !isSuperAdmin()) return;
+  var u = findUser(username); if(!u || userClubIds(u).indexOf(club) < 0 || u.role === 'admin') return;
+  var nm = (document.getElementById('cm-name').value || '').trim(); if(nm) u.name = nm;
+  var hcp = parseFloat(document.getElementById('cm-hcp').value);
+  if(!isNaN(hcp) && hcp !== u.hcp) { try { recordHcpChange(u, hcp); } catch(e) {} u.hcp = hcp; }
+  u.isPlayer = document.getElementById('cm-player').checked;
+  var clubTourIds = (S.tours || []).filter(function(t){ return itemClub(t) === club; }).map(function(t){ return t.id; });
+  var chosen = Array.prototype.map.call(document.querySelectorAll('.cm-tour:checked'), function(x){ return x.value; });
+  u.tourAccess = (u.tourAccess || []).filter(function(id){ return clubTourIds.indexOf(id) < 0; }).concat(chosen);
+  save(); closeModal(); renderUsersList();
+}
+function clubAdminRemoveMember(username) {
+  var club = currentClubId(); if(!isClubAdminOf(club) && !isSuperAdmin()) return;
+  var u = findUser(username); if(!u || u.role === 'admin') return;
+  if(!confirm('Ta bort ' + (u.name || u.username) + ' ur ' + currentClub().name + '?\n\nKontot finns kvar, men hen kommer inte längre åt klubbhuset eller dess tourer.')) return;
+  var clubTourIds = (S.tours || []).filter(function(t){ return itemClub(t) === club; }).map(function(t){ return t.id; });
+  u.clubhouses = userClubIds(u).filter(function(x){ return x !== club; });
+  u.tourAccess = (u.tourAccess || []).filter(function(id){ return clubTourIds.indexOf(id) < 0; });
+  save(); closeModal(); renderUsersList();
+}
+
 // Klubbhusadminens vy av Klubbhus: bara de egna klubbhusen, med namn och utseende
 function clubAdminClubsHTML() {
   var me = findUser(currentUser.username) || currentUser, cur = currentClubId();
   var mine = clubList().filter(function(c){ return isClubAdminOf(c.id, me); });
-  return '<div class="card" style="margin-bottom:12px"><p style="font-size:12px;color:var(--text-2);margin:0">Du är admin för ' + (mine.length === 1 ? 'det här klubbhuset' : 'de här klubbhusen') + '. Här ändrar du namn och utseende. Tourer, Ryder Cup och resultat sköter du som vanligt i klubbhuset. Nya medlemmar läggs till av appens admin.</p></div>' +
+  return '<div class="card" style="margin-bottom:12px"><p style="font-size:12px;color:var(--text-2);margin:0">Du är admin för ' + (mine.length === 1 ? 'det här klubbhuset' : 'de här klubbhusen') + '. Här ändrar du namn och utseende. Tourer, Ryder Cup och resultat sköter du som vanligt i klubbhuset. Spelare och nya ansökningar hittar du under Inställningar → Spelare.</p></div>' +
     mine.map(function(c){
       var n = (S.users || []).filter(function(u){ return userClubIds(u).indexOf(c.id) >= 0; }).length;
       return '<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
@@ -27242,7 +27353,7 @@ function clubAdminClubsHTML() {
         '<div style="font-size:12px;color:var(--text-3)">' + n + ' medlemmar · ' + (S.tours || []).filter(function(t){ return itemClub(t) === c.id; }).length + ' tourer</div></div>' +
         '<button class="btn btn-sm btn-primary" onclick="openClubLook(\'' + c.id + '\')"><i class="ti ti-palette"></i> Utseende</button>' +
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\'' + c.id + '\')"><i class="ti ti-edit"></i></button>' +
-        myPlayerToggleHTML(c.id) +
+        myPlayerToggleHTML(c.id) + clubInviteButtonsHTML(c.id) +
         (c.id !== cur ? '<button class="btn btn-sm" onclick="switchClub(\'' + c.id + '\')">Byt till</button>' : '') + '</div>';
     }).join('');
 }
@@ -27275,6 +27386,7 @@ function clubhouseSettingsHTML() {
         '<button class="btn btn-sm btn-primary" title="Utseende (ikon, headerbild)" onclick="openClubLook(\''+c.id+'\')"><i class="ti ti-palette"></i> Utseende</button>'+
         '<button class="btn btn-sm" title="Byt namn" onclick="renameClubhouse(\''+c.id+'\')"><i class="ti ti-edit"></i></button>'+
         myPlayerToggleHTML(c.id)+
+        (c.isTest?'':clubInviteButtonsHTML(c.id))+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="'+(c.isTest?'Gör till vanligt klubbhus':'Gör till testklubbhus')+'" onclick="toggleTestClub(\''+c.id+'\')" style="'+(c.isTest?'background:#F2C14E;color:#3A2A00;border-color:#F2C14E':'')+'">🧪</button>':'')+
         (c.isTest?'<button class="btn btn-sm" onclick="openLabSeeder(\''+c.id+'\')"><i class="ti ti-user-plus"></i> Testgolfare</button><button class="btn btn-sm" title="Töm klubbhuset" onclick="emptyTestClub(\''+c.id+'\')"><i class="ti ti-eraser"></i> Töm</button>':'')+
         (c.id!==DEFAULT_CLUB_ID?'<button class="btn btn-sm" title="Ta bort" onclick="deleteClubhouse(\''+c.id+'\')"><i class="ti ti-trash" style="color:var(--danger-text)"></i></button>':'')+
@@ -27501,8 +27613,10 @@ function applyLoginBranding() {
 // ── Självregistrerade konton som väntar på klubbhus (admin) ───────────────────
 function renderHomePendingUsers() {
   var el = document.getElementById('home-pending-users-widget'); if(!el) return;
-  if(!isSuperAdmin()) { el.innerHTML = ''; return; }
-  var list = pendingUsers();
+  var sup = isSuperAdmin(), me0 = currentUser ? (findUser(currentUser.username) || currentUser) : null;
+  var myClubs = sup ? null : ((me0 && Array.isArray(me0.clubAdminOf)) ? me0.clubAdminOf : []);
+  if(!sup && !myClubs.length) { el.innerHTML = ''; return; }
+  var list = pendingUsers().filter(function(u){ return sup || myClubs.indexOf(u.requestedClub) >= 0; });
   if(!list.length) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:#7DB7F0;background:#EAF3FB">'+
     '<div style="font-size:13px;font-weight:700;color:#0C447C;margin-bottom:4px"><i class="ti ti-user-plus"></i> Nya konton väntar på klubbhus ('+list.length+')</div>'+
@@ -27512,16 +27626,17 @@ function renderHomePendingUsers() {
       return '<div style="border-top:1px solid #CFE3F7;padding:9px 0;font-size:13px">'+
         '<div style="font-weight:700">'+esc(u.name || u.username)+' <span style="font-weight:400;color:var(--text-3)">@'+esc(u.username)+'</span></div>'+
         '<div style="font-size:12px;color:var(--text-2)">'+(u.createdAt?'Registrerad '+new Date(u.createdAt).toLocaleDateString('sv-SE')+' · ':'')+'HCP '+(u.hcp!=null?u.hcp:'–')+(u.golfId?' · Golf-ID '+esc(u.golfId):' · Golf-ID saknas')+(u.email?' · '+esc(u.email):'')+'</div>'+
+        (u.requestedClub && clubById(u.requestedClub) ? '<div style="font-size:12px;font-weight:700;color:#185FA5;margin-top:3px"><i class="ti ti-link"></i> Via inbjudan till '+esc(clubById(u.requestedClub).name)+'</div>' : '')+
         '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">'+
-          clubList().map(function(c){ return '<button class="btn btn-sm btn-primary" onclick="approvePendingUser(\''+esc(u.username)+'\',\''+c.id+'\')"><i class="ti ti-plus"></i> '+esc(clubShort(c))+'</button>'; }).join('')+
-          '<button class="btn btn-sm" onclick="openEditUser('+idx+')" title="Öppna kontot (välj flera klubbhus, tourer m.m.)"><i class="ti ti-edit"></i></button>'+
-          '<button class="btn btn-sm btn-danger" onclick="rejectPendingUser(\''+esc(u.username)+'\')" title="Ta bort kontot"><i class="ti ti-trash"></i></button>'+
+          clubList().filter(function(c){ return sup ? !c.isTest : c.id === u.requestedClub; }).sort(function(a,b){ return (a.id === u.requestedClub ? -1 : 0) - (b.id === u.requestedClub ? -1 : 0); }).map(function(c){ return '<button class="btn btn-sm btn-primary" onclick="approvePendingUser(\''+esc(u.username)+'\',\''+c.id+'\')"><i class="ti ti-plus"></i> '+esc(clubShort(c))+'</button>'; }).join('')+
+          (sup ? '<button class="btn btn-sm" onclick="openEditUser('+idx+')" title="Öppna kontot (välj flera klubbhus, tourer m.m.)"><i class="ti ti-edit"></i></button>'+
+          '<button class="btn btn-sm btn-danger" onclick="rejectPendingUser(\''+esc(u.username)+'\')" title="Ta bort kontot"><i class="ti ti-trash"></i></button>' : '')+
         '</div></div>';
     }).join('')+'</div>';
 }
 function approvePendingUser(username, clubId) {
-  if(!isAdmin()) return;
   var u = findUser(username); if(!u) return;
+  if(!isSuperAdmin() && !(isClubAdminOf(clubId) && u.requestedClub === clubId)) return;
   var c = clubById(clubId);
   u.clubhouses = [clubId];
   delete u.pending;
@@ -27546,6 +27661,7 @@ function rejectPendingUser(username) {
 var _clubFieldDefault = null;
 function clubAccessFieldHTML(u) {
   var ids = u ? userClubIds(u) : [currentClubId()];
+  if(u && isPendingUser(u) && u.requestedClub) ids = [u.requestedClub];
   _clubFieldDefault = ids.slice();
   return '<div class="field" id="u-club-field"><label>Klubbhus</label><div style="display:flex;flex-wrap:wrap;gap:8px 16px">'+
     clubList().map(function(c){

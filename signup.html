@@ -66,7 +66,8 @@ input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0
 
 <div class="wrap">
   <div class="card" id="form-card">
-    <h2>Ny spelare</h2>
+    <h2 id="su-title">Ny spelare</h2>
+    <div id="su-invite" style="display:none;margin:-4px 0 10px;padding:10px 12px;border-radius:10px;background:#EAF3FB;color:#0C447C;font-size:14px"></div>
     <p class="sub">Fyll i dina uppgifter för att skapa ett konto. När kontot är skapat får admin en notis och <strong>godkänner dig</strong> genom att ge dig tillgång till rätt klubbhus. Därefter kan du logga in med användarnamnet och lösenordet du väljer här.</p>
 
     <div class="error-box" id="error-box"></div>
@@ -168,6 +169,30 @@ function simpleHash(str) {
   } catch(e) {}
 })();
 
+// Inbjudningslänk från ett klubbhus (release 367): signup.html?club=<id>&k=<kod>.
+// Koden måste stämma med klubbhusets inbjudningskod; då märks ansökan med klubbhuset
+// (requestedClub) så att klubbhusets admin ser den. Kontot väntar ändå på godkännande.
+var INVITE = (function(){ try { var q = new URLSearchParams(location.search); var c = q.get('club'), k = q.get('k'); return c && k ? { club: c, k: k } : null; } catch(e) { return null; } })();
+var INVITE_OK = null; // { id, name } när koden är kontrollerad
+function inviteClub(state) {
+  if(!INVITE || !state || !Array.isArray(state.clubhouses)) return null;
+  var c = state.clubhouses.find(function(x){ return x && x.id === INVITE.club; });
+  return (c && c.inviteCode && c.inviteCode === INVITE.k && !c.isTest) ? c : null;
+}
+if(INVITE) {
+  DOC_REF.get().then(function(doc){
+    var state = (doc.exists && doc.data().data) ? JSON.parse(doc.data().data) : {};
+    var c = inviteClub(state);
+    if(!c) { var b0 = document.getElementById('su-invite'); b0.style.display = 'block'; b0.style.background = '#FCEBEB'; b0.style.color = '#7A1F1F'; b0.textContent = 'Inbjudningslänken gäller inte längre. Du kan ändå skapa ett konto – appens admin hjälper dig till rätt sällskap.'; return; }
+    INVITE_OK = { id: c.id, name: c.name };
+    document.getElementById('su-eyebrow').textContent = '\u26f3 ' + c.name;
+    document.getElementById('su-title').textContent = 'Skapa konto – ' + c.name;
+    var b = document.getElementById('su-invite'); b.style.display = 'block';
+    b.innerHTML = '<strong>Du har bjudits in till ' + c.name.replace(/[<>&]/g, '') + '.</strong> När kontot är skapat godkänner sällskapets admin dig.';
+    if(c.heroImg) document.getElementById('su-hero').style.backgroundImage = "url('" + c.heroImg + "')";
+  }).catch(function(){});
+}
+
 function showError(msg) {
   var box = document.getElementById('error-box');
   box.textContent = msg;
@@ -216,6 +241,7 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
       if(!state.ideas) state.ideas = [];
       var taken = state.users.some(function(u){ return u.username.toLowerCase() === username.toLowerCase(); });
       if(taken) throw new Error('USERNAME_TAKEN');
+      var invC = inviteClub(state);
 
       state.users.push({
         username: username,
@@ -232,6 +258,7 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
         // Tom lista = väntar på att admin tilldelar ett eller flera klubbhus
         clubhouses: [],
         pending: true,
+        requestedClub: invC ? invC.id : null,
         createdAt: Date.now()
       });
 
@@ -243,10 +270,10 @@ document.getElementById('signup-form').addEventListener('submit', function(e) {
     });
   }).then(function() {
     // Notis till admin (push + popup i appen) om att ett nytt konto väntar
-    db.collection('pushOutbox').add({ kind: 'signup', username: username, name: name, createdBy: username, createdAt: Date.now() }).catch(function(){});
+    db.collection('pushOutbox').add({ kind: 'signup', username: username, name: name, requestedClub: INVITE_OK ? INVITE_OK.id : null, createdBy: username, createdAt: Date.now() }).catch(function(){});
     document.getElementById('form-card').style.display = 'none';
     document.getElementById('success-msg').textContent =
-      'Ditt konto (' + username + ') väntar nu på att godkännas av admin. Du kan logga in så fort du fått tillgång – oftast får du ett meddelande när det är klart.';
+      'Ditt konto (' + username + ') väntar nu på att godkännas av ' + (INVITE_OK ? 'admin i ' + INVITE_OK.name : 'admin') + '. Du kan logga in så fort du fått tillgång – oftast får du ett meddelande när det är klart.';
     document.getElementById('success-card').style.display = 'block';
   }).catch(function(err) {
     btn.disabled = false;
