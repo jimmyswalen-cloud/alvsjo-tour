@@ -3609,7 +3609,7 @@ function quickEditHcpFromHome() {
   showModal(
     '<h3 style="margin-bottom:4px">Uppdatera HCP</h3>'+
     '<p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Ange ditt aktuella handicap.</p>'+
-    '<div class="field"><label>HCP</label><input id="hcp-update-inp" type="number" step="0.1" value="'+(Number(u.hcp)||0).toFixed(1)+'"></div>'+
+    '<div class="field"><label>HCP</label><input id="hcp-update-inp" type="number" step="0.1" value="'+(Number(hcpVal)||0).toFixed(1)+'"></div>'+
     '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveHcpUpdateFromHome()"><i class="ti ti-device-floppy"></i> Spara</button>',
     true, false
   );
@@ -5658,25 +5658,26 @@ function saveEditTour() {
     var row = document.getElementById('edit-ev-row-'+i);
     if(row && row.parentNode) { // only if not removed
       var existing = t.events[i] || {};
-      newEvents.push({
-        id: existing.id || uid(),
-        name: nameInput.value.trim() || ('Del '+(newEvents.length+1)),
-        date: dateInput ? dateInput.value : existing.date,
-        type: typeInput ? typeInput.value : (existing.type||'stableford'),
-        course: existing.course || '',
-        // Manuellt satta här - periodStartAuto/periodEndAuto sätts till false så
-        // att de aldrig av misstag skrivs över av auto-uträkningen igen (den körs
-        // annars bara i tour-guiden, men bättre att vara explicit och säker).
-        periodStart: pStartInput ? pStartInput.value : (existing.periodStart || (dateInput?dateInput.value:'')),
-        periodEnd: pEndInput ? pEndInput.value : (existing.periodEnd || (dateInput?dateInput.value:'')),
-        periodStartAuto: false, periodEndAuto: false,
-        isFinal: !!existing.isFinal,
-        isMajor: !!existing.isMajor,
-        img: existing.img || null,
-        registrations: existing.registrations || [],
-        results: existing.results || [],
-        closed: false
-      });
+      // Release 370: utgå från HELA den befintliga deltävlingen och skriv bara över det som
+      // går att ändra här (namn, datum, typ och spelperiod). Tidigare byggdes deltävlingen
+      // om från grunden med ett fåtal fält, så side bets, bollar/starttider, chatt,
+      // slagförsprång m.m. försvann på ALLA deltävlingar när man sparade.
+      var ev = JSON.parse(JSON.stringify(existing));
+      ev.id = existing.id || uid();
+      ev.name = nameInput.value.trim() || ('Del '+(newEvents.length+1));
+      ev.date = dateInput ? dateInput.value : existing.date;
+      ev.type = typeInput ? typeInput.value : (existing.type||'stableford');
+      ev.course = existing.course || '';
+      ev.periodStart = pStartInput ? pStartInput.value : (existing.periodStart || (dateInput?dateInput.value:''));
+      ev.periodEnd = pEndInput ? pEndInput.value : (existing.periodEnd || (dateInput?dateInput.value:''));
+      ev.periodStartAuto = false; ev.periodEndAuto = false;
+      ev.isFinal = !!existing.isFinal;
+      ev.isMajor = !!existing.isMajor;
+      ev.img = existing.img || null;
+      ev.registrations = existing.registrations || [];
+      ev.results = existing.results || [];
+      ev.closed = !!existing.closed;
+      newEvents.push(ev);
     }
     i++;
   }
@@ -22631,6 +22632,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (371)',
+    items: [
+      { type: 'fixed', text: 'Knappen för att snabbt uppdatera HCP från startsidan gav ett fel och öppnades inte (felet kom med release 346). Nu fungerar den igen.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (370)',
+    items: [
+      { type: 'fixed', text: 'Redigera tour (för tourer som inte startat) byggde om alla deltävlingar från grunden när man sparade – därför försvann side bets, bollar och starttider, chatt m.m. på ALLA deltävlingar, även om man bara bytte omslagsbild eller bana på en. Nu sparas bara det som ändrats (namn, datum, typ, spelperiod och bilder) och allt annat ligger kvar.' },
+    ]
+  },
   {
     date: '11 november 2026 (369)',
     items: [
