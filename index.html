@@ -7440,7 +7440,7 @@ function startEclecticRound(tourId) {
   if(eclTakenRounds(t, me).length >= N) { alert('Du har redan spelat alla rundor.'); return; }
   var c = eclCourse(t); if(!c || !casualCourseHasCard(c)) { alert('Banan saknar scorekort i bandatabasen (par och hålindex). Be admin lägga in det.'); return; }
   _eqs = { tourId: t.id, sel: [me], shcp: {}, side: null };
-  _eqs.shcp[me] = eclPlayingHcp(me, c);
+  // Release 382: SHCP anges på nytt för varje rond (HCP kan ha ändrats) – inget förifylls eller sparas i touren
   renderEclQuick();
 }
 function renderEclQuick() {
@@ -7457,9 +7457,9 @@ function renderEclQuick() {
         return '<div class="row" style="align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';' + (dis ? 'opacity:.5' : '') + '">' +
           '<input type="checkbox" ' + (on ? 'checked ' : '') + (isMe || dis ? 'disabled ' : '') + 'onchange="eqsToggle(\'' + esc(u) + '\')" style="width:18px;height:18px;margin:0">' +
           '<span style="flex:1;min-width:0;font-size:14px;font-weight:600">' + esc(rcUserName(u)) + (isMe ? ' <span style="color:var(--text-3);font-weight:400">(du)</span>' : '') + '<span style="display:block;font-size:11px;color:var(--text-3);font-weight:400">' + (full ? 'Alla rundor spelade' : 'Runda ' + nx + ' av ' + N) + ' · HCP ' + fmtHcp((findUser(u) || {}).hcp) + '</span></span>' +
-          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;gap:2px;margin:0">SHCP<input type="number" step="1" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" onchange="_eqs.shcp[\'' + esc(u) + '\']=parseInt(this.value,10)||0" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px 4px"></label>' : '') + '</div>';
+          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;gap:2px;margin:0">SHCP<input type="number" step="1" inputmode="numeric" placeholder="?" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" oninput="var v=this.value.trim();if(v===\'\'){delete _eqs.shcp[\'' + esc(u) + '\']}else{_eqs.shcp[\'' + esc(u) + '\']=parseInt(v,10)}" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px 4px;' + (_eqs.shcp[u] == null ? 'border-color:#B7791F' : '') + '"></label>' : '') + '</div>';
       }).join('') + '</div>' +
-      '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">SHCP hittar du i banans slopetabell (beror på tee och banans svårighet). Förifyllt med avrundad HCP – ändra till rätt värde.' + (!cands.length ? ' Bara spelare i touren kan vara med.' : '') + '</p></div>';
+      '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Ange dagens SHCP för varje spelare – den hittar du i banans slopetabell utifrån aktuell HCP, tee och kön. SHCP anges på nytt för varje rond eftersom HCP kan ha ändrats.' + (!cands.length ? ' Bara spelare i touren kan vara med.' : '') + '</p></div>';
   var n = _eqs.sel.length, sides = [['', 'ti-circle-off', 'Inget', 'Bara eclectic']].concat(CF_SECONDARY.filter(function(k){ return k !== (stab ? 'stableford' : 'stroke_net'); }).map(function(k){ return [k, CF[k].icon, CF[k].title, CF[k].sub || '']; }));
   h += '<div class="field"><label>Sidospel (valfritt)</label><div class="cf-grid">' + sides.map(function(x){
     var k = x[0], need = k && CF[k] ? (CF[k].players || (CF[k].min || 1)) : 1, ok = !k || (CF[k].players ? n === CF[k].players : n >= (CF[k].min || 1));
@@ -7472,16 +7472,18 @@ function eqsToggle(u) {
   var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
   var i = _eqs.sel.indexOf(u);
   if(i >= 0) _eqs.sel.splice(i, 1);
-  else if(_eqs.sel.length < 4) { _eqs.sel.push(u); if(_eqs.shcp[u] == null) _eqs.shcp[u] = eclPlayingHcp(u, eclCourse(t)); }
+  else if(_eqs.sel.length < 4) { _eqs.sel.push(u); }
   if(_eqs.side && CF[_eqs.side] && (CF[_eqs.side].players ? _eqs.sel.length !== CF[_eqs.side].players : _eqs.sel.length < (CF[_eqs.side].min || 1))) _eqs.side = null;
   renderEclQuick();
 }
 function eqsStart() {
   var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
+  var miss = _eqs.sel.filter(function(u){ return _eqs.shcp[u] == null || isNaN(_eqs.shcp[u]); });
+  if(miss.length) { alert('Ange SHCP för ' + miss.map(rcUserName).join(', ') + '. SHCP hittar du i banans slopetabell.'); return; }
   var c = eclCourse(t), stab = t.eclectic.mode === 'stableford';
   _cw = { step: 4, courseId: c.id, date: hcpTodayISO(), sim: false, roundType: 'casual', hidden: false, silent: false, search: '',
     format: { primary: stab ? 'stableford' : 'stroke_net', secondary: _eqs.side || null }, contests: [], teamOf: {}, teamShcp: {}, teamSize: 2,
-    players: _eqs.sel.map(function(u){ return { key: 'u_' + u, username: u, name: rcUserName(u), guest: false, shcp: _eqs.shcp[u] != null ? _eqs.shcp[u] : eclPlayingHcp(u, c) }; }),
+    players: _eqs.sel.map(function(u){ return { key: 'u_' + u, username: u, name: rcUserName(u), guest: false, shcp: _eqs.shcp[u] }; }),
     ecl: { tourId: t.id, round: eclTakenRounds(t, currentUser.username).length + 1 } };
   if(_cw.format.secondary === 'wolf') _cw.format.secondary = 'wolf';
   var probs = cwFormatProblem();
@@ -23167,6 +23169,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (382)',
+    items: [
+      { type: 'improved', text: 'Eclectic: SHCP måste nu anges för varje spelare vid varje ny rond – fälten är tomma och scorekortet öppnas först när alla har fyllt i. Inget SHCP sparas eller låses i touren, eftersom HCP kan ändras mellan rundorna.' },
+    ]
+  },
   {
     date: '11 november 2026 (381)',
     items: [
