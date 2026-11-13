@@ -1387,9 +1387,14 @@ function afterStateSnapshot() {
   if(!_stateBackupLoaded || meta.fromCache) return;
   var restored = healFromBackup(false);
   if(restored.length) {
+    // Release 385: logga vem/vad som skrev data utan klubbhus, så att boven kan hittas
+    try {
+      db.collection('dataGuardLog').add({ at: Date.now(), restored: restored, lastActor: meta.lastActor || null, savedAt: meta.savedAt || null,
+        appVer: meta.appVer || null, via: meta.via || null, seenBy: (currentUser && currentUser.username) || null, myVer: currentReleaseNo() }).catch(function(){});
+    } catch(e) {}
     save();
     try { applyClubFilters(); renderClubSwitcher(); applyClubBranding(); } catch(e) {}
-    if(isAdmin() && !impersonatorAdmin) showDataGuardBanner('Återställde automatiskt: '+esc(restored.join(', '))+'.'+(meta.lastActor && !meta.appVer ? ' Senast sparat av '+esc(meta.lastActor)+' med en gammal appversion.' : ''));
+    if(isAdmin() && !impersonatorAdmin) { var wu = meta.lastActor ? findUser(meta.lastActor) : null; showDataGuardBanner('Återställde automatiskt: '+esc(restored.join(', '))+'.<div style="font-size:12px;margin-top:4px;opacity:.85">Senast sparat av <b>'+esc((wu && wu.name) || meta.lastActor || 'okänd')+'</b>'+(meta.savedAt ? ' kl '+new Date(meta.savedAt).toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'}) : '')+' · version '+(meta.appVer || 'saknas')+(meta.via ? ' · via '+esc(meta.via) : '')+'. Sparningen saknade klubbhuslistan.</div>'); }
   } else if(!_stateBackup && S.clubhouses && S.clubhouses.length && isAdmin()) {
     writeStateBackup(); // första gången: skapa kopian
   }
@@ -11021,7 +11026,12 @@ function renderHomeActivityFeed(items) {
       lineHtml = '<b>'+esc(it.playerName)+'</b>'+(it.caption ? ': '+esc(it.caption) : ' delade en bild i chatten');
     } else if(it.category === 'casualround') {
       var sumTxt = (it.summary||[]).map(function(x){ return '<span style="white-space:nowrap">'+esc(String(x.name||'').split(' ')[0])+(x.guest?' <span style="font-size:10px;color:var(--text-3)">(gäst)</span>':'')+' <b style="color:#B45309">'+x.poang+' p</b></span>'; }).join(' · ');
-      lineHtml = '⛳ <b>'+esc(it.playerName)+'</b> spelade en sällskapsrond på <b>'+esc(it.course||it.eventName||'')+'</b>'+(it.sim?' (simulator)':'')+
+      lineHtml = (it.eclTourName
+        ? (it.eclPlayers && it.eclPlayers.length > 1
+            ? '⭐ <b>'+it.eclPlayers.map(function(x){ return esc(x.name.split(' ')[0]); }).join(', ').replace(/, ([^,]*)$/, ' och $1')+'</b> spelade en runda i <b>'+esc(it.eclTourName)+'</b> på '+esc(it.course||'')+
+              '<div style="font-size:12px;color:var(--text-3);margin-top:2px">'+it.eclPlayers.map(function(x){ return esc(x.name.split(' ')[0])+(x.round ? ' runda '+x.round+' av '+esc(it.eclRounds) : ''); }).join(' · ')+'</div>'
+            : '⭐ <b>'+esc(it.playerName)+'</b> spelade '+(it.eclRoundNo ? 'runda '+esc(it.eclRoundNo)+' av '+esc(it.eclRounds)+' i ' : 'en runda i ')+'<b>'+esc(it.eclTourName)+'</b> på '+esc(it.course||''))
+        : '⛳ <b>'+esc(it.playerName)+'</b> spelade en sällskapsrond på <b>'+esc(it.course||it.eventName||'')+'</b>')+(it.sim?' (simulator)':'')+
         (sumTxt ? '<div style="font-size:12px;margin-top:3px;color:var(--text-2)">'+sumTxt+'</div>' : '')+
         (it.resultLine ? '<div style="font-size:12px;margin-top:3px;color:#B45309">'+esc(it.resultLine)+'</div>' : '');
     } else {
@@ -16012,6 +16022,16 @@ function shareCasualRoundToWall() {
     playerUsername: currentUser.username, playerName: me.name || currentUser.username,
     category: 'casualround', course: r.courseName, sim: !!r.sim, holes: r.holePars.length, summary: summary,
     noNotify: !!r.noNotify,
+    // Release 386: eclectic-runda – visas som "runda k av N i <tour>" i stället för sällskapsrond
+    eclTourId: (eclRoundInfo(r) || {}).tour ? eclRoundInfo(r).tour.id : null,
+    eclTourName: (eclRoundInfo(r) || {}).tour ? eclRoundInfo(r).tour.name : null,
+    eclRoundNo: (eclRoundInfo(r) || {}).round || null, eclRounds: (eclRoundInfo(r) || {}).total || null,
+    // Release 387: alla i bollen som är med i touren, med var och ens rundnummer
+    eclPlayers: (function(){ var ei = eclRoundInfo(r); if(!ei) return null;
+      return (r.players || []).filter(function(p){ return p.username && !p.guest; }).map(function(p){
+        var tk = eclTakenRounds(ei.tour, p.username), ix = tk.findIndex(function(x){ return x.id === r.id; });
+        return { name: p.name || p.username, round: ix >= 0 ? ix + 1 : null };
+      }); })(),
     createdAt: Date.now(), likes: {}
   }).then(function(){
     CASUAL_COL.doc(r.id).update({ sharedToWall: true }).catch(function(){});
@@ -23185,6 +23205,24 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (387)',
+    items: [
+      { type: 'improved', text: 'Eclectic-rundor på väggen nämner nu alla i bollen: "⭐ Jimmy, Ludvig och Scottie spelade en runda i Riksten Eclectic \'27 på Riksten GK", med var och ens rundnummer på raden under (t.ex. "Jimmy runda 1 av 5 · Ludvig runda 2 av 5").' },
+    ]
+  },
+  {
+    date: '11 november 2026 (386)',
+    items: [
+      { type: 'fixed', text: 'En eclectic-runda som delades på väggen stod som "spelade en sällskapsrond på Riksten GK". Nu står det "⭐ Jimmy spelade runda 1 av 5 i Riksten Eclectic \'27 på Riksten GK", med resultatraden som förut.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (385)',
+    items: [
+      { type: 'improved', text: 'Dataskyddet visar nu vem som senast sparade, när, med vilken appversion och via vad, när klubbhusen behövde återställas – och loggar varje återställning (dataGuardLog) så att orsaken kan spåras.' },
+    ]
+  },
   {
     date: '11 november 2026 (384)',
     items: [
