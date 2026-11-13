@@ -269,6 +269,7 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .cf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
 .cf-tile{background:var(--surface);border:2px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
 .cf-tile i{font-size:24px;color:#B45309}
+.cf-tile svg{margin-bottom:2px}
 .cf-tile.on{border-color:#B45309;background:#FEF3E2}
 .cf-t{font-size:13px;font-weight:700;line-height:1.15}
 .cf-s{font-size:11px;color:var(--text-3)}
@@ -15782,20 +15783,44 @@ function cwStep2HTML(c) {
   h += '<div class="cf-head"><i class="ti ti-plus"></i> Sidospel (valfritt)</div>';
   if(CF[fm.primary].teamScore) h += '<p style="font-size:12px;color:var(--text-3);margin:0 0 12px">Sidospel kräver att alla spelar egen boll och går därför inte att kombinera med '+esc(cfLabel(fm.primary))+'.</p>';
   else {
-    h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"><button type="button" class="btn btn-sm'+(!fm.secondary?' btn-primary':'')+'" onclick="_cw.format.secondary=null;renderCasualWizard()">Inget</button>'+
-      CF_SECONDARY.filter(function(k){ return k !== fm.primary; }).map(function(k){ var on = fm.secondary === k;
-        return '<button type="button" class="btn btn-sm'+(on?' btn-primary':'')+'" onclick="_cw.format.secondary=\''+k+'\';renderCasualWizard()"><i class="ti '+CF[k].icon+'"></i> '+cfLabel(k)+'</button>'; }).join('')+'</div>';
+    // Release 368: sidospelen som tydliga kort, i samma stil som det primära spelet
+    h += '<div class="cf-grid" style="margin-bottom:8px">'+
+      '<div class="cf-tile'+(!fm.secondary?' on':'')+'" onclick="_cw.format.secondary=null;renderCasualWizard()"><i class="ti ti-circle-off"></i><div class="cf-t">Inget</div><div class="cf-s">Bara primärt</div></div>'+
+      CF_SECONDARY.filter(function(k){ return k !== fm.primary; }).map(function(k){ var on = fm.secondary === k, f = CF[k];
+        return '<div class="cf-tile'+(on?' on':'')+'" onclick="_cw.format.secondary=\''+k+'\';renderCasualWizard()"><i class="ti '+f.icon+'"></i><div class="cf-t">'+f.title+'</div>'+(f.sub?'<div class="cf-s">'+f.sub+'</div>':'')+'</div>'; }).join('')+'</div>';
     if(fm.secondary) h += '<p style="font-size:12px;color:var(--text-2);margin:0 0 12px">'+esc(CF_INFO[fm.secondary]||'')+(fm.secondary==='wolf'||fm.secondary==='match'?' <b>Kräver exakt '+CF[fm.secondary].players+' spelare.</b>':'')+'</p>';
   }
   // Tävlingar
   var n = c ? c.holePars.length : 18;
   h += '<div class="cf-head"><i class="ti ti-target"></i> Tävlingar (valfritt)</div><div class="card" style="padding:10px 14px;margin-bottom:12px">'+
     (_cw.contests.length ? _cw.contests.map(function(ct, i){ var m = CONTEST_META[ct.type];
-      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)"><i class="ti '+m.icon+'" style="color:var(--gold)"></i><span style="flex:1;font-size:13px">'+m.label+'</span>'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">'+contestIconSVG(ct.type, 24)+'<span style="flex:1;font-size:13px">'+m.label+'</span>'+
         '<select style="width:auto;margin:0;padding:4px 8px" onchange="_cw.contests['+i+'].hole=parseInt(this.value)">'+(c?c.holePars:[]).map(function(par, j){ return '<option value="'+(j+1)+'"'+(ct.hole===j+1?' selected':'')+'>Hål '+(j+1)+' (par '+par+')</option>'; }).join('')+'</select>'+
         '<button type="button" class="btn btn-sm" style="padding:3px 7px" onclick="_cw.contests.splice('+i+',1);renderCasualWizard()"><i class="ti ti-x"></i></button></div>'; }).join('') : '<p style="font-size:12px;color:var(--text-3);margin:0 0 6px">Lägg till närmast hål och längsta drive på valfria hål. Vinnaren markeras under ronden.</p>')+
-    '<div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn btn-sm" onclick="cwAddContest(\'ctp\')"><i class="ti ti-target"></i> Närmast hål</button><button type="button" class="btn btn-sm" onclick="cwAddContest(\'ld\')"><i class="ti ti-arrow-big-right-lines"></i> Längsta drive</button></div></div>';
+    '<div class="cf-grid" style="grid-template-columns:repeat(2,1fr);margin-top:10px">'+
+      '<div class="cf-tile" onclick="cwAddContest(\'ctp\')">'+contestIconSVG('ctp', 34)+'<div class="cf-t">Närmast hål</div><div class="cf-s">+ Lägg till</div></div>'+
+      '<div class="cf-tile" onclick="cwAddContest(\'ld\')">'+contestIconSVG('ld', 34)+'<div class="cf-t">Längsta drive</div><div class="cf-s">+ Lägg till</div></div>'+
+    '</div></div>';
   return h;
+}
+// Egna ikoner (release 368): närmast hål = flagga i hålet med ringar runt, längsta drive =
+// en boll i flykt med fartstreck och en mätpil.
+function contestIconSVG(type, size) {
+  size = size || 28; var c = '#B45309';
+  if(type === 'ctp') return '<svg viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true" style="display:block;flex-shrink:0">' +
+    '<ellipse cx="16" cy="25" rx="13" ry="4.2" fill="none" stroke="' + c + '" stroke-width="1.4" opacity=".45"/>' +
+    '<ellipse cx="16" cy="25" rx="8" ry="2.6" fill="none" stroke="' + c + '" stroke-width="1.6" opacity=".75"/>' +
+    '<ellipse cx="16" cy="25" rx="2.6" ry="1.1" fill="' + c + '"/>' +
+    '<path d="M16 25 V4" stroke="' + c + '" stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="M16.5 4.5 L26 8 L16.5 11.5 Z" fill="' + c + '"/>' +
+    '<circle cx="22.5" cy="24.2" r="1.7" fill="#fff" stroke="' + c + '" stroke-width="1"/></svg>';
+  return '<svg viewBox="0 0 32 32" width="' + size + '" height="' + size + '" aria-hidden="true" style="display:block;flex-shrink:0">' +
+    '<path d="M3 27 Q14 6 28 13" fill="none" stroke="' + c + '" stroke-width="1.6" stroke-dasharray="2.2 2.6" stroke-linecap="round"/>' +
+    '<circle cx="26" cy="12" r="3.6" fill="#fff" stroke="' + c + '" stroke-width="1.6"/>' +
+    '<circle cx="25" cy="11.2" r=".6" fill="' + c + '"/><circle cx="27" cy="12.6" r=".6" fill="' + c + '"/>' +
+    '<path d="M4 30 H28" stroke="' + c + '" stroke-width="1.8" stroke-linecap="round"/>' +
+    '<path d="M24.5 27.6 L28.2 30 L24.5 32" fill="none" stroke="' + c + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -2)"/>' +
+    '<path d="M2 21 h4 M1 24 h4" stroke="' + c + '" stroke-width="1.4" stroke-linecap="round" opacity=".6"/></svg>';
 }
 function cwAddContest(type) {
   var c = courseDb.find(function(x){ return x.id === _cw.courseId; }); var pars = c ? c.holePars : [];
@@ -22605,6 +22630,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (368)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond: sidospelen visas nu som tydliga kort i samma stil som det primära spelet (ikon, namn och variant), med "Inget" som eget kort. Närmast hål och Längsta drive har fått egna ikoner – flaggan i hålet med ringar och en boll i flykt med mätpil – både på knapparna och i listan över tillagda tävlingar.' },
+    ]
+  },
   {
     date: '10 november 2026 (367)',
     items: [
