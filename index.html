@@ -15090,8 +15090,11 @@ function renderHomeCasualWidget() {
     var t = me ? casualTotals(r, me) : null;
     h += '<div class="card" onclick="openCasualRound(\''+r.id+'\')" style="cursor:pointer;margin-bottom:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;border-color:#E0A030">'+
       '<span style="width:10px;height:10px;border-radius:50%;background:#E24B4A;box-shadow:0 0 0 4px rgba(226,75,74,.18);flex-shrink:0"></span>'+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">Pågående sällskapsrond · '+esc(r.courseName||'')+'</div>'+
-      '<div style="font-size:12px;color:var(--text-3)">'+(r.players||[]).length+' spelare'+(t?' · du har spelat '+t.thru+' av '+(r.holePars||[]).length+' hål':'')+'</div></div>'+
+      (function(){ var ei = eclRoundInfo(r);
+        return ei ? '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px"><i class="ti ti-stars" style="color:var(--gold)"></i> Pågående eclectic-runda · '+esc(ei.tour.name)+'</div>'+
+            '<div style="font-size:12px;color:var(--text-3)">'+(ei.round?'Runda '+ei.round+' av '+ei.total+' · ':'')+esc(r.courseName||'')+' · '+(r.players||[]).length+' spelare'+(t?' · '+t.thru+' av '+(r.holePars||[]).length+' hål':'')+'</div></div>'
+          : '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px">Pågående sällskapsrond · '+esc(r.courseName||'')+'</div>'+
+            '<div style="font-size:12px;color:var(--text-3)">'+(r.players||[]).length+' spelare'+(t?' · du har spelat '+t.thru+' av '+(r.holePars||[]).length+' hål':'')+'</div></div>'; })()+
       '<span class="btn btn-sm btn-primary">Fortsätt</span></div>';
   });
   el.innerHTML = h;
@@ -15121,6 +15124,19 @@ function casualStepHeader(step, title) {
         (on?'background:#B45309;color:#fff':done?'background:#FEF3E2;color:#B45309':'background:var(--surface2);color:var(--text-3)')+'">'+(done?'✓ ':(i+1)+'. ')+s+'</div>';
     }).join('')+'</div>'+
     '<h3 style="margin:0 0 10px">'+title+'</h3>';
+}
+// Release 384: en rond som startats från en eclectic-tour visas som eclectic-runda överallt
+function eclRoundInfo(r) {
+  if(!r || !r.eclectic || !r.eclectic.tourId) return null;
+  var t = (S.tours || []).find(function(x){ return x.id === r.eclectic.tourId; }); if(!t || !t.eclectic) return null;
+  var me = currentUser ? currentUser.username : null, k = 0;
+  if(me) { var tk = eclTakenRounds(t, me); var ix = tk.findIndex(function(x){ return x.id === r.id; }); if(ix >= 0) k = ix + 1; }
+  return { tour: t, round: k, total: t.eclectic.rounds || 0 };
+}
+function casualTitleFor(r, finished) {
+  var ei = eclRoundInfo(r);
+  if(ei) return 'Eclectic' + (ei.round ? ' – runda ' + ei.round + ' av ' + ei.total : '') + (finished ? ' · klar' : '');
+  return finished ? 'Sällskapsrond · klar' : 'Sällskapsrond';
 }
 function setCasualTitle(t) { var el = document.getElementById('casual-title'); if(el) el.textContent = t; }
 
@@ -15810,7 +15826,7 @@ function renderCasualRound() {
   var n = r.holePars.length, h = _cr.hole, par = r.holePars[h-1], idx = (r.holeHcpIndex && r.holeHcpIndex[h-1]) || h;
   var edit = casualCanEdit(r) && r.status === 'active';
   var finished = r.status === 'finished';
-  setCasualTitle(finished ? 'Sällskapsrond · klar' : 'Sällskapsrond');
+  setCasualTitle(casualTitleFor(r, finished));
   var out = '<div class="card" style="padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">'+
     (getCourseImage(r.courseName)?'<img src="'+getCourseImage(r.courseName)+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px">':'<i class="ti ti-golf" style="font-size:24px;color:#B45309"></i>')+
     '<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(r.courseName)+(r.hidden?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-eye-off"></i> Dold</span>':(r.noNotify?' <span class="badge" style="background:var(--surface2);color:var(--text-2)"><i class="ti ti-bell-off"></i> Inga notiser</span>':''))+(r.sim?' <span class="badge" style="background:#F1EBFD;color:#6D28D9">Simulator</span>':'')+'</div>'+
@@ -23169,6 +23185,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (384)',
+    items: [
+      { type: 'fixed', text: 'En pågående eclectic-runda visades som "Pågående sällskapsrond" på startsidan och i scorekortets rubrik. Nu står det "Pågående eclectic-runda · Riksten Eclectic \'27 – Runda 1 av 5" på startsidan och "Eclectic – runda 1 av 5" i scorekortet.' },
+    ]
+  },
   {
     date: '11 november 2026 (383)',
     items: [
