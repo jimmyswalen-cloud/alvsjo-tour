@@ -16159,6 +16159,7 @@ function buildPushAdoptionHTML(allTokens) {
     (byUser[u] = byUser[u] || []).push(x);
   });
   var players = (S.users||[]).filter(function(u){
+    if(u.isTest) return false; // release 369: testgolfare i Labbet kan aldrig ha notiser – visas inte
     var plays = u.isPlayer != null ? u.isPlayer : (u.role !== 'admin');
     return plays || byUser[String(u.username||'').toLowerCase()];
   }).map(function(u){
@@ -22630,6 +22631,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (369)',
+    items: [
+      { type: 'fixed', text: 'Notisöversikten visade vissa spelare två gånger – den andra var deras testkopia i Labbet (och proffsen därifrån). Testgolfare kan aldrig ha notiser och visas inte längre i listan.' },
+    ]
+  },
   {
     date: '11 november 2026 (368)',
     items: [
