@@ -6816,6 +6816,21 @@ function openTourCoverPicker(onSelect, onCancel) {
   var adm = isSuperAdmin(); // biblioteket delas av alla klubbhus – bara appens admin ändrar det
   var covers = allTourCovers();
   var h = '<h3><i class="ti ti-photo"></i> '+(_coverPickerManage ? 'Omslagsbibliotek' : 'Välj omslagsbild')+'</h3>';
+  // Release 377: när man väljer bild finns även fliken Banbilder (bilderna på banorna i bandatabasen)
+  if(!_coverPickerManage) {
+    h += '<div class="row" style="gap:6px;margin-bottom:12px">'+
+      '<button class="btn btn-sm'+(_coverPickerTab!=='course'?' btn-primary':'')+'" style="flex:1;justify-content:center" onclick="_coverPickerTab=\'lib\';reopenTourCoverPicker()"><i class="ti ti-library-photo"></i> Bildbibliotek</button>'+
+      '<button class="btn btn-sm'+(_coverPickerTab==='course'?' btn-primary':'')+'" style="flex:1;justify-content:center" onclick="_coverPickerTab=\'course\';reopenTourCoverPicker()"><i class="ti ti-golf"></i> Banbilder</button></div>';
+    if(_coverPickerTab === 'course') {
+      h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
+        '<input type="text" id="tcp-course-q" placeholder="Sök bana, klubb eller ort…" oninput="renderCoursePicGrid()" style="margin:0;padding-left:32px"></div>'+
+        '<div id="tcp-course-grid"></div>'+
+        '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="cancelTourCoverPicker()">Avbryt</button></div>';
+      showModal(h, true, true);
+      renderCoursePicGrid();
+      return;
+    }
+  }
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+
     (_coverPickerManage ? 'Bilderna som visas när man väljer omslag till en tour, header eller klubbhus.' : 'Klicka på en bild för att välja den.')+
     (adm ? ' Pennan döper om, papperskorgen tar bort en uppladdad bild.' : '')+'</p>';
@@ -6852,6 +6867,26 @@ function openTourCoverPicker(onSelect, onCancel) {
   showModal(h, true, true);
 }
 
+var _coverPickerTab = 'lib';
+function coursePicList() {
+  var seen = {}, out = [];
+  (courseDb || []).forEach(function(c){
+    var url = getCourseImage(c.name); if(!url || seen[url]) return; seen[url] = true;
+    out.push({ name: c.name, url: url, hay: [c.name, c.klubb, c.kommun].filter(Boolean).join(' ').toLowerCase() });
+  });
+  return out.sort(function(a, b){ return a.name.localeCompare(b.name, 'sv'); });
+}
+function renderCoursePicGrid() {
+  var el = document.getElementById('tcp-course-grid'); if(!el) return;
+  var q = ((document.getElementById('tcp-course-q') || {}).value || '').trim().toLowerCase();
+  var list = coursePicList().filter(function(x){ return !q || x.hay.indexOf(q) >= 0; });
+  if(!list.length) { el.innerHTML = '<p style="font-size:13px;color:var(--text-3)">' + (q ? 'Ingen bana med bild matchar sökningen.' : 'Inga banor har bilder än.') + '</p>'; return; }
+  el.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:420px;overflow-y:auto">' + list.map(function(x){
+    return '<div style="border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:pointer" onclick="selectTourCover(\'' + esc(x.url) + '\')">' +
+      '<img src="' + esc(x.url) + '" loading="lazy" style="width:100%;height:90px;object-fit:cover;display:block">' +
+      '<div style="padding:6px 8px;font-size:12px;font-weight:600;background:var(--surface2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="ti ti-golf" style="font-size:11px"></i> ' + esc(x.name) + '</div></div>';
+  }).join('') + '</div><p style="font-size:11px;color:var(--text-3);margin:8px 0 0">' + list.length + ' banor med bild.</p>';
+}
 function reopenTourCoverPicker() {
   openTourCoverPicker(_coverPickerOnSelect, _coverPickerOnCancel);
 }
@@ -23059,6 +23094,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (377)',
+    items: [
+      { type: 'new', text: 'Banbilder som omslag: när du väljer omslagsbild (ny tour, Redigera, headerbild m.m.) finns nu fliken Banbilder bredvid Bildbiblioteket. Där ligger bilderna på alla banor i bandatabasen, med sökning på bana, klubb eller ort – tryck på en bild för att använda den.' },
+    ]
+  },
   {
     date: '11 november 2026 (376)',
     items: [
