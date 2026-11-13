@@ -7430,11 +7430,9 @@ function eclFreeOverviewHTML(t) {
 // (max 4 i bollen, de som har rundor kvar), kontrollerar SHCP och väljer ev. sidospel (t.ex.
 // Varg) – sedan öppnas scorekortet direkt. Avslut och markör fungerar som vanligt.
 var _eqs = null;
-function eclPlayingHcp(u, c) {
-  var hcp = Number((findUser(u) || {}).hcp) || 0;
-  if(c && c.slope && c.rating && c.par) return Math.round(hcp * c.slope / 113 + (c.rating - c.par));
-  return Math.round(hcp);
-}
+// Release 381: samma SHCP-inmatning som i sällskapsronden – förifyllt med avrundad HCP,
+// spelaren ändrar till värdet i banans slopetabell (beror på tee och kön).
+function eclPlayingHcp(u) { return Math.round(Number((findUser(u) || {}).hcp) || 0); }
 function startEclecticRound(tourId) {
   var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t || !eclIsFree(t) || !currentUser) return;
   if(eclClosed(t)) { alert('Touren är avslutad.'); return; }
@@ -7458,10 +7456,10 @@ function renderEclQuick() {
         var on = _eqs.sel.indexOf(u) >= 0, nx = nextOf(u), full = nx > N, isMe = u === me, dis = !isMe && (full || (!on && _eqs.sel.length >= 4));
         return '<div class="row" style="align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';' + (dis ? 'opacity:.5' : '') + '">' +
           '<input type="checkbox" ' + (on ? 'checked ' : '') + (isMe || dis ? 'disabled ' : '') + 'onchange="eqsToggle(\'' + esc(u) + '\')" style="width:18px;height:18px;margin:0">' +
-          '<span style="flex:1;min-width:0;font-size:14px;font-weight:600">' + esc(rcUserName(u)) + (isMe ? ' <span style="color:var(--text-3);font-weight:400">(du)</span>' : '') + '<span style="display:block;font-size:11px;color:var(--text-3);font-weight:400">' + (full ? 'Alla rundor spelade' : 'Runda ' + nx + ' av ' + N) + '</span></span>' +
-          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px;margin:0">SHCP <input type="number" step="1" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" onchange="_eqs.shcp[\'' + esc(u) + '\']=parseInt(this.value,10)||0" style="width:62px;margin:0;padding:4px 6px"></label>' : '') + '</div>';
+          '<span style="flex:1;min-width:0;font-size:14px;font-weight:600">' + esc(rcUserName(u)) + (isMe ? ' <span style="color:var(--text-3);font-weight:400">(du)</span>' : '') + '<span style="display:block;font-size:11px;color:var(--text-3);font-weight:400">' + (full ? 'Alla rundor spelade' : 'Runda ' + nx + ' av ' + N) + ' · HCP ' + fmtHcp((findUser(u) || {}).hcp) + '</span></span>' +
+          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;gap:2px;margin:0">SHCP<input type="number" step="1" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" onchange="_eqs.shcp[\'' + esc(u) + '\']=parseInt(this.value,10)||0" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px 4px"></label>' : '') + '</div>';
       }).join('') + '</div>' +
-      (!cands.length ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Bara spelare i touren kan vara med.</p>' : '') + '</div>';
+      '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">SHCP hittar du i banans slopetabell (beror på tee och banans svårighet). Förifyllt med avrundad HCP – ändra till rätt värde.' + (!cands.length ? ' Bara spelare i touren kan vara med.' : '') + '</p></div>';
   var n = _eqs.sel.length, sides = [['', 'ti-circle-off', 'Inget', 'Bara eclectic']].concat(CF_SECONDARY.filter(function(k){ return k !== (stab ? 'stableford' : 'stroke_net'); }).map(function(k){ return [k, CF[k].icon, CF[k].title, CF[k].sub || '']; }));
   h += '<div class="field"><label>Sidospel (valfritt)</label><div class="cf-grid">' + sides.map(function(x){
     var k = x[0], need = k && CF[k] ? (CF[k].players || (CF[k].min || 1)) : 1, ok = !k || (CF[k].players ? n === CF[k].players : n >= (CF[k].min || 1));
@@ -23169,6 +23167,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (381)',
+    items: [
+      { type: 'improved', text: 'Eclectic-snabbstarten använder nu samma SHCP-inmatning som sällskapsronden: förifyllt med avrundad HCP och ett tydligt fält per spelare där man skriver in värdet från banans slopetabell. HCP visas bredvid namnet. Ingen automatisk uträkning från slope/course rating längre.' },
+    ]
+  },
   {
     date: '11 november 2026 (380)',
     items: [
