@@ -1221,7 +1221,6 @@ var STATIC_COURSE_IMAGES = {
   'kungsängen gk': 'kungsangen.jpg',
   'kungsängen queens gk': 'kungsangen.jpg',
   'queens gk': 'kungsangen.jpg',
-  'lindo': 'lindo.jpg',
   'nynäshamn': 'nynashamn-berg-sjo.jpg',
   'nynashamn': 'nynashamn-berg-sjo.jpg',
   'nynäshamn gk': 'nynashamn-berg-sjo.jpg',
@@ -1988,7 +1987,7 @@ function eventPeriodRowHTML(e) {
   var txt = isRange ? dateShortSv(start, !sameYear)+' &ndash; '+dateShortSv(end, true) : dateShortSv(start, true);
   var chip = '';
   if(!e.closed) {
-    var today = new Date().toISOString().slice(0,10);
+    var today = hcpTodayISO();
     var DAY = 86400000;
     var dTo = function(a, b){ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / DAY); };
     var style, label;
@@ -2321,6 +2320,7 @@ function showMyBetting(tab) {
 
 function showHomeScreen() {
   activeTourId = null;
+  try { rcStopLive(); } catch(e) {}
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
@@ -3466,6 +3466,7 @@ function updateSettingsCard() {
 function showToursView() { showToursList(); }
 
 function showToursList() {
+  try { rcStopLive(); } catch(e) {}
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
@@ -5609,7 +5610,7 @@ function addEventToTour() {
   if(!isAdmin()) return;
   var t = getTour();
   var n = (t.events||[]).length;
-  var today = new Date().toISOString().slice(0,10);
+  var today = hcpTodayISO();
   var newRow = document.createElement('div');
   newRow.id = 'edit-ev-row-'+n;
   newRow.className = 'row';
@@ -6029,7 +6030,7 @@ function findMyNextRoundInfo() {
   if(!currentUser) return null;
   var accessIds = currentUser.tourAccess || [];
   if(!accessIds.length) return null;
-  var todayStr = new Date().toISOString().slice(0,10);
+  var todayStr = hcpTodayISO();
   var today = new Date(todayStr+'T00:00:00');
   var best = null, bestDiff = Infinity;
   clubTours().forEach(function(t){
@@ -6611,14 +6612,14 @@ function renderToursList() {
 function tourStatusGroup(t) {
   if(isRyderTour(t)) {
     if(rcPoints(t).winner || rcAllDecided(t)) return 'finished';
-    var today0 = new Date().toISOString().slice(0,10);
+    var today0 = hcpTodayISO();
     var started0 = (t.rc.sessions||[]).some(function(s){ return (s.date && s.date <= today0) || Object.keys(s.results||{}).length; });
     return started0 ? 'ongoing' : 'upcoming';
   }
   var events = t.events || [];
   if(events.length && events.every(function(e){ return e.closed; })) return 'finished';
   var range = tourDateRange(t);
-  var today = new Date().toISOString().slice(0,10);
+  var today = hcpTodayISO();
   var started = tourHasStarted(t) || (range && range.start <= today);
   return started ? 'ongoing' : 'upcoming';
 }
@@ -6804,7 +6805,7 @@ function openTourCoverPicker(onSelect, onCancel) {
   _coverPickerOnSelect = onSelect;
   _coverPickerOnCancel = onCancel;
   _coverPickerManage = !onSelect;
-  var adm = isAdmin();
+  var adm = isSuperAdmin(); // biblioteket delas av alla klubbhus – bara appens admin ändrar det
   var covers = allTourCovers();
   var h = '<h3><i class="ti ti-photo"></i> '+(_coverPickerManage ? 'Omslagsbibliotek' : 'Välj omslagsbild')+'</h3>';
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:12px">'+
@@ -6855,7 +6856,7 @@ function tcpStatus(html, err) {
 // komprimeras men beskärs inte - samma bild används i olika format (tourkort,
 // header, klubbhusbild) och varje plats beskär själv med object-fit.
 function uploadTourCoversToLibrary(fileList) {
-  if(!isAdmin()) return;
+  if(!isSuperAdmin()) return;
   var files = Array.prototype.slice.call(fileList || []).filter(function(f){ return f && /^image\//.test(f.type); });
   if(!files.length) return;
   var nextNo = allTourCovers().length + 1;
@@ -6904,7 +6905,7 @@ function uploadTourCoversToLibrary(fileList) {
 // Ta bort ett uppladdat omslag ur biblioteket. Själva filen i Storage lämnas kvar,
 // så tourer och klubbhus som redan använder bilden behåller den.
 function deleteTourCoverFromLibrary(key) {
-  if(!isAdmin()) return;
+  if(!isSuperAdmin()) return;
   var entry = (tourCoverLabels._library || []).find(function(x){ return x && x.key === key; });
   if(!entry) return;
   if(!confirm('Ta bort "' + getCoverLabel(entry) + '" ur biblioteket?\n\nTourer som redan använder bilden behåller den.')) return;
@@ -6920,7 +6921,7 @@ function deleteTourCoverFromLibrary(key) {
 }
 
 function renameTourCover(key) {
-  if(!isAdmin()) return;
+  if(!isSuperAdmin()) return;
   var c = allTourCovers().find(function(x){ return x.key === key; });
   if(!c) return;
   var current = getCoverLabel(c);
@@ -7049,7 +7050,7 @@ function wizScheduleMonths() {
   var i = wiz.stepIdx;
   var refs = [];
   [i-1, i, i+1].forEach(function(idx){ var e = wiz.events[idx]; if(e && e.date) refs.push(e.date); });
-  if(!refs.length) refs.push(new Date().toISOString().slice(0,10));
+  if(!refs.length) refs.push(hcpTodayISO());
   var monthNums = refs.map(function(d){ var dt = new Date(d+'T00:00:00'); return dt.getFullYear()*12 + dt.getMonth(); });
   var minM = Math.min.apply(null, monthNums), maxM = Math.max.apply(null, monthNums);
   if(maxM - minM > 2) maxM = minM + 2; // cap span to max 3 månader
@@ -8222,6 +8223,10 @@ function rcMatchStatus(t, s, m, doc) {
 function rcCanScore(m) { return isAdmin() || !!(currentUser && m.a.concat(m.b).indexOf(currentUser.username) >= 0); }
 
 // Prenumerera på tourens matcher medan Ryder Cup-vyn är öppen
+function rcStopLive() {
+  if(_rcLiveUnsub) { try { _rcLiveUnsub(); } catch(e) {} }
+  _rcLiveUnsub = null; _rcLiveTour = null; // senaste läget (_rcLive) ligger kvar för startsidan
+}
 function rcSubscribeLive(t) {
   if(_rcLiveTour === t.id && _rcLiveUnsub) return;
   if(_rcLiveUnsub) { try { _rcLiveUnsub(); } catch(e) {} }
@@ -8535,15 +8540,15 @@ function rcCaptainSettingsHTML(t) {
   var num = function(i, k, label){ return '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px">' + label + '<input type="number" step="0.5" value="' + heads[i][k] + '" onchange="rcSetCaptainHead(' + i + ',\'' + k + '\',this.value)" style="width:70px;margin:0;font-size:12px"></label>'; };
   return '<div class="card" style="padding:14px 16px;margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:6px"><i class="ti ti-photo-star"></i> Kaptensbilden på väggen</div>' +
     '<p style="font-size:12px;color:var(--text-3);margin:0 0 10px">En bild där kaptenernas profilbilder läggs över huvudena. Postas på väggen när en cup skapas. Bilden gäller alla cuper.</p>' +
-    (bg ? '<div style="border-radius:10px;overflow:hidden;margin-bottom:10px">' + rcCaptainsImageHTML(bg, rcCaptainCaps(t)) + '</div>' +
+    (bg ? '<div style="border-radius:10px;overflow:hidden;margin-bottom:10px">' + rcCaptainsImageHTML(bg, rcCaptainCaps(t)) + '</div>' + (!isSuperAdmin() ? '' :
       '<details class="dsw" style="margin-bottom:10px"><summary style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-2)"><span style="flex:1">Justera ansiktenas placering</span><i class="ti ti-chevron-down dsw-chev"></i></summary>' +
         ['Vänster', 'Höger'].map(function(lbl, i){ return '<div class="row" style="gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;width:56px">' + lbl + '</span>' + num(i, 'x', 'Sidled %') + num(i, 'y', 'Höjd %') + num(i, 'r', 'Storlek %') + '</div>'; }).join('') +
-        '<button type="button" class="btn btn-sm" style="margin-top:8px" onclick="rcResetCaptainHeads()">Återställ</button></details>' : '') +
-    '<div class="row" style="gap:8px;flex-wrap:wrap"><label class="btn btn-sm" style="margin:0;cursor:pointer"><i class="ti ti-upload"></i> ' + (bg ? 'Byt bild' : 'Ladda upp bild') + '<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])rcUploadCaptainBg(this.files[0])"></label>' +
+        '<button type="button" class="btn btn-sm" style="margin-top:8px" onclick="rcResetCaptainHeads()">Återställ</button></details>') : (isSuperAdmin() ? '' : '<p style="font-size:12px;color:var(--text-3);margin:0 0 8px">Appens admin har inte laddat upp någon kaptensbild än.</p>')) +
+    '<div class="row" style="gap:8px;flex-wrap:wrap">' + (isSuperAdmin() ? '<label class="btn btn-sm" style="margin:0;cursor:pointer"><i class="ti ti-upload"></i> ' + (bg ? 'Byt bild' : 'Ladda upp bild') + '<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])rcUploadCaptainBg(this.files[0])"></label>' : '') +
       (bg ? '<button class="btn btn-sm btn-primary" onclick="rcPostCaptainsToWall(getTour())"><i class="ti ti-send"></i> Posta på väggen nu</button>' : '') + '</div></div>';
 }
 function rcUploadCaptainBg(file) {
-  if(!isAdmin()) return;
+  if(!isSuperAdmin()) return;
   compressImage(file, 1600, 1100, 0.88, function(d){
     var im = new Image();
     im.onload = function(){
@@ -8559,7 +8564,7 @@ function rcUploadCaptainBg(file) {
   });
 }
 function rcSetCaptainHead(i, k, v) {
-  var bg = rcCaptainBg(); if(!bg || !isAdmin()) return;
+  var bg = rcCaptainBg(); if(!bg || !isSuperAdmin()) return;
   var n = parseFloat(v); if(isNaN(n)) return;
   var heads = JSON.parse(JSON.stringify(bg.heads || RC_CAPTAIN_HEADS_DEFAULT));
   heads[i][k] = n; bg.heads = heads;
@@ -8567,7 +8572,7 @@ function rcSetCaptainHead(i, k, v) {
   renderSettings();
 }
 function rcResetCaptainHeads() {
-  var bg = rcCaptainBg(); if(!bg || !isAdmin()) return;
+  var bg = rcCaptainBg(); if(!bg || !isSuperAdmin()) return;
   bg.heads = JSON.parse(JSON.stringify(RC_CAPTAIN_HEADS_DEFAULT));
   TOUR_COVER_LABELS_REF.set({ _rcCaptainBg: bg }, { merge: true }).catch(function(){});
   renderSettings();
@@ -8709,6 +8714,9 @@ function rcSaveTeeTimes(si) {
 // ── Inställningar för Ryder Cup (release 342) ─────────────────────────────
 // Lagnamn, färger, kaptener, försvarande lag och spelare. En spelare som redan står i
 // en inlämnad uppställning kan inte flyttas eller tas bort (det skulle rubba matcherna).
+// Release 372: när första uppställningen är inlämnad låses lagens storlek, eftersom antalet
+// matcher (och därmed totalpoäng och vinstgräns) räknas från lagstorleken.
+function rcAnyLineup(t) { return (t.rc.sessions || []).some(function(s){ return !!(s.lineups && (s.lineups.A || s.lineups.B)); }); }
 function rcPlayerLocked(t, u) {
   return (t.rc.sessions || []).some(function(s){ return ['A', 'B'].some(function(id){ var lu = s.lineups && s.lineups[id]; return lu && lu.slots.some(function(sl){ return sl.indexOf(u) >= 0; }); }); });
 }
@@ -8725,16 +8733,17 @@ function rcSettingsHTML(t) {
       '<div class="field"><label>Kapten</label><select onchange="rcSetTeam(\'' + tm.id + '\',\'captain\',this.value)">' + tm.players.map(function(u){ return '<option value="' + esc(u) + '" ' + (tm.captain === u ? 'selected' : '') + '>' + esc(rcUserName(u)) + '</option>'; }).join('') + '</select></div>' +
       '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:4px">Spelare (' + tm.players.length + ')</div>' +
       tm.players.map(function(u){
-        var locked = rcPlayerLocked(t, u);
+        var locked = rcPlayerLocked(t, u) || rcAnyLineup(t);
         return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">' +
           '<span style="font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(rcUserName(u)) + (tm.captain === u ? ' <span class="badge badge-gold" style="font-size:10px">Kapten</span>' : '') + '</span>' +
-          (locked ? '<span title="Står i en inlämnad uppställning" style="font-size:12px;color:var(--text-3)"><i class="ti ti-lock"></i> I uppställning</span>'
+          (locked ? '<span title="' + (rcPlayerLocked(t, u) ? 'Står i en inlämnad uppställning' : 'Lagen är låsta') + '" style="font-size:12px;color:var(--text-3)"><i class="ti ti-lock"></i> ' + (rcPlayerLocked(t, u) ? 'I uppställning' : 'Låst') + '</span>'
             : '<span class="row" style="gap:6px;flex-shrink:0"><button class="btn btn-sm" onclick="rcMovePlayer(\'' + esc(u) + '\')">Till ' + esc(rcTeam(t, rcOther(tm.id)).name) + '</button><button class="btn btn-sm" title="Ta bort ur cupen" onclick="rcRemovePlayer(\'' + esc(u) + '\')"><i class="ti ti-x"></i></button></span>') +
         '</div>';
       }).join('') + '</div>';
   }).join('');
   h += '<div class="card" style="padding:14px 16px;margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">Lägg till spelare</div>' +
-    (free.length ? '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="rc-add-u" style="flex:1;min-width:180px;margin:0">' + free.map(function(u){ return '<option value="' + esc(u.username) + '">' + esc(u.name || u.username) + '</option>'; }).join('') + '</select>' +
+    (rcAnyLineup(t) ? '<p style="font-size:12px;color:var(--text-3);margin:0"><i class="ti ti-lock"></i> Lagen är låsta eftersom en uppställning är inlämnad – antalet matcher och vinstgränsen räknas från lagens storlek. Nollställ uppställningarna (✏️ på passet) om lagen måste ändras.</p>' :
+    free.length ? '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="rc-add-u" style="flex:1;min-width:180px;margin:0">' + free.map(function(u){ return '<option value="' + esc(u.username) + '">' + esc(u.name || u.username) + '</option>'; }).join('') + '</select>' +
       t.rc.teams.map(function(tm){ return '<button class="btn btn-sm" style="background:' + esc(tm.color) + ';color:#fff;border-color:' + esc(tm.color) + '" onclick="rcAddPlayer(\'' + tm.id + '\')">Till ' + esc(tm.name) + '</button>'; }).join('') + '</div>'
       : '<p style="font-size:12px;color:var(--text-3);margin:0">Alla spelare i klubbhuset är redan med.</p>') + '</div>';
   h += rcCaptainSettingsHTML(t);
@@ -8753,6 +8762,7 @@ function rcSetTeam(id, field, v) {
 function rcSetHolder(v) { var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return; t.rc.holder = v || null; save(); }
 function rcAddPlayer(teamId) {
   var t = getTour(); if(!isRyderTour(t) || !isAdmin()) return;
+  if(rcAnyLineup(t)) { alert('Lagen är låsta – en uppställning är redan inlämnad. Nollställ uppställningarna på passen om lagen måste ändras.'); return; }
   var sel = document.getElementById('rc-add-u'); if(!sel || !sel.value) return;
   var tm = rcTeam(t, teamId);
   if(tm.players.length >= 12) { alert('Högst 12 spelare per lag.'); return; }
@@ -8762,6 +8772,7 @@ function rcAddPlayer(teamId) {
 }
 function rcMovePlayer(u) {
   var t = getTour(); if(!isRyderTour(t) || !isAdmin() || rcPlayerLocked(t, u)) return;
+  if(rcAnyLineup(t)) { alert('Lagen är låsta – en uppställning är redan inlämnad.'); return; }
   var from = t.rc.teams.find(function(tm){ return tm.players.indexOf(u) >= 0; }); if(!from) return;
   var to = rcTeam(t, rcOther(from.id));
   if(to.players.length >= 12) { alert('Högst 12 spelare per lag.'); return; }
@@ -8772,6 +8783,7 @@ function rcMovePlayer(u) {
 }
 function rcRemovePlayer(u) {
   var t = getTour(); if(!isRyderTour(t) || !isAdmin() || rcPlayerLocked(t, u)) return;
+  if(rcAnyLineup(t)) { alert('Lagen är låsta – en uppställning är redan inlämnad.'); return; }
   var from = t.rc.teams.find(function(tm){ return tm.players.indexOf(u) >= 0; }); if(!from) return;
   if(from.captain === u) { alert('Välj en annan kapten i ' + from.name + ' först.'); return; }
   if(from.players.length <= 2) { alert('Ett lag behöver minst 2 spelare.'); return; }
@@ -17928,7 +17940,7 @@ function computeLiveOomPreview(docsByEvent, candidateEvents, t) {
 }
 
 function subscribeTourLiveStandings(t) {
-  var todayStr = new Date().toISOString().slice(0,10);
+  var todayStr = hcpTodayISO();
   // "Live" = deltävlingen har minst en boll vars datum faktiskt kommit (annars
   // skulle en boll skapad långt i förväg för en helt framtida dag felaktigt
   // visas som "live" bara för att den existerar). Kräver INTE längre att någon
@@ -22632,6 +22644,15 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (372)',
+    items: [
+      { type: 'fixed', text: '"Idag" räknas nu alltid i svensk tid. Tidigare blev det gårdagens datum mellan midnatt och klockan 01 (02 sommartid) på några ställen: kortet Kommande runda, tourstatus, live-tabellen, förvalt datum för ny deltävling och tourguidens kalender.' },
+      { type: 'improved', text: 'Ryder Cup: lagen låses när första uppställningen är inlämnad (lägg till, flytta och ta bort spelare i Inst.), eftersom antalet matcher och vinstgränsen räknas från lagens storlek. Nollställ uppställningarna om lagen måste ändras.' },
+      { type: 'improved', text: 'Omslagsbiblioteket och kaptensbilden för Ryder Cup delas av alla klubbhus och kan nu bara ändras av appens admin. Klubbhusadmin kan fortfarande välja bilder ur biblioteket och posta kaptensbilden.' },
+      { type: 'improved', text: 'Appen slutar lyssna på Ryder Cup-matcherna när man lämnar touren, vilket sparar batteri och data. Startsidans kort och mittknappen behåller senaste läget.' },
+    ]
+  },
   {
     date: '11 november 2026 (371)',
     items: [
