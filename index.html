@@ -7405,6 +7405,16 @@ function eclFreeOverviewHTML(t) {
         : '<button class="btn btn-primary" style="width:100%;justify-content:center" onclick="startEclecticRound(\'' + t.id + '\')"><i class="ti ti-golf"></i> Starta runda ' + nx + ' av ' + N + '</button>')))) +
     '</div>';
   }
+  // Release 379: tydlig hjälp när man inte är med som spelare (t.ex. admin direkt efter att touren skapats)
+  var myO = isPl ? d.list.find(function(o){ return o.p.username === me && o.played; }) : null;
+  if(myO) h += '<details style="margin-top:10px" open><summary style="font-size:13px;font-weight:700;cursor:pointer;color:var(--text-2)"><i class="ti ti-table"></i> Ditt eclectic-kort · ' + myO.main.value + ' ' + unit + '</summary><div style="margin-top:8px">' +
+    chEclecticCardHTML({ eclMode: d.stab ? 'points' : 'netto', maxRounds: N }, eclCardData(myO, d)) + eclRoundsLineHTML(myO, d) + '</div></details>';
+  if(!isPl) {
+    var nPl = getPlayersForTour(t).filter(Boolean).length;
+    h += '<div style="margin-top:12px;padding:12px;border-radius:12px;background:var(--surface2);font-size:13px;color:var(--text-2)">' +
+      '<i class="ti ti-info-circle"></i> ' + (nPl ? 'Du är inte med som spelare i touren. Rundorna startas av spelarna själva här.' : 'Touren har inga spelare än. Lägg till spelarna – sedan får var och en knappen <b>Starta runda 1</b> här.') +
+      (isAdmin() ? '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="showView(\'players\')"><i class="ti ti-user-plus"></i> Lägg till spelare' + (nPl ? ' (även dig själv)' : '') + '</button></div>' : '') + '</div>';
+  }
   if(d.list.some(function(o){ return o.played; })) {
     h += '<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Ledare just nu</div>' +
       d.list.filter(function(o){ return o.played; }).slice(0, 3).map(function(o, k){ return '<div class="row" style="justify-content:space-between;padding:4px 0;font-size:13px"><span><b>' + (k + 1) + '.</b> ' + esc(o.p.name || o.p.username) + ' <span style="color:var(--text-3)">· ' + o.played + '/' + N + '</span></span><b>' + o.main.value + ' ' + unit + '</b></div>'; }).join('') +
@@ -7415,16 +7425,73 @@ function eclFreeOverviewHTML(t) {
     (closed ? (t.eclectic.closedAt ? '<button class="btn btn-sm" onclick="eclReopen(\'' + t.id + '\')"><i class="ti ti-lock-open"></i> Öppna igen</button>' : '') : '<button class="btn btn-sm" onclick="eclCloseNow(\'' + t.id + '\')"><i class="ti ti-flag-check"></i> Avsluta touren nu</button>') + '</div>';
   return h + '</div>';
 }
+// Release 380: snabbstart för eclectic-rundor. Bana, spelform och rondtyp är låsta av touren
+// (ingen träning/simulator, inte dold). Man väljer bara medspelare bland tourens spelare
+// (max 4 i bollen, de som har rundor kvar), kontrollerar SHCP och väljer ev. sidospel (t.ex.
+// Varg) – sedan öppnas scorekortet direkt. Avslut och markör fungerar som vanligt.
+var _eqs = null;
+function eclPlayingHcp(u, c) {
+  var hcp = Number((findUser(u) || {}).hcp) || 0;
+  if(c && c.slope && c.rating && c.par) return Math.round(hcp * c.slope / 113 + (c.rating - c.par));
+  return Math.round(hcp);
+}
 function startEclecticRound(tourId) {
   var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t || !eclIsFree(t) || !currentUser) return;
   if(eclClosed(t)) { alert('Touren är avslutad.'); return; }
-  var taken = eclTakenRounds(t, currentUser.username);
-  if(taken.length >= (t.eclectic.rounds || 0)) { alert('Du har redan spelat alla rundor.'); return; }
+  var me = currentUser.username, N = t.eclectic.rounds || 0;
+  if(eclTakenRounds(t, me).length >= N) { alert('Du har redan spelat alla rundor.'); return; }
   var c = eclCourse(t); if(!c || !casualCourseHasCard(c)) { alert('Banan saknar scorekort i bandatabasen (par och hålindex). Be admin lägga in det.'); return; }
-  startCasualRoundWizard();
-  _cw.courseId = c.id; _cw.step = 2; _cw.ecl = { tourId: t.id, round: taken.length + 1 };
-  _cw.format = { primary: t.eclectic.mode === 'stableford' ? 'stableford' : 'stroke_net', secondary: null };
-  renderCasualWizard();
+  _eqs = { tourId: t.id, sel: [me], shcp: {}, side: null };
+  _eqs.shcp[me] = eclPlayingHcp(me, c);
+  renderEclQuick();
+}
+function renderEclQuick() {
+  var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
+  var c = eclCourse(t), N = t.eclectic.rounds || 0, stab = t.eclectic.mode === 'stableford', me = currentUser.username;
+  var cands = getPlayersForTour(t).filter(function(p){ return p && p.username && p.username !== me; });
+  var nextOf = function(u){ return eclTakenRounds(t, u).length + 1; };
+  var h = '<h3><i class="ti ti-stars" style="color:var(--gold)"></i> Eclectic – runda ' + nextOf(me) + ' av ' + N + '</h3>' +
+    '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--surface2);font-size:13px;margin-bottom:12px"><i class="ti ti-lock" style="color:var(--text-3)"></i><b>' + esc(c.name) + '</b> · ' + (stab ? 'Poängbogey' : 'Slagspel netto') + '<span style="color:var(--text-3)"> · bestäms av touren</span></div>' +
+    '<div class="field"><label>Spelare i bollen (max 4)</label>' +
+      '<div style="display:flex;flex-direction:column;gap:6px">' +
+      [me].concat(cands.map(function(p){ return p.username; })).map(function(u){
+        var on = _eqs.sel.indexOf(u) >= 0, nx = nextOf(u), full = nx > N, isMe = u === me, dis = !isMe && (full || (!on && _eqs.sel.length >= 4));
+        return '<div class="row" style="align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';' + (dis ? 'opacity:.5' : '') + '">' +
+          '<input type="checkbox" ' + (on ? 'checked ' : '') + (isMe || dis ? 'disabled ' : '') + 'onchange="eqsToggle(\'' + esc(u) + '\')" style="width:18px;height:18px;margin:0">' +
+          '<span style="flex:1;min-width:0;font-size:14px;font-weight:600">' + esc(rcUserName(u)) + (isMe ? ' <span style="color:var(--text-3);font-weight:400">(du)</span>' : '') + '<span style="display:block;font-size:11px;color:var(--text-3);font-weight:400">' + (full ? 'Alla rundor spelade' : 'Runda ' + nx + ' av ' + N) + '</span></span>' +
+          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px;margin:0">SHCP <input type="number" step="1" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" onchange="_eqs.shcp[\'' + esc(u) + '\']=parseInt(this.value,10)||0" style="width:62px;margin:0;padding:4px 6px"></label>' : '') + '</div>';
+      }).join('') + '</div>' +
+      (!cands.length ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Bara spelare i touren kan vara med.</p>' : '') + '</div>';
+  var n = _eqs.sel.length, sides = [['', 'ti-circle-off', 'Inget', 'Bara eclectic']].concat(CF_SECONDARY.filter(function(k){ return k !== (stab ? 'stableford' : 'stroke_net'); }).map(function(k){ return [k, CF[k].icon, CF[k].title, CF[k].sub || '']; }));
+  h += '<div class="field"><label>Sidospel (valfritt)</label><div class="cf-grid">' + sides.map(function(x){
+    var k = x[0], need = k && CF[k] ? (CF[k].players || (CF[k].min || 1)) : 1, ok = !k || (CF[k].players ? n === CF[k].players : n >= (CF[k].min || 1));
+    return '<div class="cf-tile' + ((_eqs.side || '') === k ? ' on' : '') + '" style="' + (ok ? '' : 'opacity:.4;pointer-events:none') + '" onclick="_eqs.side=\'' + k + '\'||null;renderEclQuick()"><i class="ti ' + x[1] + '"></i><div class="cf-t">' + x[2] + '</div><div class="cf-s">' + (ok ? x[3] : (CF[k].players ? 'Kräver ' + CF[k].players + ' spelare' : 'Kräver ' + need)) + '</div></div>';
+  }).join('') + '</div></div>' +
+  '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn" onclick="_eqs=null;closeModal()">Avbryt</button><button class="btn btn-primary" onclick="eqsStart()"><i class="ti ti-golf"></i> Öppna scorekortet</button></div>';
+  showModal(h, true, true);
+}
+function eqsToggle(u) {
+  var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
+  var i = _eqs.sel.indexOf(u);
+  if(i >= 0) _eqs.sel.splice(i, 1);
+  else if(_eqs.sel.length < 4) { _eqs.sel.push(u); if(_eqs.shcp[u] == null) _eqs.shcp[u] = eclPlayingHcp(u, eclCourse(t)); }
+  if(_eqs.side && CF[_eqs.side] && (CF[_eqs.side].players ? _eqs.sel.length !== CF[_eqs.side].players : _eqs.sel.length < (CF[_eqs.side].min || 1))) _eqs.side = null;
+  renderEclQuick();
+}
+function eqsStart() {
+  var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
+  var c = eclCourse(t), stab = t.eclectic.mode === 'stableford';
+  _cw = { step: 4, courseId: c.id, date: hcpTodayISO(), sim: false, roundType: 'casual', hidden: false, silent: false, search: '',
+    format: { primary: stab ? 'stableford' : 'stroke_net', secondary: _eqs.side || null }, contests: [], teamOf: {}, teamShcp: {}, teamSize: 2,
+    players: _eqs.sel.map(function(u){ return { key: 'u_' + u, username: u, name: rcUserName(u), guest: false, shcp: _eqs.shcp[u] != null ? _eqs.shcp[u] : eclPlayingHcp(u, c) }; }),
+    ecl: { tourId: t.id, round: eclTakenRounds(t, currentUser.username).length + 1 } };
+  if(_cw.format.secondary === 'wolf') _cw.format.secondary = 'wolf';
+  var probs = cwFormatProblem();
+  if(probs.length) { alert(probs.join('\n')); return; }
+  _eqs = null; closeModal();
+  if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
+  showCasualScreen();
+  createCasualRound();
 }
 function eclEditEnd(tourId) {
   var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t || !isAdmin()) return;
@@ -23102,6 +23169,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (380)',
+    items: [
+      { type: 'improved', text: 'Eclectic: "Starta runda" går nu snabbare och säkrare. Bana, spelform och rondtyp är låsta av touren (ingen träning/simulator), du väljer bara medspelare bland tourens spelare (max 4, de som har rundor kvar), kontrollerar SHCP och kan välja ett sidospel som Varg – sedan öppnas scorekortet direkt. Avslut och markör fungerar som vanligt.' },
+      { type: 'new', text: 'Eclectic-touren visar nu ditt eget eclectic-kort direkt under Dina rundor, hål för hål, med vilka rundor de bästa hålen kom från.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (379)',
+    items: [
+      { type: 'improved', text: 'Eclectic-touren visar nu en tydlig hjälp när du inte är med som spelare – t.ex. direkt efter att touren skapats: "Lägg till spelarna – sedan får var och en knappen Starta runda 1 här", med en knapp till Spelare.' },
+    ]
+  },
   {
     date: '11 november 2026 (378)',
     items: [
