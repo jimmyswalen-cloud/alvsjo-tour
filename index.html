@@ -755,6 +755,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <button class="nav-btn" onclick="showView('players')" id="nav-players"><i class="ti ti-users"></i><span>Spelare</span></button>
       <button class="nav-btn" onclick="showView('calendar')" id="nav-calendar"><i class="ti ti-calendar"></i><span>Kalender</span></button>
       <button class="nav-btn" onclick="showView('oom')" id="nav-oom"><i class="ti ti-medal"></i><span>OoM</span></button>
+      <button class="nav-btn" onclick="showView('eclectic')" id="nav-eclectic" style="display:none"><i class="ti ti-stars"></i><span>Eclectic</span></button>
       <button class="nav-btn" onclick="showView('settings')" id="nav-settings"><i class="ti ti-settings"></i><span>Inst.</span></button>
     </nav>
   </div>
@@ -790,6 +791,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <div id="cal-events-list"></div>
     <div id="cal-overview-list"></div>
   </div>
+  <div id="view-eclectic" class="view"><div id="eclectic-content"></div></div>
   <div id="view-oom" class="view">
     <div id="oom-main">
       <div id="leaderboard-section"></div>
@@ -1917,6 +1919,7 @@ function isSimEventId(eid) {
 }
 function simBadgeHTML(t) {
   if(isRyderTour(t)) return rcBadgeHTML(t);
+  if(isEclecticTour(t)) return '<span class="badge" style="background:#FEF3E2;color:#8A4B00;margin-left:4px;white-space:nowrap"><i class="ti ti-stars"></i> Eclectic</span>';
   if(!isSimTour(t)) return '';
   return '<span class="badge" style="background:#EEEDFE;color:#534AB7;margin-left:4px;white-space:nowrap"><i class="ti ti-device-gamepad-2"></i> Simulator</span>';
 }
@@ -5728,7 +5731,9 @@ function enterTour(id) {
   if(settingsNav) settingsNav.style.display = isAdmin() ? '' : 'none';
   // Ryder Cup har ingen OoM-tabell - lagställningen visas i Tävlingar-fliken
   var oomNav = document.getElementById('nav-oom');
-  if(oomNav) oomNav.style.display = isRyderTour(getTour()) ? 'none' : '';
+  if(oomNav) oomNav.style.display = (isRyderTour(getTour()) || isEclecticTour(getTour())) ? 'none' : '';
+  var eclNav = document.getElementById('nav-eclectic');
+  if(eclNav) eclNav.style.display = isEclecticTour(getTour()) ? '' : 'none';
   // ...och inga deltävlingar, så Kalender (som visar deltävlingarna) döljs också
   var calNav = document.getElementById('nav-calendar');
   if(calNav) calNav.style.display = isRyderTour(getTour()) ? 'none' : '';
@@ -5754,6 +5759,7 @@ function showView(v) {
   if(v==='teams')      { var tt = getTour(); var tc = document.getElementById('teams-content'); if(tc) tc.innerHTML = isRyderTour(tt) ? rcRosterHTML(tt) : ''; }
   if(v==='calendar')   renderCalendar();
   if(v==='oom')        { showOOMMain(); subscribeTourLiveStandings(getTour()); renderOOM(); }
+  if(v==='eclectic')   { renderEclectic(); }
   if(v==='settings')   renderSettings();
   window.scrollTo(0, 0);
   try { syncOomLandscape(); } catch(e) {}
@@ -7225,6 +7231,122 @@ function wizToStep2() {
 // som vanligt. Bara en ordinarie deltävling i taget är öppen. Finalen spelas sist: den kan
 // få datum och bana när som helst (✏️), men livescoring öppnar först när alla ordinarie
 // deltävlingar är stängda.
+// ═══════════════════════════════════════════════════════════════════════════
+// ECLECTIC (release 374)
+// En tour i egen takt där alla rundor spelas på samma bana (t.eclectic.course). För varje
+// spelare och hål räknas det bästa resultatet från alla rundor ihop till ett "drömscorekort".
+// Slagspel: lägst netto (brutto − HCP-slag på hålet) vinner. Poängbogey: högst poäng vinner.
+// Brutto visas alltid också. Rundorna tas i tur och ordning; spelar man bara 3 av 7 är det
+// ens eget ansvar – hål man inte spelat saknas i kortet. Källa: deltävlingarnas resultat
+// (e.results[].holes + shcp), samma data som livescoringen godkänner.
+// ═══════════════════════════════════════════════════════════════════════════
+function isEclecticTour(t) { return !!(t && t.eclectic); }
+function eclCourse(t) { var n = (t.eclectic.course || '').toLowerCase(); return (courseDb || []).find(function(c){ return (c.name || '').toLowerCase() === n; }) || null; }
+function eclCompute(t) {
+  var c = eclCourse(t), n = c && c.holePars ? c.holePars.length : 18, pars = c && c.holePars ? c.holePars : [], idx = c && c.holeHcpIndex ? c.holeHcpIndex : [];
+  var stab = ((t.events[0] || {}).type === 'stableford'), players = getPlayersForTour(t), out = [];
+  var rounds = t.events.filter(function(e){ return !e.isFinal; });
+  players.forEach(function(p, pi){
+    if(!p) return;
+    var best = [], played = 0, lastGain = null;
+    rounds.forEach(function(e, ri){
+      var r = (e.results || []).find(function(x){ return x.pi === pi && Array.isArray(x.holes); }); if(!r) return;
+      played++;
+      var before = eclTotals(best, stab, n).main;
+      for(var h = 0; h < n; h++) {
+        var g = r.holes[h]; if(g == null || isNaN(g)) continue;
+        var str = computeHcpStrokesForHole(Number(r.shcp) || 0, idx[h] != null ? idx[h] : h + 1, n), net = g - str, par = pars[h] || 4, pts = Math.max(0, 2 + par - net);
+        var b = best[h] || {};
+        if(b.g == null || g < b.g) { b.g = g; b.gR = ri + 1; }
+        if(b.net == null || net < b.net) { b.net = net; b.nR = ri + 1; }
+        if(b.pts == null || pts > b.pts) { b.pts = pts; b.pR = ri + 1; }
+        best[h] = b;
+      }
+      var after = eclTotals(best, stab, n).main;
+      if(before.holes === n && after.holes === n) lastGain = { round: ri + 1, diff: stab ? after.value - before.value : before.value - after.value };
+    });
+    if(!played) return;
+    var tot = eclTotals(best, stab, n);
+    out.push({ pi: pi, p: p, played: played, best: best, main: tot.main, gross: tot.gross, lastGain: lastGain });
+  });
+  out.sort(function(a, b){
+    if((a.main.holes === n) !== (b.main.holes === n)) return a.main.holes === n ? -1 : 1;
+    if(a.main.holes !== b.main.holes) return b.main.holes - a.main.holes;
+    return stab ? b.main.value - a.main.value : a.main.value - b.main.value;
+  });
+  return { list: out, n: n, pars: pars, stab: stab, rounds: rounds.length, done: rounds.filter(function(e){ return e.closed; }).length };
+}
+function eclTotals(best, stab, n) {
+  var holes = 0, v = 0, g = 0, gh = 0;
+  for(var h = 0; h < n; h++) { var b = best[h]; if(!b) continue; if(stab ? b.pts != null : b.net != null) { holes++; v += stab ? b.pts : b.net; } if(b.g != null) { gh++; g += b.g; } }
+  return { main: { holes: holes, value: v }, gross: { holes: gh, value: g } };
+}
+// Release 375: samma eclectic-scorekort som i Utmaningar (chEclecticCardHTML), så att de två
+// varianterna ser likadana ut. Bästa brutto per hål färgas efter resultat mot par.
+function eclCardData(o, d) {
+  var holes = [], parT = 0, netT = 0, pts = 0, covered = 0;
+  for(var h = 0; h < d.n; h++) {
+    var b = o.best[h], par = d.pars[h] || 4;
+    if(b && b.g != null) { holes.push({ g: b.g, net: b.net, pts: b.pts }); covered++; parT += par; netT += b.net; pts += b.pts; }
+    else holes.push(null);
+  }
+  var pars = []; for(var k = 0; k < d.n; k++) pars.push(d.pars[k] || 4);
+  return { ecl: { holes: holes, pars: pars }, covered: covered, total: d.n, rounds: o.played, pts: pts, netVsPar: netT - parT };
+}
+function eclRoundsLineHTML(o, d) {
+  var used = {};
+  o.best.forEach(function(b){ if(!b) return; var r = d.stab ? b.pR : b.nR; if(r) used[r] = (used[r] || 0) + 1; });
+  var keys = Object.keys(used).sort(function(a, b){ return a - b; });
+  return keys.length ? '<div style="font-size:11px;color:var(--text-3);margin-top:6px"><i class="ti ti-history" style="font-size:11px"></i> Bästa hålen kommer från: ' + keys.map(function(r){ return 'runda ' + r + ' (' + used[r] + ' hål)'; }).join(' · ') + '</div>' : '';
+}
+function eclPostRoundToWall(t, i) {
+  var e = t.events[i]; if(!e || e.eclPosted) return;
+  e.eclPosted = true;
+  var before = eclCompute({ id: t.id, eclectic: t.eclectic, players: t.players, events: t.events.filter(function(x, k){ return k !== i; }) });
+  var after = eclCompute(t), unit = after.stab ? 'p' : 'netto';
+  (e.results || []).forEach(function(r){
+    var a = after.list.find(function(o){ return o.pi === r.pi; }), b = before.list.find(function(o){ return o.pi === r.pi; });
+    if(!a || !b || b.main.holes < after.n || a.main.holes < after.n) return; // jämför bara fulla kort
+    var gain = after.stab ? a.main.value - b.main.value : b.main.value - a.main.value;
+    if(gain <= 0) return;
+    var p = a.p || {};
+    ACTIVITY_FEED_COL.add({ tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''), eventId: e.id, eventName: e.name, category: 'eclimp',
+      playerUsername: p.username || null, playerName: p.name || p.username || '', eclGain: gain, eclTotal: a.main.value, eclGross: a.gross.value, eclUnit: unit, eclRound: i + 1,
+      createdAt: Date.now(), likes: {} }).catch(function(){});
+  });
+  var allDone = t.events.filter(function(x){ return !x.isFinal; }).every(function(x){ return x.closed; });
+  if(allDone && !t.eclWinPosted && after.list.length && after.list[0].main.holes === after.n) {
+    t.eclWinPosted = true;
+    var w = after.list[0], wp = w.p || {};
+    ACTIVITY_FEED_COL.add({ tourId: t.id, tourName: t.name + (t.season ? ' ' + t.season : ''), category: 'eclwin',
+      playerUsername: wp.username || null, playerName: wp.name || wp.username || '', eclTotal: w.main.value, eclGross: w.gross.value, eclUnit: unit,
+      createdAt: Date.now(), likes: {} }).catch(function(){});
+  }
+  save();
+}
+function renderEclectic() {
+  var el = document.getElementById('eclectic-content'); if(!el) return;
+  var t = getTour(); if(!isEclecticTour(t)) { el.innerHTML = ''; return; }
+  var d = eclCompute(t), unit = d.stab ? 'poäng' : 'netto';
+  var h = '<div class="card" style="padding:14px 16px;margin-bottom:12px">' +
+    '<div class="row" style="justify-content:space-between;align-items:center;gap:8px"><div><div style="font-size:16px;font-weight:800"><i class="ti ti-stars" style="color:var(--gold)"></i> Eclectic</div>' +
+    '<div style="font-size:12px;color:var(--text-3);margin-top:2px">' + esc(t.eclectic.course || '') + ' · bästa resultat per hål från ' + d.rounds + ' rundor · ' + (d.stab ? 'högst poäng vinner' : 'lägst netto vinner') + '</div></div>' +
+    '<div style="text-align:right;font-size:13px;font-weight:700">' + d.done + ' av ' + d.rounds + '<div style="font-size:11px;color:var(--text-3);font-weight:500">rundor spelade</div></div></div>' +
+    (!eclCourse(t) ? '<p style="font-size:12px;color:#B7791F;margin:8px 0 0"><i class="ti ti-alert-triangle"></i> Banan finns inte i bandatabasen – par och hålindex saknas, så netto blir ungefärligt.</p>' : '') + '</div>';
+  if(!d.list.length) { el.innerHTML = h + '<p class="empty">Inga rundor spelade än. Eclectic-kortet byggs upp när första rundan har resultat.</p>'; return; }
+  h += d.list.map(function(o, k){
+    var full = o.main.holes === d.n, nm = o.p.name || o.p.username;
+    var mainTxt = d.stab ? o.main.value + ' p' : String(o.main.value), grossTxt = o.gross.value + (o.gross.holes < d.n ? '' : '');
+    return '<details class="card" style="padding:10px 14px;margin-bottom:8px"' + (k === 0 ? ' open' : '') + '><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px">' +
+      '<span style="width:22px;font-weight:800;color:' + (k === 0 && full ? 'var(--gold)' : 'var(--text-3)') + '">' + (full ? k + 1 : '–') + '</span>' +
+      '<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(nm) + '</span>' +
+        '<span style="display:block;font-size:11px;color:var(--text-3)">' + o.played + ' av ' + d.rounds + ' rundor' + (full ? '' : ' · ' + o.main.holes + ' av ' + d.n + ' hål') + (o.lastGain && o.lastGain.diff > 0 ? ' · <span style="color:#1D9E75;font-weight:700">' + (d.stab ? '+' : '−') + o.lastGain.diff + ' efter runda ' + o.lastGain.round + '</span>' : '') + '</span></span>' +
+      '<span style="text-align:right"><span style="display:block;font-size:18px;font-weight:800">' + mainTxt + '</span><span style="display:block;font-size:11px;color:var(--text-3)">' + unit + ' · brutto ' + grossTxt + '</span></span></summary>' +
+      '<div style="margin-top:10px">' + chEclecticCardHTML({ eclMode: d.stab ? 'points' : 'netto', maxRounds: d.rounds }, eclCardData(o, d)) + eclRoundsLineHTML(o, d) + '</div></details>';
+  }).join('');
+  el.innerHTML = h;
+}
+
 function pacedRegulars(t) { return (t.events || []).map(function(e, i){ return { e: e, i: i }; }).filter(function(x){ return !x.e.isFinal; }); }
 function pacedAllRegularsClosed(t) { return pacedRegulars(t).every(function(x){ return x.e.closed; }); }
 function pacedNextIdx(t) {
@@ -7254,7 +7376,7 @@ function pacedPlanHTML(t) {
       (isAdmin() && !e.closed ? '<button class="btn btn-sm" onclick="openEditEventCourseImg(' + x.i + ')"><i class="ti ti-calendar"></i> ' + (e.date ? 'Ändra' : 'Sätt datum') + '</button>' : '') + '</div>';
   };
   return '<div class="card" style="padding:14px 16px;margin-bottom:16px">' +
-    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:15px;font-weight:800"><i class="ti ti-player-track-next" style="color:var(--green-dark)"></i> Säsongsplan</div><div style="font-size:13px;font-weight:700">' + done + ' av ' + regs.length + ' spelade</div></div>' +
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:15px;font-weight:800"><i class="ti ' + (isEclecticTour(t) ? 'ti-stars' : 'ti-player-track-next') + '" style="color:var(--green-dark)"></i> ' + (isEclecticTour(t) ? 'Eclectic · ' + esc(t.eclectic.course) : 'Säsongsplan') + '</div><div style="font-size:13px;font-weight:700">' + done + ' av ' + regs.length + ' spelade</div></div>' +
     '<div style="height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-bottom:6px"><div style="height:100%;width:' + pct + '%;background:var(--green-dark)"></div></div>' +
     regs.map(function(x, k){ return row(x, k + 1); }).join('') + fins.map(finRow).join('') + '</div>';
 }
@@ -7266,7 +7388,8 @@ function openStartPaced(i) {
   var endISO = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
   var h = '<h3><i class="ti ti-player-play"></i> Starta ' + esc(e.name) + '</h3>' +
     '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Deltävlingen öppnar idag. Spelarna kan anmäla sig och spela under spelperioden.</p>' +
-    '<div class="field"><label>Bana</label>' + courseSearchHTML('pc-course', prev ? prev.course : '', 'courseSearchNoop') + (prev ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Förvald: samma bana som förra deltävlingen.</p>' : '') + '</div>' +
+    (isEclecticTour(t) ? '<div class="field"><label>Bana</label><div style="font-size:15px;font-weight:700"><i class="ti ti-lock" style="color:var(--text-3)"></i> ' + esc(t.eclectic.course) + '</div><p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Eclectic – alla rundor spelas på samma bana.</p><input type="hidden" id="pc-course" value="' + esc(t.eclectic.course) + '"></div>'
+      : '<div class="field"><label>Bana</label>' + courseSearchHTML('pc-course', prev ? prev.course : '', 'courseSearchNoop') + (prev ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Förvald: samma bana som förra deltävlingen.</p>' : '') + '</div>') +
     '<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>Från</label><input type="date" id="pc-from" value="' + today + '"></div><div class="field" style="flex:1"><label>Till och med</label><input type="date" id="pc-to" value="' + endISO + '"></div></div>' +
     '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="saveStartPaced(' + i + ')"><i class="ti ti-player-play"></i> Starta</button></div>';
   showModal(h, true);
@@ -7287,17 +7410,34 @@ function wizStepPaced() {
   var regs = wiz.events.filter(function(e){ return !e.isFinal; }), fins = wiz.events.filter(function(e){ return e.isFinal; });
   var h = '<h3><i class="ti ti-player-track-next"></i> Egen takt – upplägg</h3>' +
     '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">' + regs.length + ' deltävlingar' + (fins.length ? ' + ' + fins.length + ' final' + (fins.length > 1 ? 'er' : '') : '') + '. Inga datum – du startar dem en i taget när det passar.</p>' +
+    '<div class="field"><label>Typ av tour</label><div class="row" style="gap:6px">' +
+      '<button type="button" class="btn btn-sm' + (!wiz.eclectic ? ' btn-primary' : '') + '" style="flex:1;justify-content:center" onclick="wizPacedSave();wiz.eclectic=false;wizStepPaced()"><i class="ti ti-medal"></i> Vanlig (OoM)</button>' +
+      '<button type="button" class="btn btn-sm' + (wiz.eclectic ? ' btn-primary' : '') + '" style="flex:1;justify-content:center" onclick="wizPacedSave();wiz.eclectic=true;wizStepPaced()"><i class="ti ti-stars"></i> Eclectic</button></div>' +
+      (wiz.eclectic ? '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Alla rundor spelas på samma bana. Bästa resultatet per hål från alla rundor blir spelarens drömscorekort. Ingen final och inga OoM-poäng.</p>' : '') + '</div>' +
+    (wiz.eclectic ? '<div class="field"><label>Bana för alla rundor</label>' + courseSearchHTML('w-pc-course', wiz.eclCourse || '', 'wizEclCoursePick') + '</div>' : '') +
     '<div class="field"><label>Spelform</label><select id="w-pc-type">' +
       [['slag','Slagspel (netto)'],['stableford','Poängbogey']].map(function(o){ return '<option value="' + o[0] + '" ' + ((regs[0] && regs[0].type) === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
-    '<div class="field"><label>Deltävlingar – bocka i majors</label>' +
+    (wiz.eclectic ? '' : '<div class="field"><label>Deltävlingar – bocka i majors</label>' +
       regs.map(function(e, i){ return '<div class="row" style="align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:14px">Deltävling ' + (i + 1) + '</span>' +
-        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin:0"><input type="checkbox" class="w-pc-major" data-i="' + i + '" ' + (e.isMajor ? 'checked' : '') + ' style="width:auto;margin:0"> Major</label></div>'; }).join('') + '</div>' +
-    fins.map(function(e, j){ return '<div class="field"><label>' + esc(e.name || ('Final ' + (j + 1))) + ' – datum (valfritt)</label><input type="date" class="w-pc-fdate" data-j="' + j + '" value="' + esc(e.date || '') + '">' +
-      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Kan också sättas senare med ✏️ på finalen. Finalen öppnar för livescoring först när alla deltävlingar är stängda.</p></div>'; }).join('') +
-    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="wizPacedSave();wizStep1()"><i class="ti ti-arrow-left"></i> Tillbaka</button><button class="btn btn-primary" onclick="wizPacedSave();wizStep3()">Nästa <i class="ti ti-arrow-right"></i></button></div>';
+        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin:0"><input type="checkbox" class="w-pc-major" data-i="' + i + '" ' + (e.isMajor ? 'checked' : '') + ' style="width:auto;margin:0"> Major</label></div>'; }).join('') + '</div>') +
+    (wiz.eclectic ? '' : fins.map(function(e, j){ return '<div class="field"><label>' + esc(e.name || ('Final ' + (j + 1))) + ' – datum (valfritt)</label><input type="date" class="w-pc-fdate" data-j="' + j + '" value="' + esc(e.date || '') + '">' +
+      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Kan också sättas senare med ✏️ på finalen. Finalen öppnar för livescoring först när alla deltävlingar är stängda.</p></div>'; }).join('')) +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="wizPacedSave();wizStep1()"><i class="ti ti-arrow-left"></i> Tillbaka</button>' +
+      (wiz.eclectic ? '<button class="btn btn-primary" onclick="wizEclFinish()"><i class="ti ti-check"></i> Skapa tour</button>' : '<button class="btn btn-primary" onclick="wizPacedSave();wizStep3()">Nästa <i class="ti ti-arrow-right"></i></button>') + '</div>';
   showModal(h, false, true);
 }
+function wizEclCoursePick(name) { wiz.eclCourse = (name || '').trim(); }
+function wizEclFinish() {
+  wizPacedSave();
+  if(!wiz.eclCourse) { alert('Välj banan som alla rundor spelas på.'); return; }
+  wiz.events = wiz.events.filter(function(e){ return !e.isFinal; });
+  if(!wiz.events.length) { alert('Ange minst en runda.'); return; }
+  wiz.events.forEach(function(e, i){ e.name = 'Runda ' + (i + 1); e.isMajor = false; });
+  wiz.numFinals = 0; wiz.finalTable = [];
+  wizFinish();
+}
 function wizPacedSave() {
+  var ec = document.getElementById('w-pc-course'); if(ec) wiz.eclCourse = (ec.value || '').trim();
   var type = (document.getElementById('w-pc-type') || {}).value || 'slag';
   var regs = wiz.events.filter(function(e){ return !e.isFinal; }), fins = wiz.events.filter(function(e){ return e.isFinal; });
   regs.forEach(function(e, i){ e.name = e.name || ('Deltävling ' + (i + 1)); e.type = type; e.course = ''; e.date = ''; e.periodStart = ''; e.periodEnd = ''; e.pacedWaiting = true; e.isMajor = false; });
@@ -7611,6 +7751,7 @@ function wizStep3Back() {
   wizStep2();
 }
 function wizStep3SaveCurrent() {
+  if(!document.getElementById('w-pts-0') && wiz.eclectic) return; // eclectic hoppar över poängsteget
   wiz.pointsScale = wiz.pointsScale.map(function(_,i){ var el=document.getElementById('w-pts-'+i); return el?(parseInt(el.value)||0):0; });
   if(wiz.finalTable.length) {
     wiz.finalTable = wiz.finalTable.map(function(_,i){ var el=document.getElementById('w-final-'+i); return el?(parseInt(el.value)||0):0; });
@@ -7665,6 +7806,7 @@ function wizFinish() {
       id: tourId, name: wiz.name, season: wiz.season, img: tourImgUrl,
       simulator: !!wiz.simulator,
       paced: !!wiz.paced,
+      eclectic: (wiz.paced && wiz.eclectic && wiz.eclCourse) ? { course: wiz.eclCourse } : null,
       trackman: (wiz.simulator && wiz.trackman && Object.keys(wiz.trackman).length) ? wiz.trackman : null,
       locked: true,
       players: [],
@@ -10412,7 +10554,7 @@ function subscribeHomeChampions(tourIds) {
   if(_homeChampUnsub) { try { _homeChampUnsub(); } catch(e) {} _homeChampUnsub = null; }
   _homeChampItems = [];
   // Release 353: även Ryder Cup-vinnaren (rcwin) fästs överst, guldig som säsongsmästaren
-  _homeChampUnsub = ACTIVITY_FEED_COL.where('category','in',['tourchampion','rcwin']).onSnapshot(function(snap){
+  _homeChampUnsub = ACTIVITY_FEED_COL.where('category','in',['tourchampion','rcwin','eclwin']).onSnapshot(function(snap){
     var all = snap.docs.map(function(doc){ var d = doc.data(); d._id = doc.id; return d; })
       .filter(function(d){ return tourIds.indexOf(d.tourId) >= 0; })
       .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
@@ -10577,6 +10719,10 @@ function renderHomeActivityFeed(items) {
     } else if(it.category === 'tourchampion') {
       var ptsText = it.pts!=null ? ' med '+it.pts+' p' : '';
       lineHtml = '👑 <b>'+esc(it.playerName)+'</b> är säsongsmästare i <b>'+esc(it.tourName)+'</b>'+ptsText+'!';
+    } else if(it.category === 'eclimp') {
+      lineHtml = '⭐ <b>' + esc(it.playerName) + '</b> ' + (it.eclUnit === 'p' ? 'plockade <b>' + esc(it.eclGain) + ' poäng</b>' : 'kapade <b>' + esc(it.eclGain) + ' slag</b>') + ' på sitt eclectic-kort i runda ' + esc(it.eclRound) + ' – nu <b>' + esc(it.eclTotal) + (it.eclUnit === 'p' ? ' p' : ' netto') + '</b> <span style="color:var(--text-3)">(' + esc(it.eclGross) + ' brutto)</span>';
+    } else if(it.category === 'eclwin') {
+      lineHtml = '🏆 <b>' + esc(it.playerName) + '</b> vann eclectic-touren <b>' + esc(it.tourName) + '</b> med ' + esc(it.eclTotal) + (it.eclUnit === 'p' ? ' poäng' : ' netto') + ' (' + esc(it.eclGross) + ' brutto)!';
     } else if(it.category === 'rcmatch') {
       lineHtml = (it.rcHalved
         ? '🤝 <b>' + esc(it.rcWinners) + '</b> och <b>' + esc(it.rcLosers) + '</b> delade matchen'
@@ -13503,6 +13649,7 @@ function closeEvent(i){
   }
   e.closed=true; save(); renderEvents(); renderOOM();
   postEventWinnerToFeed(t, e);
+  if(isEclecticTour(t)) { try { eclPostRoundToWall(t, i); } catch(err) { console.warn('Eclectic vägg', err); } return; } // eclectic: ingen OoM-mästare
   checkAndPostTourConclusion(t, e);
 }
 
@@ -22747,6 +22894,20 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (375)',
+    items: [
+      { type: 'improved', text: 'Eclectic-touren använder nu samma scorekort som eclectic i Utmaningar (hål för hål med par, bästa resultat färgat mot par, netto/poäng och summa ut/in), plus en rad som visar vilka rundor de bästa hålen kommer från.' },
+      { type: 'new', text: 'Eclectic på väggen: när en runda stängs postas alla som förbättrat sitt kort, t.ex. "Jimmy kapade 2 slag på sitt eclectic-kort i runda 3 – nu 68 netto". När sista rundan är stängd postas vinnaren och fästs överst i guld, som säsongsmästaren.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (374)',
+    items: [
+      { type: 'new', text: 'Eclectic-tour: välj Eclectic i guiden för egen takt. Ange antal rundor och banan som alla rundor spelas på. Rundorna startas och stängs i tur och ordning. För varje spelare räknas det bästa resultatet per hål från alla rundor ihop till ett drömscorekort – slagspel visar netto (lägst vinner), poängbogey visar poäng (högst vinner), och bruttot visas alltid också.' },
+      { type: 'new', text: 'Ny flik Eclectic: tabell med placering, rundor spelade och förbättringen efter senaste rundan. Tryck på en spelare för hela kortet hål för hål – bästa netto/poäng, bästa brutto och vilken runda resultatet kom från. Hål man inte spelat saknas i kortet.' },
+    ]
+  },
   {
     date: '11 november 2026 (373)',
     items: [
