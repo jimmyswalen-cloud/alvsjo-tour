@@ -6618,6 +6618,7 @@ function tourStatusGroup(t) {
   }
   var events = t.events || [];
   if(events.length && events.every(function(e){ return e.closed; })) return 'finished';
+  if(t.paced) return events.some(function(e){ return !e.pacedWaiting || e.closed; }) ? 'ongoing' : 'upcoming';
   var range = tourDateRange(t);
   var today = hcpTodayISO();
   var started = tourHasStarted(t) || (range && range.start <= today);
@@ -6988,6 +6989,9 @@ function wizStep1() {
   h += '<div id="w-tm-wrap" style="'+(wiz.simulator?'':'display:none;')+'margin:10px 0 0 26px"><div style="font-size:12px;font-weight:700;color:#534AB7;margin-bottom:6px"><i class="ti ti-device-desktop"></i> Trackman-inställningar</div>'+trackmanFormHTML('w-tm-', wiz.trackman)+'</div>';
   h += '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">För tourer som spelas i golfsimulator. Tourens ställning, leaderboard och SHCP fungerar som vanligt, men inga puttar registreras och inga rundor räknas in i spelarnas profilstatistik &ndash; så att simulator och riktig golf inte blandas. Går inte att ändra efter att touren skapats.</p>';
   h += '</div>';
+  h += '<div class="field" style="background:#E6F4EE;border-radius:10px;padding:10px 12px">'+
+    '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;font-weight:600;color:#0F6E56"><input type="checkbox" id="w-paced" '+(wiz.paced?'checked':'')+' style="width:auto;margin:0"> <i class="ti ti-player-track-next"></i> Spela i egen takt – inga datum</label>'+
+    '<p style="font-size:11px;color:var(--text-2);margin:6px 0 0 26px">Deltävlingarna skapas utan datum och bana. Du startar dem en i taget när det passar (bana och spelperiod sätts då) och stänger dem i tur och ordning. Finalen spelas sist och kan få ett datum när som helst under säsongen.</p></div>';
   h += '<div class="field"><label>Antal deltävlingar (ej finaler)</label><input id="w-numev" type="number" min="0" value="'+wiz.numEvents+'"></div>';
   h += '<div class="field"><label>Antal finaler</label><input id="w-numfin" type="number" min="0" value="'+wiz.numFinals+'"></div>';
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Du fyller i namn, bana och datum för varje tävling i nästa steg. När touren skapats kan strukturen inte ändras.</p>';
@@ -7034,6 +7038,8 @@ function wizSaveStep1Fields() {
   var nf = document.getElementById('w-numfin');
   var sm = document.getElementById('w-sim');
   if(sm) wiz.simulator = !!sm.checked;
+  var pc = document.getElementById('w-paced');
+  if(pc) wiz.paced = !!pc.checked;
   if(document.getElementById('w-tm-pins')) wiz.trackman = readTrackmanForm('w-tm-');
   if(n) wiz.name = n.value;
   if(s) wiz.season = s.value;
@@ -7207,7 +7213,98 @@ function wizToStep2() {
   }
   wiz.events = newEvents;
   wiz.stepIdx = 0;
+  var pcEl = document.getElementById('w-paced');
+  wiz.paced = !!(pcEl && pcEl.checked);
+  if(wiz.paced) { wizStepPaced(); return; }
   wizStep2();
+}
+
+// ── EGEN TAKT (release 373) ─────────────────────────────────────────────────
+// Touren skapas med N deltävlingar utan datum/bana (e.pacedWaiting). Admin startar nästa
+// deltävling i tur och ordning – då sätts bana och spelperiod (från idag) – och stänger den
+// som vanligt. Bara en ordinarie deltävling i taget är öppen. Finalen spelas sist: den kan
+// få datum och bana när som helst (✏️), men livescoring öppnar först när alla ordinarie
+// deltävlingar är stängda.
+function pacedRegulars(t) { return (t.events || []).map(function(e, i){ return { e: e, i: i }; }).filter(function(x){ return !x.e.isFinal; }); }
+function pacedAllRegularsClosed(t) { return pacedRegulars(t).every(function(x){ return x.e.closed; }); }
+function pacedNextIdx(t) {
+  var regs = pacedRegulars(t);
+  if(regs.some(function(x){ return !x.e.closed && !x.e.pacedWaiting; })) return -1; // en är redan öppen
+  var nx = regs.find(function(x){ return x.e.pacedWaiting; });
+  return nx ? nx.i : -1;
+}
+function pacedPlanHTML(t) {
+  var regs = pacedRegulars(t), done = regs.filter(function(x){ return x.e.closed; }).length, nextI = pacedNextIdx(t);
+  var fins = (t.events || []).map(function(e, i){ return { e: e, i: i }; }).filter(function(x){ return x.e.isFinal; });
+  var pct = regs.length ? Math.round(done / regs.length * 100) : 0;
+  var row = function(x, n){
+    var e = x.e, st = e.closed ? 'done' : (e.pacedWaiting ? (x.i === nextI ? 'next' : 'wait') : 'open');
+    var ic = st === 'done' ? '<i class="ti ti-circle-check" style="color:#1D9E75;font-size:20px"></i>' : (st === 'open' ? '<i class="ti ti-player-play" style="color:var(--gold);font-size:20px"></i>' : '<i class="ti ti-circle-dashed" style="color:var(--text-3);font-size:20px"></i>');
+    var sub = st === 'done' ? 'Spelad' + (e.course ? ' · ' + esc(e.course) : '') : (st === 'open' ? 'Pågår' + (e.course ? ' · ' + esc(e.course) : '') + (e.periodEnd ? ' · t.o.m. ' + esc(formatSvDateShort ? formatSvDateShort(e.periodEnd) : e.periodEnd) : '') : 'Ej startad');
+    return '<div class="row" style="align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">' + ic +
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">' + esc(e.name || ('Deltävling ' + n)) + (e.isMajor ? ' <span class="badge badge-gold" style="font-size:10px">Major</span>' : '') + '</div><div style="font-size:12px;color:var(--text-3)">' + sub + '</div></div>' +
+      (st === 'next' && isAdmin() ? '<button class="btn btn-sm btn-primary" onclick="openStartPaced(' + x.i + ')"><i class="ti ti-player-play"></i> Starta</button>' : '') + '</div>';
+  };
+  var finRow = function(x){
+    var e = x.e, locked = !pacedAllRegularsClosed(t);
+    return '<div class="row" style="align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">' +
+      '<i class="ti ti-trophy" style="color:' + (e.closed ? '#1D9E75' : 'var(--gold)') + ';font-size:20px"></i>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">' + esc(e.name || 'Final') + '</div><div style="font-size:12px;color:var(--text-3)">' +
+        (e.closed ? 'Spelad' : (e.date ? esc(formatSvDateFull(e.date)) + (e.course ? ' · ' + esc(e.course) : '') : 'Datum ej satt')) + (!e.closed && locked ? ' · <i class="ti ti-lock" style="font-size:11px"></i> öppnar när alla deltävlingar är spelade' : '') + '</div></div>' +
+      (isAdmin() && !e.closed ? '<button class="btn btn-sm" onclick="openEditEventCourseImg(' + x.i + ')"><i class="ti ti-calendar"></i> ' + (e.date ? 'Ändra' : 'Sätt datum') + '</button>' : '') + '</div>';
+  };
+  return '<div class="card" style="padding:14px 16px;margin-bottom:16px">' +
+    '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:15px;font-weight:800"><i class="ti ti-player-track-next" style="color:var(--green-dark)"></i> Säsongsplan</div><div style="font-size:13px;font-weight:700">' + done + ' av ' + regs.length + ' spelade</div></div>' +
+    '<div style="height:8px;border-radius:4px;background:var(--surface2);overflow:hidden;margin-bottom:6px"><div style="height:100%;width:' + pct + '%;background:var(--green-dark)"></div></div>' +
+    regs.map(function(x, k){ return row(x, k + 1); }).join('') + fins.map(finRow).join('') + '</div>';
+}
+function openStartPaced(i) {
+  var t = getTour(); if(!t || !isAdmin()) return;
+  var e = t.events[i]; if(!e || !e.pacedWaiting || pacedNextIdx(t) !== i) return;
+  var prev = (t.events || []).filter(function(x){ return !x.isFinal && x.closed && x.course; }).slice(-1)[0];
+  var today = hcpTodayISO(), end = new Date(); end.setDate(end.getDate() + 14);
+  var endISO = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+  var h = '<h3><i class="ti ti-player-play"></i> Starta ' + esc(e.name) + '</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">Deltävlingen öppnar idag. Spelarna kan anmäla sig och spela under spelperioden.</p>' +
+    '<div class="field"><label>Bana</label>' + courseSearchHTML('pc-course', prev ? prev.course : '', 'courseSearchNoop') + (prev ? '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Förvald: samma bana som förra deltävlingen.</p>' : '') + '</div>' +
+    '<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>Från</label><input type="date" id="pc-from" value="' + today + '"></div><div class="field" style="flex:1"><label>Till och med</label><input type="date" id="pc-to" value="' + endISO + '"></div></div>' +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="closeModal()">Avbryt</button><button class="btn btn-primary" onclick="saveStartPaced(' + i + ')"><i class="ti ti-player-play"></i> Starta</button></div>';
+  showModal(h, true);
+}
+function saveStartPaced(i) {
+  var t = getTour(); if(!t || !isAdmin()) return;
+  var e = t.events[i]; if(!e || !e.pacedWaiting) return;
+  var course = (document.getElementById('pc-course').value || '').trim(), from = document.getElementById('pc-from').value, to = document.getElementById('pc-to').value;
+  if(!course) { alert('Välj en bana.'); return; }
+  if(!from || !to || to < from) { alert('Kontrollera spelperioden.'); return; }
+  e.course = course; e.date = from; e.periodStart = from; e.periodEnd = to; e.periodStartAuto = false; e.periodEndAuto = false;
+  if(!e.img) { try { e.img = getCourseImage(course) || null; } catch(x) {} }
+  delete e.pacedWaiting;
+  save(); closeModal(); renderEvents();
+}
+
+function wizStepPaced() {
+  var regs = wiz.events.filter(function(e){ return !e.isFinal; }), fins = wiz.events.filter(function(e){ return e.isFinal; });
+  var h = '<h3><i class="ti ti-player-track-next"></i> Egen takt – upplägg</h3>' +
+    '<p style="font-size:12px;color:var(--text-3);margin-bottom:12px">' + regs.length + ' deltävlingar' + (fins.length ? ' + ' + fins.length + ' final' + (fins.length > 1 ? 'er' : '') : '') + '. Inga datum – du startar dem en i taget när det passar.</p>' +
+    '<div class="field"><label>Spelform</label><select id="w-pc-type">' +
+      [['slag','Slagspel (netto)'],['stableford','Poängbogey']].map(function(o){ return '<option value="' + o[0] + '" ' + ((regs[0] && regs[0].type) === o[0] ? 'selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>Deltävlingar – bocka i majors</label>' +
+      regs.map(function(e, i){ return '<div class="row" style="align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:14px">Deltävling ' + (i + 1) + '</span>' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin:0"><input type="checkbox" class="w-pc-major" data-i="' + i + '" ' + (e.isMajor ? 'checked' : '') + ' style="width:auto;margin:0"> Major</label></div>'; }).join('') + '</div>' +
+    fins.map(function(e, j){ return '<div class="field"><label>' + esc(e.name || ('Final ' + (j + 1))) + ' – datum (valfritt)</label><input type="date" class="w-pc-fdate" data-j="' + j + '" value="' + esc(e.date || '') + '">' +
+      '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">Kan också sättas senare med ✏️ på finalen. Finalen öppnar för livescoring först när alla deltävlingar är stängda.</p></div>'; }).join('') +
+    '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn" onclick="wizPacedSave();wizStep1()"><i class="ti ti-arrow-left"></i> Tillbaka</button><button class="btn btn-primary" onclick="wizPacedSave();wizStep3()">Nästa <i class="ti ti-arrow-right"></i></button></div>';
+  showModal(h, false, true);
+}
+function wizPacedSave() {
+  var type = (document.getElementById('w-pc-type') || {}).value || 'slag';
+  var regs = wiz.events.filter(function(e){ return !e.isFinal; }), fins = wiz.events.filter(function(e){ return e.isFinal; });
+  regs.forEach(function(e, i){ e.name = e.name || ('Deltävling ' + (i + 1)); e.type = type; e.course = ''; e.date = ''; e.periodStart = ''; e.periodEnd = ''; e.pacedWaiting = true; e.isMajor = false; });
+  document.querySelectorAll('.w-pc-major').forEach(function(x){ var e = regs[+x.getAttribute('data-i')]; if(e) e.isMajor = x.checked; });
+  fins.forEach(function(e, j){ e.type = type; var d = document.querySelector('.w-pc-fdate[data-j="' + j + '"]'); var v = d ? d.value : (e.date || '');
+    e.date = v; e.periodStart = v; e.periodEnd = v; if(v) delete e.pacedWaiting; else e.pacedWaiting = true; });
+  saveDraft();
 }
 
 function wizStep2() {
@@ -7509,6 +7606,7 @@ function wizTogglePayoutMode() {
 
 function wizStep3Back() {
   wizStep3SaveCurrent();
+  if(wiz.paced) { wizStepPaced(); return; }
   wiz.stepIdx = wiz.events.length-1;
   wizStep2();
 }
@@ -7560,11 +7658,13 @@ function wizFinish() {
     var events = wiz.events.map(function(ev, idx) {
       return { id: eventIds[idx], name:ev.name, course:ev.course, date:ev.date, type:ev.type,
         periodStart: ev.periodStart||ev.date, periodEnd: ev.periodEnd||ev.date,
-        isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: urls[idx+1]||null, registrations:[], results:[], closed:false };
+        isFinal: !!ev.isFinal, isMajor: !!ev.isMajor, img: urls[idx+1]||null, registrations:[], results:[], closed:false,
+        pacedWaiting: !!(wiz.paced && ev.pacedWaiting) };
     });
     var tour = {
       id: tourId, name: wiz.name, season: wiz.season, img: tourImgUrl,
       simulator: !!wiz.simulator,
+      paced: !!wiz.paced,
       trackman: (wiz.simulator && wiz.trackman && Object.keys(wiz.trackman).length) ? wiz.trackman : null,
       locked: true,
       players: [],
@@ -8975,7 +9075,7 @@ function renderEvents() {
   }
 
   var open=[], closed=[];
-  t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else open.push({e:e,i:i});});
+  t.events.forEach(function(e,i){if(e.closed)closed.push({e:e,i:i});else if(!e.pacedWaiting)open.push({e:e,i:i});});
   // Kommande/öppna deltävlingar: stigande datum, närmast förestående överst
   // (vad som händer HÄRNÄST är intressantast där). Avslutade deltävlingar:
   // fallande datum, senast avslutad överst (samma princip som avslutade
@@ -8990,6 +9090,7 @@ function renderEvents() {
   open.sort(byDateAsc);
   closed.sort(byDateDesc);
   var html='';
+  if(t.paced) html += pacedPlanHTML(t);
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   el.innerHTML = liveStandingsHtml + top3Html + buildChickenCardHTML(t) + storyBanner + trackmanCardHTML(t) + feeCard + titleBlock + html;
@@ -13329,6 +13430,7 @@ function saveEditEventCourseImg() {
     }
     e.course = _editEventDraft.course;
     e.date = _editEventDraft.date;
+    if(e.pacedWaiting && e.date) { e.periodStart = e.date; e.periodEnd = e.date; delete e.pacedWaiting; } // egen takt: finalen får datum
     // Om banan skrevs in manuellt och saknas i banregistret, lägg till den (samma logik som i skapa-tour-guiden)
     if(!courseDb.find(function(c){ return c.name.toLowerCase()===e.course.toLowerCase(); })) {
       courseDb.push({ id: uid(), name: e.course, par: 72 });
@@ -16449,6 +16551,7 @@ function openLiveScoring(eid, gIdx) {
   var t = getTour();
   var e = t.events.find(function(x){ return x.id === eid; });
   if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  if(t.paced && e.isFinal && !pacedAllRegularsClosed(t)) { alert('Finalen spelas sist – den öppnar för livescoring när alla deltävlingar är stängda.'); return; }
   var g = e.teeGroups[gIdx];
   if(!g.playerPis || !g.playerPis.length) { alert('Bollen saknar spelare.'); return; }
 
@@ -22644,6 +22747,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (373)',
+    items: [
+      { type: 'new', text: 'Ny tour i egen takt: kryssa i "Spela i egen takt – inga datum" i guiden. Ange antal deltävlingar och finaler, bocka i vilka som är majors och välj spelform – inga datum eller banor behövs. Touren får en Säsongsplan med förloppsmätare ("3 av 7 spelade").' },
+      { type: 'new', text: 'Admin startar nästa deltävling med ett tryck när det passar: bana (förvald samma som förra) och spelperiod från idag. Bara en deltävling i taget är öppen och de stängs som vanligt i tur och ordning. Finalen kan få datum när som helst under säsongen, men öppnar för livescoring först när alla deltävlingar är stängda.' },
+    ]
+  },
   {
     date: '11 november 2026 (372)',
     items: [
