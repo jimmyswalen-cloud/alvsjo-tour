@@ -23469,6 +23469,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '11 november 2026 (395)',
+    items: [
+      { type: 'new', text: 'Inloggningar: ny lista "Senast aktiv" överst med alla spelare – när de senast använde appen (uppdateras varje gång appen öppnas eller väcks, högst var 5:e minut), enhet och vilken appversion de kör. Gammal version visas i gult, och spelare utan uppgift har inte öppnat appen sedan uppdateringen – de behöver stänga appen helt och öppna den igen.' },
+    ]
+  },
+  {
     date: '11 november 2026 (394)',
     items: [
       { type: 'improved', text: 'Inloggningsloggen fångar nu fler besök: "öppnade appen" loggas även när appen väcks från bakgrunden eller fliken blir aktiv igen – inte bara när den startas om helt. Fortfarande högst en gång per dygn, användare och enhet.' },
@@ -26930,12 +26936,33 @@ function logLoginEvent(username, kind) {
 // Visar de senaste 50 inloggningarna i Inställningar (admin). Engångshämtning
 // (inte en live-lyssnare) - man öppnar sidan för att kolla, inget som behöver
 // uppdateras i realtid.
+function renderPresenceSection(el) {
+  LOGIN_LOG_COL.where('presence', '==', true).get().then(function(snap){
+    var seen = {}; snap.forEach(function(d){ var x = d.data(); if(x && x.username) seen[x.username] = x; });
+    var cur = currentReleaseNo();
+    var users = (S.users || []).filter(function(u){ return u && !u.isTest && !isPendingUser(u); })
+      .map(function(u){ return { u: u, p: seen[u.username] || null }; })
+      .sort(function(a, b){ return ((b.p && b.p.lastSeen) || 0) - ((a.p && a.p.lastSeen) || 0); });
+    var ago = function(ts){ var m = Math.round((Date.now() - ts) / 60000); if(m < 2) return 'nyss'; if(m < 60) return m + ' min sedan'; var h = Math.round(m / 60); if(h < 24) return h + ' tim sedan'; var dd = Math.round(h / 24); return dd + ' dag' + (dd === 1 ? '' : 'ar') + ' sedan'; };
+    var today = users.filter(function(x){ return x.p && Date.now() - x.p.lastSeen < 24 * 3600000; }).length;
+    var box = document.getElementById('presence-list'); if(!box) return;
+    box.innerHTML = '<p style="font-size:12px;color:var(--text-3);margin:0 0 8px">' + today + ' aktiva senaste dygnet. Spelare utan uppgift har inte öppnat appen sedan release 395 laddades – de kör troligen en gammal version och behöver stänga appen helt och öppna igen.</p>' +
+      '<div class="card" style="padding:0;overflow:hidden">' + users.map(function(x, i){
+        var p = x.p, old = p && p.appVer && cur && p.appVer < cur;
+        return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:9px 14px;' + (i < users.length - 1 ? 'border-bottom:1px solid var(--border)' : '') + '">' +
+          '<span style="font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(x.u.name || x.u.username) + '</span>' +
+          '<span style="font-size:12px;color:var(--text-3);text-align:right;flex-shrink:0">' + (p ? ago(p.lastSeen) + ' · ' + esc(p.os || '') + ' · <b style="color:' + (old ? '#B7791F' : '#1D9E75') + '">v' + esc(p.appVer) + '</b>' : '<span style="color:#B7791F">ingen uppgift</span>') + '</span></div>';
+      }).join('') + '</div>';
+  }).catch(function(e){ var box = document.getElementById('presence-list'); if(box) box.innerHTML = '<p style="font-size:12px;color:var(--text-3)">Kunde inte hämta "senast aktiv" (' + esc(e.message || '') + ').</p>'; });
+}
 function renderLoginLogSection() {
   var el = document.getElementById('login-log-section');
   if(!el || !isAdmin()) { if(el) el.innerHTML = ''; return; }
-  el.innerHTML = '<div class="section-title" style="margin-top:20px"><i class="ti ti-shield-lock"></i> Inloggningslogg</div>'+
+  el.innerHTML = '<div class="section-title" style="margin-top:20px"><i class="ti ti-activity"></i> Senast aktiv</div><div id="presence-list"><p style="font-size:12px;color:var(--text-3)">Hämtar…</p></div>'+
+    '<div class="section-title" style="margin-top:20px"><i class="ti ti-shield-lock"></i> Inloggningslogg</div>'+
     '<p id="login-log-status" style="font-size:12px;color:var(--text-3);margin-bottom:10px">Hämtar de senaste inloggningarna...</p>'+
     '<div id="login-log-list"></div>';
+  renderPresenceSection(el);
   LOGIN_LOG_COL.orderBy('timestamp','desc').limit(50).get().then(function(snap){
     var statusEl = document.getElementById('login-log-status');
     var listEl = document.getElementById('login-log-list');
@@ -26971,7 +26998,21 @@ function renderLoginLogSection() {
 
 // Release 394: logga "öppnade appen" även när appen väcks från bakgrunden (hemskärmsappen
 // laddas oftast inte om – den fortsätter där den var), högst en gång per dygn, användare och enhet.
+// Release 395: "senast aktiv" per spelare – skrivs varje gång appen öppnas eller väcks (högst var
+// 5:e minut), med appversion och enhet. Visar admin exakt vem som använder appen och vem som
+// fortfarande kör en gammal version (som inte loggar något alls).
+function touchPresence() {
+  try {
+    if(!currentUser || currentUser.isTest || impersonatorAdmin) return;
+    var k = 'agcc-presence-at', last = +(localStorage.getItem(k) || 0);
+    if(Date.now() - last < 5 * 60 * 1000) return;
+    localStorage.setItem(k, String(Date.now()));
+    var pu = parseUserAgent(navigator.userAgent);
+    LOGIN_LOG_COL.doc('presence_' + currentUser.username).set({ presence: true, username: currentUser.username, lastSeen: Date.now(), appVer: currentReleaseNo(), browser: pu.browser, os: pu.os }, { merge: true }).catch(function(){});
+  } catch(e) {}
+}
 function logAppOpenOnce() {
+  try { touchPresence(); } catch(e) {}
   try {
     if(!currentUser || currentUser.isTest) return;
     if(impersonatorAdmin) return; // inte när admin är inloggad som någon annan
