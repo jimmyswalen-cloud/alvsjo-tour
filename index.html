@@ -11044,7 +11044,7 @@ function renderHomeActivityFeed(items) {
     var avatar = img
       ? '<img src="'+img+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">'
       : '<div class="avatar-ph" style="width:36px;height:36px;font-size:13px;flex-shrink:0">'+ini(it.playerName)+'</div>';
-    var likes = it.likes || {};
+    var likes = flattenLikes(it.likes || {});
     var likeCount = Object.keys(likes).length;
     var iLiked = currentUser && !!likes[currentUser.username];
     // Bildinlägg från chatten: egen layout med bilden i full bredd (release 306)
@@ -11316,7 +11316,7 @@ function toggleHomeFeedExpanded() {
 function showFeedLikers(docId) {
   ACTIVITY_FEED_COL.doc(docId).get().then(function(doc){
     if(!doc.exists) { alert('Inlägget finns inte längre.'); return; }
-    var likes = doc.data().likes || {};
+    var likes = flattenLikes(doc.data().likes || {});
     var usernames = Object.keys(likes);
     if(!usernames.length) { alert('Ingen har gillat än.'); return; }
     var rows = usernames.map(function(un){
@@ -11346,16 +11346,34 @@ function deleteActivityFeedItem(docId) {
   });
 }
 
+// Release 392: användarnamn med punkt (t.ex. e-postadresser som dino.lundin@gmail.com)
+// sparades fel – "likes.dino.lundin@gmail.com" tolkas av Firestore som nästlade fält
+// (likes.dino.lundin@gmail.com → likes → dino → lundin@gmail → com). Nu används FieldPath,
+// och gamla nästlade gillningar läses tillbaka till rätt användarnamn.
+function flattenLikes(likes) {
+  var out = {};
+  (function walk(obj, prefix){
+    Object.keys(obj || {}).forEach(function(k){
+      var v = obj[k], key = prefix ? prefix + '.' + k : k;
+      if(v && typeof v === 'object' && !Array.isArray(v)) walk(v, key); else if(v) out[key] = v;
+    });
+  })(likes, '');
+  return out;
+}
 function toggleActivityFeedLike(docId) {
   if(!currentUser) return;
-  var ref = ACTIVITY_FEED_COL.doc(docId);
+  var ref = ACTIVITY_FEED_COL.doc(docId), me = currentUser.username;
   ref.get().then(function(doc){
     if(!doc.exists) return;
-    var likes = doc.data().likes || {};
-    var update = {};
-    if(likes[currentUser.username]) update['likes.'+currentUser.username] = firebase.firestore.FieldValue.delete();
-    else update['likes.'+currentUser.username] = true;
-    ref.update(update).catch(function(err){ console.error('Kunde inte gilla', err); });
+    var raw = doc.data().likes || {}, likes = flattenLikes(raw);
+    var path = new firebase.firestore.FieldPath('likes', me);
+    var p;
+    if(likes[me]) {
+      p = ref.update(path, firebase.firestore.FieldValue.delete());
+      // Städa även en gammal nästlad gillning (från före release 392)
+      if(me.indexOf('.') >= 0) { var first = me.split('.')[0]; if(raw[first] && typeof raw[first] === 'object') p = p.then(function(){ return ref.update(new firebase.firestore.FieldPath('likes', first), firebase.firestore.FieldValue.delete()); }); }
+    } else p = ref.update(path, true);
+    p.catch(function(err){ console.error('Kunde inte gilla', err); });
   }).catch(function(err){ console.error('Kunde inte läsa feed-inlägget', err); });
 }
 
@@ -15255,11 +15273,27 @@ var _casualAll = [], _casualRaw = [], _casualUnsub = null;
 var _cw = null;        // guiden (ny rond)
 var _cr = { id:null, data:null, hole:1, unsub:null }; // öppen rond
 
+// Release 392: spelarnycklar med punkt (u_dino.lundin@gmail.com) sparades nästlat av
+// Firestore. Läs tillbaka gamla nästlade värden till rätt nyckel, och skriv nya med FieldPath.
+function normalizeCasualDoc(x) {
+  if(!x || !Array.isArray(x.players)) return x;
+  ['scores', 'putts'].forEach(function(f){
+    var m = x[f]; if(!m) return;
+    x.players.forEach(function(p){
+      if(!p || !p.key || p.key.indexOf('.') < 0) return;
+      var parts = p.key.split('.'), o = m;
+      for(var i = 0; i < parts.length && o; i++) o = o[parts[i]];
+      if(o && typeof o === 'object') m[p.key] = Object.assign({}, o, m[p.key] || {});
+    });
+  });
+  // (contestWin sparar spelarnyckeln som VÄRDE, inte som fältnamn – där finns inget att rätta)
+  return x;
+}
 function subscribeCasualRounds() {
   if(_casualUnsub || !currentUser) return;
   _casualUnsub = CASUAL_COL.onSnapshot(function(snap){
     var all = [];
-    snap.forEach(function(d){ var x = d.data(); x.id = d.id; all.push(x); });
+    snap.forEach(function(d){ var x = normalizeCasualDoc(d.data()); x.id = d.id; all.push(x); });
     _casualRaw = all;
     _casualAll = all.filter(inCurrentClub).filter(casualVisibleToMe);
     _casualRounds = _casualAll.filter(function(r){ return r.status === 'finished'; });
@@ -15915,7 +15949,7 @@ function openCasualRound(id) {
   if(el) el.innerHTML = '<p style="text-align:center;color:var(--text-3);padding:20px">Laddar ronden…</p>';
   _cr.unsub = CASUAL_COL.doc(id).onSnapshot(function(d){
     if(!d.exists) { if(el) el.innerHTML = '<p class="empty">Ronden finns inte längre.</p>'; return; }
-    _cr.data = d.data(); _cr.data.id = d.id;
+    _cr.data = normalizeCasualDoc(d.data()); _cr.data.id = d.id;
     if(_cr.hole == null) { // börja på första ospelade hålet
       var n = (_cr.data.holePars||[]).length, first = 1;
       var units0 = cfUnits(_cr.data);
@@ -15928,14 +15962,13 @@ function openCasualRound(id) {
 function casualGoHole(h) { _cr.hole = h; renderCasualRound(); }
 function casualSetScore(key, field, val) {
   var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
-  var upd = {};
-  upd[field+'.'+key+'.'+_cr.hole] = (val == null) ? firebase.firestore.FieldValue.delete() : val;
-  upd.updatedAt = Date.now();
+  // FieldPath så att nycklar med punkt (e-postanvändarnamn) inte blir nästlade fält
+  var fp = new firebase.firestore.FieldPath(field, key, String(_cr.hole));
   // optimistisk uppdatering
   r[field] = r[field] || {}; r[field][key] = r[field][key] || {};
   if(val == null) delete r[field][key][_cr.hole]; else r[field][key][_cr.hole] = val;
   renderCasualRound();
-  CASUAL_COL.doc(r.id).update(upd).catch(function(e){ alert('Kunde inte spara: '+e.message); });
+  CASUAL_COL.doc(r.id).update(fp, (val == null) ? firebase.firestore.FieldValue.delete() : val, 'updatedAt', Date.now()).catch(function(e){ alert('Kunde inte spara: '+e.message); });
 }
 function casualStep(key, field, delta) {
   var r = _cr.data; var cur = ((r[field]||{})[key]||{})[_cr.hole];
@@ -16478,9 +16511,8 @@ function cfWolfCardHTML(r, h, edit, inline) {
 function casualSetContest(id, key) {
   var r = _cr.data; if(!r || !casualCanEdit(r) || r.status !== 'active') return;
   r.contestWin = r.contestWin || {}; if(key) r.contestWin[id] = key; else delete r.contestWin[id];
-  var upd = { updatedAt: Date.now() }; upd['contestWin.' + id] = key ? key : firebase.firestore.FieldValue.delete();
   renderCasualRound();
-  CASUAL_COL.doc(r.id).update(upd).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
+  CASUAL_COL.doc(r.id).update(new firebase.firestore.FieldPath('contestWin', String(id)), key ? key : firebase.firestore.FieldValue.delete(), 'updatedAt', Date.now()).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
 }
 var CONTEST_META = { ctp:{ label:'Närmast hål', icon:'ti-target' }, ld:{ label:'Längsta drive', icon:'ti-arrow-big-right-lines' } };
 function cfContestCardsHTML(r, h, edit, inline) {
@@ -23437,6 +23469,19 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '11 november 2026 (393)',
+    items: [
+      { type: 'improved', text: 'Inloggningsloggen visar nu även när någon öppnar appen med sparad inloggning ("öppnade appen", högst en gång per dygn och enhet) – tidigare loggades bara när man skrev in användarnamn och lösenord, så de flesta som redan var inloggade syntes aldrig. Raden visar också spelarens namn i stället för användarnamnet.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (392)',
+    items: [
+      { type: 'fixed', text: 'Viktigt: i sällskapsronder (även eclectic) sparades slag och puttar fel för spelare vars användarnamn innehåller punkt, t.ex. dino.lundin@gmail.com – scoren kunde försvinna ur scorekortet när det laddades om. Nu sparas de rätt, och redan förda slag läses tillbaka.' },
+      { type: 'fixed', text: 'Gillningar från spelare vars användarnamn innehåller punkt (t.ex. en e-postadress som dino.lundin@gmail.com) sparades fel och visades som "dino" i "Gillat av", och tummen syntes inte som gillad för dem. Nu sparas gillningen rätt, och befintliga gillningar visas med rätt namn.' },
+    ]
+  },
+  {
     date: '11 november 2026 (391)',
     items: [
       { type: 'fixed', text: 'OoM räknade dubbelt efter att en deltävling stängts: de preliminära live-poängen låg kvar ovanpå de officiella (t.ex. "50 pts – varav 25 p prel." i stället för 25), och rutan "Preliminär ställning … pågår just nu" visades fortfarande. Nu tas förhandsvisningen bort så fort deltävlingen är stängd.' },
@@ -26859,12 +26904,12 @@ function parseUserAgent(ua) {
 // position och ingen behörighetsprompt behövs). Misslyckas geolocation-anropet
 // (t.ex. nätverksfel, tjänsten nere) loggas raden ändå, bara utan plats -
 // själva inloggningen ska aldrig blockeras eller synas störas av detta.
-function logLoginEvent(username) {
+function logLoginEvent(username, kind) {
   var ua = navigator.userAgent;
   var parsed = parseUserAgent(ua);
   var base = {
     username: username, timestamp: Date.now(), userAgent: ua,
-    browser: parsed.browser, os: parsed.os
+    browser: parsed.browser, os: parsed.os, kind: kind || 'login'
   };
   fetch('https://ipapi.co/json/').then(function(r){ return r.json(); }).then(function(loc){
     base.city = loc.city || null;
@@ -26893,7 +26938,7 @@ function renderLoginLogSection() {
       if(statusEl) statusEl.textContent = 'Inga inloggningar loggade ännu.';
       return;
     }
-    if(statusEl) statusEl.textContent = 'Senaste '+snap.size+' inloggningarna, nyast överst.';
+    if(statusEl) statusEl.textContent = 'Senaste '+snap.size+' händelserna, nyast överst. "Öppnade appen" = redan inloggad (loggas en gång per dygn och enhet).';
     listEl.innerHTML = '<div class="card" style="padding:0;overflow:hidden">'+
       snap.docs.map(function(doc, idx){
         var l = doc.data();
@@ -26901,7 +26946,7 @@ function renderLoginLogSection() {
         var place = [l.city, l.country].filter(Boolean).join(', ');
         return '<div style="padding:10px 14px;'+(idx<snap.size-1?'border-bottom:1px solid var(--border)':'')+'">'+
           '<div class="row" style="justify-content:space-between;align-items:center">'+
-            '<span style="font-weight:600;font-size:13px">'+esc(l.username)+'</span>'+
+            '<span style="font-weight:600;font-size:13px">'+esc((findUser(l.username)||{}).name || l.username)+' <span style="font-weight:500;font-size:11px;color:'+(l.kind==='open'?'var(--text-3)':'#1D9E75')+'">· '+(l.kind==='open'?'öppnade appen':'loggade in')+'</span></span>'+
             '<span style="font-size:12px;color:var(--text-3)">'+when+'</span>'+
           '</div>'+
           '<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+
@@ -26924,7 +26969,16 @@ function tryAutoLogin() {
   try {
     var sess = JSON.parse(raw);
     var user = findUser(sess.username);
-    if(user && !isPendingUser(user)) { currentUser = user; return true; }
+    if(user && !isPendingUser(user)) {
+      currentUser = user;
+      // Release 393: de flesta är redan inloggade och loggar aldrig in på nytt – logga därför
+      // även när appen öppnas med sparad inloggning (högst en gång per dygn och enhet).
+      try {
+        var tk = 'agcc-open-logged', today = hcpTodayISO();
+        if(localStorage.getItem(tk) !== today + '|' + user.username) { localStorage.setItem(tk, today + '|' + user.username); logLoginEvent(user.username, 'open'); }
+      } catch(e) {}
+      return true;
+    }
   } catch(e) {}
   return false;
 }
