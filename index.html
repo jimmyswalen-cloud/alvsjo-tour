@@ -23469,6 +23469,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '11 november 2026 (394)',
+    items: [
+      { type: 'improved', text: 'Inloggningsloggen fångar nu fler besök: "öppnade appen" loggas även när appen väcks från bakgrunden eller fliken blir aktiv igen – inte bara när den startas om helt. Fortfarande högst en gång per dygn, användare och enhet.' },
+    ]
+  },
+  {
     date: '11 november 2026 (393)',
     items: [
       { type: 'improved', text: 'Inloggningsloggen visar nu även när någon öppnar appen med sparad inloggning ("öppnade appen", högst en gång per dygn och enhet) – tidigare loggades bara när man skrev in användarnamn och lösenord, så de flesta som redan var inloggade syntes aldrig. Raden visar också spelarens namn i stället för användarnamnet.' },
@@ -26963,6 +26969,21 @@ function renderLoginLogSection() {
   });
 }
 
+// Release 394: logga "öppnade appen" även när appen väcks från bakgrunden (hemskärmsappen
+// laddas oftast inte om – den fortsätter där den var), högst en gång per dygn, användare och enhet.
+function logAppOpenOnce() {
+  try {
+    if(!currentUser || currentUser.isTest) return;
+    if(impersonatorAdmin) return; // inte när admin är inloggad som någon annan
+    var tk = 'agcc-open-logged', key = hcpTodayISO() + '|' + currentUser.username;
+    if(localStorage.getItem(tk) === key) return;
+    localStorage.setItem(tk, key);
+    logLoginEvent(currentUser.username, 'open');
+  } catch(e) {}
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) logAppOpenOnce(); });
+window.addEventListener('focus', function(){ logAppOpenOnce(); });
+window.addEventListener('pageshow', function(){ logAppOpenOnce(); });
 function tryAutoLogin() {
   var raw = localStorage.getItem('tourapp_session');
   if(!raw) return false;
@@ -26973,10 +26994,7 @@ function tryAutoLogin() {
       currentUser = user;
       // Release 393: de flesta är redan inloggade och loggar aldrig in på nytt – logga därför
       // även när appen öppnas med sparad inloggning (högst en gång per dygn och enhet).
-      try {
-        var tk = 'agcc-open-logged', today = hcpTodayISO();
-        if(localStorage.getItem(tk) !== today + '|' + user.username) { localStorage.setItem(tk, today + '|' + user.username); logLoginEvent(user.username, 'open'); }
-      } catch(e) {}
+      logAppOpenOnce();
       return true;
     }
   } catch(e) {}
