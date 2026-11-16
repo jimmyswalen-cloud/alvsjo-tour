@@ -60,6 +60,9 @@ img.cover-banner{width:100%;display:block;object-fit:cover;object-position:cente
 @media (max-width:699px){
   img.cover-banner{min-height:clamp(110px,32vw,150px)}
 }
+/* Release 397: ingen zoom vid dubbeltryck – nyp-zoom fungerar som vanligt */
+html, body { touch-action: manipulation; }
+a, button, input, select, textarea, label, .btn, [onclick] { touch-action: manipulation; }
 /* Release 362: headern 10 % lägre överallt (inkl. toningen nedtill) för mer plats i mitten */
 .hero{height:180px}
 .hero-scroll{height:43px}
@@ -23468,6 +23471,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (397)',
+    items: [
+      { type: 'improved', text: 'Dubbeltryck zoomar inte längre in sidan (det hände lätt när man tryckte snabbt på knappar, t.ex. + och − på scorekortet). Nyp-zoom med två fingrar fungerar som vanligt.' },
+    ]
+  },
   {
     date: '11 november 2026 (396)',
     items: [
