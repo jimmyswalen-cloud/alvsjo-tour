@@ -12289,11 +12289,11 @@ function eventCardHTML(i,e) {
       return '<tr onclick="showPlayerProfile('+r.pi+')" style="cursor:pointer">'+
         '<td style="width:28px;text-align:center;font-size:16px">'+(medals[idx]||(idx+1)+'.')+'</td>'+
         '<td><div>'+esc(p.name)+'</div>'+(playerBrandLogoTag(p.username, 15)?'<div style="margin-top:2px">'+playerBrandLogoTag(p.username, 15)+'</div>':'')+'</td>'+
-        '<td style="text-align:right">'+scoreLabel+'</td>'+
+        '<td style="text-align:right">'+scoreLabel+(r.shcp != null && r.shcp !== '' ? '<div style="font-size:11px;color:var(--text-3);margin-top:2px">('+(Number(r.shcp) < 0 ? '+'+Math.abs(Number(r.shcp)) : esc(r.shcp))+')</div>' : '')+'</td>'+
         (e.isFinal?'':'<td style="text-align:right;color:var(--green-dark);font-weight:600">'+(r.points||0)+' p</td>')+
       '</tr>';
     }).join('');
-    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right">Resultat</th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
+    regsTable = '<div style="overflow-x:auto;margin-bottom:12px"><table class="hist-table"><thead><tr><th></th><th>Spelare</th><th style="text-align:right;line-height:1.25">Resultat<br><span style="font-size:10px">(SHCP)</span></th>'+(e.isFinal?'':'<th style="text-align:right">OoM-poäng</th>')+'</tr></thead><tbody>'+resultRows+'</tbody></table></div>';
     missingWarnHtml = '<div class="missing-results-warning" data-tour-id="'+t.id+'" data-eid="'+e.id+'"></div>';
   } else if(t.players.length) {
     var rowsData = t.players.map(function(p, pi){
@@ -23468,6 +23468,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (396)',
+    items: [
+      { type: 'improved', text: 'Resultattabellen för en deltävling visar nu varje spelares SHCP inom parentes under nettoscoren, och rubriken heter "Resultat (SHCP)". Plus-SHCP visas med plus.' },
+    ]
+  },
   {
     date: '11 november 2026 (395)',
     items: [
