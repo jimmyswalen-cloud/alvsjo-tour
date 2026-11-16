@@ -16666,6 +16666,7 @@ function renderCasualRound() {
     (edit ? '<button class="btn btn-sm" onclick="openCasualShcpEdit()"><i class="ti ti-adjustments"></i> Ändra SHCP</button>' : '')+
     (finished && casualCanEdit(r) && !r.sharedToWall && !r.hidden ? '<button class="btn btn-sm btn-primary" onclick="shareCasualRoundToWall()"><i class="ti ti-messages"></i> Dela på '+esc(clubWallName())+'</button>' : '')+
     (finished && casualCanEdit(r) ? '<button class="btn btn-sm" onclick="reopenCasualRound()"><i class="ti ti-lock-open"></i> Öppna för ändring</button>' : '')+
+    (isAdmin() ? '<button class="btn btn-sm" onclick="changeCasualRoundDate()" title="Ändra rondens datum"><i class="ti ti-calendar-event"></i> Ändra datum</button>' : '')+
     ((isAdmin() || r.createdBy === (currentUser&&currentUser.username)) ? '<button class="btn btn-sm btn-danger" onclick="deleteCasualRound()"><i class="ti ti-trash"></i> Ta bort ronden</button>' : '')+
   '</div>';
   el.innerHTML = out;
@@ -16741,6 +16742,17 @@ function finishCasualRound() {
     if(r.hidden) { showPushToast('Ronden är sparad', 'Dold rond – delas inte på väggen.'); return; }
     if(confirm('Ronden är sparad! Vill du dela resultatet på '+clubWallName()+'?')) shareCasualRoundToWall();
   }).catch(function(e){ alert('Kunde inte avsluta: '+e.message); });
+}
+// Release 406: admin kan ändra datum på en sällskapsrond (t.ex. en rond som registrerats på
+// fel dag). Påverkar bara datumet – score, spelare och spelform är orörda.
+function changeCasualRoundDate() {
+  var r = _cr.data; if(!r || !isAdmin()) return;
+  var v = prompt('Nytt datum för ronden (ÅÅÅÅ-MM-DD):', r.date || hcpTodayISO());
+  if(v == null) return; v = v.trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + 'T00:00:00'))) { alert('Skriv datumet som ÅÅÅÅ-MM-DD, t.ex. 2026-10-13.'); return; }
+  if(v === r.date) return;
+  r.date = v; renderCasualRound();
+  CASUAL_COL.doc(r.id).update({ date: v, dateChangedBy: currentUser.username, dateChangedAt: Date.now() }).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
 }
 function reopenCasualRound() {
   var r = _cr.data; if(!r || !casualCanEdit(r)) return;
@@ -23980,6 +23992,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (406)',
+    items: [
+      { type: 'new', text: 'Admin kan ändra datum på en sällskapsrond: öppna ronden och tryck "Ändra datum". Bara datumet ändras – score, spelare och spelform är orörda – och ronden sorteras om i profilens senaste scorekort och i statistiken.' },
+    ]
+  },
   {
     date: '11 november 2026 (405)',
     items: [
