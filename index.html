@@ -12493,7 +12493,13 @@ function eventCardHTML(i,e) {
     ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
     : ((isAdmin()||myPi>=0) ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   // Anmälningar flyttas upp till övre högra hörnet (ovanför status) och ligger därför inte i den hopfällbara delen.
-  var registerBtn = e.closed ? '' : ((myPi>=0 ? '<button class="btn btn-sm btn-primary" onclick="openSignupFlow('+i+')"><i class="ti ti-golf"></i> '+(sfGroupOf(e,myPi)?'Din boll':'Anmäl dig')+'</button>' : '')+
+  var registerBtn = e.closed ? '' : ((myPi>=0 ? (function(){ var myR = sfReg(e,myPi), inG = sfGroupOf(e,myPi), lbl, ic;
+      // Release 403: knappen följer spelarens läge
+      if(inG) { lbl = 'Din boll'; ic = 'ti-golf'; }
+      else if(myR && myR.declined) { lbl = 'Ändra svar'; ic = 'ti-refresh'; }
+      else if(myR) { lbl = sfMode(e)==='admin' ? 'Väntar på boll' : 'Gå med i / skapa boll'; ic = sfMode(e)==='admin' ? 'ti-hourglass' : 'ti-users-plus'; }
+      else { lbl = 'Anmäl dig'; ic = 'ti-golf'; }
+      return '<button class="btn btn-sm btn-primary" onclick="openSignupFlow('+i+')"><i class="ti '+ic+'"></i> '+lbl+'</button>'; })() : '')+
     (isAdmin() ? '<button class="btn btn-sm" onclick="openPairing(\''+t.id+'\','+i+')"><i class="ti ti-dice"></i> Sätt bollar</button>' : '')+
     '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>');
   var btns=e.closed
@@ -12827,13 +12833,24 @@ function renderHomeBollTodo() {
   var el = document.getElementById('home-bolltodo-widget'); if(!el) return;
   if(!isAdmin()) { el.innerHTML = ''; return; }
   try { clubTours().forEach(function(t){ if(!isRyderTour(t)) (t.events || []).forEach(function(e){ if(!e.closed) sfNormalizeGroups(t, e); }); }); } catch(x) {}
-  var rows = [];
+  // Release 402: påminn bara om det som är aktuellt – nästa deltävling i varje tour (alla
+  // tidigare är stängda) och bara när speldagen är inom 7 dagar. Varje rad kan också gömmas.
+  var rows = [], today = hcpTodayISO(), soon = (function(){ var d = new Date(); d.setDate(d.getDate() + 7); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  var hidden = {}; try { hidden = JSON.parse(localStorage.getItem('agcc-bolltodo-hidden') || '{}'); } catch(x) {}
   clubTours().forEach(function(t){
     if(isRyderTour(t) || eclIsFree(t)) return;
-    (t.events || []).forEach(function(e, ei){
-      if(e.closed || e.pacedWaiting) return;
-      var by = {}; prUnassigned(t, e).forEach(function(r){ var k = prKey(t, e, r); (by[k] = by[k] || []).push(r); });
-      Object.keys(by).sort().forEach(function(k){ rows.push({ t: t, e: e, ei: ei, key: k, n: by[k].length }); });
+    var evs = (t.events || []).map(function(e, ei){ return { e: e, ei: ei }; }).filter(function(x){ return !x.e.pacedWaiting && x.e.date; })
+      .sort(function(a, b){ return (a.e.periodStart || a.e.date).localeCompare(b.e.periodStart || b.e.date); });
+    var next = evs.find(function(x){ return !x.e.closed; });
+    if(!next) return;
+    var e = next.e, ei = next.ei;
+    var by = {}; prUnassigned(t, e).forEach(function(r){ var k = prKey(t, e, r); (by[k] = by[k] || []).push(r); });
+    Object.keys(by).sort().forEach(function(k){
+      var d = k.split('|')[0];
+      if(d > soon || d < today) return;
+      var hk = t.id + '|' + e.id + '|' + k;
+      if(hidden[hk] && hidden[hk] >= by[k].length) return; // gömd – visas igen om fler anmäler sig
+      rows.push({ t: t, e: e, ei: ei, key: k, n: by[k].length, hk: hk });
     });
   });
   if(!rows.length) { el.innerHTML = ''; return; }
@@ -12841,7 +12858,13 @@ function renderHomeBollTodo() {
     '<div style="font-weight:800;font-size:15px;margin-bottom:2px"><i class="ti ti-clipboard-list" style="color:var(--gold)"></i> Att göra – sätt bollar</div><div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Anmälda utan boll, per plats och dag</div>' +
     rows.slice(0, 8).map(function(x){ return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
       '<div style="min-width:0"><b style="font-size:13px">' + esc(prKeyLabel(x.t, x.e, x.key)) + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(x.t.name) + ' · ' + esc(x.e.name) + ' · ' + x.n + ' utan boll</div></div>' +
-      '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="openPairing(\'' + x.t.id + '\',' + x.ei + ',\'' + esc(x.key) + '\')"><i class="ti ti-dice"></i> Sätt bollar</button></div>'; }).join('') + '</div>';
+      '<span class="row" style="gap:6px;flex-shrink:0"><button class="btn btn-sm btn-primary" onclick="openPairing(\'' + x.t.id + '\',' + x.ei + ',\'' + esc(x.key) + '\')"><i class="ti ti-dice"></i> Sätt bollar</button>' +
+        '<button class="btn btn-sm" title="Göm påminnelsen" onclick="hideBollTodo(\'' + esc(x.hk) + '\',' + x.n + ')"><i class="ti ti-eye-off"></i></button></span></div>'; }).join('') + '</div>';
+}
+function hideBollTodo(hk, n) {
+  var h = {}; try { h = JSON.parse(localStorage.getItem('agcc-bolltodo-hidden') || '{}'); } catch(x) {}
+  h[hk] = n; try { localStorage.setItem('agcc-bolltodo-hidden', JSON.stringify(h)); } catch(x) {}
+  renderHomeBollTodo();
 }
 function openPairing(tourId, ei, key) {
   var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t || !isAdmin()) return;
@@ -23929,6 +23952,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (403)',
+    items: [
+      { type: 'improved', text: 'Knappen på deltävlingen följer nu ditt läge: "Anmäl dig" om du inte svarat, "Gå med i / skapa boll" om du är anmäld men saknar boll, "Väntar på boll" när admin sätter bollarna, "Din boll" när du har en boll och "Ändra svar" om du svarat att du inte kan.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (402)',
+    items: [
+      { type: 'improved', text: 'Rutan "Att göra – sätt bollar" på startsidan påminner nu bara om det som är aktuellt: nästa deltävling i varje tour (när de tidigare är spelade och stängda) och bara när speldagen är inom en vecka. Med 👁 kan du gömma en rad – den dyker upp igen om fler anmäler sig.' },
+    ]
+  },
   {
     date: '11 november 2026 (401)',
     items: [
