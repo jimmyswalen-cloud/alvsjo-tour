@@ -6147,6 +6147,25 @@ function quickDeclineFromHome(tourId, eventIndex) {
 // Snabbgenväg till "Side bets" för deltävlingen direkt från startsidans
 // "Väntar på resultat/Kommande runda"-widget - samma mönster som de andra
 // genvägarna här (enterTour + setTimeout innan vyn som bygger på getTour()).
+// Release 404: samma lägesknapp som på deltävlingen (Anmäl dig / Gå med i / skapa boll /
+// Väntar på boll / Din boll / Ändra svar) på startsidans kort "Kommande runda". Den lyser
+// gult när spelaren behöver agera (inte svarat eller anmäld utan boll i fritt läge).
+function homeSignupBtnHTML(t, ei) {
+  try {
+    var e = t.events[ei]; if(!e || e.closed) return '';
+    var me = getMyPi(t); if(me < 0) return '';
+    var r = sfReg(e, me), g = sfGroupOf(e, me), lbl, ic, act = false;
+    if(g) { lbl = 'Din boll'; ic = 'ti-golf'; }
+    else if(r && r.declined) { lbl = 'Ändra svar'; ic = 'ti-refresh'; }
+    else if(r) { if(sfMode(e) === 'admin') { lbl = 'Väntar på boll'; ic = 'ti-hourglass'; } else { lbl = 'Gå med i / skapa boll'; ic = 'ti-users-plus'; act = true; } }
+    else { lbl = 'Anmäl dig'; ic = 'ti-golf'; act = true; }
+    return '<button class="btn btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap;' + (act ? 'background:var(--gold);border-color:var(--gold);color:#2a1a00;font-weight:700' : '') + '" onclick="event.stopPropagation();goToSignupFromHome(\'' + t.id + '\',' + ei + ')"><i class="ti ' + ic + '"></i> ' + lbl + '</button>';
+  } catch(x) { return ''; }
+}
+function goToSignupFromHome(tourId, eventIndex) {
+  enterTour(tourId);
+  setTimeout(function(){ openSignupFlow(eventIndex); }, 60);
+}
 function goToMySideBetsFromHome(tourId, eventIndex) {
   enterTour(tourId);
   setTimeout(function(){ openSideBets(eventIndex); }, 60);
@@ -6383,6 +6402,7 @@ function renderHomeNextRoundWidget() {
       '<div class="row" style="justify-content:flex-end;align-items:center;gap:6px;padding:10px 14px 12px;flex-wrap:wrap">'+
         '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff;padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
+        homeSignupBtnHTML(t, info.eventIndex)+
         '<button class="btn btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets</button>'+
         '<button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
@@ -23952,6 +23972,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (404)',
+    items: [
+      { type: 'improved', text: 'Startsidans kort "Kommande runda" har nu samma knapp som deltävlingen – Anmäl dig, Gå med i / skapa boll, Väntar på boll, Din boll eller Ändra svar – till vänster om Side bets. Knappen lyser gult när du behöver agera.' },
+    ]
+  },
   {
     date: '11 november 2026 (403)',
     items: [
