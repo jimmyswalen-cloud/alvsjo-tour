@@ -588,6 +588,8 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <div id="home-billing-widget"></div>
     <div id="home-pending-users-widget"></div>
     <div id="home-course-review-widget"></div>
+    <div id="home-invite-widget"></div>
+    <div id="home-bolltodo-widget"></div>
     <div id="home-ryder-widget"></div>
     <div id="home-next-round-widget"></div>
     <div id="home-approvals-widget"></div>
@@ -6292,6 +6294,8 @@ function renderHomeRyderWidget() {
 }
 
 function renderHomeNextRoundWidget() {
+  try { renderHomeInvites(); } catch(e) { console.error('Inbjudningar', e); }
+  try { renderHomeBollTodo(); } catch(e) { console.error('Sätt bollar', e); }
   try { renderHomeRyderWidget(); } catch(e) { console.error('Ryder Cup på startsidan', e); }
   var el = document.getElementById('home-next-round-widget');
   if(!el) return;
@@ -12489,7 +12493,9 @@ function eventCardHTML(i,e) {
     ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets ('+e.sideBets.length+')</button>'
     : ((isAdmin()||myPi>=0) ? '<button class="btn btn-sm" onclick="openSideBets('+i+')"><i class="ti ti-target-arrow"></i> Side bets</button>' : '');
   // Anmälningar flyttas upp till övre högra hörnet (ovanför status) och ligger därför inte i den hopfällbara delen.
-  var registerBtn = e.closed ? '' : '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>';
+  var registerBtn = e.closed ? '' : ((myPi>=0 ? '<button class="btn btn-sm btn-primary" onclick="openSignupFlow('+i+')"><i class="ti ti-golf"></i> '+(sfGroupOf(e,myPi)?'Din boll':'Anmäl dig')+'</button>' : '')+
+    (isAdmin() ? '<button class="btn btn-sm" onclick="openPairing(\''+t.id+'\','+i+')"><i class="ti ti-dice"></i> Sätt bollar</button>' : '')+
+    '<button class="btn btn-sm" onclick="openRegister('+i+')"><i class="ti ti-user-plus"></i> Anmälningar</button>');
   var btns=e.closed
     ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Resultattavla</button>'+
       '<button class="btn btn-sm" onclick="openResultsView('+i+')"><i class="ti ti-podium"></i> Placeringar</button>'+
@@ -12542,8 +12548,459 @@ function eventCardHTML(i,e) {
 // Note: events cannot be added/removed once tour is locked (locked is always true now)
 
 // ── REGISTER ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// BOLLANMÄLAN (release 398)
+// Ett enklare anmälningsflöde för spelaren: "Anmäl dig" → välj sätt:
+//   • Gå med i en boll (lediga platser, namn och plats syns)
+//   • Skapa egen boll (datum, tid – simulator: anläggning och SIM –, antal platser, bjud in)
+//   • Låt admin sätta boll (välj dag och plats – admin lottar/parar)
+//   • Kan inte delta
+// Bollarna är samma e.teeGroups som admin använder idag, utökade med host (värd), venue,
+// simNo, timeTo, seats och invites (inbjudna pi). Per deltävling: e.bollMode 'free'|'admin'
+// (finaler är 'admin' som standard → spelaren svarar bara Jag spelar / Kan inte).
+// Inbjudna får en ruta på startsidan (Tacka ja / Nej tack). Admin får en ruta med anmälda
+// utan boll, grupperade per plats och dag, och ett parningsverktyg: markera spelare → lägg i
+// befintlig/ny boll, lotta resten (slumpvis, efter HCP, fyll befintliga först), granska och
+// publicera.
+// ═══════════════════════════════════════════════════════════════════════════
+var _sf = null, _pr = null, _sfModeBanner = '';
+function sfMode(e) { return e.bollMode || (e.isFinal ? 'admin' : 'free'); }
+function sfSeats(g) { return g.seats || 4; }
+function sfFree(g) { return sfSeats(g) - (g.playerPis || []).length - (g.invites || []).length; }
+function sfReg(e, pi) { return (e.registrations || []).find(function(r){ return r && r.pi === pi; }); }
+function sfGroupOf(e, pi) { return (e.teeGroups || []).find(function(g){ return (g.playerPis || []).indexOf(pi) >= 0; }); }
+function sfHostLabel(t, g) { return g.host != null ? sfFirst(t, g.host) : (g.createdBy === 'admin' || g.createdBy === 'lottery' ? 'admin' : ''); }
+function sfName(t, pi) { var p = t.players[pi]; return p ? (p.name || p.username) : '?'; }
+function sfFirst(t, pi) { return sfName(t, pi).split(' ')[0]; }
+function sfPlace(t, e, g) { return isSimTour(t) ? [g.venue || '', g.simNo || ''].filter(Boolean).join(' · ') : (e.course || ''); }
+function sfTimeLbl(g) { return (g.time || '') + (g.timeTo ? '–' + g.timeTo : ''); }
+function sfDateLbl(d) { try { return formatSvDateShort(d); } catch(e) { return d; } }
+function sfAvatars(t, pis, free) {
+  var h = (pis || []).map(function(pi){ var p = t.players[pi] || {}, u = findUser(p.username) || {}, img = playerPhoto(p.username, u.img || p.img);
+    return img ? '<img src="' + esc(img) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;margin-right:-6px;border:2px solid var(--surface)">'
+      : '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green-dark);color:#fff;font-size:9px;font-weight:700;margin-right:-6px;border:2px solid var(--surface)">' + ini(p.name || '') + '</span>'; }).join('');
+  for(var k = 0; k < (free || 0); k++) h += '<span style="display:inline-block;width:24px;height:24px;border-radius:50%;border:1.5px dashed var(--text-3);margin-right:-6px;vertical-align:middle"></span>';
+  return '<span style="display:inline-flex;align-items:center">' + h + '</span>';
+}
+function sfUpsertReg(e, pi, fields) {
+  if(!e.registrations) e.registrations = [];
+  var r = sfReg(e, pi);
+  if(!r) { r = { pi: pi, date: fields.date || e.date, declined: false }; e.registrations.push(r); }
+  r.declined = false;
+  // Release 400: tomt/odefinierat värde lämnar det som redan finns orört (bollar från äldre
+  // versioner saknar t.ex. anläggning och SIM på själva bollen). Bara null tar bort ett fält.
+  Object.keys(fields).forEach(function(k){ var v = fields[k]; if(v === null) delete r[k]; else if(v !== undefined && v !== '') r[k] = v; });
+  return r;
+}
+// Bollar skapade i release 397 och tidigare har bara { id?, date, time, playerPis }. Fyll i
+// det som saknas – id, värd, platser – och för simulator anläggning, SIM och tid från
+// spelarnas anmälningar (där de låg tidigare), så att nya flödet visar och matchar rätt.
+function sfNormalizeGroups(t, e) {
+  if(!e || !Array.isArray(e.teeGroups)) return;
+  var sim = isSimTour(t);
+  e.teeGroups.forEach(function(g){
+    if(!g.id) g.id = 'tg_' + uid();
+    if(!Array.isArray(g.playerPis)) g.playerPis = [];
+    // Release 401: bollar från tidigare versioner är satta av admin – admin är värd
+    if(!g.createdBy) { g.createdBy = 'admin'; if(g.host === undefined) g.host = null; }
+    var regs = g.playerPis.map(function(pi){ return sfReg(e, pi); }).filter(Boolean);
+    var common = function(k){ var vals = regs.map(function(r){ return r[k]; }).filter(Boolean); return vals.length && vals.every(function(v){ return v === vals[0]; }) ? vals[0] : null; };
+    if(sim) {
+      if(!g.venue) { var v = common('venue'); if(v) g.venue = v; }
+      if(!g.simNo) { var sn = common('simNo'); if(sn) g.simNo = sn; }
+      if(!g.timeTo) { var tt = common('timeTo'); if(tt) g.timeTo = tt; }
+    }
+    if(!g.time) { var tm = common('time'); if(tm) g.time = tm; }
+  });
+}
+function sfRemoveFromGroups(e, pi, exceptId) {
+  (e.teeGroups || []).forEach(function(g){
+    if(g.id === exceptId) return;
+    var i = (g.playerPis || []).indexOf(pi);
+    if(i >= 0) { g.playerPis.splice(i, 1); if(g.host === pi) g.host = g.playerPis.length ? g.playerPis[0] : null; }
+    if(g.invites) g.invites = g.invites.filter(function(x){ return x !== pi; });
+  });
+  e.teeGroups = (e.teeGroups || []).filter(function(g){ return (g.playerPis || []).length || (g.invites || []).length; });
+}
+function sfDates(e) {
+  var out = [], a = new Date((e.periodStart || e.date) + 'T00:00:00'), b = new Date((e.periodEnd || e.date) + 'T00:00:00'), today = hcpTodayISO();
+  for(var d = new Date(a); d <= b && out.length < 60; d.setDate(d.getDate() + 1)) {
+    var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if(iso >= today) out.push(iso);
+  }
+  return out;
+}
+function sfDateSelect(e, id, val) {
+  var ds = sfDates(e); if(!ds.length) ds = [e.date];
+  return '<select id="' + id + '" style="margin:0">' + ds.map(function(d){ return '<option value="' + d + '" ' + (d === val ? 'selected' : '') + '>' + esc(sfDateLbl(d)) + '</option>'; }).join('') + '</select>';
+}
+
+// ── Spelarens flöde ───────────────────────────────────────────────────────
+function openSignupFlow(ei) {
+  var t = getTour(), e = t && t.events[ei]; if(!e) return;
+  var me = getMyPi(t); if(me < 0) { alert('Du är inte med i den här touren.'); return; }
+  if(!isAdmin() && isRegistrationDeadlinePassed(e) && !sfReg(e, me)) { alert('Anmälningstiden för den här tävlingen har gått ut.'); return; }
+  sfNormalizeGroups(t, e);
+  _sf = { ei: ei, step: 'choose', invites: [], seats: 4, dateFilter: '' };
+  renderSignupFlow();
+}
+function sfHead(t, e, step) {
+  return '<div style="font-size:10px;letter-spacing:.12em;font-weight:700;color:var(--gold)">' + step + '</div>' +
+    '<h3 style="margin:2px 0 2px">' + esc(e.name) + '</h3><p style="font-size:12px;color:var(--text-3);margin:0 0 10px">' +
+    (e.periodStart && e.periodEnd && e.periodStart !== e.periodEnd ? 'Spelperiod ' + esc(sfDateLbl(e.periodStart)) + ' – ' + esc(sfDateLbl(e.periodEnd)) : esc(sfDateLbl(e.date))) + (e.course ? ' · ' + esc(e.course) : '') + '</p>';
+}
+function sfOpt(icon, bg, title, sub, onclick, dim) {
+  return '<div onclick="' + onclick + '" style="cursor:pointer;display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;border:1px solid var(--border);margin-bottom:8px;' + (dim ? 'opacity:.65' : '') + '">' +
+    '<span style="width:38px;height:38px;border-radius:11px;background:' + bg + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><i class="ti ' + icon + '"></i></span>' +
+    '<span style="flex:1;min-width:0"><b style="font-size:14px">' + title + '</b><span style="display:block;font-size:12px;color:var(--text-3)">' + sub + '</span></span><i class="ti ti-chevron-right" style="color:var(--text-3)"></i></div>';
+}
+function renderSignupFlow() {
+  if(!_sf) return;
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t), mode = sfMode(e);
+  var reg = sfReg(e, me), myG = sfGroupOf(e, me), h = '';
+  if(_sf.step === 'choose') {
+    h += sfHead(t, e, 'ANMÄLAN');
+    if(myG) h += '<div style="padding:12px;border-radius:14px;border:2px solid var(--green-dark);margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--green-dark)">DIN BOLL</div><b>' + esc(sfDateLbl(myG.date)) + (sfTimeLbl(myG) ? ' · ' + esc(sfTimeLbl(myG)) : '') + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(sfPlace(t, e, myG)) + '</div>' +
+      '<div style="margin-top:6px">' + sfAvatars(t, myG.playerPis, Math.max(0, sfFree(myG))) + '</div><div style="font-size:12px;color:var(--text-2);margin-top:4px">' + myG.playerPis.map(function(pi){ return esc(sfFirst(t, pi)) + (myG.host === pi ? ' (värd)' : ''); }).join(' · ') + (myG.host == null && sfHostLabel(t, myG) ? ' <span style="color:var(--text-3)">· värd: admin</span>' : '') + '</div>' +
+      '<button class="btn btn-sm" style="margin-top:8px;color:#dc2626" onclick="sfLeave()"><i class="ti ti-door-exit"></i> Lämna bollen</button></div>';
+    else if(reg && !reg.declined) h += '<div style="padding:10px 12px;border-radius:12px;background:var(--surface2);font-size:13px;margin-bottom:12px"><i class="ti ti-circle-check" style="color:#1D9E75"></i> Du är anmäld' + (reg.date ? ' · ' + esc(sfDateLbl(reg.date)) : '') + ' – väntar på boll' + (mode === 'admin' || reg.bollMode === 'admin' ? ' från admin' : '') + '.</div>';
+    else if(reg && reg.declined) h += '<div style="padding:10px 12px;border-radius:12px;background:var(--surface2);font-size:13px;margin-bottom:12px"><i class="ti ti-x" style="color:#dc2626"></i> Du har svarat att du inte kan delta.</div>';
+    if(mode === 'admin') {
+      h += '<p style="font-size:12px;color:var(--text-3);margin:0 0 8px">Admin sätter bollar och starttider för den här ' + (e.isFinal ? 'finalen' : 'deltävlingen') + '.</p>' +
+        sfOpt('ti-check', '#1D9E75', 'Jag spelar', 'Admin lottar bollar' + (sim ? ' – välj dag och plats' : ''), "_sf.step='admin';renderSignupFlow()") +
+        sfOpt('ti-x', '#7a3a3a', 'Kan inte delta', '', 'sfDecline()', true);
+    } else {
+      var open = (e.teeGroups || []).filter(function(g){ return sfFree(g) > 0 && g.date >= hcpTodayISO() && (g.playerPis || []).indexOf(me) < 0; }).length;
+      h += sfOpt('ti-users-group', '#1D9E75', myG ? 'Byt till en annan boll' : 'Gå med i en boll', open ? open + ' boll' + (open === 1 ? '' : 'ar') + ' har lediga platser' : 'Inga lediga platser just nu', "_sf.step='join';renderSignupFlow()") +
+        sfOpt('ti-plus', '#E8A33D', 'Skapa egen boll', 'Du blir värd – andra kan ansluta', "_sf.step='host';renderSignupFlow()") +
+        sfOpt('ti-shield-half', '#3a4a6a', 'Låt admin sätta boll', 'Välj dag' + (sim ? ' och plats' : '') + ' – admin lottar', "_sf.step='admin';renderSignupFlow()") +
+        sfOpt('ti-x', '#7a3a3a', 'Kan inte delta', '', 'sfDecline()', true);
+    }
+    h += '<div class="row" style="justify-content:space-between;margin-top:6px">' + (isAdmin() ? '<button class="btn btn-sm" onclick="_sf=null;openRegister(' + _sf.ei + ')"><i class="ti ti-list"></i> Alla anmälningar</button>' : '<span></span>') + '<button class="btn" onclick="_sf=null;closeModal()">Stäng</button></div>';
+  } else if(_sf.step === 'join') {
+    h += sfHead(t, e, 'GÅ MED I EN BOLL');
+    var gs = (e.teeGroups || []).filter(function(g){ return g.date >= hcpTodayISO() && (g.playerPis || []).indexOf(me) < 0; }).sort(function(a, b){ return (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')); });
+    var days = gs.map(function(g){ return g.date; }).filter(function(d, i, a){ return a.indexOf(d) === i; });
+    h += '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">' + [''].concat(days).map(function(d){ var on = (_sf.dateFilter || '') === d; return '<button class="btn btn-sm" style="' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="_sf.dateFilter=\'' + d + '\';renderSignupFlow()">' + (d ? esc(sfDateLbl(d)) : 'Alla dagar') + '</button>'; }).join('') + '</div>';
+    var list = gs.filter(function(g){ return !_sf.dateFilter || g.date === _sf.dateFilter; });
+    h += list.length ? list.map(function(g){
+      var free = sfFree(g), full = free <= 0;
+      return '<div style="padding:10px 12px;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;' + (full ? 'opacity:.5' : '') + '">' +
+        '<div class="row" style="justify-content:space-between;align-items:center"><b>' + esc(sfDateLbl(g.date)) + (sfTimeLbl(g) ? ' · ' + esc(sfTimeLbl(g)) : '') + '</b><span style="font-size:12px;color:var(--text-3)">' + (full ? 'Full' : g.playerPis.length + '/' + sfSeats(g)) + '</span></div>' +
+        '<div style="font-size:12px;color:var(--text-3)">' + esc(sfPlace(t, e, g)) + '</div>' +
+        '<div style="font-size:12px;color:var(--text-2);margin-top:4px">' + g.playerPis.map(function(pi){ return esc(sfFirst(t, pi)) + (g.host === pi ? ' (värd)' : ''); }).join(' · ') + (g.host == null && sfHostLabel(t, g) ? ' <span style="color:var(--text-3)">· värd: admin</span>' : '') + '</div>' +
+        '<div class="row" style="justify-content:space-between;align-items:center;margin-top:6px">' + sfAvatars(t, g.playerPis, Math.max(0, free)) + (full ? '' : '<button class="btn btn-sm btn-primary" onclick="sfJoin(\'' + g.id + '\')">Gå med</button>') + '</div></div>';
+    }).join('') : '<p style="font-size:13px;color:var(--text-3)">Inga bollar' + (_sf.dateFilter ? ' den dagen' : '') + ' än. Skapa en egen, eller låt admin sätta din boll.</p>';
+    h += '<div class="row" style="justify-content:space-between;margin-top:8px"><button class="btn" onclick="_sf.step=\'choose\';renderSignupFlow()"><i class="ti ti-arrow-left"></i> Tillbaka</button><button class="btn btn-sm" onclick="_sf.step=\'host\';renderSignupFlow()"><i class="ti ti-plus"></i> Skapa egen</button></div>';
+  } else if(_sf.step === 'host') {
+    h += sfHead(t, e, 'SKAPA EGEN BOLL');
+    var others = t.players.map(function(p, pi){ return { p: p, pi: pi }; }).filter(function(x){ var r = sfReg(e, x.pi); return x.p && x.pi !== me && !(r && r.declined) && !sfGroupOf(e, x.pi); });
+    h += (sim ? '' : '<div class="field"><label>Bana</label><div style="font-size:14px;font-weight:700"><i class="ti ti-lock" style="color:var(--text-3)"></i> ' + esc(e.course || 'Deltävlingens bana') + '</div></div>') +
+      '<div class="row" style="gap:10px"><div class="field" style="flex:1"><label>Datum</label>' + sfDateSelect(e, 'sf-date', _sf.date || (reg && reg.date) || sfDates(e)[0]) + '</div>' +
+      '<div class="field" style="flex:1"><label>' + (sim ? 'Från' : 'Starttid') + '</label><input type="time" id="sf-time" value="' + esc(_sf.time || '') + '" style="margin:0"></div>' +
+      (sim ? '<div class="field" style="flex:1"><label>Till</label><input type="time" id="sf-timeto" value="' + esc(_sf.timeTo || '') + '" style="margin:0"></div>' : '') + '</div>' +
+      (sim ? '<div class="field"><label>Anläggning</label>' + simVenuePickerHTML('sf-venue', _sf.venue || (reg && reg.venue) || lastSimVenueFor(currentUser.username, true) || '', 'sfVenuePick') + '</div>' +
+        '<div class="field"><label>Simulator</label><input type="text" id="sf-sim" maxlength="12" placeholder="t.ex. SIM 1" value="' + esc(_sf.simNo || '') + '"></div>' : '') +
+      '<div class="field"><label>Platser</label><div class="row" style="gap:6px">' + [2, 3, 4].map(function(n){ var on = _sf.seats === n; return '<button class="btn btn-sm" style="flex:1;justify-content:center;' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="sfKeep();_sf.seats=' + n + ';renderSignupFlow()">' + n + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label>Bjud in (valfritt)</label><div class="row" style="gap:6px;flex-wrap:wrap">' + (others.length ? others.map(function(x){ var on = _sf.invites.indexOf(x.pi) >= 0;
+        return '<button class="btn btn-sm" style="' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="sfKeep();sfToggleInvite(' + x.pi + ')">' + (on ? '✓ ' : '+ ') + esc((x.p.name || '').split(' ')[0]) + '</button>'; }).join('') : '<span style="font-size:12px;color:var(--text-3)">Alla andra har redan en boll.</span>') + '</div>' +
+        '<p style="font-size:11px;color:var(--text-3);margin:4px 0 0">De inbjudna får en ruta på startsidan och svarar ja eller nej. Platsen hålls tills de svarar.</p></div>' +
+      '<div class="row" style="justify-content:space-between;margin-top:8px"><button class="btn" onclick="sfKeep();_sf.step=\'choose\';renderSignupFlow()"><i class="ti ti-arrow-left"></i> Tillbaka</button><button class="btn btn-primary" onclick="sfCreate()"><i class="ti ti-check"></i> Skapa boll</button></div>';
+  } else if(_sf.step === 'admin') {
+    h += sfHead(t, e, mode === 'admin' ? 'JAG SPELAR' : 'LÅT ADMIN SÄTTA BOLL');
+    h += '<div class="field"><label>Dag</label>' + sfDateSelect(e, 'sf-date', (reg && reg.date) || sfDates(e)[0]) + '</div>' +
+      (sim ? '<div class="field"><label>Anläggning</label>' + simVenuePickerHTML('sf-venue', (reg && reg.venue) || lastSimVenueFor(currentUser.username, true) || '', 'sfVenuePick') + '</div>' : '') +
+      '<p style="font-size:12px;color:var(--text-3)">Admin parar ihop eller lottar spelare som spelar samma dag' + (sim ? ' på samma anläggning' : '') + '. Din boll visas på startsidan när den är satt.</p>' +
+      '<div class="row" style="justify-content:space-between;margin-top:8px"><button class="btn" onclick="_sf.step=\'choose\';renderSignupFlow()"><i class="ti ti-arrow-left"></i> Tillbaka</button><button class="btn btn-primary" onclick="sfAdminPick()"><i class="ti ti-check"></i> Anmäl mig</button></div>';
+  } else if(_sf.step === 'done') {
+    var g2 = sfGroupOf(e, me);
+    h += '<div style="text-align:center;padding:6px 0 4px"><div style="font-size:40px">⛳</div><h3 style="margin:4px 0">' + (g2 ? 'Du är med!' : 'Du är anmäld!') + '</h3></div>' +
+      (g2 ? '<div style="padding:12px;border-radius:14px;border:2px solid var(--green-dark)"><b>' + esc(sfDateLbl(g2.date)) + (sfTimeLbl(g2) ? ' · ' + esc(sfTimeLbl(g2)) : '') + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(sfPlace(t, e, g2)) + '</div><div style="margin-top:6px">' + sfAvatars(t, g2.playerPis, Math.max(0, sfFree(g2))) + '</div>' +
+        ((g2.invites || []).length ? '<div style="font-size:12px;color:var(--text-3);margin-top:6px">Inbjudna: ' + g2.invites.map(function(pi){ return esc(sfFirst(t, pi)); }).join(', ') + ' (väntar på svar)</div>' : '') + '</div>'
+        : '<p style="text-align:center;font-size:13px;color:var(--text-2)">Admin sätter din boll – den visas på startsidan när den är klar.</p>') +
+      '<p style="font-size:12px;color:var(--text-3);text-align:center;margin:10px 0 0">Visas under Kommande runda på startsidan. Du kan byta eller lämna fram till dagen före.</p>' +
+      '<div class="row" style="justify-content:center;margin-top:12px"><button class="btn btn-primary" onclick="_sf=null;closeModal();renderEvents()">Klar</button></div>';
+  }
+  showModal(h, true, true);
+}
+function sfKeep() {
+  var g = function(id){ var el = document.getElementById(id); return el ? el.value : undefined; };
+  if(g('sf-date') !== undefined) _sf.date = g('sf-date');
+  if(g('sf-time') !== undefined) _sf.time = g('sf-time');
+  if(g('sf-timeto') !== undefined) _sf.timeTo = g('sf-timeto');
+  if(g('sf-sim') !== undefined) _sf.simNo = g('sf-sim');
+  var vs = document.getElementById('sf-venue-sel'); if(vs) _sf.venue = vs.value === '__other' ? (g('sf-venue-other') || '') : vs.value;
+}
+function sfVenuePick(v) { _sf.venue = v; }
+function sfToggleInvite(pi) { var i = _sf.invites.indexOf(pi); if(i >= 0) _sf.invites.splice(i, 1); else if(_sf.invites.length < _sf.seats - 1) _sf.invites.push(pi); else { alert('Bollen har ' + _sf.seats + ' platser.'); return; } renderSignupFlow(); }
+function sfJoin(gid) {
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), g = (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
+  if(sfFree(g) <= 0) { alert('Bollen är full.'); renderSignupFlow(); return; }
+  sfRemoveFromGroups(e, me, g.id);
+  if(g.host == null && !g.playerPis.length) g.host = me; // äldre bollar utan värd får ingen värd bara för att någon går med
+  g.playerPis.push(me);
+  sfUpsertReg(e, me, { date: g.date, time: g.time || undefined, timeTo: g.timeTo || undefined, venue: g.venue || undefined, simNo: g.simNo || undefined, bollMode: null });
+  save(); _sf.step = 'done'; renderSignupFlow();
+}
+function sfCreate() {
+  sfKeep();
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t);
+  if(!_sf.date) { alert('Välj datum.'); return; }
+  if(sim && !_sf.venue) { alert('Välj anläggning.'); return; }
+  sfRemoveFromGroups(e, me, null);
+  var g = { id: 'tg_' + uid(), date: _sf.date, time: _sf.time || '', playerPis: [me], host: me, seats: _sf.seats, invites: _sf.invites.slice(), createdBy: 'player' };
+  if(sim) { g.venue = _sf.venue; if(_sf.simNo) g.simNo = _sf.simNo; if(_sf.timeTo) g.timeTo = _sf.timeTo; }
+  if(!e.teeGroups) e.teeGroups = [];
+  e.teeGroups.push(g);
+  sfUpsertReg(e, me, { date: g.date, time: g.time || undefined, timeTo: g.timeTo || undefined, venue: g.venue || undefined, simNo: g.simNo || undefined, bollMode: null });
+  save(); _sf.step = 'done'; renderSignupFlow();
+}
+function sfAdminPick() {
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t);
+  var d = (document.getElementById('sf-date') || {}).value || e.date; sfKeep();
+  if(sim && !_sf.venue) { alert('Välj anläggning.'); return; }
+  sfRemoveFromGroups(e, me, null);
+  sfUpsertReg(e, me, { date: d, venue: sim ? _sf.venue : null, bollMode: 'admin' });
+  save(); _sf.step = 'done'; renderSignupFlow();
+}
+function sfDecline() {
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t);
+  if(!confirm('Svara att du inte kan delta?')) return;
+  sfRemoveFromGroups(e, me, null);
+  var r = sfReg(e, me); if(r) r.declined = true; else { if(!e.registrations) e.registrations = []; e.registrations.push({ pi: me, date: e.date, declined: true }); }
+  save(); _sf = null; closeModal(); renderEvents();
+}
+function sfLeave() {
+  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t);
+  if(!confirm('Lämna bollen? Du är fortfarande anmäld och kan gå med i en annan boll eller låta admin sätta din boll.')) return;
+  sfRemoveFromGroups(e, me, null);
+  save(); renderSignupFlow();
+}
+
+// ── Inbjudningar på startsidan ────────────────────────────────────────────
+function sfMyInvites() {
+  var out = []; if(!currentUser) return out;
+  clubTours().forEach(function(t){
+    if(isRyderTour(t)) return;
+    var me = getMyPi(t); if(me < 0) return;
+    (t.events || []).forEach(function(e, ei){ if(e.closed) return; (e.teeGroups || []).forEach(function(g){ if(g && (g.invites || []).indexOf(me) >= 0 && g.date >= hcpTodayISO()) out.push({ t: t, e: e, ei: ei, g: g, me: me }); }); });
+  });
+  return out;
+}
+function renderHomeInvites() {
+  var el = document.getElementById('home-invite-widget'); if(!el) return;
+  var list = sfMyInvites(); if(!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = list.map(function(x){
+    var host = x.g.host != null ? sfName(x.t, x.g.host) : 'Någon';
+    return '<div class="card" style="margin-bottom:16px;padding:14px;border:2px solid var(--gold)">' +
+      '<div style="display:flex;gap:10px;align-items:center"><span style="width:36px;height:36px;border-radius:10px;background:var(--gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="ti ti-mail"></i></span>' +
+        '<div style="flex:1;min-width:0"><b>' + esc(host) + ' bjöd in dig</b><div style="font-size:12px;color:var(--text-3)">' + esc(x.t.name) + ' · ' + esc(x.e.name) + '</div></div></div>' +
+      '<div style="margin-top:8px"><b>' + esc(sfDateLbl(x.g.date)) + (sfTimeLbl(x.g) ? ' · ' + esc(sfTimeLbl(x.g)) : '') + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(sfPlace(x.t, x.e, x.g)) + '</div>' +
+        '<div style="font-size:12px;color:var(--text-2);margin-top:3px">' + x.g.playerPis.map(function(pi){ return esc(sfFirst(x.t, pi)) + (x.g.host === pi ? ' (värd)' : ''); }).join(' · ') + '</div></div>' +
+      '<div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-primary" style="flex:1;justify-content:center" onclick="sfAnswerInvite(\'' + x.t.id + '\',' + x.ei + ',\'' + x.g.id + '\',true)">Tacka ja</button>' +
+        '<button class="btn" style="flex:1;justify-content:center" onclick="sfAnswerInvite(\'' + x.t.id + '\',' + x.ei + ',\'' + x.g.id + '\',false)">Nej tack</button></div></div>';
+  }).join('');
+}
+function sfAnswerInvite(tourId, ei, gid, yes) {
+  var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t) return;
+  var e = t.events[ei], g = (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
+  var me = getMyPi(t); if(me < 0) return;
+  g.invites = (g.invites || []).filter(function(x){ return x !== me; });
+  if(yes) {
+    sfRemoveFromGroups(e, me, g.id);
+    if(g.playerPis.length < sfSeats(g)) g.playerPis.push(me);
+    sfUpsertReg(e, me, { date: g.date, time: g.time || undefined, timeTo: g.timeTo || undefined, venue: g.venue || undefined, simNo: g.simNo || undefined, bollMode: null });
+  }
+  save(); renderHomeInvites();
+  try { renderHomeNextRoundWidget(); } catch(err) {}
+}
+
+// ── Admin: anmälda utan boll + parning ────────────────────────────────────
+function prKey(t, e, r) { return r.date + '|' + (isSimTour(t) ? (r.venue || '?') : (e.course || '')); }
+function prKeyLabel(t, e, key) { var p = key.split('|'); return (p[1] && p[1] !== '?' ? p[1] : (isSimTour(t) ? 'Plats ej angiven' : (e.course || ''))) + ' · ' + sfDateLbl(p[0]); }
+function prUnassigned(t, e, groups) {
+  groups = groups || e.teeGroups || [];
+  var inG = {}; groups.forEach(function(g){ (g.playerPis || []).forEach(function(pi){ inG[pi] = true; }); });
+  return (e.registrations || []).filter(function(r){ return r && !r.declined && r.date && r.date >= hcpTodayISO() && !inG[r.pi] && t.players[r.pi]; });
+}
+function renderHomeBollTodo() {
+  var el = document.getElementById('home-bolltodo-widget'); if(!el) return;
+  if(!isAdmin()) { el.innerHTML = ''; return; }
+  try { clubTours().forEach(function(t){ if(!isRyderTour(t)) (t.events || []).forEach(function(e){ if(!e.closed) sfNormalizeGroups(t, e); }); }); } catch(x) {}
+  var rows = [];
+  clubTours().forEach(function(t){
+    if(isRyderTour(t) || eclIsFree(t)) return;
+    (t.events || []).forEach(function(e, ei){
+      if(e.closed || e.pacedWaiting) return;
+      var by = {}; prUnassigned(t, e).forEach(function(r){ var k = prKey(t, e, r); (by[k] = by[k] || []).push(r); });
+      Object.keys(by).sort().forEach(function(k){ rows.push({ t: t, e: e, ei: ei, key: k, n: by[k].length }); });
+    });
+  });
+  if(!rows.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="card" style="margin-bottom:20px;padding:14px 16px;border:2px solid var(--gold)">' +
+    '<div style="font-weight:800;font-size:15px;margin-bottom:2px"><i class="ti ti-clipboard-list" style="color:var(--gold)"></i> Att göra – sätt bollar</div><div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Anmälda utan boll, per plats och dag</div>' +
+    rows.slice(0, 8).map(function(x){ return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
+      '<div style="min-width:0"><b style="font-size:13px">' + esc(prKeyLabel(x.t, x.e, x.key)) + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(x.t.name) + ' · ' + esc(x.e.name) + ' · ' + x.n + ' utan boll</div></div>' +
+      '<button class="btn btn-sm btn-primary" style="flex-shrink:0" onclick="openPairing(\'' + x.t.id + '\',' + x.ei + ',\'' + esc(x.key) + '\')"><i class="ti ti-dice"></i> Sätt bollar</button></div>'; }).join('') + '</div>';
+}
+function openPairing(tourId, ei, key) {
+  var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t || !isAdmin()) return;
+  if(activeTourId !== tourId) { try { enterTour(tourId); } catch(e) {} }
+  var e = t.events[ei];
+  sfNormalizeGroups(t, e);
+  _pr = { tourId: tourId, ei: ei, key: key || null, groups: JSON.parse(JSON.stringify(e.teeGroups || [])), sel: [], view: 'pick', lotMode: 'random', moved: {} };
+  if(!_pr.key) { var u = prUnassigned(t, e, _pr.groups); if(u.length) _pr.key = prKey(t, e, u[0]); }
+  renderPairing();
+}
+function prKeys(t, e) {
+  var ks = {}; prUnassigned(t, e, _pr.groups).forEach(function(r){ ks[prKey(t, e, r)] = (ks[prKey(t, e, r)] || 0) + 1; });
+  _pr.groups.forEach(function(g){ if(g.date >= hcpTodayISO()) { var k = g.date + '|' + (isSimTour(t) ? (g.venue || '?') : (e.course || '')); if(!(k in ks)) ks[k] = 0; } });
+  return ks;
+}
+function prGroupsForKey(t, e) {
+  var p = (_pr.key || '').split('|');
+  return _pr.groups.filter(function(g){ return g.date === p[0] && (!isSimTour(t) || (g.venue || '?') === p[1]); });
+}
+function renderPairing() {
+  if(!_pr) return;
+  var t = S.tours.find(function(x){ return x.id === _pr.tourId; }), e = t.events[_pr.ei], sim = isSimTour(t);
+  var ks = prKeys(t, e), un = _pr.key ? prUnassigned(t, e, _pr.groups).filter(function(r){ return prKey(t, e, r) === _pr.key; }) : [];
+  var hcpOf = function(pi){ var p = t.players[pi] || {}; return Number((findUser(p.username) || {}).hcp); };
+  var h = '<div style="font-size:10px;letter-spacing:.12em;font-weight:700;color:var(--gold)">ADMIN · ' + esc(e.name.toUpperCase()) + '</div><h3 style="margin:2px 0 8px">Sätt bollar</h3>' +
+    '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">' + Object.keys(ks).sort().map(function(k){ var on = k === _pr.key;
+      return '<button class="btn btn-sm" style="' + (on ? 'background:var(--gold);color:#2a1a00;border-color:transparent' : '') + '" onclick="_pr.key=\'' + esc(k) + '\';_pr.sel=[];_pr.view=\'pick\';renderPairing()">' + esc(prKeyLabel(t, e, k)) + ' (' + ks[k] + ')</button>'; }).join('') + '</div>' +
+    '<div class="row" style="gap:6px;margin-bottom:10px">' + [['pick', 'Para ihop'], ['review', 'Granska bollar']].map(function(v){ var on = _pr.view === v[0]; return '<button class="btn btn-sm" style="flex:1;justify-content:center;' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent' : '') + '" onclick="_pr.view=\'' + v[0] + '\';renderPairing()">' + v[1] + '</button>'; }).join('') + '</div>';
+  if(_pr.view === 'pick') {
+    h += '<div style="font-size:12px;color:var(--text-3);margin-bottom:4px">Utan boll – tryck för att markera</div>' +
+      (un.length ? un.map(function(r){ var on = _pr.sel.indexOf(r.pi) >= 0, hc = hcpOf(r.pi);
+        return '<div onclick="prToggle(' + r.pi + ')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';margin-bottom:5px;' + (on ? 'background:color-mix(in srgb, var(--green-dark) 14%, transparent)' : '') + '">' +
+          '<span style="width:18px;height:18px;border-radius:5px;border:1.5px solid ' + (on ? 'var(--green-dark)' : 'var(--text-3)') + ';background:' + (on ? 'var(--green-dark)' : 'transparent') + ';color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">' + (on ? '✓' : '') + '</span>' +
+          sfAvatars(t, [r.pi], 0) + '<span style="flex:1;font-size:13px;font-weight:600;margin-left:6px">' + esc(sfName(t, r.pi)) + '</span><span style="font-size:12px;color:var(--text-3)">' + (isNaN(hc) ? '' : 'HCP ' + fmtHcp(hc)) + '</span></div>'; }).join('')
+        : '<p style="font-size:13px;color:#1D9E75"><i class="ti ti-circle-check"></i> Alla här har en boll.</p>');
+    if(_pr.sel.length) {
+      var fits = prGroupsForKey(t, e).filter(function(g){ return sfSeats(g) - g.playerPis.length >= _pr.sel.length; });
+      h += '<div style="margin-top:10px;padding:12px;border-radius:12px;background:var(--surface2)"><b>' + _pr.sel.length + ' markerade – lägg i boll</b>' +
+        fits.map(function(g){ return '<div class="row" style="justify-content:space-between;align-items:center;margin-top:8px"><span style="font-size:13px">' + esc(sfTimeLbl(g) || 'Utan tid') + (g.simNo ? ' · ' + esc(g.simNo) : '') + ' · ' + g.playerPis.map(function(pi){ return esc(sfFirst(t, pi)); }).join(', ') + '</span><button class="btn btn-sm" onclick="prAddTo(\'' + g.id + '\')">Lägg till</button></div>'; }).join('') +
+        '<div style="margin-top:10px;font-size:12px;font-weight:700">Ny boll</div><div class="row" style="gap:6px;margin-top:4px;flex-wrap:wrap">' +
+          '<input type="time" id="pr-time" style="margin:0;width:110px" title="Tid">' + (sim ? '<input type="text" id="pr-sim" maxlength="12" placeholder="SIM" style="margin:0;width:90px">' : '') +
+          '<select id="pr-host" style="margin:0;flex:1;min-width:120px">' + _pr.sel.map(function(pi){ return '<option value="' + pi + '">Värd: ' + esc(sfFirst(t, pi)) + '</option>'; }).join('') + '</select>' +
+          '<button class="btn btn-sm btn-primary" onclick="prNewGroup()"><i class="ti ti-plus"></i> Skapa boll</button></div></div>';
+    }
+    if(un.length) h += '<div style="margin-top:12px;padding:12px;border-radius:12px;border:1px dashed var(--border)"><b>Lotta ' + (_pr.sel.length ? 'de ' + un.filter(function(r){ return _pr.sel.indexOf(r.pi) < 0; }).length + ' andra' : 'alla ' + un.length) + '</b>' +
+      '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">' + [['random', 'Slumpvis'], ['hcp', 'Efter HCP – jämna bollar'], ['fill', 'Fyll befintliga först']].map(function(m){ var on = _pr.lotMode === m[0]; return '<button class="btn btn-sm" style="' + (on ? 'background:var(--gold);color:#2a1a00;border-color:transparent' : '') + '" onclick="_pr.lotMode=\'' + m[0] + '\';renderPairing()">' + m[1] + '</button>'; }).join('') + '</div>' +
+      '<button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="prLottery()"><i class="ti ti-dice"></i> Lotta</button></div>';
+  } else {
+    var gs = prGroupsForKey(t, e).sort(function(a, b){ return (a.time || '').localeCompare(b.time || ''); }), allInKey = gs;
+    h += gs.length ? gs.map(function(g){
+      var editing = _pr.editing === g.id;
+      return '<div style="padding:10px 12px;border-radius:12px;border:1px solid ' + (editing ? 'var(--gold)' : 'var(--border)') + ';margin-bottom:8px">' +
+        '<div class="row" style="justify-content:space-between;align-items:center;gap:6px"><b>' + esc(sfTimeLbl(g) || 'Utan tid') + (g.simNo ? ' · ' + esc(g.simNo) : '') + '</b><span class="row" style="gap:6px;align-items:center"><span style="font-size:11px;color:var(--text-3)">' + (g.createdBy === 'player' ? 'spelarnas' : (g.createdBy === 'lottery' ? 'lottade' : 'parade')) + ' · ' + g.playerPis.length + '/' + sfSeats(g) + '</span>' +
+          '<button class="btn btn-sm" style="padding:3px 8px" title="Ändra bollen" onclick="_pr.editing=' + (editing ? 'null' : '\'' + g.id + '\'') + ';renderPairing()"><i class="ti ti-' + (editing ? 'x' : 'pencil') + '"></i></button></span></div>' +
+        (editing ? prEditFormHTML(t, e, g) : '') +
+        g.playerPis.map(function(pi){ var mv = _pr.moved[pi];
+          return '<div class="row" style="justify-content:space-between;align-items:center;gap:6px;margin-top:5px"><span style="font-size:13px;' + (mv ? 'color:var(--gold);font-weight:700' : '') + '">' + esc(sfName(t, pi)) + (g.host === pi ? ' (värd)' : '') + '</span>' +
+            '<select style="margin:0;width:auto;font-size:12px;padding:4px 6px" onchange="prMove(' + pi + ',this.value)"><option value="">Flytta…</option>' + allInKey.filter(function(x){ return x.id !== g.id && x.playerPis.length < sfSeats(x); }).map(function(x){ return '<option value="' + x.id + '">' + esc(sfTimeLbl(x) || 'Utan tid') + (x.simNo ? ' ' + esc(x.simNo) : '') + '</option>'; }).join('') + '<option value="__none">Ta ur boll</option></select></div>'; }).join('') +
+        ((g.invites || []).length ? '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Inbjudna: ' + g.invites.map(function(pi){ return esc(sfFirst(t, pi)); }).join(', ') + '</div>' : '') + '</div>';
+    }).join('') : '<p style="font-size:13px;color:var(--text-3)">Inga bollar här än.</p>';
+    h += '<p style="font-size:11px;color:var(--text-3)">Orange = placerad av dig. Inget syns för spelarna förrän du publicerar.</p>';
+  }
+  h += '<div class="row" style="justify-content:space-between;gap:8px;margin-top:12px"><button class="btn" onclick="_pr=null;closeModal()">Avbryt</button><button class="btn btn-primary" onclick="prPublish()"><i class="ti ti-check"></i> Publicera bollarna</button></div>';
+  showModal(h, true, true);
+}
+// Release 399: admin kan ändra allt på en boll – tid, sluttid, anläggning, SIM, antal platser
+// och värd. Ändringen gäller utkastet och syns för spelarna först när bollarna publiceras.
+function prEditFormHTML(t, e, g) {
+  var sim = isSimTour(t);
+  return '<div style="margin-top:8px;padding:10px;border-radius:10px;background:var(--surface2)">' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+      '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px">' + (sim ? 'Från' : 'Starttid') + '<input type="time" id="pre-time" value="' + esc(g.time || '') + '" style="margin:0;width:110px"></label>' +
+      (sim ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px">Till<input type="time" id="pre-timeto" value="' + esc(g.timeTo || '') + '" style="margin:0;width:110px"></label>' +
+        '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;gap:2px">SIM<input type="text" id="pre-sim" maxlength="12" value="' + esc(g.simNo || '') + '" style="margin:0;width:90px"></label>' : '') + '</div>' +
+    (sim ? '<div style="margin-top:8px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Anläggning</div>' + simVenuePickerHTML('pre-venue', g.venue || '', 'courseSearchNoop') + '</div>' : '') +
+    '<div style="margin-top:8px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Antal platser</div><div class="row" style="gap:6px">' + [2, 3, 4].map(function(n){ var on = sfSeats(g) === n, tooFew = n < g.playerPis.length;
+      return '<button class="btn btn-sm" style="flex:1;justify-content:center;' + (on ? 'background:var(--green-dark);color:#fff;border-color:transparent;' : '') + (tooFew ? 'opacity:.4;pointer-events:none' : '') + '" onclick="prSetSeats(\'' + g.id + '\',' + n + ')">' + n + '</button>'; }).join('') + '</div></div>' +
+    '<div style="margin-top:8px"><div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Värd</div><select id="pre-host" style="margin:0">' + g.playerPis.map(function(pi){ return '<option value="' + pi + '" ' + (g.host === pi ? 'selected' : '') + '>' + esc(sfName(t, pi)) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn btn-sm" onclick="_pr.editing=null;renderPairing()">Avbryt</button><button class="btn btn-sm btn-primary" onclick="prSaveEdit(\'' + g.id + '\')"><i class="ti ti-check"></i> Spara ändring</button></div></div>';
+}
+function prSetSeats(gid, n) { var g = _pr.groups.find(function(x){ return x.id === gid; }); if(!g || n < g.playerPis.length) return; prKeepEdit(g); g.seats = n; renderPairing(); }
+function prKeepEdit(g) {
+  var v = function(id){ var el = document.getElementById(id); return el ? el.value : undefined; };
+  if(v('pre-time') !== undefined) g.time = v('pre-time') || '';
+  if(v('pre-timeto') !== undefined) { if(v('pre-timeto')) g.timeTo = v('pre-timeto'); else delete g.timeTo; }
+  if(v('pre-sim') !== undefined) { if(v('pre-sim')) g.simNo = v('pre-sim').trim(); else delete g.simNo; }
+  var vs = document.getElementById('pre-venue-sel');
+  if(vs) { var nv = vs.value === '__other' ? (v('pre-venue-other') || '').trim() : vs.value; if(nv) g.venue = nv; }
+  if(v('pre-host') !== undefined && v('pre-host') !== '') g.host = parseInt(v('pre-host'), 10);
+}
+function prSaveEdit(gid) {
+  var g = _pr.groups.find(function(x){ return x.id === gid; }); if(!g) return;
+  var t = S.tours.find(function(x){ return x.id === _pr.tourId; }), oldVenue = g.venue;
+  prKeepEdit(g);
+  if(isSimTour(t) && g.venue !== oldVenue) _pr.key = g.date + '|' + (g.venue || '?'); // följ med bollen till nya anläggningen
+  _pr.editing = null; renderPairing();
+}
+function prToggle(pi) { var i = _pr.sel.indexOf(pi); if(i >= 0) _pr.sel.splice(i, 1); else _pr.sel.push(pi); renderPairing(); }
+function prDateVenue(t, e) { var p = _pr.key.split('|'); return { date: p[0], venue: isSimTour(t) && p[1] !== '?' ? p[1] : null }; }
+function prAddTo(gid) {
+  var g = _pr.groups.find(function(x){ return x.id === gid; }); if(!g) return;
+  _pr.sel.forEach(function(pi){ if(g.playerPis.length < sfSeats(g)) { g.playerPis.push(pi); _pr.moved[pi] = true; } });
+  _pr.sel = []; renderPairing();
+}
+function prNewGroup() {
+  var t = S.tours.find(function(x){ return x.id === _pr.tourId; }), e = t.events[_pr.ei], dv = prDateVenue(t, e);
+  var host = parseInt((document.getElementById('pr-host') || {}).value, 10);
+  var g = { id: 'tg_' + uid(), date: dv.date, time: (document.getElementById('pr-time') || {}).value || '', playerPis: _pr.sel.slice(0, 4), host: isNaN(host) ? _pr.sel[0] : host, seats: 4, invites: [], createdBy: 'admin' };
+  if(dv.venue) g.venue = dv.venue;
+  var sv = (document.getElementById('pr-sim') || {}).value; if(sv) g.simNo = sv;
+  _pr.sel.forEach(function(pi){ _pr.moved[pi] = true; });
+  _pr.groups.push(g); _pr.sel = []; renderPairing();
+}
+function prLottery() {
+  var t = S.tours.find(function(x){ return x.id === _pr.tourId; }), e = t.events[_pr.ei], dv = prDateVenue(t, e);
+  var pool = prUnassigned(t, e, _pr.groups).filter(function(r){ return prKey(t, e, r) === _pr.key && _pr.sel.indexOf(r.pi) < 0; }).map(function(r){ return r.pi; });
+  if(!pool.length) return;
+  var hcp = function(pi){ var p = t.players[pi] || {}; var v = Number((findUser(p.username) || {}).hcp); return isNaN(v) ? 54 : v; };
+  if(_pr.lotMode === 'hcp') pool.sort(function(a, b){ return hcp(a) - hcp(b); });
+  else for(var i = pool.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
+  if(_pr.lotMode === 'fill') {
+    prGroupsForKey(t, e).forEach(function(g){ while(pool.length && g.playerPis.length < sfSeats(g)) { var pi = pool.shift(); g.playerPis.push(pi); _pr.moved[pi] = true; } });
+  }
+  if(pool.length) {
+    var n = Math.ceil(pool.length / 4), buckets = []; for(var b = 0; b < n; b++) buckets.push([]);
+    if(_pr.lotMode === 'hcp') pool.forEach(function(pi, k){ var round = Math.floor(k / n), idx = round % 2 === 0 ? k % n : n - 1 - (k % n); buckets[idx].push(pi); });
+    else pool.forEach(function(pi, k){ buckets[k % n].push(pi); });
+    buckets.forEach(function(pis){
+      var g = { id: 'tg_' + uid(), date: dv.date, time: '', playerPis: pis, host: pis[0], seats: 4, invites: [], createdBy: 'lottery' };
+      if(dv.venue) g.venue = dv.venue;
+      pis.forEach(function(pi){ _pr.moved[pi] = true; });
+      _pr.groups.push(g);
+    });
+  }
+  _pr.view = 'review'; renderPairing();
+}
+function prMove(pi, gid) {
+  if(!gid) return;
+  _pr.groups.forEach(function(g){ var i = g.playerPis.indexOf(pi); if(i >= 0) { g.playerPis.splice(i, 1); if(g.host === pi) g.host = g.playerPis[0] != null ? g.playerPis[0] : null; } });
+  if(gid !== '__none') { var g2 = _pr.groups.find(function(x){ return x.id === gid; }); if(g2) { g2.playerPis.push(pi); _pr.moved[pi] = true; if(g2.host == null) g2.host = pi; } }
+  _pr.groups = _pr.groups.filter(function(g){ return g.playerPis.length || (g.invites || []).length; });
+  renderPairing();
+}
+function prPublish() {
+  var t = S.tours.find(function(x){ return x.id === _pr.tourId; }); if(!t || !isAdmin()) return;
+  var e = t.events[_pr.ei];
+  if(!confirm('Publicera bollarna? Spelarna ser sina bollar direkt.')) return;
+  e.teeGroups = _pr.groups;
+  e.teeGroups.forEach(function(g){ (g.playerPis || []).forEach(function(pi){ sfUpsertReg(e, pi, { date: g.date, time: g.time || undefined, timeTo: g.timeTo || undefined, venue: g.venue || undefined, simNo: g.simNo || undefined, bollMode: null }); }); });
+  save(); _pr = null; closeModal(); try { renderEvents(); } catch(x) {} try { renderHomeBollTodo(); } catch(x) {}
+}
+function toggleEventBollMode(ei) {
+  var t = getTour(), e = t.events[ei]; if(!isAdmin()) return;
+  e.bollMode = sfMode(e) === 'admin' ? 'free' : 'admin'; save(); openRegister(ei);
+}
+
 function openRegister(i) {
   var t=getTour(), e=t.events[i], regs=e.registrations||[];
+  _sfModeBanner = isAdmin() ? '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--surface2);margin-bottom:10px;flex-wrap:wrap"><span style="font-size:13px"><b>Bollar:</b> '+(sfMode(e)==='admin'?'Admin sätter bollar – spelarna svarar bara Jag spelar / Kan inte':'Fritt – spelarna kan gå med, skapa egen eller låta admin sätta')+'</span><button class="btn btn-sm" onclick="toggleEventBollMode('+i+')">'+(sfMode(e)==='admin'?'Byt till fritt':'Byt till admin sätter')+'</button></div>' : '';
   if(!e.periodStart) e.periodStart = e.date;
   if(!e.periodEnd) e.periodEnd = e.date;
   // regs is an array of {pi, date}. Migrate old format (plain pi numbers) if present.
@@ -12631,6 +13088,7 @@ function openRegister(i) {
     h += '<button class="btn btn-sm btn-primary" style="margin-bottom:10px" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-live-photo"></i> Följ live</button>';
   }
   h += '<p style="font-size:12px;color:var(--text-2);margin-bottom:6px"><i class="ti ti-calendar"></i> Speltidsperiod: '+e.periodStart+' &ndash; '+e.periodEnd+' (ordinarie datum: '+e.date+')</p>';
+  h += _sfModeBanner;
   h += '<p style="font-size:13px;color:var(--text-2);margin-bottom:12px">Markera din status för tävlingen. "Anmäld" inkluderar dig i startlistan.</p>';
   h += rows;
   h += '<hr class="divider">';
@@ -23471,6 +23929,33 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (401)',
+    items: [
+      { type: 'improved', text: 'Bollar som skapades före den nya anmälan finns kvar precis som de är och fungerar i det nya flödet. De räknas som satta av admin – i stället för en spelare som värd står "värd: admin".' },
+    ]
+  },
+  {
+    date: '11 november 2026 (400)',
+    items: [
+      { type: 'fixed', text: 'Nya anmälan och Sätt bollar fungerar nu fullt ut med bollar som skapades i tidigare versioner: saknade uppgifter (id, värd, platser och – för simulator – anläggning, SIM och tid) fylls i från spelarnas anmälningar, så att bollarna visas med rätt plats och matchas mot rätt anläggning. Att gå med i en boll eller publicera bollar skriver inte längre över spelarnas befintliga anläggning, SIM eller tid med tomma värden.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (399)',
+    items: [
+      { type: 'new', text: 'Sätt bollar → Granska bollar: pennan på varje boll låter admin ändra tid, sluttid, anläggning, SIM, antal platser (2–4) och värd. Ändringen syns för spelarna när bollarna publiceras.' },
+    ]
+  },
+  {
+    date: '11 november 2026 (398)',
+    items: [
+      { type: 'new', text: 'Ny anmälan: tryck "Anmäl dig" på deltävlingen och välj Gå med i en boll (lediga platser, namn och plats syns), Skapa egen boll (datum, tid – simulator: anläggning och SIM –, 2–4 platser och bjud in andra), Låt admin sätta boll (välj dag och plats) eller Kan inte delta. När du är med visas "Din boll" med möjlighet att lämna eller byta.' },
+      { type: 'new', text: 'Inbjudningar: den som bjuds in får en ruta på startsidan med Tacka ja / Nej tack. Platsen hålls tills hen svarar.' },
+      { type: 'new', text: 'Admin: rutan "Att göra – sätt bollar" på startsidan visar anmälda utan boll per plats och dag. Parningsverktyget (även via "Sätt bollar" på deltävlingen): markera spelare och lägg dem i en befintlig eller ny boll (tid, SIM, värd), lotta resten slumpvis, efter HCP eller fyll befintliga först, flytta spelare mellan bollar och publicera när det ser bra ut.' },
+      { type: 'new', text: 'Per deltävling väljer admin under Anmälningar om bollarna är fria eller sätts av admin. Finaler är "admin sätter" som standard – då svarar spelaren bara Jag spelar / Kan inte.' },
+    ]
+  },
   {
     date: '11 november 2026 (397)',
     items: [
