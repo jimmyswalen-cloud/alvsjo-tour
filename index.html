@@ -16723,7 +16723,23 @@ function openCasualPlayerScorecard(roundId, key) {
   showModal('<h3 style="margin-bottom:2px">Scorekort · '+esc(r.courseName)+'</h3>'+
     '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">'+hcpFmtDate(r.date)+' · '+esc(casualRoundTypeLabel(r))+(!casualFormat(r).legacy ? ' · '+esc(cfLabel(casualFormat(r).primary)) : '')+'</p>'+
     SCORECARD_LEGEND_HTML + casualUnitCardHTML(r, p, false) +
-    '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>', true);
+    '<div class="row" style="justify-content:'+(isAdmin()?'space-between':'flex-end')+';gap:8px;margin-top:12px">'+
+      (isAdmin() ? '<button class="btn" onclick="changeCasualRoundDateById(\''+r.id+'\',\''+esc(key)+'\')"><i class="ti ti-calendar-event"></i> Ändra datum</button>' : '')+
+      '<button class="btn btn-primary" onclick="closeModal()">Stäng</button></div>', true);
+}
+// Release 407: "Ändra datum" även från profilens scorekort (inte bara inne i ronden)
+function changeCasualRoundDateById(roundId, key) {
+  if(!isAdmin()) return;
+  var r = (_casualRaw||[]).find(function(x){ return x.id === roundId; }); if(!r) return;
+  var v = prompt('Nytt datum för ronden (ÅÅÅÅ-MM-DD). Gäller alla spelare i ronden:', r.date || hcpTodayISO());
+  if(v == null) return; v = v.trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + 'T00:00:00'))) { alert('Skriv datumet som ÅÅÅÅ-MM-DD, t.ex. 2026-10-13.'); return; }
+  if(v === r.date) return;
+  r.date = v;
+  CASUAL_COL.doc(r.id).update({ date: v, dateChangedBy: currentUser.username, dateChangedAt: Date.now() }).then(function(){
+    openCasualPlayerScorecard(roundId, key);
+    try { if(typeof renderPlayerProfileRefresh === 'function') renderPlayerProfileRefresh(); } catch(e) {}
+  }).catch(function(e){ alert('Kunde inte spara: ' + e.message); });
 }
 function casualRoundTypeLabel(r) {
   if(r.roundType === 'practice') return 'Träning';
@@ -23992,6 +24008,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (407)',
+    items: [
+      { type: 'improved', text: '"Ändra datum" finns nu även i scorekortet som öppnas från profilens Senaste scorekort (för admin), inte bara inne i ronden.' },
+    ]
+  },
   {
     date: '11 november 2026 (406)',
     items: [
