@@ -7490,7 +7490,9 @@ function renderEclQuick() {
         return '<div class="row" style="align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid ' + (on ? 'var(--green-dark)' : 'var(--border)') + ';' + (dis ? 'opacity:.5' : '') + '">' +
           '<input type="checkbox" ' + (on ? 'checked ' : '') + (isMe || dis ? 'disabled ' : '') + 'onchange="eqsToggle(\'' + esc(u) + '\')" style="width:18px;height:18px;margin:0">' +
           '<span style="flex:1;min-width:0;font-size:14px;font-weight:600">' + esc(rcUserName(u)) + (isMe ? ' <span style="color:var(--text-3);font-weight:400">(du)</span>' : '') + '<span style="display:block;font-size:11px;color:var(--text-3);font-weight:400">' + (full ? 'Alla rundor spelade' : 'Runda ' + nx + ' av ' + N) + ' · HCP ' + fmtHcp((findUser(u) || {}).hcp) + '</span></span>' +
-          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;gap:2px;margin:0">SHCP<input type="number" step="1" inputmode="numeric" placeholder="?" value="' + (_eqs.shcp[u] != null ? _eqs.shcp[u] : '') + '" oninput="var v=this.value.trim();if(v===\'\'){delete _eqs.shcp[\'' + esc(u) + '\']}else{_eqs.shcp[\'' + esc(u) + '\']=parseInt(v,10)}" style="width:64px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px 4px;' + (_eqs.shcp[u] == null ? 'border-color:#B7791F' : '') + '"></label>' : '') + '</div>';
+          (on ? '<label style="font-size:11px;color:var(--text-3);display:flex;flex-direction:column;align-items:center;gap:2px;margin:0">SHCP<span style="display:flex;gap:4px;align-items:center">' +
+            '<button type="button" class="btn btn-sm" style="padding:6px 8px;font-weight:800" title="Plus-handicap (växla +/−)" onclick="event.preventDefault();eqsFlipSign(\'' + esc(u) + '\')">±</button>' +
+            '<input type="text" inputmode="numeric" id="eqs-shcp-' + esc(u) + '" placeholder="?" value="' + (_eqs.shcp[u] != null ? (_eqs.shcp[u] < 0 ? '+' + Math.abs(_eqs.shcp[u]) : _eqs.shcp[u]) : '') + '" oninput="eqsShcpInput(\'' + esc(u) + '\',this.value)" style="width:56px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px 4px;' + (_eqs.shcp[u] == null ? 'border-color:#B7791F' : '') + '"></span></label>' : '') + '</div>';
       }).join('') + '</div>' +
       '<p style="font-size:11px;color:var(--text-3);margin:6px 0 0">Ange dagens SHCP för varje spelare – den hittar du i banans slopetabell utifrån aktuell HCP, tee och kön. SHCP anges på nytt för varje rond eftersom HCP kan ha ändrats.' + (!cands.length ? ' Bara spelare i touren kan vara med.' : '') + '</p></div>';
   var n = _eqs.sel.length, sides = [['', 'ti-circle-off', 'Inget', 'Bara eclectic']].concat(CF_SECONDARY.filter(function(k){ return k !== (stab ? 'stableford' : 'stroke_net'); }).map(function(k){ return [k, CF[k].icon, CF[k].title, CF[k].sub || '']; }));
@@ -7500,6 +7502,24 @@ function renderEclQuick() {
   }).join('') + '</div></div>' +
   '<div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn" onclick="_eqs=null;closeModal()">Avbryt</button><button class="btn btn-primary" onclick="eqsStart()"><i class="ti ti-golf"></i> Öppna scorekortet</button></div>';
   showModal(h, true, true);
+}
+// Release 408: plus-handicap. Mobilens sifferknappsats saknar minustecken, därför en ±-knapp.
+// Plus-SHCP visas med plus (t.ex. +6) och sparas som negativt tal, som i resten av appen.
+// Man kan också skriva +6 eller -6 direkt.
+function eqsShcpInput(u, raw) {
+  var v = String(raw || '').trim().replace(',', '.');
+  if(v === '' || v === '+' || v === '-') { delete _eqs.shcp[u]; return; }
+  var neg = v.charAt(0) === '+' || v.charAt(0) === '-' || v.charAt(0) === '−';
+  var n = parseInt(v.replace(/^[+\-−]/, ''), 10);
+  if(isNaN(n)) { delete _eqs.shcp[u]; return; }
+  _eqs.shcp[u] = neg ? -Math.abs(n) : n;
+}
+function eqsFlipSign(u) {
+  var el = document.getElementById('eqs-shcp-' + u);
+  var cur = _eqs.shcp[u];
+  if(cur == null || cur === 0) { if(el) { el.value = '+'; el.focus(); } return; } // börja skriva ett plus-SHCP
+  _eqs.shcp[u] = -cur;
+  if(el) el.value = _eqs.shcp[u] < 0 ? '+' + Math.abs(_eqs.shcp[u]) : String(_eqs.shcp[u]);
 }
 function eqsToggle(u) {
   var t = S.tours.find(function(x){ return x.id === _eqs.tourId; }); if(!t) return;
@@ -16558,7 +16578,7 @@ function openCasualShcpEdit() {
   var row = function(cls, key, name, val) {
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">'+
       '<span style="flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(name)+'</span>'+
-      '<input type="number" step="1" min="-10" max="54" inputmode="numeric" class="'+cls+'" data-key="'+esc(key)+'" value="'+(val!=null?val:0)+'" '+
+      '<input type="number" step="1" min="-10" max="54" inputmode="text" class="'+cls+'" data-key="'+esc(key)+'" value="'+(val!=null?val:0)+'" '+
         'style="width:72px;margin:0;text-align:center;font-weight:700;font-size:16px;padding:6px"></div>';
   };
   var h = '<h3 style="margin-bottom:6px"><i class="ti ti-adjustments"></i> Ändra SHCP</h3>'+
@@ -24008,6 +24028,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '11 november 2026 (408)',
+    items: [
+      { type: 'fixed', text: 'Eclectic-snabbstarten: plus-handicappare kunde inte få negativt SHCP eftersom mobilens sifferknappsats saknar minustecken. Nu finns en ±-knapp bredvid SHCP-fältet, plus-SHCP visas med plus (t.ex. +6) och man kan även skriva +6 eller -6 direkt.' },
+      { type: 'fixed', text: 'Samma sak i sällskapsrondens SHCP-steg: fältet öppnar nu ett tangentbord med minustecken, så att plus-handicappare kan få negativt SHCP.' },
+    ]
+  },
   {
     date: '11 november 2026 (407)',
     items: [
