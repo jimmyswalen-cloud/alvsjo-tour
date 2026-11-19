@@ -10234,6 +10234,7 @@ function submitMyScore(ei, pi) {
   };
   if(existing) { for(var k in entry) existing[k] = entry[k]; }
   else e.scoreSubmissions.push(entry);
+  syncResultsFromApprovedSubmissions(t, e);
   save();
   closeModal();
   _myScorecardCtx = null;
@@ -10424,6 +10425,7 @@ function submitBulkScore() {
 
   if(incomplete.length) { alert('Fyll i slag på alla '+ctx.totalHoles+' hål för: '+incomplete.join(', ')); return; }
 
+  syncResultsFromApprovedSubmissions(t, e);
   save();
   closeModal();
   _bulkScoreCtx = null;
@@ -10446,6 +10448,7 @@ function approveScoreSubmissionCore(t, e, submitterPi, viaAdmin) {
     if(!confirm('Bekräfta att '+(players[submitterPi]?players[submitterPi].name:'spelaren')+' fick '+sub.score+(e.type==='stableford'?' poäng':' i netto')+'?')) return;
     sub.markerApproved = true;
   }
+  syncResultsFromApprovedSubmissions(t, e);
   save();
   renderHomeApprovalWidget();
 }
@@ -11881,40 +11884,79 @@ function collectEventHoleData(t, e) {
 // deltagarna har någon relevant data registrerad ännu.
 function computeSideBetSuggestion(sb, byPi, holePars) {
   var participants = sb.participants || [];
-  if(sb.betType === 'Minst antal puttar') {
-    var best = null;
-    participants.forEach(function(pi){
-      var hd = byPi[pi]; if(!hd) return;
-      var sum = 0, any = false;
-      hd.putts.forEach(function(v){ if(typeof v === 'number') { sum += v; any = true; } });
-      if(any && (best===null || sum < best.value)) best = { pi: pi, value: sum, label: sum+' putt'+(sum===1?'':'ar') };
-    });
-    return best;
-  }
-  if(sb.betType === 'Färst antal slag på ett hål') {
-    var best2 = null;
-    participants.forEach(function(pi){
-      var hd = byPi[pi]; if(!hd) return;
-      var minGross = null;
-      hd.holes.forEach(function(v){ if(typeof v === 'number' && (minGross===null || v<minGross)) minGross = v; });
-      if(minGross!=null && (best2===null || minGross < best2.value)) best2 = { pi: pi, value: minGross, label: minGross+' slag' };
-    });
-    return best2;
-  }
-  if(sb.betType === 'Flest birdies på rundan') {
-    if(!holePars) return null;
-    var best3 = null;
-    participants.forEach(function(pi){
-      var hd = byPi[pi]; if(!hd) return;
-      var count = 0;
-      hd.holes.forEach(function(gross, idx){
-        if(typeof gross === 'number' && holePars[idx]!=null && categorizeHoleScore(gross, holePars[idx])==='birdie') count++;
-      });
-      if(best3===null || count > best3.value) best3 = { pi: pi, value: count, label: count+' birdie'+(count===1?'':'r') };
-    });
-    return (best3 && best3.value > 0) ? best3 : null;
-  }
-  return null;
+  var type = sb.betType;
+  if(SIDE_BET_AUTO_TYPES.indexOf(type) < 0) return null;
+  if(type === 'Flest birdies på rundan' && !holePars) return null;
+  var lowerIsBetter = (type !== 'Flest birdies på rundan');
+  var ranking = [], noData = [];
+  participants.forEach(function(pi){
+    var hd = byPi[pi];
+    var value = null, holesCounted = 0;
+    if(hd) {
+      if(type === 'Minst antal puttar') {
+        var sum = 0;
+        hd.putts.forEach(function(v){ if(typeof v === 'number') { sum += v; holesCounted++; } });
+        if(holesCounted) value = sum;
+      } else if(type === 'Färst antal slag på ett hål') {
+        hd.holes.forEach(function(v){ if(typeof v === 'number') { holesCounted++; if(value===null || v<value) value = v; } });
+      } else if(type === 'Flest birdies på rundan') {
+        var count = 0;
+        hd.holes.forEach(function(gross, idx){
+          if(typeof gross === 'number') {
+            holesCounted++;
+            if(holePars[idx]!=null && categorizeHoleScore(gross, holePars[idx])==='birdie') count++;
+          }
+        });
+        if(holesCounted) value = count;
+      }
+    }
+    if(value === null) { noData.push(pi); return; }
+    var label = type === 'Minst antal puttar' ? value+' putt'+(value===1?'':'ar')
+              : type === 'Färst antal slag på ett hål' ? value+' slag'
+              : value+' birdie'+(value===1?'':'s');
+    ranking.push({ pi: pi, value: value, label: label, holes: holesCounted });
+  });
+  // Bäst först. Vid lika värde: den med fler registrerade hål först (mer komplett data).
+  ranking.sort(function(x, y){
+    if(x.value !== y.value) return lowerIsBetter ? x.value - y.value : y.value - x.value;
+    return y.holes - x.holes;
+  });
+  if(!ranking.length) return null;
+  var best = ranking[0];
+  if(type === 'Flest birdies på rundan' && best.value <= 0) return null;
+  var tied = ranking.filter(function(r){ return r.value === best.value; });
+  return { pi: best.pi, value: best.value, label: best.label, ranking: ranking, noData: noData, tied: tied.length > 1 };
+}
+
+// Bygger listan med alla deltagares värden under vinnarförslaget, så att alla
+// kan se att förslaget stämmer (och upptäcka delad ledning) innan "Använd".
+function buildSideBetRankingHTML(suggestion, players, totalHoles) {
+  if(!suggestion || !suggestion.ranking) return '';
+  var best = suggestion.value;
+  var h = '<div style="margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+  suggestion.ranking.forEach(function(r, idx){
+    var p = players[r.pi];
+    var isBest = r.value === best;
+    var partial = totalHoles && r.holes < totalHoles;
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;'+
+         (idx ? 'border-top:1px solid var(--border);' : '')+
+         (isBest ? 'background:rgba(212,175,55,.10);' : '')+'">'+
+         '<span style="width:18px;color:var(--text-3);font-weight:700">'+(isBest ? '<i class="ti ti-trophy" style="color:var(--gold)"></i>' : (idx+1))+'</span>'+
+         '<span style="flex:1;color:var(--text);'+(isBest?'font-weight:700':'')+'">'+esc(p?p.name:'?')+'</span>'+
+         (partial ? '<span style="color:var(--text-3);font-size:11px">'+r.holes+'/'+totalHoles+' hål</span>' : '')+
+         '<span style="min-width:62px;text-align:right;color:var(--text);font-weight:'+(isBest?'700':'500')+'">'+r.label+'</span>'+
+         '</div>';
+  });
+  (suggestion.noData||[]).forEach(function(pi){
+    var p = players[pi];
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12px;border-top:1px solid var(--border)">'+
+         '<span style="width:18px;color:var(--text-3)">–</span>'+
+         '<span style="flex:1;color:var(--text-3)">'+esc(p?p.name:'?')+'</span>'+
+         '<span style="color:var(--text-3);font-size:11px">ingen data</span></div>';
+  });
+  h += '</div>';
+  if(suggestion.tied) h += '<div style="margin-top:6px;font-size:11px;color:var(--gold)"><i class="ti ti-alert-triangle"></i> Delad ledning – välj vinnare manuellt eller skicka potten vidare.</div>';
+  return h;
 }
 
 // Hämtar hål-datan en gång och fyller i förslag för alla mätbara side bets i
@@ -11937,8 +11979,10 @@ function refreshSideBetSuggestions(ei) {
       }
       var p = players[suggestion.pi];
       var alreadySet = sb.winnerPi === suggestion.pi;
+      var totalHoles = result.holePars ? result.holePars.length : null;
       el.innerHTML = '<span style="color:var(--text-2)"><i class="ti ti-bulb" style="color:var(--gold)"></i> Förslag: <b>'+esc(p?p.name:'?')+'</b> ('+suggestion.label+')</span>'+
-        (alreadySet ? '' : ' <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="setSideBetWinner('+ei+',\''+sb.id+'\','+suggestion.pi+');openSideBets('+ei+')">Använd</button>');
+        ((alreadySet || suggestion.tied) ? '' : ' <button class="btn btn-sm" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="setSideBetWinner('+ei+',\''+sb.id+'\','+suggestion.pi+');openSideBets('+ei+')">Använd</button>')+
+        buildSideBetRankingHTML(suggestion, players, totalHoles);
     });
   }).catch(function(err){ console.error('Kunde inte beräkna side bet-förslag', err); });
 }
@@ -13973,7 +14017,8 @@ function openResults(i) {
     var ex=e.results?e.results.find(function(r){return r.pi===pi;}):null;
     var sub=(e.scoreSubmissions||[]).find(function(s){return s.pi===pi;});
     var approved = isSubmissionApproved(sub);
-    var holesForCalc = (ex&&ex.holes) ? ex.holes : (sub&&sub.holes ? sub.holes : null);
+    var subNewer = approved && sub && sub.holes && (!ex || !ex.savedAt || (sub.submittedAt && Date.parse(sub.submittedAt) > Date.parse(ex.savedAt)));
+    var holesForCalc = subNewer ? sub.holes : ((ex&&ex.holes) ? ex.holes : (sub&&sub.holes ? sub.holes : null));
     // Förifyll från godkänt inskickat resultat om admin inte redan sparat något eget.
     var prefillScore = ex ? ex.score : (approved && sub ? sub.score : '');
     var prefillBrutto = ex&&ex.brutto!=null ? ex.brutto : (approved && sub && sub.brutto!=null ? sub.brutto : '');
@@ -14126,7 +14171,7 @@ function saveResults(i) {
     var brutto=bruttoEl&&bruttoEl.value!==''?parseFloat(bruttoEl.value):null;
     var shcpEl=document.getElementById('shcp-'+pi);
     var shcp=shcpEl&&shcpEl.value!==''?Math.round(parseFloat(shcpEl.value)):null;
-    var entry={pi:pi,score:score,brutto:brutto,shcp:shcp};
+    var entry={pi:pi,score:score,brutto:brutto,shcp:shcp,savedAt:new Date().toISOString()};
     // Bevara hål-för-hål-slag från en godkänd spelarinskickning, så statistik (birdies, hio m.m.) går att räkna senare.
     var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
     if(sub && sub.holes && isSubmissionApproved(sub)) {
@@ -14523,10 +14568,62 @@ function buildResultsFromApprovedSubmissions(t, e) {
   return results;
 }
 
+// Release 410: håller e.results i takt med godkända scorekort. Tidigare byggdes
+// e.results bara EN gång (första "Spara resultat" eller första stängningen), så
+// om admin återöppnade en deltävling, rättade ett slag och lämnade in ronden på
+// nytt uppdaterades scoreSubmissions men e.results behöll gamla slag och gammal
+// totalpoäng. Nu skrivs resultatet om från scorekortet när ett godkänt scorekort
+// är nyare än det sparade resultatet (eller resultatet saknar tidsstämpel men
+// skiljer sig). Körs aldrig på en stängd deltävling - den ska vara låst.
+function syncResultsFromApprovedSubmissions(t, e) {
+  if(!e || e.closed || !e.results || !e.results.length) return false;
+  var isStab = e.type === 'stableford';
+  var changed = false;
+  e.results.forEach(function(r){
+    var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===r.pi; });
+    if(!sub || !isSubmissionApproved(sub) || sub.score==null || isNaN(sub.score)) return;
+    var subTime = sub.submittedAt ? Date.parse(sub.submittedAt) : 0;
+    var resTime = r.savedAt ? Date.parse(r.savedAt) : 0;
+    var differs = r.score !== sub.score || r.brutto !== (sub.brutto!=null?sub.brutto:null) ||
+                  JSON.stringify(r.holes||null) !== JSON.stringify(sub.holes||null) ||
+                  JSON.stringify(r.holePutts||null) !== JSON.stringify(sub.holePutts||null);
+    if(!differs) return;
+    if(resTime && subTime && subTime <= resTime) return; // admin har sparat manuellt efter inskickningen
+    r.score = sub.score;
+    r.brutto = sub.brutto!=null ? sub.brutto : null;
+    if(sub.shcp!=null) r.shcp = Math.round(sub.shcp);
+    if(sub.holes) r.holes = sub.holes.slice(); else delete r.holes;
+    if(sub.holePutts) r.holePutts = sub.holePutts.slice(); else delete r.holePutts;
+    if(e.isFinal) {
+      var hs = getHeadStart(t, e, r.pi);
+      r.headStart = hs;
+      r.adjusted = isStab ? (r.score + hs) : (r.score - hs);
+    }
+    r.savedAt = new Date().toISOString();
+    changed = true;
+  });
+  // Godkända scorekort för spelare som ännu inte finns i resultatlistan läggs till.
+  var have = {}; e.results.forEach(function(r){ have[r.pi] = true; });
+  buildResultsFromApprovedSubmissions(t, e).forEach(function(nr){
+    if(have[nr.pi]) return;
+    nr.savedAt = new Date().toISOString();
+    e.results.push(nr); changed = true;
+  });
+  if(changed) {
+    e.results.sort(function(a,b){
+      var ah=(t.players[a.pi]&&t.players[a.pi].hcp)||0, bh=(t.players[b.pi]&&t.players[b.pi].hcp)||0;
+      if(e.isFinal) { var d = isStab ? (b.adjusted-a.adjusted) : (a.adjusted-b.adjusted); return d || ah-bh; }
+      return isStab ? (b.score-a.score||ah-bh) : (a.score-b.score||ah-bh);
+    });
+  }
+  return changed;
+}
+
 function closeEvent(i){
   if(!isAdmin()) return;
   var t=getTour(),e=t.events[i];
   if(!confirm('Stäng tävlingen? Resultat låses.'+(e.isFinal?'':' Poäng delas ut.')))return;
+  syncResultsFromApprovedSubmissions(t, e);
   if(!e.results||!e.results.length){
     var autoResults = buildResultsFromApprovedSubmissions(t, e);
     if(!autoResults.length){ alert('Inga godkända resultat att stänga tävlingen med ännu. Godkänn minst en spelares scorekort (markör eller admin), eller mata in resultat manuellt under "Resultat" innan du stänger.'); return; }
@@ -24028,6 +24125,21 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 november 2026 (410)',
+    items: [
+      { type: 'fixed', text: 'Rättade slag räknades inte om: om en deltävling återöppnades och ett scorekort lämnades in på nytt (t.ex. ändrat slag på ett hål) behöll resultatlistan den gamla totalpoängen. Nu uppdateras resultatet automatiskt från det nya godkända scorekortet – vid inlämning, godkännande och när tävlingen stängs.' },
+      { type: 'fixed', text: 'Resultatinmatningen räknar nu poängen från det senaste godkända scorekortet, inte från gamla sparade hålslag.' },
+    ]
+  },
+  {
+    date: '18 november 2026 (409)',
+    items: [
+      { type: 'new', text: 'Side bets: under vinnarförslaget visas nu alla deltagares resultat i en topplista (t.ex. antal puttar), så att alla kan se att förslaget stämmer innan man trycker "Använd". Gäller Minst antal puttar, Färst antal slag på ett hål och Flest birdies.' },
+      { type: 'improved', text: 'Spelare som inte registrerat alla hål märks med t.ex. "14/18 hål", och de utan data visas som "ingen data".' },
+      { type: 'improved', text: 'Vid delad ledning visas en varning och "Använd"-knappen döljs, så att vinnaren väljs manuellt eller potten skickas vidare.' },
+    ]
+  },
   {
     date: '11 november 2026 (408)',
     items: [
