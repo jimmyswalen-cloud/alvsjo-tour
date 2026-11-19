@@ -14619,10 +14619,90 @@ function syncResultsFromApprovedSubmissions(t, e) {
   return changed;
 }
 
+// Release 411: räknar om ett scorekort (brutto + poäng/netto) från dess hålslag.
+function recomputeSubmissionTotals(sub, holePars, holeHcpIndex, isStab) {
+  var n = holePars.length, brutto = 0, score = 0;
+  for(var i=0; i<n; i++){
+    var g = sub.holes[i]; if(typeof g !== 'number') continue;
+    var idx = (holeHcpIndex && holeHcpIndex[i]!=null) ? holeHcpIndex[i] : (i+1);
+    var recv = computeHcpStrokesForHole(Math.round(sub.shcp||0), idx, n);
+    brutto += g;
+    score += isStab ? computeHoleStablefordPoints(g, holePars[i], recv) : (g - recv);
+  }
+  sub.brutto = brutto; sub.score = score;
+}
+
+// Release 411: förs ett rättat slag i livescoringen över till spelarens
+// inskickade scorekort. Tidigare ändrades bara livescoring-dokumentet - det
+// officiella scorekortet (och därmed resultatlistan, poängen och live-tabellen,
+// som visar det godkända scorekortet) behöll det gamla slaget. Ett redan
+// GODKÄNT scorekort ändras bara av admin (det är fastställt), ett ej godkänt
+// följer alltid med. Stängd deltävling: admin rättar, poängen delas ut på nytt.
+function applyLiveHolesToSubmission(t, e, pi, liveHoles, holePars, holeHcpIndex) {
+  var sub = (e.scoreSubmissions||[]).find(function(s){ return s.pi===pi; });
+  if(!sub || !sub.holes || !liveHoles) return false;
+  if(isSubmissionApproved(sub) && !isAdmin()) return false;
+  var n = holePars.length, changed = false;
+  for(var i=0; i<n; i++){
+    var v = liveHoles[i+1];
+    if(typeof v === 'number' && sub.holes[i] !== v) { sub.holes[i] = v; changed = true; }
+  }
+  if(!changed) return false;
+  sub.holes = sub.holes.slice();
+  recomputeSubmissionTotals(sub, holePars, holeHcpIndex, e.type === 'stableford');
+  sub.submittedAt = new Date().toISOString();
+  return true;
+}
+
+// Efter att scorekort ändrats: synka resultatlistan, och dela ut OoM-poängen
+// på nytt om deltävlingen redan är stängd (bara admin kommer hit då).
+function afterSubmissionCorrection(t, e) {
+  var wasClosed = !!e.closed;
+  if(wasClosed) e.closed = false;
+  var changed = syncResultsFromApprovedSubmissions(t, e);
+  if(wasClosed) {
+    e.closed = true;
+    if(changed && !e.isFinal) {
+      var mult = e.isMajor ? 1.5 : 1;
+      e.results.forEach(function(r,idx){ r.points = Math.round((t.pointsScale[idx]||0)*mult*10)/10; });
+    }
+  }
+  return changed;
+}
+
+// Hämtar bollarnas livescoring och för över rättade slag till scorekorten -
+// fångar rättningar som gjordes innan release 411.
+function pullLiveCorrectionsForEvent(t, e) {
+  var course = (courseDb||[]).find(function(c){ return c.name.toLowerCase() === (e.course||'').trim().toLowerCase(); });
+  var promises = (e.teeGroups||[]).map(function(g){
+    return LIVE_SCORING_COL.doc(liveScoringDocId(e.id, ensureTeeGroupId(g))).get().catch(function(){ return null; });
+  });
+  return Promise.all(promises).then(function(docs){
+    var changed = false;
+    docs.forEach(function(doc){
+      if(!doc || !doc.exists) return;
+      var d = doc.data();
+      var pars = d.holePars || (course && course.holePars); if(!pars) return;
+      var idx = d.holeHcpIndex || (course && course.holeHcpIndex) || [];
+      (d.players||[]).forEach(function(p){
+        if(applyLiveHolesToSubmission(t, e, p.pi, (d.scores||{})[p.pi], pars, idx)) changed = true;
+      });
+    });
+    return changed;
+  });
+}
+
 function closeEvent(i){
   if(!isAdmin()) return;
   var t=getTour(),e=t.events[i];
   if(!confirm('Stäng tävlingen? Resultat låses.'+(e.isFinal?'':' Poäng delas ut.')))return;
+  pullLiveCorrectionsForEvent(t, e).catch(function(err){ console.warn('Kunde inte läsa livescoring', err); })
+    .then(function(){ closeEventCore(i); });
+}
+
+function closeEventCore(i){
+  var t=getTour(),e=t.events[i];
+  if(!e || e.closed) return;
   syncResultsFromApprovedSubmissions(t, e);
   if(!e.results||!e.results.length){
     var autoResults = buildResultsFromApprovedSubmissions(t, e);
@@ -18696,6 +18776,18 @@ function onLiveScoreInput(pi, rawValue) {
     console.error('Livescoring: kunde inte spara', err);
     alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
   });
+  if(!cleared) {
+    try {
+      var fte = findTourAndEventById(d.eventId);
+      if(fte && fte.event && d.holePars) {
+        var liveRow = {}; liveRow[hole] = n;
+        if(applyLiveHolesToSubmission(fte.tour, fte.event, pi, liveRow, d.holePars, d.holeHcpIndex||[])) {
+          afterSubmissionCorrection(fte.tour, fte.event);
+          save();
+        }
+      }
+    } catch(err) { console.warn('Kunde inte föra över rättat slag till scorekortet', err); }
+  }
   var par = d.holePars ? d.holePars[hole-1] : null;
   syncActivityFeedForHole(d.eventId, pi, hole, cleared ? null : n, par);
   if(!cleared) checkGoodRoundForFeed(pi, hole, n);
@@ -24125,6 +24217,14 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '19 november 2026 (411)',
+    items: [
+      { type: 'fixed', text: 'Rättar man ett slag i livescoringen efter att ronden lämnats in och godkänts följer rättningen nu med till det officiella scorekortet. Poäng, resultatlista och live-tabell räknas om direkt. Tidigare ändrades bara livescoringen och totalpoängen låg kvar på det gamla slaget.' },
+      { type: 'fixed', text: 'Ett godkänt scorekort kan bara rättas så av admin. Är deltävlingen redan stängd delas OoM-poängen ut på nytt utifrån den nya ordningen.' },
+      { type: 'fixed', text: 'När admin stänger en deltävling hämtas först rättningar som gjorts i livescoringen, så att även äldre rättningar kommer med.' },
+    ]
+  },
   {
     date: '19 november 2026 (410)',
     items: [
