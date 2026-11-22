@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
+:root{--score-red:#B42318;--score-blue:#1D4ED8;--info-text:#123A4D;
   --green:#1D9E75;--green-light:#E1F5EE;--green-dark:#0F6E56;
   --gold:#BA7517;--gold-light:#FAEEDA;
   --bg:#f0f4f1;--surface:#ffffff;--surface2:#f3f4f6;
@@ -391,6 +391,9 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* ── MÖRKT LÄGE ── aktiveras via <html data-theme="dark"> (applyTheme). Färgvariablerna
    byts, och några hårdkodade ljusa färger i inline-stilar skrivs över nedan. Färgade
    ikonrutor (startsidan, Mer-menyn, Inställningar) behåller sina pastellfärger men dämpas lite. */
+/* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
+.info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
+html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
 html[data-theme="dark"]{
   color-scheme:dark;
   --green-light:#14392c;--green-dark:#5BD0A2;
@@ -399,6 +402,7 @@ html[data-theme="dark"]{
   --border:#2D3833;--border-strong:#3B4842;
   --text:#E6ECE8;--text-2:#A7B2AC;--text-3:#7C8781;
   --danger-bg:#3A1818;--danger-border:#6B2626;--danger-text:#F38B8B;
+  --score-red:#FF8A80;--score-blue:#8AB4FF;--info-text:#9CCBEA;
 }
 html[data-theme="dark"] .hero.hero-sticky::after{background:linear-gradient(180deg,var(--bg) 0%,rgba(14,20,17,0) 100%)}
 html[data-theme="dark"] #bnav{background:rgba(24,32,28,.96)}
@@ -460,6 +464,49 @@ html[data-theme="dark"] [style*="color:#B45309"]:not(.home-card *):not(.bs-it *)
 html[data-theme="dark"] [style*="color:#A32D2D"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#dc2626"]:not(.home-card *):not(.bs-it *){color:#F38B8B !important}
 html[data-theme="dark"] [style*="color:#534AB7"]:not(.home-card *):not(.bs-it *),html[data-theme="dark"] [style*="color:#6D28D9"]:not(.home-card *):not(.bs-it *){color:#B4A8F5 !important}
 html[data-theme="dark"] [style*="color:#3B6D11"]:not(.home-card *):not(.bs-it *){color:#9BD46A !important}
+/* Release 417: mörka textfärger i inline-stilar blir ljusa i mörkt läge (samma färgton) */
+html[data-theme="dark"] [style*="color:#ba7517" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F0C589 !important}
+html[data-theme="dark"] [style*="color:#8a5a00" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5CE84 !important}
+html[data-theme="dark"] [style*="color:#7a4100" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5C084 !important}
+html[data-theme="dark"] [style*="color:#123a4d" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#94CBE6 !important}
+html[data-theme="dark"] [style*="color:#b42318" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#EF918A !important}
+html[data-theme="dark"] [style*="color:#1d4ed8" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#8AA5EF !important}
+html[data-theme="dark"] [style*="color:#555" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#BDBDBD !important}
+html[data-theme="dark"] [style*="color:#5f5e5a" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#BEBEBB !important}
+html[data-theme="dark"] [style*="color:#8f4b00" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5BF84 !important}
+html[data-theme="dark"] [style*="color:#13664f" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#8FEAD1 !important}
+html[data-theme="dark"] [style*="color:#5e7016" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#D7E990 !important}
+html[data-theme="dark"] [style*="color:#7a1f1f" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#E49595 !important}
+html[data-theme="dark"] [style*="color:#7a231b" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#E79A92 !important}
+html[data-theme="dark"] [style*="color:#7a4a0a" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5C584 !important}
+html[data-theme="dark"] [style*="color:#7a4b00" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5CA84 !important}
+html[data-theme="dark"] [style*="color:#166534" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#92E7B2 !important}
+html[data-theme="dark"] [style*="color:#065f46" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#84F5D5 !important}
+html[data-theme="dark"] [style*="color:#8f5200" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5C584 !important}
+html[data-theme="dark"] [style*="color:#c2410c" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5A584 !important}
+html[data-theme="dark"] [style*="color:#8a4b00" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5C284 !important}
+html[data-theme="dark"] [style*="color:#5a3d00" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5D184 !important}
+html[data-theme="dark"] [style*="color:#7a4cae" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#BBA3D7 !important}
+html[data-theme="dark"] [style*="color:#854f0b" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5C385 !important}
+html[data-theme="dark"] [style*="color:#e24b4a" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#ED8D8D !important}
+html[data-theme="dark"] [style*="color:#a32d2d" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#E29797 !important}
+html[data-theme="dark"] [style*="color:#b45309" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#F5B584 !important}
+html[data-theme="dark"] [style*="color:#534ab7" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#A5A0D9 !important}
+html[data-theme="dark"] [style*="color:#185fa5" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#8BBDEE !important}
+html[data-theme="dark"] [style*="color:#0c447c" i]:not([style*="background"]):not(.home-card *):not(.bs-it *){color:#86BDF3 !important}
+html[data-theme="dark"] [style*="background:#dcfce7" i][style*="color:#166534" i]{color:#92E7B2 !important}
+html[data-theme="dark"] [style*="background:#e3effb" i][style*="color:#185fa5" i]{color:#8BBDEE !important}
+html[data-theme="dark"] [style*="background:#eeedfe" i][style*="color:#534ab7" i]{color:#A5A0D9 !important}
+html[data-theme="dark"] [style*="background:#fcebeb" i][style*="color:#a32d2d" i]{color:#E29797 !important}
+html[data-theme="dark"] [style*="background:#fdecec" i][style*="color:#b42318" i]{color:#EF918A !important}
+html[data-theme="dark"] [style*="background:#fef3e2" i][style*="color:#7a4100" i]{color:#F5C084 !important}
+html[data-theme="dark"] [style*="background:#fef3e2" i][style*="color:#8a4b00" i]{color:#F5C284 !important}
+html[data-theme="dark"] [style*="background:#fef3e9" i][style*="color:#7a4a0a" i]{color:#F5C584 !important}
+html[data-theme="dark"] [style*="background:#fff4d6" i][style*="color:#8a5a00" i]{color:#F5CE84 !important}
+html[data-theme="dark"] [style*="background:#fff4dc" i][style*="color:#7a4b00" i]{color:#F5CA84 !important}
+html[data-theme="dark"] [style*="background:#fff8ec" i][style*="color:#7a4100" i]{color:#F5C084 !important}
+html[data-theme="dark"] [style*="background:#FFF4D6" i]{background:#372D15 !important}
+html[data-theme="dark"] [style*="#FFE3B3" i]{background:linear-gradient(135deg,#3A2A12,#2A1F10) !important}
 /* Märkesloggor (svart text på vit/transparent botten) inverteras i mörkt läge: vit text,
    och den (nu svarta) bakgrunden blandas bort med screen så loggan ser transparent ut.
    hue-rotate återställer ev. färgade detaljer (t.ex. röda) till ungefär sin ursprungsfärg. */
@@ -19447,17 +19494,23 @@ function computeLiveStandingsRows(docs, t, ev) {
 function formatLiveDiff(diff, thru, isStab) {
   if(!thru) return { text: '–', color: 'var(--text-3)' };
   if(!isStab) {
-    if(diff === 0) return { text: 'E', color: '#111827' };
-    return { text: (diff>0?'+':'')+diff, color: diff<0 ? '#B42318' : '#1D4ED8' };
+    if(diff === 0) return { text: 'E', color: 'var(--text)' };
+    return { text: (diff>0?'+':'')+diff, color: diff<0 ? 'var(--score-red)' : 'var(--score-blue)' };
   }
   if(diff === 0) return { text: 'E', color: 'var(--text-2)' };
-  return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : '#B42318' };
+  return { text: (diff>0?'+':'')+diff, color: diff>0 ? 'var(--green-dark)' : 'var(--score-red)' };
 }
 
 // Kortar "Förnamn Efternamn(en)" till "F. Efternamn(en)" - tar bara bort första
 // ordet och ersätter det med dess första bokstav, resten av namnet (även om det
 // är flera ord, t.ex. "Jonsson Wråkk") lämnas orört. Ingen separat för-/efternamn-
 // fältuppdelning behövs - fungerar direkt på det befintliga namnet som en sträng.
+// Release 418: namn i OoM-listan - hela namnet om det får plats, annars kortat.
+function oomDisplayName(name) {
+  if(!name) return '';
+  return name.length <= 16 ? name : abbreviateFirstName(name);
+}
+
 function abbreviateFirstName(fullName) {
   if(!fullName) return fullName;
   var firstSpace = fullName.indexOf(' ');
@@ -21368,7 +21421,7 @@ function renderOOM(){
   var winningsData = (t.fee>0 && isTourConcluded(t)) ? computeTourWinnings(t) : null;
   var liveEventNames = Object.keys(livePrev.byEvent||{}).map(function(eid){ return livePrev.byEvent[eid].eventName; });
   var liveBannerHtml = liveEventNames.length
-    ? '<div style="background:#EAF3FB;border:1px solid #B9D9F0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#123A4D;display:flex;align-items:center;gap:6px">'+
+    ? '<div class="info-banner" style="border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:6px">'+
         '<i class="ti ti-broadcast"></i> <span><strong>Preliminär ställning</strong> - '+esc(liveEventNames.join(', '))+' pågår just nu. Poängen nedan uppdateras live men blir inte officiella förrän deltävlingen stängs.</span>'+
       '</div>'
     : '';
@@ -21386,12 +21439,14 @@ function renderOOM(){
         '<div style="width:24px;height:24px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-2);flex-shrink:0">'+(seasonNotStarted?'-':(idx+1))+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%;flex-shrink:0" alt="">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px;flex-shrink:0">'+ini(p.name)+'</div>')+
         '<div style="flex:1;min-width:0">'+
-          '<div style="display:flex;align-items:center;gap:5px;min-width:0"><span style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</span>'+(pLogo||'')+'</div>'+
-          '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+statsLine+'</div>'+
+          // Release 418: hela raden ges åt namnet (loggan flyttad till raden under),
+          // och långa namn kortas till "P. Pettersson" / "A. J. Wrååk" så de syns.
+          '<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(p.name)+'">'+esc(oomDisplayName(p.name))+'</div>'+
+          '<div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:1px"><span style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+statsLine+'</span>'+(pLogo?'<span style="flex-shrink:0;display:inline-flex;align-items:center">'+pLogo+'</span>':'')+'</div>'+
         '</div>'+
         '<div style="text-align:right;flex-shrink:0">'+
           '<div style="font-weight:700;font-size:15px;color:var(--green-dark);white-space:nowrap">'+d.pts+' pts</div>'+
-          (d.livePts>0?'<div style="font-size:10px;color:#123A4D;font-weight:700;white-space:nowrap"><i class="ti ti-broadcast"></i> varav '+d.livePts+' p prel.</div>':'')+
+          (d.livePts>0?'<div style="font-size:10px;color:var(--info-text);font-weight:700;white-space:nowrap"><i class="ti ti-broadcast"></i> varav '+d.livePts+' p prel.</div>':'')+
           (won>0?'<div style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap"><i class="ti ti-cash" style="font-size:10px"></i> '+won+' kr</div>':'')+
         '</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3);flex-shrink:0"></i></div>';
@@ -24527,6 +24582,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '22 november 2026 (418)',
+    items: [
+      { type: 'improved', text: 'OoM-listan: namnen syns nu. Märkesloggan har flyttats ner till raden med antal tävlingar, så att namnet får hela raden, och långa namn kortas till t.ex. "P. Pettersson" eller "A. J. Wrååk" i stället för att klippas till "Pet…".' },
+    ]
+  },
+  {
+    date: '22 november 2026 (417)',
+    items: [
+      { type: 'fixed', text: 'Mörkt läge: blå och röd text syntes nästan inte. Gäller bl.a. rutan "Preliminär ställning" och "varav X p prel." i OoM, samt röd (under par) och blå (över par) score i live-tabellen. De visas nu i ljusblått och ljusrött.' },
+      { type: 'fixed', text: 'Mörkt läge: en rad andra mörka textfärger (bruna, gröna, lila m.fl.) visas nu i en ljusare variant av samma färg, så att de syns mot den mörka bakgrunden.' },
+    ]
+  },
   {
     date: '22 november 2026 (416)',
     items: [
