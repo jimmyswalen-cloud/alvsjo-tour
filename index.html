@@ -6431,6 +6431,7 @@ function renderHomeNextRoundWidget() {
           '</div>'+
         '</div>'+
       '</div>'+
+      '<div id="home-submit-reminder"></div>'+
       '<div class="row" style="justify-content:flex-end;align-items:center;gap:6px;padding:10px 14px 12px;flex-wrap:wrap">'+
         '<span id="home-live-table-btn"></span>'+
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff;padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
@@ -6442,6 +6443,33 @@ function renderHomeNextRoundWidget() {
     '<div style="height:1px;background:var(--border);margin:0 0 20px"></div>';
   checkHomeLiveTableButton(e.id, t.id);
   if(info.groupIndex != null) checkHomeShcpBadge(t.id, e.id, info.groupIndex);
+  if(info.groupIndex != null) checkHomeSubmitReminder(t.id, e.id, info.groupIndex);
+}
+
+// Release 416: på startsidan - visar tydligt om min rond är spelad klart men
+// scorekortet inte är inskickat, eller om det väntar på markören.
+function checkHomeSubmitReminder(tourId, eid, gIdx) {
+  var t = (S.tours||[]).find(function(x){ return x.id===tourId; }); if(!t) return;
+  var e = (t.events||[]).find(function(x){ return x.id===eid; }); if(!e || !e.teeGroups || !e.teeGroups[gIdx]) return;
+  var myPi = getMyPi(t), g = e.teeGroups[gIdx];
+  var sub = (e.scoreSubmissions||[]).find(function(x){ return x.pi===myPi; });
+  var box = function(html){ var el = document.getElementById('home-submit-reminder'); if(el) el.innerHTML = html; };
+  if(sub) {
+    box(isSubmissionApproved(sub)
+      ? '<div style="margin:0 14px;padding:8px 10px;border-radius:8px;background:var(--green-light);color:var(--green-dark);font-size:12px;font-weight:600"><i class="ti ti-circle-check"></i> Ditt scorekort är inskickat och godkänt</div>'
+      : '<div style="margin:0 14px;padding:8px 10px;border-radius:8px;background:var(--gold-light);color:#8A5A00;font-size:12px;font-weight:600"><i class="ti ti-clock"></i> Scorekortet är inskickat – väntar på att markören godkänner</div>');
+    return;
+  }
+  LIVE_SCORING_COL.doc(liveScoringDocId(eid, ensureTeeGroupId(g))).get().then(function(doc){
+    if(!doc.exists) return;
+    var d = doc.data(), n = (d.holePars||[]).length || 18, sc = (d.scores||{})[myPi] || {};
+    for(var h=1; h<=n; h++){ if(typeof sc[h] !== 'number') return; }
+    box('<div style="margin:0 14px;padding:12px;border-radius:10px;background:#FFF6E5;border:2px solid #E8A33D;text-align:center" onclick="event.stopPropagation()">' +
+      '<div style="font-weight:800;color:#8A5A00;font-size:14px"><i class="ti ti-alert-triangle"></i> Din rond är klar – skicka in scorekortet</div>' +
+      '<div style="font-size:12px;color:#8A5A00;margin:2px 0 8px">Resultatet räknas inte förrän det är inskickat.</div>' +
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;font-weight:700" onclick="event.stopPropagation();goToMyLiveScoring(\'' + tourId + '\',\'' + eid + '\',' + gIdx + ')"><i class="ti ti-send"></i> Skicka in scorekort</button>' +
+    '</div>');
+  }).catch(function(){});
 }
 
 // Visar spelarens SPELHANDICAP FÖR DEN HÄR SPECIFIKA RONDEN (SHCP) i "Kommande
@@ -18437,10 +18465,11 @@ function renderLiveGridHTML() {
           '<div style="font-size:12px;color:#3B6D11;margin-top:2px">Alla i bollen har fyllt i '+totalHoles+' hål och skickat in sina officiella scorekort'+(isAdminUser?' - som admin kan du fortfarande justera resultat vid behov.':'. Kontakta admin om något behöver korrigeras.')+'</div>'+
           (isAdminUser ? '<button class="btn btn-sm" style="margin-top:8px" onclick="syncLiveCorrectionsNow(\''+_liveScoring.eid+'\')"><i class="ti ti-refresh"></i> Räkna om scorekorten</button>' : '')+
         '</div>'
-      : '<div style="background:#FFF6E5;border:1px solid #F3D19E;border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">'+
-          '<div style="font-weight:800;color:#8A5A00;font-size:17px;margin-bottom:2px"><i class="ti ti-flag-2"></i> Rond klar!</div>'+
-          '<div style="font-size:13px;color:#8A5A00;margin-bottom:10px">Alla '+totalHoles+' hål är ifyllda för hela bollen. Välj markörer och skicka in de officiella scorekorten.</div>'+
-          '<button class="btn btn-primary" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Välj markörer & skicka in rond</button>'+
+      : '<div style="background:#FFF6E5;border:2px solid #E8A33D;border-radius:12px;padding:14px;margin-bottom:14px;text-align:center">'+
+          '<div style="font-weight:800;color:#8A5A00;font-size:17px;margin-bottom:2px"><i class="ti ti-alert-triangle"></i> Scorekorten är inte inskickade</div>'+
+          '<div style="font-size:13px;color:#8A5A00;margin-bottom:8px">Alla '+totalHoles+' hål är ifyllda. Resultatet räknas inte i tävlingen förrän scorekorten skickats in.</div>'+
+          liveSubmitStatusHTML(d, found)+
+          '<button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:16px;font-weight:700;margin-top:10px" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Skicka in scorekorten</button>'+
         '</div>';
   }
 
@@ -18502,9 +18531,56 @@ function renderLiveGridHTML() {
     '</div>'+
     rows+
     '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">'+filledCount+' av '+d.players.length+' klara för hålet. Tryck på en spelares slag-knapp för att mata in - valfri ordning.</p>'+
+    liveRoundProgressHTML(d, totalHoles, allComplete, allComplete && completionBanner.indexOf('inte inskickade') >= 0)+
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
-      '<button class="btn" onclick="closeModal()">Stäng</button>'+
+      '<button class="btn" onclick="closeLiveScoringSafe()">Stäng</button>'+
     '</div>';
+}
+
+// Release 416: status per spelare i bollen - inskickat, godkänt eller saknas.
+function liveSubmitStatusHTML(d, found) {
+  var subs = (found && found.event && found.event.scoreSubmissions) || [];
+  return '<div style="display:flex;flex-direction:column;gap:4px;text-align:left;background:rgba(255,255,255,.55);border-radius:8px;padding:8px 10px">' +
+    d.players.map(function(p){
+      var sub = subs.find(function(x){ return x.pi === p.pi; });
+      var st = !sub ? '<span style="color:#B42318;font-weight:700"><i class="ti ti-circle-x"></i> Ej inskickat</span>'
+             : isSubmissionApproved(sub) ? '<span style="color:#3B6D11;font-weight:700"><i class="ti ti-circle-check"></i> Godkänt</span>'
+             : '<span style="color:#8A5A00;font-weight:700"><i class="ti ti-clock"></i> Väntar på markör</span>';
+      return '<div class="row" style="justify-content:space-between;font-size:12px;color:#3d2a00"><span>' + esc(p.name) + '</span>' + st + '</div>';
+    }).join('') + '</div>';
+}
+
+// Release 416: visar hur långt bollen kommit och påminner om inlämningen,
+// så att ingen tror att rundan är klar bara för att sista slaget är inmatat.
+function liveRoundProgressHTML(d, totalHoles, allComplete, needsSubmit) {
+  var done = 0;
+  for(var h=1; h<=totalHoles; h++){
+    if(d.players.every(function(p){ return typeof ((d.scores[p.pi]||{})[h]) === 'number'; })) done++;
+  }
+  var pct = Math.round(done / totalHoles * 100);
+  var msg = allComplete
+    ? (needsSubmit ? '<b style="color:#B42318">Sista steget: skicka in scorekorten</b>' : '<b style="color:var(--green-dark)">Klart och inskickat</b>')
+    : (totalHoles - done <= 3 ? 'Snart klart – efter hål ' + totalHoles + ' skickar ni in scorekorten här' : 'När alla hål är klara skickar ni in scorekorten här');
+  return '<div style="margin-top:14px">' +
+    '<div class="row" style="justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:4px"><span>' + done + ' av ' + totalHoles + ' hål klara</span><span>' + msg + '</span></div>' +
+    '<div style="height:6px;border-radius:3px;background:var(--surface2);overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (allComplete && needsSubmit ? '#E8A33D' : 'var(--green)') + '"></div></div>' +
+    (needsSubmit ? '<button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:16px;font-weight:700;margin-top:12px" onclick="openBulkScoreSubmission(\'' + _liveScoring.eid + '\',' + _liveScoring.gIdx + ')"><i class="ti ti-send"></i> Skicka in scorekorten</button>' : '') +
+  '</div>';
+}
+
+// Release 416: varnar om man stänger en färdig rond som inte är inskickad.
+function closeLiveScoringSafe() {
+  try {
+    var d = _liveScoring && _liveScoring.data, found = d && findTourAndEventById(d.eventId);
+    if(d && found) {
+      var totalHoles = (d.holePars||[]).length || 18;
+      var allComplete = d.players.every(function(p){ var sc = d.scores[p.pi]||{}; for(var h=1; h<=totalHoles; h++){ if(typeof sc[h] !== 'number') return false; } return true; });
+      var subs = found.event.scoreSubmissions || [];
+      var missing = d.players.filter(function(p){ return !subs.some(function(x){ return x.pi === p.pi; }); });
+      if(allComplete && missing.length && !confirm('Scorekorten är inte inskickade för: ' + missing.map(function(p){ return p.name; }).join(', ') + '.\n\nResultatet räknas inte förrän de skickats in. Stänga ändå?')) return;
+    }
+  } catch(e) {}
+  closeModal();
 }
 
 // Tydlig, egen avslutningsskärm som visas automatiskt så fort ALLA spelare i
@@ -18543,15 +18619,15 @@ function renderRoundCompleteHTML() {
         '<i class="ti ti-flag-2" style="font-size:32px;color:var(--green-dark)"></i>'+
       '</div>'+
       '<div>'+
-        '<h3 style="margin:0 0 4px">Rond klar!</h3>'+
-        '<p style="margin:0;color:var(--text-2);font-size:13px">Alla '+totalHoles+' hål är ifyllda för hela bollen</p>'+
+        '<h3 style="margin:0 0 4px">Rond klar – skicka in scorekorten</h3>'+
+        '<p style="margin:0;color:var(--text-2);font-size:13px">Alla '+totalHoles+' hål är ifyllda. <b>Resultatet räknas inte i tävlingen förrän scorekorten är inskickade.</b></p>'+
       '</div>'+
       '<div style="width:100%;background:var(--surface2);border-radius:10px;padding:8px 14px;text-align:left">'+rows+'</div>'+
       '<div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:2px">'+
-        '<button class="btn btn-primary" style="width:100%;padding:15px;font-size:16px;font-weight:700" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Lämna in rond</button>'+
+        '<button class="btn btn-primary" style="width:100%;padding:15px;font-size:16px;font-weight:700" onclick="openBulkScoreSubmission(\''+_liveScoring.eid+'\','+_liveScoring.gIdx+')"><i class="ti ti-send"></i> Skicka in scorekorten</button>'+
         '<button class="btn" style="width:100%;padding:13px;font-size:14px" onclick="backToScoringFromRoundComplete()"><i class="ti ti-arrow-left"></i> Tillbaka till scorekortet</button>'+
       '</div>'+
-      '<p style="margin:2px 0 0;font-size:11px;color:var(--text-3)">Kontrollera slagen per hål innan du skickar in.</p>'+
+      '<p style="margin:2px 0 0;font-size:11px;color:var(--text-3)">Nästa steg: kontrollera slagen och välj markör för varje spelare. Markören godkänner sedan scorekortet.</p>'+
     '</div>';
 }
 
@@ -24451,6 +24527,15 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '22 november 2026 (416)',
+    items: [
+      { type: 'improved', text: 'Tydligare att skicka in sin score: när alla hål är ifyllda visas en stor knapp "Skicka in scorekorten" och status per spelare i bollen (ej inskickat / väntar på markör / godkänt). Det står också tydligt att resultatet inte räknas förrän scorekorten är inskickade.' },
+      { type: 'new', text: 'En framstegsrad i livescoringen visar hur många hål bollen har klara och påminner om att scorekorten skickas in efter sista hålet.' },
+      { type: 'new', text: 'Stänger man livescoringen med en färdig men inte inskickad rond får man en varning.' },
+      { type: 'new', text: 'Startsidan visar en tydlig påminnelse "Din rond är klar – skicka in scorekortet" tills det är gjort, och därefter status: väntar på markör eller godkänt.' },
+    ]
+  },
   {
     date: '22 november 2026 (415)',
     items: [
