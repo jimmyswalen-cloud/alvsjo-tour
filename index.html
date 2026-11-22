@@ -13080,16 +13080,27 @@ function renderHomeBollTodo() {
       if(d > soon || d < today) return;
       var hk = t.id + '|' + e.id + '|' + k;
       if(hidden[hk] && hidden[hk] >= by[k].length) return; // gömd – visas igen om fler anmäler sig
-      rows.push({ t: t, e: e, ei: ei, key: k, n: by[k].length, hk: hk });
+      rows.push({ t: t, e: e, ei: ei, key: k, n: by[k].length, hk: hk, regs: by[k] });
     });
   });
   if(!rows.length) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="card" style="margin-bottom:20px;padding:14px 16px;border:2px solid var(--gold)">' +
     '<div style="font-weight:800;font-size:15px;margin-bottom:2px"><i class="ti ti-clipboard-list" style="color:var(--gold)"></i> Att göra – sätt bollar</div><div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Anmälda utan boll, per plats och dag</div>' +
     rows.slice(0, 8).map(function(x){ return '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
-      '<div style="min-width:0"><b style="font-size:13px">' + esc(prKeyLabel(x.t, x.e, x.key)) + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(x.t.name) + ' · ' + esc(x.e.name) + ' · ' + x.n + ' utan boll</div></div>' +
+      '<div style="min-width:0"><b style="font-size:13px">' + esc(prKeyLabel(x.t, x.e, x.key)) + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(x.t.name) + ' · ' + esc(x.e.name) + ' · ' + x.n + ' utan boll</div>' + bollTodoNamesHTML(x.t, x.regs) + '</div>' +
       '<span class="row" style="gap:6px;flex-shrink:0"><button class="btn btn-sm btn-primary" onclick="openPairing(\'' + x.t.id + '\',' + x.ei + ',\'' + esc(x.key) + '\')"><i class="ti ti-dice"></i> Sätt bollar</button>' +
         '<button class="btn btn-sm" title="Göm påminnelsen" onclick="hideBollTodo(\'' + esc(x.hk) + '\',' + x.n + ')"><i class="ti ti-eye-off"></i></button></span></div>'; }).join('') + '</div>';
+}
+// Release 419: vilka spelare som saknar boll (med ev. önskad tid), som små etiketter.
+function bollTodoNamesHTML(t, regs) {
+  var players = getPlayersForTour(t) || t.players || [];
+  var list = (regs || []).slice().sort(function(a, b){ return String(a.time || '').localeCompare(String(b.time || '')); });
+  return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' + list.map(function(r){
+    var p = players[r.pi], tm = '';
+    try { tm = r.time ? regTimeLabel(r) : ''; } catch(x) {}
+    return '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--text);white-space:nowrap"><i class="ti ti-user" style="font-size:10px;color:var(--text-3)"></i> ' +
+      esc(p ? p.name : '?') + (tm ? ' <span style="color:var(--text-3)">· ' + esc(tm) + '</span>' : '') + '</span>';
+  }).join('') + '</div>';
 }
 function hideBollTodo(hk, n) {
   var h = {}; try { h = JSON.parse(localStorage.getItem('agcc-bolltodo-hidden') || '{}'); } catch(x) {}
@@ -24582,6 +24593,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '22 november 2026 (419)',
+    items: [
+      { type: 'improved', text: 'Startsidan, "Att göra – sätt bollar": rutan visar nu namnen på spelarna som saknar boll (och deras önskade tid om de angett en), inte bara antalet.' },
+    ]
+  },
   {
     date: '22 november 2026 (418)',
     items: [
