@@ -1524,6 +1524,7 @@ function initFirebaseSync(onFirstLoad) {
       if (_saveAfterReady) { _saveAfterReady = false; save(); }
     } else {
       try { afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
+      try { reapplyPendingSubCorrections(); } catch(e) { console.warn('väntande rättningar', e); }
       // Data changed remotely (another visitor edited something) — re-render current view.
       refreshCurrentView();
       try { renderHomeChampGreeting(); } catch(e) {}
@@ -2518,6 +2519,37 @@ function setupBottomNav() {
     });
   }
   window._bnavKbCheck = function(){ if(!isTextField(document.activeElement)) document.body.classList.remove('kb-open'); };
+  // Release 413: iOS (särskilt som hemskärmsapp) kan efter att tangentbordet
+  // stängts lämna kvar en "krympt" layout - fasta element som menyraden ritas då
+  // där tangentbordets överkant var, mitt på skärmen, tills man scrollar. Vi
+  // tvingar iOS att räkna om layouten och kompenserar för en kvarstående skillnad
+  // mellan den synliga ytan och layoutytan.
+  (function(){
+    var nav = document.getElementById('bnav'); if(!nav) return;
+    var vv = window.visualViewport;
+    function fix(){
+      if(document.body.classList.contains('kb-open') || isTextField(document.activeElement)) { nav.style.transform = ''; return; }
+      if(!vv) return;
+      var gap = Math.round((vv.offsetTop + vv.height) - window.innerHeight);
+      // Bara rimliga avvikelser (positiv = synlig yta längre ner än layoutens botten)
+      nav.style.transform = (gap > 2 && gap < vv.height * 0.7) ? 'translateY(' + gap + 'px)' : '';
+    }
+    function nudge(){
+      if(document.body.classList.contains('kb-open') || isTextField(document.activeElement)) return;
+      // Liten scroll fram och tillbaka får iOS att släppa den gamla layouten
+      var y = window.scrollY;
+      window.scrollTo(window.scrollX, y + 1);
+      window.scrollTo(window.scrollX, y);
+      fix();
+    }
+    window._bnavLayoutFix = nudge;
+    document.addEventListener('focusout', function(){ setTimeout(nudge, 120); setTimeout(nudge, 450); });
+    if(vv) { vv.addEventListener('resize', function(){ setTimeout(fix, 60); }); vv.addEventListener('scroll', fix); }
+    window.addEventListener('orientationchange', function(){ setTimeout(nudge, 400); });
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(nudge, 200); });
+    window.addEventListener('pageshow', function(){ setTimeout(nudge, 200); });
+    window.addEventListener('scroll', function(){ if(nav.style.transform) fix(); }, { passive: true });
+  })();
   // Håll aktiv flik i synk med vilken skärm som visas
   var t = null;
   var mo = new MutationObserver(function(){ if(t) return; t = setTimeout(function(){ t = null; try { syncBottomNav(); } catch(e) {} }, 30); });
@@ -12721,17 +12753,38 @@ function sfDates(e) {
   return out;
 }
 function sfDateSelect(e, id, val) {
-  var ds = sfDates(e); if(!ds.length) ds = [e.date];
+  var ds = sfDates(e); // release 413: ingen reserv till e.date - ett passerat datum ska aldrig gå att välja
+  if(!ds.length) return '<select id="' + id + '" style="margin:0" disabled><option value="">Inga speldagar kvar</option></select>';
   return '<select id="' + id + '" style="margin:0">' + ds.map(function(d){ return '<option value="' + d + '" ' + (d === val ? 'selected' : '') + '>' + esc(sfDateLbl(d)) + '</option>'; }).join('') + '</select>';
 }
 
 // ── Spelarens flöde ───────────────────────────────────────────────────────
+// Release 413: varför en deltävling inte längre tar emot bollar/anmälningar.
+// Tidigare kunde spelare skapa bollar i en deltävling vars speldagar redan
+// passerat (datumväljaren föll tillbaka på deltävlingens datum) - bara en
+// stängd deltävling spärrades, och bara via knapparna, inte i själva flödet.
+function sfClosedReason(e) {
+  if(!e) return 'Deltävlingen finns inte längre.';
+  if(e.closed) return 'Deltävlingen är avslutad och stängd.';
+  if(!sfDates(e).length) return 'Deltävlingens speldagar har passerat – det går inte att skapa eller ändra bollar längre.';
+  return '';
+}
+// Slår upp deltävlingen via id (inte index), så att flödet aldrig hamnar i fel deltävling.
+function sfEvt(t) {
+  if(!t || !_sf) return null;
+  var k = (t.events || []).findIndex(function(x){ return x.id === _sf.eid; });
+  if(k < 0) return null;
+  _sf.ei = k;
+  return t.events[k];
+}
 function openSignupFlow(ei) {
   var t = getTour(), e = t && t.events[ei]; if(!e) return;
   var me = getMyPi(t); if(me < 0) { alert('Du är inte med i den här touren.'); return; }
   if(!isAdmin() && isRegistrationDeadlinePassed(e) && !sfReg(e, me)) { alert('Anmälningstiden för den här tävlingen har gått ut.'); return; }
-  sfNormalizeGroups(t, e);
-  _sf = { ei: ei, step: 'choose', invites: [], seats: 4, dateFilter: '' };
+  var why = sfClosedReason(e);
+  if(why && !sfReg(e, me) && !sfGroupOf(e, me)) { alert(why); return; }
+  if(!e.closed) sfNormalizeGroups(t, e);
+  _sf = { ei: ei, eid: e.id, step: 'choose', invites: [], seats: 4, dateFilter: '' };
   renderSignupFlow();
 }
 function sfHead(t, e, step) {
@@ -12746,8 +12799,18 @@ function sfOpt(icon, bg, title, sub, onclick, dim) {
 }
 function renderSignupFlow() {
   if(!_sf) return;
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t), mode = sfMode(e);
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t), sim = isSimTour(t), mode = sfMode(e);
+  if(!e) { _sf = null; closeModal(); return; }
   var reg = sfReg(e, me), myG = sfGroupOf(e, me), h = '';
+  var closedWhy = sfClosedReason(e);
+  if(closedWhy && _sf.step !== 'done') {
+    h += sfHead(t, e, 'ANMÄLAN') +
+      '<div style="padding:12px;border-radius:12px;background:var(--surface2);font-size:13px;margin-bottom:12px"><i class="ti ti-lock" style="color:var(--text-3)"></i> ' + esc(closedWhy) + '</div>' +
+      (myG ? '<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Din boll: <b>' + esc(sfDateLbl(myG.date)) + (sfTimeLbl(myG) ? ' · ' + esc(sfTimeLbl(myG)) : '') + '</b></div>' : '') +
+      '<div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="_sf=null;closeModal()">Stäng</button></div>';
+    showModal(h, true, true);
+    return;
+  }
   if(_sf.step === 'choose') {
     h += sfHead(t, e, 'ANMÄLAN');
     if(myG) h += '<div style="padding:12px;border-radius:14px;border:2px solid var(--green-dark);margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--green-dark)">DIN BOLL</div><b>' + esc(sfDateLbl(myG.date)) + (sfTimeLbl(myG) ? ' · ' + esc(sfTimeLbl(myG)) : '') + '</b><div style="font-size:12px;color:var(--text-3)">' + esc(sfPlace(t, e, myG)) + '</div>' +
@@ -12824,7 +12887,10 @@ function sfKeep() {
 function sfVenuePick(v) { _sf.venue = v; }
 function sfToggleInvite(pi) { var i = _sf.invites.indexOf(pi); if(i >= 0) _sf.invites.splice(i, 1); else if(_sf.invites.length < _sf.seats - 1) _sf.invites.push(pi); else { alert('Bollen har ' + _sf.seats + ' platser.'); return; } renderSignupFlow(); }
 function sfJoin(gid) {
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), g = (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t);
+  var why = sfClosedReason(e); if(why) { alert(why); renderSignupFlow(); return; }
+  var g = (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
+  if(g.date < hcpTodayISO()) { alert('Bollen har redan spelats.'); renderSignupFlow(); return; }
   if(sfFree(g) <= 0) { alert('Bollen är full.'); renderSignupFlow(); return; }
   sfRemoveFromGroups(e, me, g.id);
   if(g.host == null && !g.playerPis.length) g.host = me; // äldre bollar utan värd får ingen värd bara för att någon går med
@@ -12834,8 +12900,10 @@ function sfJoin(gid) {
 }
 function sfCreate() {
   sfKeep();
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t);
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t), sim = isSimTour(t);
+  var why = sfClosedReason(e); if(why) { alert(why); renderSignupFlow(); return; }
   if(!_sf.date) { alert('Välj datum.'); return; }
+  if(sfDates(e).indexOf(_sf.date) < 0) { alert('Välj en av deltävlingens kommande speldagar.'); return; }
   if(sim && !_sf.venue) { alert('Välj anläggning.'); return; }
   sfRemoveFromGroups(e, me, null);
   var g = { id: 'tg_' + uid(), date: _sf.date, time: _sf.time || '', playerPis: [me], host: me, seats: _sf.seats, invites: _sf.invites.slice(), createdBy: 'player' };
@@ -12846,22 +12914,24 @@ function sfCreate() {
   save(); _sf.step = 'done'; renderSignupFlow();
 }
 function sfAdminPick() {
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t), sim = isSimTour(t);
-  var d = (document.getElementById('sf-date') || {}).value || e.date; sfKeep();
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t), sim = isSimTour(t);
+  var why = sfClosedReason(e); if(why) { alert(why); renderSignupFlow(); return; }
+  var d = (document.getElementById('sf-date') || {}).value; sfKeep();
+  if(!d || sfDates(e).indexOf(d) < 0) { alert('Välj en av deltävlingens kommande speldagar.'); return; }
   if(sim && !_sf.venue) { alert('Välj anläggning.'); return; }
   sfRemoveFromGroups(e, me, null);
   sfUpsertReg(e, me, { date: d, venue: sim ? _sf.venue : null, bollMode: 'admin' });
   save(); _sf.step = 'done'; renderSignupFlow();
 }
 function sfDecline() {
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t);
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t);
   if(!confirm('Svara att du inte kan delta?')) return;
   sfRemoveFromGroups(e, me, null);
   var r = sfReg(e, me); if(r) r.declined = true; else { if(!e.registrations) e.registrations = []; e.registrations.push({ pi: me, date: e.date, declined: true }); }
   save(); _sf = null; closeModal(); renderEvents();
 }
 function sfLeave() {
-  var t = getTour(), e = t.events[_sf.ei], me = getMyPi(t);
+  var t = getTour(), e = sfEvt(t), me = getMyPi(t);
   if(!confirm('Lämna bollen? Du är fortfarande anmäld och kan gå med i en annan boll eller låta admin sätta din boll.')) return;
   sfRemoveFromGroups(e, me, null);
   save(); renderSignupFlow();
@@ -12893,8 +12963,9 @@ function renderHomeInvites() {
 }
 function sfAnswerInvite(tourId, ei, gid, yes) {
   var t = S.tours.find(function(x){ return x.id === tourId; }); if(!t) return;
-  var e = t.events[ei], g = (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
+  var e = t.events[ei], g = e && (e.teeGroups || []).find(function(x){ return x.id === gid; }); if(!g) return;
   var me = getMyPi(t); if(me < 0) return;
+  if(yes && (sfClosedReason(e) || g.date < hcpTodayISO())) { alert('Den här bollen kan inte längre tackas ja till – deltävlingen är avslutad eller dagen har passerat.'); yes = false; }
   g.invites = (g.invites || []).filter(function(x){ return x !== me; });
   if(yes) {
     sfRemoveFromGroups(e, me, g.id);
@@ -13566,7 +13637,14 @@ function cleanupOrphanedLiveScoringDocs(eid, removedGroups) {
     var docId = liveScoringDocId(eid, g.id);
     var ref = LIVE_SCORING_COL.doc(docId);
     ref.get().then(function(doc){
-      if(doc.exists) deleteActivityFeedPostsFromMap(doc.data().feedPosts);
+      if(!doc.exists) return;
+      // Release 415: har bollen redan slag inmatade raderas den INTE - spelarna har
+      // flyttats till en annan boll och deras slag förs över dit när den bollens
+      // livescoring öppnas (se reconcileLiveDocPlayers). Tidigare raderades slagen.
+      var sc = doc.data().scores || {};
+      var hasScores = Object.keys(sc).some(function(pi){ var row = sc[pi] || {}; return Object.keys(row).some(function(h){ return typeof row[h] === 'number'; }); });
+      if(hasScores) return ref.update({ orphaned: true, updatedAt: Date.now() });
+      deleteActivityFeedPostsFromMap(doc.data().feedPosts);
       return ref.delete();
     }).catch(function(){});
   });
@@ -14690,6 +14768,64 @@ function pullLiveCorrectionsForEvent(t, e) {
     });
     return changed;
   });
+}
+
+// Release 412: rättningar som gjorts lokalt men kanske inte hunnit sparas. Om
+// molnet skickar ny data (S ersätts helt) innan vår sparning landat skulle
+// rättningen annars försvinna tyst. Läggs på igen efter varje inkommande
+// ögonblicksbild tills den syns i molnets data, max 2 minuter.
+var _pendingSubCorrections = [];
+function reapplyPendingSubCorrections() {
+  if(!_pendingSubCorrections.length) return;
+  var now = Date.now(), reapplied = {};
+  _pendingSubCorrections = _pendingSubCorrections.filter(function(c){
+    if(now - c.at > 120000) return false;
+    var fte = findTourAndEventById(c.eid);
+    if(!fte) return false;
+    var sub = (fte.event.scoreSubmissions||[]).find(function(x){ return x.pi===c.pi; });
+    if(!sub || !sub.holes) return false;
+    if(sub.holes[c.hole-1] === c.n) return false; // molnet har rättningen - klart
+    var row = {}; row[c.hole] = c.n;
+    if(applyLiveHolesToSubmission(fte.tour, fte.event, c.pi, row, c.holePars, c.holeHcpIndex)) {
+      afterSubmissionCorrection(fte.tour, fte.event);
+      reapplied[fte.tour.id] = fte.tour;
+    }
+    return true;
+  });
+  if(Object.keys(reapplied).length) save();
+}
+
+// Ritar om vyer som visar scorekort/resultat efter en rättning.
+function refreshAfterSubmissionCorrection(t) {
+  try { var ct = getTour(); if(ct && t && ct.id === t.id) subscribeTourLiveStandings(ct); } catch(e) {}
+  try { renderOOM(); } catch(e) {}
+}
+
+// Admin-knappen "Räkna om scorekorten": läser bollarnas livescoring, för över
+// avvikande slag till scorekorten och visar exakt vad som ändrades.
+function syncLiveCorrectionsNow(eid) {
+  if(!isAdmin()) return;
+  var fte = findTourAndEventById(eid);
+  if(!fte) { alert('Hittade inte deltävlingen.'); return; }
+  var t = fte.tour, e = fte.event, players = getPlayersForTour(t);
+  var before = {};
+  (e.scoreSubmissions||[]).forEach(function(s){ before[s.pi] = { score: s.score, brutto: s.brutto }; });
+  pullLiveCorrectionsForEvent(t, e).then(function(changed){
+    var lines = [];
+    (e.scoreSubmissions||[]).forEach(function(s){
+      var b = before[s.pi];
+      if(b && (b.score !== s.score || b.brutto !== s.brutto)) {
+        var p = players[s.pi];
+        lines.push((p?p.name:'?')+': '+b.score+' → '+s.score+(e.type==='stableford'?' p':' netto')+' (brutto '+b.brutto+' → '+s.brutto+')');
+      }
+    });
+    if(!changed) { alert('Scorekorten stämmer redan med livescoringen – inget att räkna om.'); return; }
+    afterSubmissionCorrection(t, e);
+    save();
+    refreshAfterSubmissionCorrection(t);
+    try { renderEvents(); } catch(err) {}
+    alert('Scorekorten är omräknade:\n\n'+(lines.length ? lines.join('\n') : 'Hålslag uppdaterade (totalen oförändrad).'));
+  }).catch(function(err){ console.error(err); alert('Kunde inte läsa livescoringen. Kontrollera anslutningen och försök igen.'); });
 }
 
 function closeEvent(i){
@@ -17982,6 +18118,65 @@ function liveScoreLabel(gross, par) {
 }
 
 // Anropas från bollistan (admin/spelare) — kräver att banan har scorekortsdata.
+// Release 415: håller livescoringens spelarlista i takt med bollen. Tidigare
+// skapades listan bara när bollens livescoring öppnades första gången, så om
+// admin (eller en spelare) senare lade till någon i bollen syntes bara de
+// ursprungliga spelarna när man skulle mata in. Nu läggs nya spelare till - och
+// har de redan spelat hål i en annan boll följer de slagen (och putts/SHCP) med.
+// Spelare som flyttats ut ur bollen tas bort ur listan (deras slag följer med
+// till den nya bollen när den öppnas).
+function reconcileLiveDocPlayers(ref, d, g, t, e) {
+  var want = (g.playerPis || []).slice();
+  var have = (d.players || []).map(function(p){ return p.pi; });
+  var missing = want.filter(function(pi){ return have.indexOf(pi) < 0; });
+  var extra = have.filter(function(pi){ return want.indexOf(pi) < 0; });
+  if(!missing.length && !extra.length) return Promise.resolve(false);
+  var countScores = function(row){ return Object.keys(row || {}).filter(function(h){ return typeof row[h] === 'number'; }).length; };
+  var findSources = missing.length
+    ? LIVE_SCORING_COL.where('eventId', '==', e.id).get().then(function(snap){ return snap.docs.filter(function(x){ return x.id !== ref.id; }); })
+    : Promise.resolve([]);
+  return findSources.then(function(others){
+    var players = (d.players || []).filter(function(p){ return want.indexOf(p.pi) >= 0; });
+    var upd = { updatedAt: Date.now() }, sourceUpdates = [];
+    missing.forEach(function(pi){
+      var best = null, bestN = 0;
+      others.forEach(function(doc){
+        var n = countScores(((doc.data().scores) || {})[pi]);
+        if(n > bestN) { best = doc; bestN = n; }
+      });
+      var p = t.players[pi], shcp = (p && p.hcp != null) ? Math.round(p.hcp) : 0, entry = { pi: pi, name: p ? p.name : '?', shcp: shcp };
+      upd['scores.' + pi] = {}; upd['putts.' + pi] = {};
+      if(best) {
+        var bd = best.data();
+        upd['scores.' + pi] = bd.scores[pi] || {};
+        upd['putts.' + pi] = (bd.putts || {})[pi] || {};
+        var bp = (bd.players || []).find(function(x){ return x.pi === pi; });
+        if(bp) { entry.shcp = bp.shcp; if(bp.shcpManuallySet) entry.shcpManuallySet = true; }
+        sourceUpdates.push({ doc: best, pi: pi });
+      }
+      players.push(entry);
+    });
+    // Behåll bollens ordning
+    players.sort(function(a, b){ return want.indexOf(a.pi) - want.indexOf(b.pi); });
+    upd.players = players;
+    return ref.update(upd).then(function(){
+      // Ta bort de flyttade spelarna ur sin gamla boll så de inte räknas dubbelt.
+      var byDoc = {};
+      sourceUpdates.forEach(function(su){ (byDoc[su.doc.id] = byDoc[su.doc.id] || { doc: su.doc, pis: [] }).pis.push(su.pi); });
+      var validIds = currentLiveScoringDocIds(e);
+      return Promise.all(Object.keys(byDoc).map(function(id){
+        var x = byDoc[id], sd = x.doc.data(), sref = LIVE_SCORING_COL.doc(id);
+        var left = (sd.players || []).filter(function(p){ return x.pis.indexOf(p.pi) < 0; });
+        var leftScores = Object.keys(sd.scores || {}).filter(function(pi){ return x.pis.indexOf(Number(pi)) < 0 && countScores(sd.scores[pi]) > 0; });
+        if(!left.length && !leftScores.length && (sd.orphaned || !validIds[id])) return sref.delete().catch(function(){});
+        var su = { players: left, updatedAt: Date.now() };
+        x.pis.forEach(function(pi){ su['scores.' + pi] = firebase.firestore.FieldValue.delete(); su['putts.' + pi] = firebase.firestore.FieldValue.delete(); });
+        return sref.update(su).catch(function(){});
+      }));
+    }).then(function(){ return true; });
+  });
+}
+
 function openLiveScoring(eid, gIdx) {
   var t = getTour();
   var e = t.events.find(function(x){ return x.id === eid; });
@@ -18022,10 +18217,18 @@ function openLiveScoring(eid, gIdx) {
   // activeHole:null - sätts till rätt hål (första ej helt ifyllda) när datan laddats,
   // se computeLiveResumeHole i subscribeLiveScoring. Annars hamnade man alltid på
   // hål 1 varje gång man öppnade livescoringen, oavsett hur långt man kommit.
-  _liveScoring = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null, eid: eid, gIdx: gIdx, roundCompleteDismissed: false };
-  _afterModalClose = function(){ if(_liveScoring.unsub) { _liveScoring.unsub(); _liveScoring.unsub = null; } };
+  // Release 414: avsluta en ev. tidigare bolls lyssnare innan en ny session startar.
+  if(_liveScoring && _liveScoring.unsub) { try { _liveScoring.unsub(); } catch(x) {} _liveScoring.unsub = null; }
+  var session = { docId: docId, unsub: null, data: null, activeHole: null, activePi: g.playerPis[0], mode: null, eid: eid, gIdx: gIdx, roundCompleteDismissed: false };
+  _liveScoring = session;
 
+  // Release 414: showModal() kör closeModal() först, som kör och NOLLSTÄLLER
+  // _afterModalClose. Tidigare sattes callbacken FÖRE showModal - den förbrukades
+  // direkt och lyssnaren avslutades aldrig när man stängde. Den gamla bollens
+  // lyssnare levde kvar och skrev sin data i nästa livescoring man öppnade, så
+  // en annan boll (t.ex. en spelare som matade in slag) dök upp "av sig själv".
   showModal('<div id="live-scoring-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar livescoring…</p></div>', true, true);
+  _afterModalClose = function(){ if(session.unsub) { try { session.unsub(); } catch(x) {} session.unsub = null; } };
 
   var ref = LIVE_SCORING_COL.doc(docId);
   ref.get().then(function(doc){
@@ -18041,9 +18244,11 @@ function openLiveScoring(eid, gIdx) {
         holePars: course.holePars, holeHcpIndex: course.holeHcpIndex || [],
         players: players, scores: scores, putts: putts, shcpConfirmed: false, simulator: isSimTour(t), updatedAt: Date.now()
       };
-      ref.set(initData).then(function(){ subscribeLiveScoring(ref); });
-    } else {
-      subscribeLiveScoring(ref);
+      ref.set(initData).then(function(){ if(_liveScoring === session) subscribeLiveScoring(ref); });
+    } else if(_liveScoring === session) {
+      reconcileLiveDocPlayers(ref, doc.data(), g, t, e)
+        .catch(function(err){ console.warn('Kunde inte stämma av bollens spelare', err); })
+        .then(function(){ if(_liveScoring === session) subscribeLiveScoring(ref); }); // stängd/bytt innan -> ingen lyssnare
     }
   }).catch(function(err){
     console.error('Kunde inte öppna livescoring', err);
@@ -18069,7 +18274,15 @@ function computeLiveResumeHole(d) {
 
 function subscribeLiveScoring(ref) {
   if(_liveScoring.unsub) _liveScoring.unsub();
-  _liveScoring.unsub = ref.onSnapshot(function(doc){
+  var session = _liveScoring, unsubLocal = null;
+  unsubLocal = ref.onSnapshot(function(doc){
+    // Release 414: en lyssnare får bara skriva i SIN egen session, och bara medan
+    // dess livescoring-ruta är öppen. Annars avslutar den sig själv.
+    if(_liveScoring !== session || !document.getElementById('live-scoring-modal-body')) {
+      if(unsubLocal) { try { unsubLocal(); } catch(x) {} }
+      if(session.unsub === unsubLocal) session.unsub = null;
+      return;
+    }
     if(!doc.exists) return;
     _liveScoring.data = doc.data();
     // Första gången datan laddas: gå automatiskt till SHCP-steget om det
@@ -18086,6 +18299,7 @@ function subscribeLiveScoring(ref) {
     }
     renderLiveScoringView();
   }, function(err){ console.error('Livescoring-lyssnare fel', err); });
+  session.unsub = unsubLocal;
 }
 
 // Simulatorgolf: inget putt-steg i livescoringen (SHCP-steget fungerar som vanligt).
@@ -18221,6 +18435,7 @@ function renderLiveGridHTML() {
       ? '<div style="background:#EAF3DE;border:1px solid #B9DD8C;border-radius:10px;padding:12px 14px;margin-bottom:14px;text-align:center">'+
           '<div style="font-weight:700;color:#3B6D11;font-size:15px"><i class="ti ti-circle-check"></i> Rond klar och inskickad!</div>'+
           '<div style="font-size:12px;color:#3B6D11;margin-top:2px">Alla i bollen har fyllt i '+totalHoles+' hål och skickat in sina officiella scorekort'+(isAdminUser?' - som admin kan du fortfarande justera resultat vid behov.':'. Kontakta admin om något behöver korrigeras.')+'</div>'+
+          (isAdminUser ? '<button class="btn btn-sm" style="margin-top:8px" onclick="syncLiveCorrectionsNow(\''+_liveScoring.eid+'\')"><i class="ti ti-refresh"></i> Räkna om scorekorten</button>' : '')+
         '</div>'
       : '<div style="background:#FFF6E5;border:1px solid #F3D19E;border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">'+
           '<div style="font-weight:800;color:#8A5A00;font-size:17px;margin-bottom:2px"><i class="ti ti-flag-2"></i> Rond klar!</div>'+
@@ -18782,8 +18997,10 @@ function onLiveScoreInput(pi, rawValue) {
       if(fte && fte.event && d.holePars) {
         var liveRow = {}; liveRow[hole] = n;
         if(applyLiveHolesToSubmission(fte.tour, fte.event, pi, liveRow, d.holePars, d.holeHcpIndex||[])) {
+          _pendingSubCorrections.push({ eid: d.eventId, pi: pi, hole: hole, n: n, holePars: d.holePars, holeHcpIndex: d.holeHcpIndex||[], at: Date.now() });
           afterSubmissionCorrection(fte.tour, fte.event);
           save();
+          refreshAfterSubmissionCorrection(fte.tour);
         }
       }
     } catch(err) { console.warn('Kunde inte föra över rättat slag till scorekortet', err); }
@@ -18933,25 +19150,33 @@ function openLiveFollow(eid, tourId) {
   var e = t.events.find(function(x){ return x.id === eid; });
   if(!e) return;
   var players = getPlayersForTour(t);
-  _liveFollow = { eid: eid, unsub: null, docs: [] };
+  if(_liveFollow && _liveFollow.unsub) { try { _liveFollow.unsub(); } catch(x) {} _liveFollow.unsub = null; }
+  var followSession = { eid: eid, unsub: null, docs: [] };
+  _liveFollow = followSession;
   // Uppdaterar bara modalens INNEHÅLL (updateModalContent) istället för att
   // anropa showModal() på nytt - showModal() kör alltid closeModal() först,
   // vilket annars skulle trigga _afterModalClose (avprenumerera live-lyssnaren)
   // varje gång man går tillbaka från ett scorekort till tabellen.
   _liveStandingsBackTo = function(){
     updateModalContent('<div id="live-follow-modal-body"></div>');
+    var fr = findTourAndEventById(eid); if(fr) { t = fr.tour; e = fr.event; }
     renderLiveFollowHTML(e, players, t);
   };
+  showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
+  // Release 414: sätts EFTER showModal (som annars förbrukar callbacken direkt).
   _afterModalClose = function(){
-    if(_liveFollow.unsub) { _liveFollow.unsub(); _liveFollow.unsub = null; }
+    if(followSession.unsub) { try { followSession.unsub(); } catch(x) {} followSession.unsub = null; }
     _liveStandingsBackTo = null;
   };
 
-  showModal('<div id="live-follow-modal-body"><p style="text-align:center;color:var(--text-3);padding:40px 0">Laddar…</p></div>', true, true);
-
   var validIds = currentLiveScoringDocIds(e);
   _liveFollow.unsub = LIVE_SCORING_COL.where('eventId','==',eid).onSnapshot(function(snap){
+    if(_liveFollow !== followSession || !document.getElementById('modal-mc')) {
+      if(followSession.unsub) { try { followSession.unsub(); } catch(x) {} followSession.unsub = null; }
+      return;
+    }
     _liveFollow.docs = snap.docs.filter(function(doc){ return validIds[doc.id]; }).map(function(doc){ return doc.data(); });
+    var fr = findTourAndEventById(eid); if(fr) { t = fr.tour; e = fr.event; } // release 412: färska objekt
     renderLiveFollowHTML(e, players, t);
   }, function(err){ console.error('Följ live: lyssnarfel', err); });
 }
@@ -19511,6 +19736,15 @@ function subscribeTourLiveStandings(t) {
 
   _tourLiveStandings.tourId = t.id;
   _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
+    // Release 412: S.tours byts ut vid varje inkommande ögonblicksbild, så de
+    // objekt som fångades när lyssnaren startade kan vara inaktuella (t.ex.
+    // visa ett scorekort från före en rättning). Slå upp färska varje gång.
+    var freshT = (S.tours||[]).find(function(x){ return x.id === t.id; });
+    if(freshT) {
+      freshT.players = getPlayersForTour(freshT);
+      candidateEvents = candidateEvents.map(function(ce){ return (freshT.events||[]).find(function(x){ return x.id === ce.id; }) || ce; });
+      t = freshT;
+    }
     var docsByEvent = {};
     candidateEvents.forEach(function(e){ docsByEvent[e.id] = []; }); // alla kandidat-event får ett värde, även utan ett enda dokument än
     snap.docs.forEach(function(doc){
@@ -24217,6 +24451,36 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '22 november 2026 (415)',
+    items: [
+      { type: 'fixed', text: 'Lade man till en spelare i en boll som redan startat livescoring syntes bara de ursprungliga spelarna när man skulle mata in. Nu uppdateras bollens spelare varje gång livescoringen öppnas.' },
+      { type: 'fixed', text: 'Flyttas en spelare som redan spelat hål till en annan boll följer slagen, puttarna och SHCP med. Tidigare raderades den gamla bollens livescoring om den blev tom - med slagen.' },
+    ]
+  },
+  {
+    date: '22 november 2026 (414)',
+    items: [
+      { type: 'fixed', text: 'En annan bolls livescoring kunde dyka upp av sig själv under rundan. Stängde man livescoringen för en boll levde dess koppling kvar i bakgrunden, och varje gång den bollen matade in ett slag tog den över den livescoring man själv hade öppen. Nu kopplas en boll alltid ner när man stänger eller byter boll.' },
+      { type: 'fixed', text: 'Samma sak för Live-tabellen: kopplingen stängs nu när man lämnar den, vilket också sparar data och batteri.' },
+    ]
+  },
+  {
+    date: '22 november 2026 (413)',
+    items: [
+      { type: 'fixed', text: 'Spelare kunde skapa och gå med i bollar i en deltävling vars speldagar redan passerat – datumväljaren föll då tillbaka på deltävlingens gamla datum. Nu går det bara att välja kommande speldagar, och en avslutad eller passerad deltävling visar i stället att den är låst.' },
+      { type: 'fixed', text: 'Anmälningsflödet hålls nu fast vid rätt deltävling även om något ändras i touren medan det är öppet.' },
+      { type: 'fixed', text: 'Menyraden i botten kunde fastna mitt på skärmen på iPhone efter att tangentbordet stängts (t.ex. efter att ha skrivit på väggen). Layouten räknas nu om automatiskt.' },
+    ]
+  },
+  {
+    date: '19 november 2026 (412)',
+    items: [
+      { type: 'new', text: 'Admin har fått knappen "Räkna om scorekorten" i livescoringen när ronden är inskickad. Den hämtar slagen från livescoringen, räknar om de officiella scorekorten och visar exakt vad som ändrades (t.ex. Leif: 32 → 31 p).' },
+      { type: 'fixed', text: 'En rättning i livescoringen kunde försvinna om ny data kom från molnet innan sparningen hann gå klart. Rättningen läggs nu på igen tills den är sparad.' },
+      { type: 'fixed', text: 'Live-tabellen och dess scorekort kunde visa gammal data efter en rättning tills man laddade om. De läser nu alltid senaste versionen.' },
+    ]
+  },
   {
     date: '19 november 2026 (411)',
     items: [
