@@ -165,6 +165,9 @@ label{font-size:13px;color:var(--text-2);display:block;margin-bottom:4px;font-we
 .home-card-label{font-weight:600;font-size:15px;text-align:center}
 .home-card-sub{font-size:12px;text-align:center}
 .oom-row{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:var(--radius);transition:background .1s}
+.oom-row.oom-fixed{min-height:72px;box-sizing:border-box}
+.oom-logo-slot{height:17px;margin-top:3px;display:flex;align-items:center;overflow:hidden}
+.oom-logo-slot img.brand-logo{margin-left:0 !important;max-height:15px}
 .oom-row:hover{background:var(--surface2)}
 .oom-row:last-child{border-bottom:none}
 .rotate-hint{display:flex;align-items:center;gap:12px;margin:10px 0 4px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--text-2);line-height:1.4}
@@ -19519,7 +19522,9 @@ function formatLiveDiff(diff, thru, isStab) {
 // Release 418: namn i OoM-listan - hela namnet om det får plats, annars kortat.
 function oomDisplayName(name) {
   if(!name) return '';
-  return name.length <= 16 ? name : abbreviateFirstName(name);
+  // Release 420: gränsen sänkt från 16 till 13 tecken - "Peter Pettersson" och
+  // "Johnny Ledensjö" klipptes fortfarande när raden har preliminära poäng.
+  return name.length <= 13 ? name : abbreviateFirstName(name);
 }
 
 function abbreviateFirstName(fullName) {
@@ -21446,18 +21451,21 @@ function renderOOM(){
       var pLogo = playerBrandLogoTag(p.username, 15);
       var won = winningsData ? (winningsData.winnings[pi]||0) : 0;
       var statsLine = d.events+' tävl · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · bästa '+d.counted+'/'+d.events:'');
-      return '<div class="oom-row" onclick="showPlayerProfile('+pi+')">'+
+      return '<div class="oom-row oom-fixed" onclick="showPlayerProfile('+pi+')">'+
         '<div style="width:24px;height:24px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-2);flex-shrink:0">'+(seasonNotStarted?'-':(idx+1))+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%;flex-shrink:0" alt="">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px;flex-shrink:0">'+ini(p.name)+'</div>')+
         '<div style="flex:1;min-width:0">'+
           // Release 418: hela raden ges åt namnet (loggan flyttad till raden under),
           // och långa namn kortas till "P. Pettersson" / "A. J. Wrååk" så de syns.
           '<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(p.name)+'">'+esc(oomDisplayName(p.name))+'</div>'+
-          '<div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:1px"><span style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">'+statsLine+'</span>'+(pLogo?'<span style="flex-shrink:0;display:inline-flex;align-items:center">'+pLogo+'</span>':'')+'</div>'+
+          // Release 421: statistiken får en egen hel rad och loggan en egen rad under.
+          // Loggraden har fast höjd även utan logga, så att alla rader blir lika höga.
+          '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">'+statsLine+'</div>'+
+          '<div class="oom-logo-slot">'+(pLogo||'')+'</div>'+
         '</div>'+
         '<div style="text-align:right;flex-shrink:0">'+
           '<div style="font-weight:700;font-size:15px;color:var(--green-dark);white-space:nowrap">'+d.pts+' pts</div>'+
-          (d.livePts>0?'<div style="font-size:10px;color:var(--info-text);font-weight:700;white-space:nowrap"><i class="ti ti-broadcast"></i> varav '+d.livePts+' p prel.</div>':'')+
+          (d.livePts>0?'<div style="font-size:10px;color:var(--info-text);font-weight:700;white-space:nowrap" title="varav '+d.livePts+' preliminära poäng"><i class="ti ti-broadcast"></i> '+d.livePts+' prel.</div>':'')+
           (won>0?'<div style="font-size:10px;color:#0F6E56;font-weight:700;white-space:nowrap"><i class="ti ti-cash" style="font-size:10px"></i> '+won+' kr</div>':'')+
         '</div>'+
         '<i class="ti ti-chevron-right" style="color:var(--text-3);flex-shrink:0"></i></div>';
@@ -24593,6 +24601,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '22 november 2026 (421)',
+    items: [
+      { type: 'improved', text: 'OoM-listan: raden med antal tävlingar och vinster klipps inte längre – märkesloggan har fått en egen rad under. Alla rader har samma höjd, med eller utan logga.' },
+    ]
+  },
+  {
+    date: '22 november 2026 (420)',
+    items: [
+      { type: 'improved', text: 'OoM-listan: namn längre än 13 tecken kortas nu (t.ex. "P. Pettersson", "J. Ledensjö"), och "varav 18 p prel." har blivit "18 prel." – så att namnen syns hela även när det finns preliminära poäng.' },
+    ]
+  },
   {
     date: '22 november 2026 (419)',
     items: [
