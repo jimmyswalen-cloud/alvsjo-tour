@@ -398,6 +398,11 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
 /* Release 426/428: avslutade deltävlingar och tourer visas med svartvit bild */
+/* Release 442: knappraden i startsidans deltävlingskort - allt på en rad */
+.home-actions{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:10px 14px 12px}
+.home-actions>span{display:contents}
+.home-actions .btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 2px !important;font-size:10.5px !important;line-height:1.15;white-space:normal !important;text-align:center;min-width:0;width:100% !important;height:auto !important;min-height:54px;border-radius:10px}
+.home-actions .btn i{font-size:19px !important;margin:0}
 .event-banner-closed{filter:grayscale(1) contrast(.95);opacity:.85}
 html[data-theme="dark"]{
   color-scheme:dark;
@@ -6566,11 +6571,11 @@ function renderHomeNextRoundWidget() {
         '</div>'+
       '</div>'+
       '<div id="home-submit-reminder"></div>'+
-      '<div class="row" style="justify-content:flex-end;align-items:center;gap:6px;padding:10px 14px 12px;flex-wrap:wrap">'+
-        '<span id="home-live-table-btn"></span>'+
+      '<div class="home-actions">'+ // release 442: en rad med lika breda knappar (ikon över text)
         (info.groupIndex != null ? '<button class="btn btn-sm" style="background:#123A4D;border-color:#123A4D;color:#fff;padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyLiveScoring(\''+t.id+'\',\''+e.id+'\','+info.groupIndex+')"><i class="ti ti-broadcast"></i> Live scoring</button>' : '')+
         homeSignupBtnHTML(t, info.eventIndex)+
         '<button class="btn btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMySideBetsFromHome(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-target-arrow"></i> Side bets</button>'+
+        '<span id="home-live-table-btn"></span>'+
         '<button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:11px;gap:4px;white-space:nowrap" onclick="event.stopPropagation();goToMyNextRound(\''+t.id+'\','+info.eventIndex+')"><i class="ti ti-edit"></i> Mitt resultat</button>'+
       '</div>'+
     '</div>'+
@@ -6759,7 +6764,7 @@ function checkHomeLiveTableButton(eid, tourId) {
     var el = document.getElementById('home-live-table-btn');
     if(!el) return;
     el.innerHTML = started
-      ? '<button class="btn btn-sm" title="Live-tabell" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\',\''+tourId+'\')"><i class="ti ti-trophy" style="font-size:16px;color:var(--gold)"></i></button>'
+      ? '<button class="btn btn-sm" title="Live-tabell" onclick="event.stopPropagation();openLiveFollow(\''+eid+'\',\''+tourId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Tabell</button>'
       : '';
   }).catch(function(err){ console.error('Kunde inte kontrollera livescoring-status', err); });
 }
@@ -25045,6 +25050,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (442)',
+    items: [
+      { type: 'improved', text: 'Startsidan: knapparna i deltävlingskortet (Live scoring, Din boll, Side bets, Tabell och Mitt resultat) ligger nu på en rad som lika breda knappar med ikonen ovanför texten, i stället för utspridda på två rader. Pokalknappen har fått texten "Tabell".' },
+    ]
+  },
   {
     date: '23 november 2026 (441)',
     items: [
