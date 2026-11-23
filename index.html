@@ -1574,6 +1574,8 @@ function initFirebaseSync(onFirstLoad) {
       onFirstLoad();
       try { afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
       if (_saveAfterReady) { _saveAfterReady = false; save(); }
+      setTimeout(preloadPlayerAvatars, 300);          // release 429
+      setTimeout(fixStorageCacheHeadersOnce, 8000);   // release 429 (bara admin, en gång)
     } else {
       try { afterStateSnapshot(); } catch(e) { console.error('dataskydd', e); }
       try { reapplyPendingSubCorrections(); } catch(e) { console.warn('väntande rättningar', e); }
@@ -2125,6 +2127,50 @@ function compressImage(file, maxW, maxH, quality, cb) {
 // Returnerar ett Promise som alltid resolvar (aldrig avvisar) - vid fel loggas
 // felet och null returneras, så att sparandet av övrig data aldrig stoppas
 // upp bara för att en bilduppladdning skulle misslyckas.
+// Release 429: hur länge telefonen får spara en bild. Profilbilder skrivs över på
+// samma sökväg (samma länk), så de får kortare tid för att en ny bild ska synas.
+function storageCacheControl(path) {
+  return /^profile-images\//.test(path || '') ? 'public, max-age=3600' : 'public, max-age=604800';
+}
+
+// Release 429: bilder som laddades upp före 429 saknar Cache-Control. Admin fixar
+// dem i bakgrunden en gång per enhet (ändrar bara metadata, inte bilden).
+function fixStorageCacheHeadersOnce() {
+  try {
+    if(!isAdmin() || !storage || localStorage.getItem('agcc-cache-fix-429')) return;
+    localStorage.setItem('agcc-cache-fix-429', '1');
+    var urls = {};
+    (S.users || []).forEach(function(u){ if(u && u.img) urls[u.img] = true; });
+    (S.tours || []).forEach(function(t){
+      if(t.img) urls[t.img] = true;
+      (t.events || []).forEach(function(e){ if(e.img) urls[e.img] = true; });
+    });
+    Object.keys(urls).filter(function(u){ return /firebasestorage\.googleapis\.com/.test(u); }).forEach(function(u, k){
+      setTimeout(function(){
+        try {
+          var ref = storage.refFromURL(u);
+          ref.updateMetadata({ cacheControl: storageCacheControl(ref.fullPath) }).catch(function(){});
+        } catch(x) {}
+      }, k * 150);
+    });
+  } catch(x) {}
+}
+
+// Release 429: värmer upp telefonens bildcache med spelarnas profilbilder direkt
+// när appen startat, så att listor med många spelare inte laddar bild för bild.
+var _avatarPreloaded = {};
+function preloadPlayerAvatars() {
+  try {
+    (S.users || []).forEach(function(u){
+      var src = u && playerPhoto(u.username, u.img);
+      if(!src || _avatarPreloaded[src] || /^data:/.test(src)) return;
+      _avatarPreloaded[src] = new Image();
+      _avatarPreloaded[src].decoding = 'async';
+      _avatarPreloaded[src].src = src;
+    });
+  } catch(x) {}
+}
+
 function uploadImageToStorage(dataUrl, path) {
   return new Promise(function(resolve){
     if(!dataUrl) { resolve(null); return; }
@@ -2132,7 +2178,9 @@ function uploadImageToStorage(dataUrl, path) {
     if(!path) { resolve(null); return; }
     var ref = storage.ref().child(path);
     var ctype = (String(dataUrl).match(/^data:([^;,]+)/) || [])[1] || 'image/jpeg';
-    ref.putString(dataUrl, 'data_url', { contentType: ctype }).then(function(snapshot){
+    // Release 429: utan Cache-Control serverar Firebase Storage bilderna med
+    // "max-age=0", så telefonen hämtade om varje bild varje gång den visades.
+    ref.putString(dataUrl, 'data_url', { contentType: ctype, cacheControl: storageCacheControl(path) }).then(function(snapshot){
       return snapshot.ref.getDownloadURL();
     }).then(function(url){
       resolve(url);
@@ -24659,6 +24707,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (429)',
+    items: [
+      { type: 'improved', text: 'Snabbare profilbilder: bilder från Firebase Storage sparas nu i telefonens cache (tidigare hämtades varje bild om varje gång den visades), och spelarnas profilbilder förladdas när appen startar.' },
+      { type: 'improved', text: 'Befintliga bilder får rätt cache-inställning automatiskt första gången en admin öppnar appen.' },
+    ]
+  },
   {
     date: '23 november 2026 (428)',
     items: [
