@@ -19569,6 +19569,11 @@ function computeLiveStandingsRows(docs, t, ev) {
     // vilket inte är en golfregel utan bara en slump i datastrukturen.
     return (a.shcp||0) - (b.shcp||0);
   });
+  // Release 431: speldag och starttid per spelare, för de som inte börjat än.
+  (rows || []).forEach(function(r){
+    var g = ev && (ev.teeGroups || []).find(function(x){ return x && (x.playerPis || []).indexOf(r.pi) >= 0; });
+    if(g) { r.teeDate = g.date || ''; r.teeTime = g.time || ''; }
+  });
   return rows;
 }
 
@@ -19646,6 +19651,21 @@ function scoreNoteHTML(isStab, isFinal) {
     'Score = '+(isStab?'poäng mot hcp':'netto mot par')+(isFinal?' inkl. slagförsprång':'')+' – avgör placeringen.</div>';
 }
 
+function liveSectionHeaderHTML(icon, label) {
+  return '<div style="display:flex;align-items:center;gap:6px;margin:12px 0 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)"><i class="ti '+icon+'" style="font-size:12px"></i>'+label+'</div>';
+}
+// "Idag 19:00", "Imorgon 21:00", "Mån 30 nov · 19:00" - eller "Ingen boll".
+function liveTeeLabelHTML(r) {
+  if(r.notStarted || !r.teeDate) return '<span style="color:var(--text-3)">'+(r.notStarted ? 'Ingen boll' : 'Ej startat')+'</span>';
+  var today = hcpTodayISO(), tm = new Date(today+'T12:00:00'); tm.setDate(tm.getDate()+1);
+  var tomorrow = tm.toISOString().slice(0,10), day;
+  if(r.teeDate === today) day = '<b style="color:var(--green-dark)">Idag</b>';
+  else if(r.teeDate === tomorrow) day = 'Imorgon';
+  else if(r.teeDate < today) day = '<span style="color:var(--gold)">Ej startat</span>';
+  else { try { var dd = new Date(r.teeDate+'T12:00:00'); day = ['Sön','Mån','Tis','Ons','Tor','Fre','Lör'][dd.getDay()]+' '+dd.getDate()+' '+['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][dd.getMonth()]; } catch(x) { day = r.teeDate; } }
+  return '<i class="ti ti-calendar-time" style="font-size:12px;color:var(--text-3);vertical-align:-1px"></i> '+day+(r.teeTime && r.teeDate >= today ? ' · <b>'+esc(r.teeTime)+'</b>' : '');
+}
+
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
@@ -19677,6 +19697,21 @@ function buildLiveStandingsRowsHTML(rows) {
     // ger mer plats åt namnet i den smala kolumnen, syns ändå via tooltip).
     // Klart & inskickat: "Klar" istället för "T18" (eller motsvarande totalHoles).
     var holeLabel = r.notStarted ? '–' : (r.submitted && r.thru>0 ? 'Klar' : 'T'+r.thru);
+    // Release 431: tydliga steg i tabellen. Spelare som har en boll men inte
+    // slagit ett slag än visar sin speldag och starttid i stället för streck,
+    // och de som saknar boll visar det. Varje grupp får en liten rubrik.
+    var waiting = !r.notStarted && r.thru === 0 && !r.submitted;
+    var prev = idx > 0 ? rows[idx-1] : null;
+    var prevWaiting = prev && !prev.notStarted && prev.thru === 0 && !prev.submitted;
+    var sectionHdr = '';
+    if(waiting && (!prev || !prevWaiting) && idx > 0) sectionHdr = liveSectionHeaderHTML('ti-clock', 'Startar senare');
+    else if(r.notStarted && (!prev || !prev.notStarted)) sectionHdr = liveSectionHeaderHTML('ti-user-question', 'Anmälda utan boll');
+    if(waiting || r.notStarted) {
+      return sectionHdr + '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.6':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px"></span><span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(r.notStarted?';color:var(--text-3)':'')+'">'+esc(abbreviateFirstName(r.name))+'</span></div>'+
+        '<div style="font-size:11px;flex-shrink:0;color:var(--text-2);white-space:nowrap;text-align:right">'+liveTeeLabelHTML(r)+'</div>'+
+      '</div>';
+    }
     return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
@@ -24722,6 +24757,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (431)',
+    items: [
+      { type: 'improved', text: 'Live-tabellen visar tydligare var spelarna är: de som har en boll men inte börjat visas under "Startar senare" med speldag och starttid (t.ex. "Idag · 19:00" eller "Mån 30 nov · 19:00") i stället för streck. När de slår första slaget visas de som vanligt med hål och resultat.' },
+      { type: 'improved', text: 'Spelare som är anmälda men saknar boll samlas under "Anmälda utan boll".' },
+    ]
+  },
   {
     date: '23 november 2026 (430)',
     items: [
