@@ -12707,7 +12707,7 @@ function eventCardHTML(i,e) {
     : myResultBtn+
       ((e.teeGroups && e.teeGroups.length) ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Ställning & scorekort</button>' : '')+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
-      '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Namn/bana/bild</button>'+
+      '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Redigera</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
       (e.teeGroups && e.teeGroups.length ? '<button class="btn btn-sm'+(e.forceLiveTable?' btn-primary':'')+'" onclick="toggleForceLiveTable('+i+')" title="Visa scoringtabellen överst på toursidan även innan någon boll räknas som \'live\' (t.ex. före rondens datum)"><i class="ti ti-'+(e.forceLiveTable?'eye-off':'eye')+'"></i> '+(e.forceLiveTable?'Dölj':'Visa')+' scoringtabell nu</button>' : '')+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
@@ -14486,7 +14486,7 @@ function openEditEventCourseImg(i) {
   var t = getTour(), e = t.events[i];
   if(!e) return;
   if(e.closed) { alert('Tävlingen är stängd och kan inte redigeras.'); return; }
-  _editEventDraft = { i: i, name: e.name || '', course: e.course || '', img: e.img || null, date: e.date || '' };
+  _editEventDraft = { i: i, name: e.name || '', isMajor: !!e.isMajor, course: e.course || '', img: e.img || null, date: e.date || '' };
   renderEeciModal();
 }
 
@@ -14558,6 +14558,8 @@ function renderEeciModal() {
   h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar namn, bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
   // Release 424: deltävlingens namn går att ändra - alltid, även när bana/datum är låsta.
   h += '<div class="field"><label>Namn på deltävlingen</label><input id="eeci-name" type="text" value="'+esc(_editEventDraft.name||'')+'" placeholder="t.ex. Trump Turnberry Ailsa - Del 3" oninput="if(_editEventDraft)_editEventDraft.name=this.value"></div>';
+  // Release 425: major (1,5x OoM-poäng) kan sättas/tas bort så länge deltävlingen inte är stängd.
+  if(!e.isFinal) h += '<label style="display:flex;align-items:center;gap:8px;margin:-4px 0 12px;font-size:13px;cursor:pointer"><input type="checkbox" id="eeci-major"'+(_editEventDraft.isMajor?' checked':'')+' onchange="if(_editEventDraft)_editEventDraft.isMajor=this.checked" style="width:auto;margin:0"> <span><b>Major</b> <span style="color:var(--text-3)">– ger 1,5x poäng i Order of Merit</span></span></label>';
   if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan inlämnade scorekort eller resultat, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
   else if(eeciRegCount(e)) h += '<p style="font-size:12px;color:var(--text-2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-users"></i> '+eeciRegCount(e)+' anmälda följer med om du byter bana eller datum.</p>';
   h += courseField;
@@ -14692,6 +14694,8 @@ function saveEditEventCourseImg() {
     }
   }
   if(newName !== e.name) e.name = newName; // release 424
+  var mjEl = document.getElementById('eeci-major');
+  if(mjEl && !e.isFinal) e.isMajor = !!mjEl.checked; // release 425
   var newImg = _editEventDraft.img;
   _editEventDraft = null;
   uploadImageToStorage(newImg, 'event-covers/'+e.id+'.jpg').then(function(url){
@@ -24641,6 +24645,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (425)',
+    items: [
+      { type: 'new', text: 'Admin kan nu göra en befintlig deltävling till major (1,5x poäng i Order of Merit), eller ta bort major, så länge deltävlingen inte är stängd. Görs under "Redigera" på deltävlingen.' },
+      { type: 'improved', text: 'Knappen "Namn/bana/bild" heter nu "Redigera", eftersom den även styr major.' },
+    ]
+  },
   {
     date: '23 november 2026 (424)',
     items: [
