@@ -12379,6 +12379,15 @@ function shareSideBetSettlement(ei, date) {
 // Sant om ett side bet redan är avgjort på något sätt - antingen en vinnare
 // satt, eller ett "ingen vann"-utfall (vidareskickat/återbetalt). Då ska
 // ingen längre kunna gå med, även om t.ex. deltagarlistan råkar vara tom.
+// Release 437: ett mätbart bet (Närmast hål/Längsta drive) är bara PRELIMINÄRT
+// avgjort så länge speldagen inte passerat och deltävlingen är öppen - fler bollar
+// kan då fortfarande slå ledarens mätning. Visas som "Leder", inte "Vinnare".
+function isSideBetProvisional(e, sb) {
+  if(!sb || sb.winnerPi == null || !e || e.closed) return false;
+  if(SIDE_BET_HOLE_TYPES.indexOf(sb.betType) < 0) return false;
+  var d = sideBetEffectiveDate(e, sb) || e.periodEnd || e.date;
+  return !!d && d >= hcpTodayISO();
+}
 function isSideBetDecided(sb) {
   return sb.winnerPi != null || !!sb.pushOutcome;
 }
@@ -19146,7 +19155,8 @@ function liveSideBetOverviewHTML(d) {
     var mine = (sb.participants || []).some(function(pi){ return inBoll[pi]; });
     var sd = sideBetEffectiveDate(ev, sb), otherDay = sd && g && g.date && sd !== g.date;
     var w = sb.winnerPi != null ? players[sb.winnerPi] : null;
-    var status = w ? '<span style="color:var(--green-dark);font-weight:700"><i class="ti ti-trophy" style="font-size:11px"></i> ' + esc(w.name) + (measured && sb.measurements && sb.measurements[sb.winnerPi] != null ? ' · ' + fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]) : '') + '</span>'
+    var prov = isSideBetProvisional(ev, sb);
+    var status = w ? '<span style="color:' + (prov ? 'var(--gold)' : 'var(--green-dark)') + ';font-weight:700"><i class="ti ' + (prov ? 'ti-flag' : 'ti-trophy') + '" style="font-size:11px"></i> ' + (prov ? 'Leder: ' : '') + esc(w.name) + (measured && sb.measurements && sb.measurements[sb.winnerPi] != null ? ' · ' + fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]) : '') + '</span>'
                : '<span style="color:var(--text-3)">Ingen vinnare än</span>';
     var canFix = admin || mine;
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
@@ -20153,9 +20163,14 @@ function buildSideBetsLiveSummaryHTML(e, players) {
       var sp = winner.name.indexOf(' ');
       winnerNameHtml = sp > 0 ? (esc(winner.name.slice(0,sp))+'<br>'+esc(winner.name.slice(sp+1))) : esc(winner.name);
     }
-    var statusHtml;
-    if(winner) {
-      statusHtml = '<div style="font-size:11px;font-weight:700;color:var(--green-dark);line-height:1.25;margin-top:2px"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+winnerNameHtml+'</div>';
+    var statusHtml, provisional = isSideBetProvisional(e, sb);
+    var measTxt = (isHoleType && winner && sb.measurements && sb.measurements[sb.winnerPi] != null) ? fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]) : '';
+    if(winner && provisional) {
+      statusHtml = '<div style="font-size:11px;font-weight:700;color:var(--gold);line-height:1.25;margin-top:2px"><i class="ti ti-flag"></i> '+winnerNameHtml+'</div>'+
+        (measTxt ? '<div style="font-size:10px;color:var(--text-2);margin-top:1px">'+measTxt+' · kan slås</div>' : '<div style="font-size:10px;color:var(--text-3);margin-top:1px">kan slås</div>');
+    } else if(winner) {
+      statusHtml = '<div style="font-size:11px;font-weight:700;color:var(--green-dark);line-height:1.25;margin-top:2px"><i class="ti ti-trophy" style="color:var(--gold)"></i> '+winnerNameHtml+'</div>'+
+        (measTxt ? '<div style="font-size:10px;color:var(--text-2);margin-top:1px">'+measTxt+'</div>' : '');
     } else if(sb.pushOutcome === 'carried') {
       statusHtml = '<div style="font-size:10px;color:#0C447C;font-weight:700;margin-top:2px"><i class="ti ti-arrow-forward-up"></i> Vidareskickad</div>';
     } else if(sb.pushOutcome === 'refunded') {
@@ -20174,7 +20189,7 @@ function buildSideBetsLiveSummaryHTML(e, players) {
           '<div style="font-size:11px;font-weight:700;color:var(--text-2);margin-top:2px">'+potInner+'</div>'+
         '</div>'+
         '<div style="text-align:right;flex-shrink:0;width:92px">'+
-          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;line-height:1.3">Vinnare</div>'+
+          '<div style="font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;line-height:1.3">'+(provisional ? 'Leder' : 'Vinnare')+'</div>'+
           statusHtml+
         '</div>'+
       '</div>'+
@@ -25021,6 +25036,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (437)',
+    items: [
+      { type: 'fixed', text: 'Närmast hål och Längsta drive visas som "Leder" (med avstånd och "kan slås") i stället för "Vinnare" så länge speldagen pågår och fler bollar kan slå mätningen. När dagen passerat eller deltävlingen stängts står det "Vinnare".' },
+    ]
+  },
   {
     date: '23 november 2026 (436)',
     items: [
