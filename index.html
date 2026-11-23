@@ -12686,12 +12686,26 @@ function eventCardHTML(i,e) {
         }
       }
     });
+    // Release 435: de som inte är anmälda till någon speldag får ett eget, tydligt
+    // avskilt avsnitt EFTER alla datum - tidigare såg "Osäkra" ut att höra till
+    // det sista datumet i listan.
+    if(unkRows.length || decRows.length) {
+      rows += '<tr><td colspan="2" style="border:none;background:transparent;padding:18px 2px 8px">'+
+        '<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:2px;background:var(--border-strong)"></div>'+
+        '<span style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--text-3);white-space:nowrap"><i class="ti ti-user-x" style="font-size:12px;vertical-align:-1px"></i> INTE ANMÄLDA TILL NÅGON SPELDAG</span>'+
+        '<div style="flex:1;height:2px;background:var(--border-strong)"></div></div></td></tr>';
+    }
+    var statusHdr = function(icon, color, label, sub){
+      return '<tr><td colspan="2" style="background:var(--surface2);padding:8px 10px;border-bottom:1px solid var(--border);border-top:2px solid '+color+'">'+
+        '<span style="font-size:12px;font-weight:800;color:'+color+'"><i class="ti '+icon+'" style="font-size:14px;vertical-align:-2px"></i> '+label+'</span>'+
+        '<span style="font-size:11px;color:var(--text-3);margin-left:8px">'+sub+'</span></td></tr>';
+    };
     if(unkRows.length) {
-      rows += sectionHdr('<span style="color:#B7861F">'+dotHtml('#D9A62E')+'Osäkra</span>', unkRows.length+' spelare');
+      rows += statusHdr('ti-help-circle', '#B7861F', 'Osäkra – har inte svarat', unkRows.length+(unkRows.length===1?' spelare':' spelare'));
       unkRows.forEach(function(x){ rows += playerRowHTML(x); });
     }
     if(decRows.length) {
-      rows += sectionHdr('<span style="color:#dc2626">'+dotHtml('#dc2626')+'Deltar ej</span>', decRows.length+' spelare');
+      rows += statusHdr('ti-circle-x', '#dc2626', 'Deltar ej', decRows.length+' spelare');
       decRows.forEach(function(x){ rows += playerRowHTML(x); });
     }
     regsTable = '<div style="overflow-x:auto;margin-bottom:12px">'+
@@ -24966,6 +24980,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (435)',
+    items: [
+      { type: 'improved', text: 'Anmälningslistan: spelare som inte är anmälda till någon speldag (Osäkra och Deltar ej) visas nu i ett eget avsnitt efter alla datum, med en tydlig avdelare "Inte anmälda till någon speldag". Tidigare såg de ut att höra till det sista datumet.' },
+    ]
+  },
   {
     date: '23 november 2026 (434)',
     items: [
