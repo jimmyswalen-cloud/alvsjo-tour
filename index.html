@@ -397,6 +397,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 426: avslutade deltävlingar visas med svartvit bild */
+.event-banner-closed{filter:grayscale(1) contrast(.95);opacity:.85}
 html[data-theme="dark"]{
   color-scheme:dark;
   --green-light:#14392c;--green-dark:#5BD0A2;
@@ -1853,6 +1855,18 @@ function deleteComment(eid, idx) {
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+// Release 427: vinnarrutan på en avslutad deltävling - med spelarens runda bild.
+function eventWinnerBoxHTML(t, pi) {
+  var pl = (typeof getPlayersForTour === 'function' ? getPlayersForTour(t) : null) || t.players || [];
+  var p = pl[pi] || t.players[pi] || null, name = p ? p.name : '?';
+  var img = p ? playerPhoto(p.username, p.img) : null;
+  var av = img
+    ? '<img src="' + img + '" alt="" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--gold)">'
+    : '<div class="avatar-ph" style="width:30px;height:30px;font-size:11px;flex-shrink:0;border:2px solid var(--gold)">' + esc(ini(name || '?')) + '</div>';
+  return '<div style="background:var(--gold-light);border-radius:8px;padding:7px 12px 7px 8px;margin-bottom:10px;display:flex;align-items:center;gap:10px">' + av +
+    '<span style="font-size:13px;flex:1;min-width:0"><strong>' + esc(name) + '</strong> vann tävlingen</span>' +
+    '<i class="ti ti-trophy" style="color:var(--gold);font-size:18px;flex-shrink:0"></i></div>';
+}
 function ini(n) { return n.trim().split(/\s+/).map(function(w){return w[0];}).join('').toUpperCase().slice(0,2); }
 // Formaterar HCP med exakt en decimal för visning (t.ex. "6" -> "6.0", "12.3" -> "12.3").
 // Används bara på visningsställen - inmatningsfälten för HCP behåller sina rå värden.
@@ -12715,7 +12729,7 @@ function eventCardHTML(i,e) {
       chatBtn;
   var statusBadgeEv = '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>';
   return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;':'')+'padding-bottom:0;overflow:hidden'+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
-    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner" alt="'+e.name+'">':'')+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner'+(e.closed?' event-banner-closed':'')+'" alt="'+esc(e.name)+'">':'')+
     '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">'+
       '<div style="min-width:0"><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
@@ -12728,7 +12742,7 @@ function eventCardHTML(i,e) {
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">'+registerBtn+statusBadgeEv+'</div>'+
     '</div>'+
     '<div style="margin-bottom:10px">'+eventPeriodRowHTML(e)+'</div>'+
-    (e.closed && e.results && e.results.length ? '<div style="background:var(--gold-light);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-trophy" style="color:var(--gold);font-size:16px"></i><span style="font-size:13px"><strong>'+esc(t.players[e.results[0].pi] ? t.players[e.results[0].pi].name : '?')+'</strong> vann tävlingen</span></div>' : '')+
+    (e.closed && e.results && e.results.length ? eventWinnerBoxHTML(t, e.results[0].pi) : '')+
     markerApprovalHtml+adminApprovalHtml+missingWarnHtml+
     '<button type="button" class="ev-toggle" aria-expanded="'+(foldOpen?'true':'false')+'" onclick="toggleEventFold(\''+e.id+'\')">'+
       '<span class="ev-sum">'+summaryHtml+'</span>'+
@@ -24645,6 +24659,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (427)',
+    items: [
+      { type: 'improved', text: 'Avslutade deltävlingar: rutan "… vann tävlingen" visar nu vinnarens runda profilbild (eller initialer om bild saknas), med en guldkant och pokalen till höger.' },
+    ]
+  },
+  {
+    date: '23 november 2026 (426)',
+    items: [
+      { type: 'improved', text: 'Tävlingar: avslutade deltävlingar visas med svartvit bild, så att det är lätt att skilja dem från kommande och pågående.' },
+    ]
+  },
   {
     date: '23 november 2026 (425)',
     items: [
