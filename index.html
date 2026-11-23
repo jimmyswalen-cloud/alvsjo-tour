@@ -21,7 +21,7 @@
   --gold:#BA7517;--gold-light:#FAEEDA;
   --bg:#f0f4f1;--surface:#ffffff;--surface2:#f3f4f6;
   --border:#e5e7eb;--border-strong:#d1d5db;
-  --text:#111827;--text-2:#6b7280;--text-3:#9ca3af;
+  --text:#111827;--text-2:#4b5563;--text-3:#6f7782;
   --radius:8px;--danger-bg:#fef2f2;--danger-border:#fecaca;--danger-text:#dc2626;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
@@ -405,7 +405,7 @@ html[data-theme="dark"]{
   --gold:#E0A548;--gold-light:#3A2C12;
   --bg:#0E1411;--surface:#18201C;--surface2:#222B26;
   --border:#2D3833;--border-strong:#3B4842;
-  --text:#E6ECE8;--text-2:#A7B2AC;--text-3:#7C8781;
+  --text:#E6ECE8;--text-2:#A7B2AC;--text-3:#8D9892;
   --danger-bg:#3A1818;--danger-border:#6B2626;--danger-text:#F38B8B;
   --score-red:#FF8A80;--score-blue:#8AB4FF;--info-text:#9CCBEA;
 }
@@ -6767,7 +6767,7 @@ function renderToursList() {
     var totalCount = events.length;
     var closedCount = events.filter(function(e){return e.closed;}).length;
     return '<div class="tour-card" onclick="enterTour(\''+t.id+'\')">'+
-      (t.img?'<div style="position:relative"><img src="'+t.img+'" onload="fitCoverImg(this)"'+(tourStatusGroup(t)==='finished'?' class="event-banner-closed"':'')+' style="width:100%;height:110px;object-fit:cover;display:block">'+(t.coverLogo&&t.coverLogo.url?coverLogoOverlayHTML(t.coverLogo.url, t.coverLogo.pos, 110):'')+'</div>':'')+
+      (t.img?'<div style="position:relative"><img src="'+t.img+'" loading="lazy" decoding="async" onload="fitCoverImg(this)"'+(tourStatusGroup(t)==='finished'?' class="event-banner-closed"':'')+' style="width:100%;height:110px;object-fit:cover;display:block">'+(t.coverLogo&&t.coverLogo.url?coverLogoOverlayHTML(t.coverLogo.url, t.coverLogo.pos, 110):'')+'</div>':'')+
       '<div style="padding:14px 16px 16px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
           '<div style="font-weight:700;font-size:17px">'+t.name+'</div>'+
@@ -6875,7 +6875,7 @@ function renderTourSearchList() {
     var registered = isRegisteredForTour(t);
     var feeText = (t.fee > 0) ? (t.fee+' kr/spelare') : 'Ingen avgift';
     return '<div class="tour-card" style="cursor:default">'+
-      (t.img?'<img src="'+t.img+'" onload="fitCoverImg(this)"'+(tourStatusGroup(t)==='finished'?' class="event-banner-closed"':'')+' style="width:100%;height:100px;object-fit:cover;display:block">':'')+
+      (t.img?'<img src="'+t.img+'" loading="lazy" decoding="async" onload="fitCoverImg(this)"'+(tourStatusGroup(t)==='finished'?' class="event-banner-closed"':'')+' style="width:100%;height:100px;object-fit:cover;display:block">':'')+
       '<div style="padding:14px 16px 16px">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px">'+
           '<div style="font-weight:700;font-size:17px">'+esc(t.name)+'</div>'+
@@ -12777,7 +12777,7 @@ function eventCardHTML(i,e) {
       chatBtn;
   var statusBadgeEv = '<span class="badge '+(e.closed?'badge-gray':'badge-green')+'" style="display:flex;align-items:center;gap:4px">'+(e.closed?'<i class="ti ti-circle-check" style="font-size:13px"></i> Färdigspelad':'Öppen')+'</span>';
   return '<div class="card" id="event-card-'+e.id+'" style="'+(e.img?'padding-top:0;':'')+'padding-bottom:0;overflow:hidden'+(e.isFinal?';border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)':'')+'">'+
-    (getEventImage(e)?'<img src="'+getEventImage(e)+'" class="event-banner'+(e.closed?' event-banner-closed':'')+'" alt="'+esc(e.name)+'">':'')+
+    (getEventImage(e)?'<img src="'+getEventImage(e)+'" loading="lazy" decoding="async" class="event-banner'+(e.closed?' event-banner-closed':'')+'" alt="'+esc(e.name)+'">':'')+
     '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">'+
       '<div style="min-width:0"><div style="font-weight:600;font-size:16px">'+(e.isFinal?'<i class="ti ti-flag" style="color:var(--gold)"></i> ':'')+(e.isMajor?'<i class="ti ti-star" style="color:var(--gold)"></i> ':'')+e.name+'</div>'+
         '<div style="font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
@@ -19943,16 +19943,27 @@ function subscribeTourLiveStandings(t) {
     if(e.forceLiveTable) return true; // admin har manuellt tvingat fram tabellen, se toggleForceLiveTable()
     return e.teeGroups.some(function(g){ return g.date && g.date <= todayStr; });
   });
-  if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
   var el = document.getElementById('tour-live-standings');
-  if(!candidateEvents.length) { if(el) el.innerHTML = ''; return; }
-
   var eventIds = candidateEvents.map(function(e){ return e.id; }).slice(0, 10); // Firestore 'in' tillåter max 10
   var validIdsByEvent = {}; // eventId -> {docId: true}
   candidateEvents.forEach(function(e){ validIdsByEvent[e.id] = currentLiveScoringDocIds(e); });
+  // Release 430: renderEvents() körs vid VARJE ändring i appen (även andras). Tidigare
+  // startades då en helt ny Firestore-lyssnare varje gång, som läste om alla bollars
+  // livescoring och fick tabellen att blinka. Är det samma tour, samma deltävlingar och
+  // samma bollar återanvänds lyssnaren och tabellen ritas direkt från senaste datan.
+  var key = t.id + '|' + eventIds.join(',') + '|' + eventIds.map(function(id){ return Object.keys(validIdsByEvent[id] || {}).sort().join(','); }).join(';');
+  if(candidateEvents.length && _tourLiveStandings.unsub && _tourLiveStandings.key === key && _tourLiveStandings.lastSnap && _tourLiveStandings.handler) {
+    try { _tourLiveStandings.handler(_tourLiveStandings.lastSnap); } catch(x) {}
+    return;
+  }
+  if(_tourLiveStandings.unsub) { _tourLiveStandings.unsub(); _tourLiveStandings.unsub = null; }
+  _tourLiveStandings.key = null; _tourLiveStandings.lastSnap = null; _tourLiveStandings.handler = null;
+  if(!candidateEvents.length) { if(el) el.innerHTML = ''; return; }
 
   _tourLiveStandings.tourId = t.id;
-  _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(function(snap){
+  _tourLiveStandings.key = key;
+  var handler = function(snap){
+    _tourLiveStandings.lastSnap = snap;
     // Release 412: S.tours byts ut vid varje inkommande ögonblicksbild, så de
     // objekt som fångades när lyssnaren startade kan vara inaktuella (t.ex.
     // visa ett scorekort från före en rättning). Slå upp färska varje gång.
@@ -19975,8 +19986,12 @@ function subscribeTourLiveStandings(t) {
     // ligga öppen (eller öppnas strax efter) medan livescoringen fylls i, och
     // ska då hänga med i realtid precis som Live-tabellen gör.
     _liveOomPreview = computeLiveOomPreview(docsByEvent, candidateEvents, t);
-    if(getTour() && getTour().id === t.id) renderOOM();
-  }, function(err){ console.error('Live-standings: lyssnarfel', err); });
+    // Release 430: rita bara om OoM om den vyn faktiskt syns (annars ritas den vid öppning).
+    var oomView = document.getElementById('view-oom');
+    if(getTour() && getTour().id === t.id && oomView && oomView.classList.contains('active')) renderOOM();
+  };
+  _tourLiveStandings.handler = handler;
+  _tourLiveStandings.unsub = LIVE_SCORING_COL.where('eventId','in', eventIds).onSnapshot(handler, function(err){ console.error('Live-standings: lyssnarfel', err); });
 }
 
 function renderTourLiveStandingsHTML(docsByEvent, candidateEvents, t) {
@@ -24707,6 +24722,15 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (430)',
+    items: [
+      { type: 'improved', text: 'Bättre läsbarhet: den grå hjälptexten (t.ex. "1 tävl · 0 vinster", datum, etiketter och tabellrubriker) är tydligare i både ljust och mörkt läge. I ljust läge var den tidigare för blek för att läsas utomhus.' },
+      { type: 'improved', text: 'Snabbare under rundor: live-tabellen startade om sin koppling och läste om alla bollar varje gång något ändrades i appen, vilket gav blinkningar och onödig väntan. Nu återanvänds kopplingen och tabellen ritas direkt.' },
+      { type: 'improved', text: 'OoM räknas inte längre om i bakgrunden vid varje inmatat slag när OoM-sidan inte är öppen, vilket sparar batteri och gör appen kvickare under rundan.' },
+      { type: 'improved', text: 'Tour- och deltävlingsbilder längre ner i listorna laddas först när man scrollar dit, så att det som syns först kommer fram snabbare.' },
+    ]
+  },
   {
     date: '23 november 2026 (429)',
     items: [
