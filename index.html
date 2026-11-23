@@ -12707,7 +12707,7 @@ function eventCardHTML(i,e) {
     : myResultBtn+
       ((e.teeGroups && e.teeGroups.length) ? '<button class="btn btn-sm" onclick="openLiveFollow(\''+e.id+'\')"><i class="ti ti-table"></i> Ställning & scorekort</button>' : '')+
       (isAdmin() ? '<button class="btn btn-sm" onclick="openResults('+i+')"><i class="ti ti-list-numbers"></i> Resultat</button>'+
-      '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Bana/bild</button>'+
+      '<button class="btn btn-sm" onclick="openEditEventCourseImg('+i+')"><i class="ti ti-map-pin"></i> Namn/bana/bild</button>'+
       '<button class="btn btn-sm" onclick="changeEventType('+i+')"><i class="ti ti-refresh"></i> '+tl+'</button>'+
       (e.teeGroups && e.teeGroups.length ? '<button class="btn btn-sm'+(e.forceLiveTable?' btn-primary':'')+'" onclick="toggleForceLiveTable('+i+')" title="Visa scoringtabellen överst på toursidan även innan någon boll räknas som \'live\' (t.ex. före rondens datum)"><i class="ti ti-'+(e.forceLiveTable?'eye-off':'eye')+'"></i> '+(e.forceLiveTable?'Dölj':'Visa')+' scoringtabell nu</button>' : '')+
       '<button class="btn btn-sm btn-danger" onclick="closeEvent('+i+')"><i class="ti ti-lock"></i> Stäng</button>' : '')+
@@ -14486,7 +14486,7 @@ function openEditEventCourseImg(i) {
   var t = getTour(), e = t.events[i];
   if(!e) return;
   if(e.closed) { alert('Tävlingen är stängd och kan inte redigeras.'); return; }
-  _editEventDraft = { i: i, course: e.course || '', img: e.img || null, date: e.date || '' };
+  _editEventDraft = { i: i, name: e.name || '', course: e.course || '', img: e.img || null, date: e.date || '' };
   renderEeciModal();
 }
 
@@ -14555,7 +14555,9 @@ function renderEeciModal() {
     : '<div class="field"><label>Datum</label><input id="eeci-date" type="date" value="'+esc(_editEventDraft.date||'')+'" oninput="onEeciDateChange()"></div>';
 
   var h = '<h3><i class="ti ti-map-pin"></i> Redigera bana/bild'+(e.isFinal?' – Final':'')+'</h3>';
-  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
+  h += '<p style="font-size:12px;color:var(--text-3);margin-bottom:10px">Ändrar namn, bana, datum och bild för "'+esc(e.name)+'". Övriga deltävlingar i touren påverkas inte, och detta går att göra oavsett om touren i övrigt har startat.</p>';
+  // Release 424: deltävlingens namn går att ändra - alltid, även när bana/datum är låsta.
+  h += '<div class="field"><label>Namn på deltävlingen</label><input id="eeci-name" type="text" value="'+esc(_editEventDraft.name||'')+'" placeholder="t.ex. Trump Turnberry Ailsa - Del 3" oninput="if(_editEventDraft)_editEventDraft.name=this.value"></div>';
   if(locked) h += '<p style="font-size:12px;color:var(--gold);background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-lock"></i> Deltävlingen har redan inlämnade scorekort eller resultat, så bana och datum är låsta. Banfoto går fortfarande bra att byta.</p>';
   else if(eeciRegCount(e)) h += '<p style="font-size:12px;color:var(--text-2);background:var(--surface2);padding:8px 10px;border-radius:8px;margin-bottom:10px"><i class="ti ti-users"></i> '+eeciRegCount(e)+' anmälda följer med om du byter bana eller datum.</p>';
   h += courseField;
@@ -14660,6 +14662,9 @@ function saveEditEventCourseImg() {
   if(!e) { _editEventDraft = null; closeModal(); return; }
   if(e.closed) { alert('Tävlingen stängdes precis och kan inte längre redigeras.'); _editEventDraft = null; closeModal(); return; }
   var locked = eeciIsLocked(e);
+  var nmEl = document.getElementById('eeci-name');
+  var newName = ((nmEl ? nmEl.value : _editEventDraft.name) || '').trim();
+  if(!newName) { alert('Ange ett namn på deltävlingen.'); return; }
   if(!locked) {
     if(!_editEventDraft.course) { alert('Ange en bana.'); return; }
     if(!_editEventDraft.date) { alert('Ange ett datum.'); return; }
@@ -14686,6 +14691,7 @@ function saveEditEventCourseImg() {
       saveCourseDb();
     }
   }
+  if(newName !== e.name) e.name = newName; // release 424
   var newImg = _editEventDraft.img;
   _editEventDraft = null;
   uploadImageToStorage(newImg, 'event-covers/'+e.id+'.jpg').then(function(url){
@@ -16698,8 +16704,7 @@ function reviewCourseRename(id) {
   if(!nn || nn === c.name) return;
   if(courseDb.some(function(x){ return x.id !== id && x.name.toLowerCase() === nn.toLowerCase(); })) { alert('Det namnet finns redan.'); return; }
   var old = c.name; c.name = nn;
-  // Följ med i pågående/avslutade sällskapsronder som använder banan
-  (_casualAll||[]).forEach(function(r){ if(r.courseId === id && r.courseName === old) CASUAL_COL.doc(r.id).update({ courseName: nn }).catch(function(){}); });
+  renameCourseEverywhere(c, old, nn); // release 423: deltävlingar, sällskapsronder, bild m.m.
   courseDb.sort(function(a,b){ return a.name.localeCompare(b.name,'sv'); });
   saveCourseDb(); renderHomeCourseReviewWidget();
 }
@@ -22159,13 +22164,47 @@ function openEditCourse(id) {
   setTimeout(function(){ renderScorecardGrid(c.holePars, c.holeHcpIndex, c.holeLengths); }, 30);
 }
 
+// Release 423: byter namn på en bana OCH följer med överallt där namnet används.
+// Deltävlingar, Ryder Cup-pass, eclectic-tourer och sällskapsronder pekar på banan
+// via dess NAMN, så tidigare tappade de kopplingen (par/hålindex, banbild,
+// statistik) när namnet ändrades. Bollar och inmatade slag påverkas aldrig -
+// de ligger i deltävlingen och livescoringen, inte på banan.
+function renameCourseEverywhere(c, oldName, newName) {
+  var o = (oldName || '').trim().toLowerCase(), n = (newName || '').trim();
+  if(!o || !n || o === n.toLowerCase() && oldName === newName) return 0;
+  var hits = 0, same = function(x){ return (x || '').trim().toLowerCase() === o; };
+  (S.tours || []).forEach(function(t){
+    (t.events || []).forEach(function(e){ if(same(e.course)) { e.course = n; hits++; } });
+    if(t.eclectic && same(t.eclectic.course)) { t.eclectic.course = n; hits++; }
+    var rc = t.ryder || t.rc;
+    if(rc && rc.sessions) rc.sessions.forEach(function(x){ if(same(x.course)) { x.course = n; hits++; } });
+  });
+  (_casualAll || []).forEach(function(r){
+    if(same(r.courseName) && (!r.courseId || !c || r.courseId === c.id)) { CASUAL_COL.doc(r.id).update({ courseName: n }).catch(function(){}); hits++; }
+  });
+  // Banbilden ligger under en nyckel som bygger på namnet - kopiera den till det nya.
+  try {
+    var ok = courseKey(oldName), nk = courseKey(n);
+    if(ok && nk && ok !== nk && courseBank[ok] && !courseBank[nk]) {
+      courseBank[nk] = Object.assign({}, courseBank[ok], { displayName: n });
+      var upd = {}; upd[nk] = courseBank[nk];
+      COURSE_BANK_REF.set(upd, { merge: true }).catch(function(){});
+    }
+  } catch(x) {}
+  if(hits) save();
+  return hits;
+}
+
 function submitEditCourse(id) {
   if(!isAdmin()) return;
   var c = courseDb.find(function(x){ return x.id===id; });
   if(!c) return;
   var f = readCourseFormFields();
   if(!f.name) { alert('Bannamn krävs.'); return; }
+  var oldName = c.name;
+  if(f.name !== oldName && courseDb.some(function(x){ return x.id !== id && (x.name||'').toLowerCase() === f.name.toLowerCase(); })) { alert('Det finns redan en bana som heter så.'); return; }
   Object.keys(f).forEach(function(k){ c[k] = f[k]; });
+  if(f.name !== oldName) renameCourseEverywhere(c, oldName, f.name);
   courseDb.sort(function(a,b){ return a.name.localeCompare(b.name, 'sv'); });
   saveCourseDb();
   closeModal();
@@ -24602,6 +24641,19 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (424)',
+    items: [
+      { type: 'new', text: 'Admin kan nu byta namn på en deltävling, t.ex. "Trump Turnberry Ailsa - Del 3" för att tydliggöra vilken bana det är. Görs under "Namn/bana/bild" på deltävlingen och fungerar även när bana och datum är låsta.' },
+    ]
+  },
+  {
+    date: '23 november 2026 (423)',
+    items: [
+      { type: 'fixed', text: 'Byter man namn på en bana i bandatabasen följer det nya namnet nu med till alla deltävlingar, Ryder Cup-pass, eclectic-tourer och sällskapsronder som använder banan. Tidigare tappade de kopplingen till banans par, hålindex och bild.' },
+      { type: 'improved', text: 'Banbilden flyttas med till det nya namnet, och man kan inte längre döpa en bana till ett namn som redan finns.' },
+    ]
+  },
   {
     date: '23 november 2026 (422)',
     items: [
