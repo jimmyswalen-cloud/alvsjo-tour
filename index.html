@@ -20165,10 +20165,10 @@ function buildSideBetsLiveSummaryHTML(e, players) {
       if(extracted) { sb.hole = extracted; migrated = true; }
     }
     var holeLabel = sb.hole
-      ? '<div style="font-size:10px;color:var(--text-3);margin-top:2px">Hål '+sb.hole+'</div>'
+      ? '<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--gold-light);color:var(--gold);border:1px solid var(--gold);white-space:nowrap"><i class="ti ti-flag-3" style="font-size:12px"></i>Hål '+sb.hole+'</span></div>'
       : (isHoleType ? '<div style="font-size:10px;color:var(--gold);margin-top:2px"><i class="ti ti-alert-triangle"></i> Hål ej angivet</div>' : '');
     var potInner = '<div style="display:inline-flex;align-items:center;gap:2px">'+
-      '<span>'+(sb.fee>0||sb.carriedOverPot?'💰':'🆓')+'</span><span>'+(sb.fee>0||sb.carriedOverPot?(pot+' kr'):'Gratis')+'</span>'+
+      '<span>'+(sb.fee>0||sb.carriedOverPot?'💰':'🆓')+'</span><span style="white-space:nowrap">'+(sb.fee>0||sb.carriedOverPot?(pot+'\u00a0kr'):'Gratis')+'</span>'+
     '</div>';
     // Radbryt vinnarnamnet mellan för- och efternamn (istället för nowrap) så
     // långa namn som "Andreas Jonsson Wråkk" får plats utan att klämmas ihop.
@@ -25050,6 +25050,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (443)',
+    items: [
+      { type: 'improved', text: 'Side bets i live-tabellen: hålet visas nu som en tydlig guldetikett med flagga ("Hål 2"), och potten bryts aldrig mellan beloppet och "kr".' },
+    ]
+  },
   {
     date: '23 november 2026 (442)',
     items: [
