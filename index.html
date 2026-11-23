@@ -9667,7 +9667,7 @@ function renderEvents() {
     '<p style="font-size:13px;color:var(--text-2);margin-top:-10px;margin-bottom:16px">Strukturen sattes vid tourens skapande och kan inte ändras.</p>';
   var top3Html = buildTop3HTML(t, false);
   var liveStandingsHtml = '<div id="tour-live-standings"></div>';
-  if(!t.events.length){el.innerHTML=liveStandingsHtml+top3Html+trackmanCardHTML(t)+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';subscribeTourLiveStandings(t);return;}
+  if(!t.events.length){el.innerHTML=trackmanCardHTML(t)+liveStandingsHtml+top3Html+titleBlock+'<p class="empty">Inga deltävlingar i den här touren.</p>';subscribeTourLiveStandings(t);return;}
 
   // Säsongsberättelse (tourens egen "story", motsvarande deltävlingarnas story fast för hela touren)
   var tourConcluded = isTourConcluded(t);
@@ -9733,7 +9733,8 @@ function renderEvents() {
   if(t.paced) html += pacedPlanHTML(t);
   if(open.length)   html+='<p class="section-title">Öppna</p>'+open.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
   if(closed.length) html+='<div style="display:flex;align-items:center;gap:12px;margin:20px 0 12px"><div style="flex:1;height:2px;background:var(--border)"></div><span style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;padding:0 4px">AVSLUTADE</span><div style="flex:1;height:2px;background:var(--border)"></div></div>'+closed.map(function(x){return eventCardHTML(x.i,x.e);}).join('');
-  el.innerHTML = liveStandingsHtml + top3Html + buildChickenCardHTML(t) + storyBanner + trackmanCardHTML(t) + feeCard + titleBlock + html;
+  // Release 422: Trackman-inställningarna alltid överst, före live-tabellen.
+  el.innerHTML = trackmanCardHTML(t) + liveStandingsHtml + top3Html + buildChickenCardHTML(t) + storyBanner + feeCard + titleBlock + html;
   subscribeTourLiveStandings(t);
   refreshMissingResultsWarnings();
 }
@@ -24601,6 +24602,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (422)',
+    items: [
+      { type: 'improved', text: 'Tävlingar: Trackman-inställningarna visas nu alltid högst upp, före live-tabellen, så att de är lätta att hitta innan rundan.' },
+    ]
+  },
   {
     date: '22 november 2026 (421)',
     items: [
