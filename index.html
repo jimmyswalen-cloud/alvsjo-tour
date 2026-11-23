@@ -2030,6 +2030,28 @@ function applyHeroBannerIfWide(heroBg, src, tourId, mode) {
   im.src = src;
 }
 
+// Release 432: datumrubrik i anmälningslistan.
+function regDateHeaderHTML(d, e, count, nBollar) {
+  if(!d) return '<tr><td colspan="2" style="background:var(--surface2);padding:8px 10px;font-size:12px;font-weight:700">Datum saknas <span style="font-weight:400;color:var(--text-3)">' + count + (count===1?' anmäld':' anmälda') + '</span></td></tr>';
+  var dt = new Date(d + 'T12:00:00'), today = hcpTodayISO();
+  var tm = new Date(today + 'T12:00:00'); tm.setDate(tm.getDate() + 1); var tomorrow = tm.toISOString().slice(0,10);
+  var MON = ['JAN','FEB','MAR','APR','MAJ','JUN','JUL','AUG','SEP','OKT','NOV','DEC'];
+  var wd = weekdaySv(d) || ''; wd = wd.charAt(0).toUpperCase() + wd.slice(1);
+  var rel = d === today ? '<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--green);color:#fff">IDAG</span>'
+          : d === tomorrow ? '<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--green-light);color:var(--green-dark)">IMORGON</span>'
+          : d < today ? '<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--surface);color:var(--text-3);border:1px solid var(--border)">SPELAD</span>' : '';
+  var badge = '<div style="width:40px;flex-shrink:0;border-radius:8px;overflow:hidden;text-align:center;border:1px solid var(--border-strong);background:var(--surface)">' +
+    '<div style="font-size:9px;font-weight:800;letter-spacing:.05em;background:var(--green-dark);color:var(--surface);padding:1px 0">' + MON[dt.getMonth()] + '</div>' +
+    '<div style="font-size:16px;font-weight:800;line-height:1.25;color:var(--text)">' + dt.getDate() + '</div></div>';
+  return '<tr><td colspan="2" style="background:var(--surface2);padding:9px 10px;border-bottom:1px solid var(--border)">' +
+    '<div style="display:flex;align-items:center;gap:10px">' + badge +
+      '<div style="min-width:0;flex:1"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:14px;font-weight:800;color:var(--text)">' + esc(wd) + '</span>' + rel +
+        (d !== e.date ? '<span style="color:var(--gold);font-weight:600;font-size:11px">ej ordinarie dag</span>' : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--text-3);margin-top:1px"><i class="ti ti-calendar" style="font-size:11px"></i> ' + esc(dateLongSv(d) || d) +
+          ' · <i class="ti ti-users" style="font-size:11px"></i> ' + count + (count===1?' anmäld':' anmälda') +
+          (nBollar ? ' · <i class="ti ti-golf" style="font-size:11px"></i> ' + nBollar + (nBollar===1?' boll':' bollar') : '') + '</div></div>' +
+    '</div></td></tr>';
+}
 function weekdaySv(dateStr) {
   if(!dateStr) return '';
   var days = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
@@ -12616,7 +12638,9 @@ function eventCardHTML(i,e) {
       var wd = weekdaySv(d);
       var dateLabel = '<i class="ti ti-calendar" style="font-size:13px;vertical-align:-2px"></i> '+(wd ? wd.charAt(0).toUpperCase()+wd.slice(1)+' ' : '')+(dateLongSv(d) || d || 'Datum saknas')+
         (d && d!==e.date ? ' <span style="color:var(--gold);font-weight:600;font-size:11px">(ej ordinarie)</span>' : '');
-      rows += sectionHdr(dateLabel, inDate.length+(inDate.length===1?' anmäld':' anmälda'));
+      // Release 432: tydlig datumrubrik - kalenderbricka, veckodag, datum, "Idag/Imorgon/Spelad"
+      var nBollar = 0; inDate.forEach(function(x, k){ if(x.gIdx>=0 && inDate.findIndex(function(y){ return y.gIdx===x.gIdx; })===k) nBollar++; });
+      rows += regDateHeaderHTML(d, e, inDate.length, nBollar);
       // Bollar för datumet, sorterade på starttid (utan tid sist, sedan skapandeordning)
       var gIdxs = [];
       inDate.forEach(function(x){ if(x.gIdx>=0 && gIdxs.indexOf(x.gIdx)<0) gIdxs.push(x.gIdx); });
@@ -12676,7 +12700,7 @@ function eventCardHTML(i,e) {
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D9A62E;margin-right:4px"></span>Osäker</span>'+
         '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Deltar ej</span>'+
       '</div>'+
-      '<table class="hist-table reg-grouped"><thead><tr><th>Namn</th><th style="text-align:right">Tid</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      '<table class="hist-table reg-grouped"><thead><tr><th>Speldag · boll · spelare</th><th style="text-align:right">Start</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   } else {
     regsTable = '<p style="color:var(--text-3);font-size:13px;margin-bottom:12px">Inga spelare i touren ännu</p>';
   }
@@ -24757,6 +24781,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (432)',
+    items: [
+      { type: 'improved', text: 'Anmälningslistan i deltävlingen: varje speldag har nu en tydlig rubrik med en liten kalenderbricka (månad + dag), veckodag, fullständigt datum, antal anmälda och antal bollar - samt "IDAG", "IMORGON" eller "SPELAD". Kolumnrubrikerna heter nu "Speldag · boll · spelare" och "Start".' },
+    ]
+  },
   {
     date: '23 november 2026 (431)',
     items: [
