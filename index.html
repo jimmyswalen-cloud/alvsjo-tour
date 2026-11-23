@@ -511,7 +511,7 @@ html[data-theme="dark"] [style*="background:#fff4d6" i][style*="color:#8a5a00" i
 html[data-theme="dark"] [style*="background:#fff4dc" i][style*="color:#7a4b00" i]{color:#F5CA84 !important}
 html[data-theme="dark"] [style*="background:#fff8ec" i][style*="color:#7a4100" i]{color:#F5C084 !important}
 html[data-theme="dark"] [style*="background:#FFF4D6" i]{background:#372D15 !important}
-html[data-theme="dark"] [style*="#FFE3B3" i]{background:linear-gradient(135deg,#3A2A12,#2A1F10) !important}
+html[data-theme="dark"] [style*="#FFE3B3" i]:not(.home-card):not(.bs-it){background:linear-gradient(135deg,#3A2A12,#2A1F10) !important}
 /* Märkesloggor (svart text på vit/transparent botten) inverteras i mörkt läge: vit text,
    och den (nu svarta) bakgrunden blandas bort med screen så loggan ser transparent ut.
    hue-rotate återställer ev. färgade detaljer (t.ex. röda) till ungefär sin ursprungsfärg. */
@@ -12203,7 +12203,10 @@ function buildSideBetsSummaryHTML(t, e, ei) {
       '</div>'+
       (sb.fee>0?'<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;color:var(--text-3)">Pott</div><div style="font-size:14px;font-weight:800;color:var(--green-dark)">'+pot+' kr</div></div>':'<span class="badge badge-green" style="flex-shrink:0">Gratis</span>')+
     '</div>';
-    if(winner) {
+    var prov = isSideBetProvisional(e, sb); // release 441
+    if(winner && prov) {
+      box += '<div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px"><i class="ti ti-flag"></i> Leder: '+esc(winner.name)+(sb.measurements&&sb.measurements[sb.winnerPi]!=null?' · '+fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]):'')+' <span style="font-weight:500;color:var(--text-3)">– kan slås</span></div>';
+    } else if(winner) {
       box += '<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-bottom:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+'</div>';
     } else if(sb.pushOutcome === 'carried') {
       box += '<div style="font-size:12px;color:#0C447C;font-weight:700;margin-bottom:6px"><i class="ti ti-arrow-forward-up"></i> Ingen vann - potten fördes vidare till "'+esc(sb.carriedToBetName||'?')+'" i '+esc(sb.carriedToEventName||'?')+'</div>';
@@ -12217,7 +12220,7 @@ function buildSideBetsSummaryHTML(t, e, ei) {
           var paid = !!(sb.payments && sb.payments[pi]);
           var isWinner = sb.winnerPi===pi;
           return '<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:'+(sb.fee>0?(paid?'#E1F5EE':'#FCEBEB'):'var(--surface)')+';color:'+(sb.fee>0?(paid?'#0F6E56':'#A32D2D'):'var(--text-2)')+';border:1px solid '+(sb.fee>0?(paid?'#1D9E75':'#dc2626'):'var(--border)')+'">'+
-            (isWinner?'🏆 ':'')+esc(p.name)+(sb.fee>0?(paid?' ✓':' ✕'):'')+
+            (isWinner?(prov?'🚩 ':'🏆 '):'')+esc(p.name)+(sb.fee>0?(paid?' ✓':' ✕'):'')+
           '</span>';
         }).join('')+
       '</div>';
@@ -25042,6 +25045,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (441)',
+    items: [
+      { type: 'fixed', text: 'Side bets i deltävlingskortet visade fortfarande "Vinnare" för Närmast hål/Längsta drive medan speldagen pågick. Nu står det "Leder: … · 1,10 m – kan slås" (med flagga i stället för pokal) tills betet är avgjort, precis som i live-tabellen och Side bets-vyn.' },
+    ]
+  },
+  {
+    date: '23 november 2026 (440)',
+    items: [
+      { type: 'fixed', text: 'Mörkt läge: menykortet "Sällskapsrond" på startsidan hade mörkbrun text på mörk bakgrund. Kortet behåller nu sin ljusa orange färg, precis som korten Tourer och Statistik, så texten syns. Samma sak för knappen "Sällskapsrond" i menyn under Ny rond.' },
+    ]
+  },
   {
     date: '23 november 2026 (439)',
     items: [
