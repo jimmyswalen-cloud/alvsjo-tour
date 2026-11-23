@@ -11688,7 +11688,8 @@ function openSideBets(ei) {
           (sb.description?'<div style="font-size:12px;color:var(--text-2);margin-top:2px">'+esc(sb.description)+'</div>':'')+
           (creator?'<div style="font-size:11px;color:var(--text-3);margin-top:2px">Skapad av '+esc(creator.name)+'</div>':'')+
           (sb.fee>0?'<div style="font-size:12px;color:var(--text-3);margin-top:3px">'+sb.fee+' kr/deltagare · '+paidCount+'/'+participants.length+' betalt'+(sb.carriedOverPot?' · +'+sb.carriedOverPot+' kr vidareskickat = '+totalPot+' kr totalt':'')+'</div>':'<div style="font-size:12px;color:var(--text-3);margin-top:3px">Gratis</div>')+
-          (winner?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+(totalPot>0?' ('+totalPot+' kr)':'')+'</div>':'')+
+          (winner && isSideBetProvisional(e, sb)?'<div style="font-size:12px;color:var(--gold);font-weight:700;margin-top:6px"><i class="ti ti-flag"></i> Leder: '+esc(winner.name)+(sb.measurements&&sb.measurements[sb.winnerPi]!=null?' · '+fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]):'')+' <span style="font-weight:500;color:var(--text-3)">– kan slås, fler kan gå med</span></div>':'')+
+          (winner && !isSideBetProvisional(e, sb)?'<div style="font-size:12px;color:var(--green-dark);font-weight:700;margin-top:6px"><i class="ti ti-trophy" style="color:var(--gold)"></i> Vinnare: '+esc(winner.name)+(totalPot>0?' ('+totalPot+' kr)':'')+'</div>':'')+
           (sb.pushOutcome==='carried'?'<div style="font-size:12px;color:#0C447C;font-weight:600;margin-top:6px"><i class="ti ti-arrow-forward-up"></i> Potten ('+((sb.fee>0?participants.length*sb.fee:0))+' kr) fördes vidare till "'+esc(sb.carriedToBetName||'?')+'" i '+esc(sb.carriedToEventName||'?')+'</div>':'')+
           (sb.pushOutcome==='refunded'?'<div style="font-size:12px;color:var(--text-2);font-weight:600;margin-top:6px"><i class="ti ti-receipt-refund"></i> Återbetalt till deltagarna</div>':'')+
           '</div>'+
@@ -11696,7 +11697,7 @@ function openSideBets(ei) {
         '</div>';
       if(canManage) {
         box += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
-        if(sb.winnerPi == null) {
+        if(sb.winnerPi == null || isSideBetProvisional(e, sb)) { // release 439: även när en ledare finns men betet kan slås
           var eligibleToAdd = players.map(function(p,pi){ return p ? pi : null; }).filter(function(pi){ return pi!=null && participants.indexOf(pi)===-1; });
           box += '<div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:6px">Lägg till deltagare</div>';
           box += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
@@ -12398,7 +12399,7 @@ function isSideBetDecided(sb) {
 function explainSideBetNotJoinable(e, sb, myPi) {
   if(myPi < 0) return 'Du är inte registrerad som spelare i den här touren.';
   if(e.closed) return 'Den här deltävlingen är avslutad - går inte att gå med i side bets längre.';
-  if(isSideBetDecided(sb)) return 'Det här betet är redan avgjort och går inte att gå med i längre.';
+  if(isSideBetDecided(sb) && !isSideBetProvisional(e, sb)) return 'Det här betet är redan avgjort och går inte att gå med i längre.';
   if((sb.participants||[]).indexOf(myPi) !== -1) return 'Du är redan med i det här betet.';
   var reg = (e.registrations||[]).find(function(r){ return r.pi===myPi && !r.declined; });
   if(!reg) return 'Du måste vara anmäld till den här deltävlingen för att gå med i dess side bets.';
@@ -12445,7 +12446,7 @@ function adminAddSideBetParticipant(ei, betId, piStr) {
   if(!e) return;
   var sb = (e.sideBets||[]).find(function(x){ return x.id===betId; });
   if(!sb || !canManageSideBet(t, sb)) return;
-  if(sb.winnerPi != null) { alert('Det här betet är redan avgjort - går inte att lägga till fler deltagare.'); return; }
+  if(sb.winnerPi != null && !isSideBetProvisional(e, sb)) { alert('Det här betet är redan avgjort - går inte att lägga till fler deltagare.'); return; }
   if(!sb.participants) sb.participants = [];
   if(sb.participants.indexOf(pi) !== -1) { alert('Spelaren är redan med i det här betet.'); return; }
   sb.participants.push(pi);
@@ -19470,6 +19471,11 @@ function onLiveScoreInput(pi, rawValue) {
   var cleared = isNaN(n);
   update['scores.'+pi+'.'+hole] = cleared ? firebase.firestore.FieldValue.delete() : n;
   update.updatedAt = Date.now();
+  // Release 438: uppdatera den lokala kopian direkt. I simulatorläget (inget putt-steg)
+  // stängs väljaren i samma ögonblick som slaget sparas, och då hann kontrollen "är
+  // hålet klart för alla?" köras mot gammal data - side bet-frågan kom aldrig upp när
+  // sista spelaren i bollen matade in sitt slag.
+  try { d.scores = d.scores || {}; d.scores[pi] = d.scores[pi] || {}; if(cleared) delete d.scores[pi][hole]; else d.scores[pi][hole] = n; } catch(x) {}
   liveScoringRef().update(update).catch(function(err){
     console.error('Livescoring: kunde inte spara', err);
     alert('Kunde inte spara resultatet. Kontrollera internetanslutningen och försök igen.');
@@ -25036,6 +25042,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (439)',
+    items: [
+      { type: 'improved', text: 'Närmast hål och Längsta drive: så länge betet bara har en ledare (speldagen pågår) kan fler gå med - både på egen hand via "Gå med" (om man inte redan spelat hålet) och via admins/skaparens "Lägg till deltagare". Side bets-vyn visar då "Leder: … – kan slås, fler kan gå med" i stället för "Vinnare".' },
+    ]
+  },
+  {
+    date: '23 november 2026 (438)',
+    items: [
+      { type: 'fixed', text: 'Simulatorligan: frågan om side bet (t.ex. Närmast hål) dök inte upp automatiskt när sista spelaren i bollen matade in sitt slag på hålet, eftersom appen kontrollerade hålet innan slaget hunnit sparas. Nu kommer frågan direkt.' },
+    ]
+  },
   {
     date: '23 november 2026 (437)',
     items: [
