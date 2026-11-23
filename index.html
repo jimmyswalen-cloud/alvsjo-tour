@@ -18703,6 +18703,7 @@ function renderLiveGridHTML() {
     '</div>'+
     rows+
     '<p style="font-size:11px;color:var(--text-3);margin:8px 0 0">'+filledCount+' av '+d.players.length+' klara för hålet. Tryck på en spelares slag-knapp för att mata in - valfri ordning.</p>'+
+    liveSideBetOverviewHTML(d)+
     liveRoundProgressHTML(d, totalHoles, allComplete, allComplete && completionBanner.indexOf('inte inskickade') >= 0)+
     '<div class="row" style="justify-content:flex-end;margin-top:16px">'+
       '<button class="btn" onclick="closeLiveScoringSafe()">Stäng</button>'+
@@ -19127,6 +19128,38 @@ function reopenSideBetPrompt(sbId) {
   renderSideBetPromptHTML();
 }
 
+// ── Release 436: alla side bets i deltävlingen syns i livescoringen ──────────
+function fmtSideBetMeasure(sb, cm) {
+  if(cm == null) return '';
+  return sb.betType === 'Närmast hål' ? (Math.floor(cm/100) + ',' + ('0' + (cm % 100)).slice(-2) + ' m') : ((Math.round(cm/10)/10).toString().replace('.', ',') + ' m');
+}
+function liveSideBetOverviewHTML(d) {
+  var found = d && findTourAndEventById(d.eventId); if(!found) return '';
+  var ev = found.event, t = found.tour;
+  var bets = (ev.sideBets || []).filter(function(sb){ return sb.hole; }).slice().sort(function(a, b){ return a.hole - b.hole; });
+  if(!bets.length) return '';
+  var players = getPlayersForTour(t) || t.players || [], admin = isAdmin();
+  var inBoll = {}; (d.players || []).forEach(function(p){ inBoll[p.pi] = true; });
+  var g = ev.teeGroups && _liveScoring.gIdx != null ? ev.teeGroups[_liveScoring.gIdx] : null;
+  var rows = bets.map(function(sb){
+    var measured = SIDE_BET_HOLE_TYPES.indexOf(sb.betType) >= 0;
+    var mine = (sb.participants || []).some(function(pi){ return inBoll[pi]; });
+    var sd = sideBetEffectiveDate(ev, sb), otherDay = sd && g && g.date && sd !== g.date;
+    var w = sb.winnerPi != null ? players[sb.winnerPi] : null;
+    var status = w ? '<span style="color:var(--green-dark);font-weight:700"><i class="ti ti-trophy" style="font-size:11px"></i> ' + esc(w.name) + (measured && sb.measurements && sb.measurements[sb.winnerPi] != null ? ' · ' + fmtSideBetMeasure(sb, sb.measurements[sb.winnerPi]) : '') + '</span>'
+               : '<span style="color:var(--text-3)">Ingen vinnare än</span>';
+    var canFix = admin || mine;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">' +
+      '<span style="flex-shrink:0;min-width:34px;text-align:center;font-size:11px;font-weight:800;padding:3px 0;border-radius:6px;background:var(--gold-light);color:var(--gold)">H' + sb.hole + '</span>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(sb.name) + ' ' + sideBetEmoji(sb.betType) + '</div>' +
+        '<div style="font-size:11px">' + status + (otherDay ? ' <span style="color:var(--text-3)">· gäller ' + esc(sfDateLbl(sd)) + '</span>' : '') + (!mine ? ' <span style="color:var(--text-3)">· ingen i er boll med</span>' : '') + '</div></div>' +
+      (canFix ? '<button class="btn btn-sm" style="flex-shrink:0" onclick="reopenSideBetPrompt(\'' + sb.id + '\')"><i class="ti ti-pencil"></i> Korrigera</button>' : '') +
+    '</div>';
+  }).join('');
+  return '<div style="margin-top:14px;padding:10px 12px 2px;border-radius:12px;border:1px solid var(--border);background:var(--surface)">' +
+    '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--text-3);margin-bottom:6px"><i class="ti ti-target-arrow" style="color:var(--gold)"></i> SIDE BETS I DELTÄVLINGEN</div>' + rows + '</div>';
+}
+
 function renderSideBetPromptHTML() {
   var el = document.getElementById('live-scoring-modal-body');
   var d = _liveScoring.data, sb = _liveScoring.pendingSideBet;
@@ -19136,7 +19169,9 @@ function renderSideBetPromptHTML() {
   // Release 434: mätbara bets (Närmast hål / Längsta drive) - mata in för ALLA i bollen.
   if(isMeasured) { renderSideBetMeasureAllHTML(); return; }
 
-  var options = (sb.participants||[]).map(function(pi){
+  var optPis = (sb.participants||[]).slice();
+  if(isAdmin()) d.players.forEach(function(x){ if(optPis.indexOf(x.pi) < 0) optPis.push(x.pi); }); // release 436
+  var options = optPis.map(function(pi){
     var inBoll = d.players.filter(function(x){ return x.pi===pi; })[0];
     var name = inBoll ? inBoll.name : null;
     if(!name) return ''; // fråga bara om de som faktiskt finns i den här bollen
@@ -19175,6 +19210,8 @@ function renderSideBetMeasureAllHTML() {
   var isClosest = sb.betType === 'Närmast hål';
   var missLbl = isClosest ? 'Missad green' : 'Missad fairway';
   var pis = (sb.participants || []).filter(function(pi){ return d.players.some(function(x){ return x.pi === pi; }); });
+  var extraPis = isAdmin() ? d.players.map(function(x){ return x.pi; }).filter(function(pi){ return pis.indexOf(pi) < 0; }) : [];
+  pis = pis.concat(extraPis); // release 436: admin kan även fylla i för spelare i bollen som inte var med i betet
   if(!_liveScoring.sbDraft || _liveScoring.sbDraft.id !== sb.id) {
     var dr = { id: sb.id, rows: {} };
     pis.forEach(function(pi){
@@ -19191,7 +19228,7 @@ function renderSideBetMeasureAllHTML() {
   var rowsHtml = pis.map(function(pi){
     var p = d.players.find(function(x){ return x.pi === pi; }), r = dr.rows[pi], flagged = r.outcome === 'missed' || r.outcome === 'worse';
     return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
-      '<div style="font-weight:700;font-size:15px;margin-bottom:6px">' + esc(p ? p.name : '?') + '</div>' +
+      '<div style="font-weight:700;font-size:15px;margin-bottom:6px">' + esc(p ? p.name : '?') + ((sb.participants || []).indexOf(pi) < 0 ? ' <span style="font-size:11px;font-weight:600;color:var(--text-3)">· inte med i betet – fyll i för att lägga till</span>' : '') + '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px' + (flagged ? ';opacity:.4' : '') + '">' +
         (isClosest
           ? '<input type="number" inputmode="numeric" min="0" placeholder="m" value="' + (r.m === '' ? '' : r.m) + '" oninput="setSbDist(' + pi + ',\'m\',this.value)" style="width:72px;text-align:center;margin:0"><span style="color:var(--text-3);font-size:12px">m</span>' +
@@ -19236,6 +19273,8 @@ function saveSideBetMeasureAll() {
   var isClosest = actual.betType === 'Närmast hål', bad = false, vals = {};
   Object.keys(dr.rows).forEach(function(k){
     var r = dr.rows[k], pi = Number(k), e = document.getElementById('sb-err-' + pi);
+    var notIn = (actual.participants || []).indexOf(pi) < 0;
+    if(notIn && !r.outcome && r.m === '' && r.cm === '') return; // inte med i betet och inget ifyllt -> hoppa över
     if(r.outcome === 'missed' || r.outcome === 'worse') { vals[pi] = r.outcome; return; }
     var m = parseFloat(r.m), cm = parseInt(r.cm, 10);
     if(isNaN(m) && (!isClosest || isNaN(cm))) { bad = true; if(e) e.textContent = 'Fyll i avstånd eller välj ' + (isClosest ? 'Missad green' : 'Missad fairway') + ' / Sämre'; return; }
@@ -19246,6 +19285,8 @@ function saveSideBetMeasureAll() {
   if(bad) return;
   actual.measurements = actual.measurements || {};
   actual.outcomes = actual.outcomes || {};
+  actual.participants = actual.participants || [];
+  Object.keys(vals).forEach(function(k){ if(actual.participants.indexOf(Number(k)) < 0) actual.participants.push(Number(k)); });
   Object.keys(vals).forEach(function(k){
     if(typeof vals[k] === 'number') { actual.measurements[k] = vals[k]; delete actual.outcomes[k]; }
     else { actual.outcomes[k] = vals[k]; delete actual.measurements[k]; }
@@ -24980,6 +25021,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '23 november 2026 (436)',
+    items: [
+      { type: 'new', text: 'Livescoringen visar nu alla side bets i deltävlingen i en egen ruta under hålen - hål, namn, vinnare/ledare med avstånd, och knappen "Korrigera" som öppnar inmatningen direkt. Fungerar även när ronden redan är inskickad.' },
+      { type: 'improved', text: 'Admin kan vid korrigering fylla i avstånd/vinnare även för spelare i bollen som inte var med i betet - de läggs då till som deltagare.' },
+    ]
+  },
   {
     date: '23 november 2026 (435)',
     items: [
