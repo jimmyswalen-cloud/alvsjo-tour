@@ -21324,16 +21324,18 @@ function buildAllScorecardsHTML(username, uid) {
   };
   var rows = list.map(function(x, i){
     var tag = ROUND_TAGS[x.kind] || ROUND_TAGS.casual;
+    var isLab = false; try { isLab = isTestClub(x.club); } catch(e) {} // release 451
     var stat = x.status === 'pending' ? '<span style="font-size:10px;color:var(--gold);font-weight:600"><i class="ti ti-clock"></i> Väntar</span>'
              : x.status === 'approved' ? '<span style="font-size:10px;color:#0F6E56;font-weight:600"><i class="ti ti-circle-check"></i> Godkänt</span>'
              : posBadge(x.pos);
-    return '<div class="asc-row-'+uid+'"'+(x.open ? ' onclick="'+x.open+'"' : '')+' style="display:'+(i < LIMIT ? 'flex' : 'none')+';align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--border);'+(x.open ? 'cursor:pointer' : 'opacity:.75')+'">'+
+    return '<div class="asc-row-'+uid+'"'+(x.open ? ' onclick="'+x.open+'"' : '')+' style="display:'+(i < LIMIT ? 'flex' : 'none')+';align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--border);'+(isLab ? 'background:repeating-linear-gradient(135deg,rgba(242,193,78,.10) 0 10px,rgba(242,193,78,.04) 10px 20px);box-shadow:inset 3px 0 0 #F2C14E;' : '')+(x.open ? 'cursor:pointer' : 'opacity:.75')+'">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">'+
           '<span style="font-size:11px;color:var(--text-3)">'+esc(x.date ? hcpFmtDate(x.date) : '')+'</span>'+
           '<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:'+tag.bg+';color:'+tag.fg+'">'+tag.label+'</span>'+
-          clubTag(x.club)+
+          (isLab ? '' : clubTag(x.club))+
         '</div>'+
+        (isLab ? '<div style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;letter-spacing:.03em;padding:2px 8px;border-radius:6px;background:#F2C14E;color:#3A2A00;margin:1px 0 3px">🧪 TESTRUNDA FRÅN LABBET · räknas inte i statistiken</div>' : '')+
         '<div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.title||'')+'</div>'+
         '<div style="font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.sub||'')+'</div>'+
       '</div>'+
@@ -25187,6 +25189,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (451)',
+    items: [
+      { type: 'improved', text: 'Senaste scorekort: rundor spelade i testklubbhuset (Labbet) har nu en egen randig gul bakgrund och märkningen "🧪 Testrunda från Labbet · räknas inte i statistiken", så att de inte förväxlas med riktiga rundor.' },
+    ]
+  },
   {
     date: '24 november 2026 (450)',
     items: [
