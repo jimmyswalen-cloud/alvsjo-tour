@@ -1,0 +1,10 @@
+CLUBHOUSETOUR – KOMPLETT UPPLADDNING (version 2026-460)
+
+Detta paket ersätter uppladdning 3 och 4 och innehåller ALLT som behövs.
+Det gör inget om några filer redan är uppladdade – de skrivs bara över med samma innehåll.
+
+1. Packa upp zip-filen.
+2. GitHub: repot -> Add file -> Upload files.
+3. Dra in ALLT innehåll (filerna i roten + mappen "grafik" med alla undermappar).
+4. Commit changes.
+5. Stäng appen helt, öppna igen och kontrollera "App Version 2026-460" längst ner på startsidan.
