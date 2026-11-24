@@ -6622,7 +6622,7 @@ function renderHomeNextRoundWidget() {
     return;
   }
 
-  var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat';
+  var eyebrow = info.isFuture ? 'Kommande runda' : 'Väntar på resultat från samtliga spelare'; // release 452
   el.innerHTML =
     '<div class="card" style="margin-bottom:20px;padding:0;overflow:hidden;cursor:pointer" onclick="goToEventOnTourPage(\''+t.id+'\',\''+e.id+'\')">'+
       '<div style="display:flex;align-items:stretch">'+
@@ -25189,6 +25189,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (452)',
+    items: [
+      { type: 'improved', text: 'Startsidan: rubriken på deltävlingskortet efter speldagen heter nu "Väntar på resultat från samtliga spelare", så det framgår att man väntar på att alla ska spela klart – inte på sitt eget resultat.' },
+    ]
+  },
   {
     date: '24 november 2026 (451)',
     items: [
