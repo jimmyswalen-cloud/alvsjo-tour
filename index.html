@@ -403,6 +403,10 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 464: "En del av ClubhouseTour" – vit logga i mörkt läge, mörk i ljust */
+.ch-powered-light{display:none}
+html:not([data-theme="dark"]) .ch-powered-dark{display:none}
+html:not([data-theme="dark"]) .ch-powered-light{display:inline}
 /* Release 462: inloggning i affischstil (ClubhouseTour) */
 #login-screen.poster{align-items:flex-start;padding-top:max(4vh,18px);overflow-y:auto}
 @media (min-aspect-ratio: 3/4){ #login-screen.poster #login-poster{background-size:auto 100%;background-position:center bottom} }
@@ -585,9 +589,6 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <path d="M0 78 C 350 116, 700 22, 1000 0" fill="none" stroke="#1DB97A" stroke-width="5" vector-effect="non-scaling-stroke"/>
   </svg>
   <div id="login-poster-tag" style="display:none;position:absolute;left:0;right:0;bottom:calc(5vh + env(safe-area-inset-bottom,0px));text-align:center;z-index:1;font-size:17px;font-weight:800;letter-spacing:.3em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.55);padding-left:.3em">TÄVLA <span style="color:#1DB97A">&bull;</span> SPELA <span style="color:#1DB97A">&bull;</span> FÖLJ</div>
-  <div id="login-powered" style="display:none;position:absolute;left:0;right:0;bottom:16px;text-align:center;z-index:1;font-size:11px;font-weight:600;letter-spacing:.08em;color:rgba(255,255,255,.75)">
-    EN DEL AV <img src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:18px;width:auto;vertical-align:-4px;margin-left:4px">
-  </div>
   <div style="position:relative;width:100%;max-width:380px">
     <div style="text-align:center;margin-bottom:22px">
       <img id="login-logo" src="logo-login.png" alt="" style="height:88px;width:auto;max-width:140px;object-fit:contain;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
@@ -618,6 +619,9 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       </button>
       <div id="release-notes-panel" style="display:none;text-align:left;background:rgba(255,255,255,.97);border-radius:12px;padding:14px 16px;margin-top:8px;max-height:280px;overflow-y:auto;box-shadow:0 8px 28px rgba(0,0,0,.25)"></div>
     </div>
+    <div id="login-powered" style="display:none;position:relative;margin-top:14px;text-align:center;z-index:1;font-size:11px;font-weight:600;letter-spacing:.08em;color:rgba(255,255,255,.8)">
+    EN DEL AV <img src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:18px;width:auto;vertical-align:-4px;margin-left:4px">
+  </div>
   </div>
 </div>
 
@@ -746,7 +750,8 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
         <div class="home-card-sub" style="color:#C9D9EC">Tourens regler, guider och vanliga frågor</div>
       </div>
     </div>
-    <div id="app-version-label" style="text-align:center;font-size:11px;color:var(--text-3);padding:6px 0 18px;letter-spacing:.3px"></div>
+    <div id="app-version-label" style="text-align:center;font-size:11px;color:var(--text-3);padding:6px 0 4px;letter-spacing:.3px"></div>
+    <div class="ch-powered" style="text-align:center;padding:2px 0 22px;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)">EN DEL AV <img class="ch-powered-dark" src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:16px;width:auto;vertical-align:-4px;margin-left:3px"><img class="ch-powered-light" src="grafik/logor/ordbild-boll-ljus.png" alt="ClubhouseTour" style="height:16px;width:auto;vertical-align:-4px;margin-left:3px"></div>
   </div>
   <div id="tours-list-screen" style="display:none">
     <div class="tours-header">
@@ -25291,6 +25296,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (464)',
+    items: [
+      { type: 'improved', text: 'Längst ner på startsidan står nu "En del av ClubhouseTour" med loggan under appversionen (vit logga i mörkt läge, mörk i ljust läge).' },
+      { type: 'fixed', text: 'Inloggningen: "En del av ClubhouseTour" krockade med "Nyheter i appen". Den ligger nu under nyhetslänken i stället.' },
+    ]
+  },
   {
     date: '24 november 2026 (463)',
     items: [
