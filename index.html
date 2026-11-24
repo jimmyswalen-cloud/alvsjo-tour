@@ -550,7 +550,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow"></div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
-      <img id="hero-logo" src="icon-192.png" style="height:clamp(40px,8.1vw,65px);width:auto;border-radius:12px" alt="">
+      <img id="hero-logo" src="grafik/logor/c-markt-boll.png" style="height:clamp(40px,8.1vw,65px);width:auto" alt="">
       <div class="hero-title" id="hero-title">CLUBHOUSETOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
@@ -7134,7 +7134,7 @@ var TOUR_COVER_LIBRARY = [
 // Release 456: bilder som redan innehåller logga/namn - visas som banner utan text ovanpå
 // Release 457: breda ordbildsloggor (namnet är redan loggan) - visas stort i stället för
 // klubbhusets namn i headern, och namnet flyttas upp till den lilla raden ovanför.
-var CH_WIDE_LOGOS = ['A-klubbhuset','C-ordbild','F-takikon','G-tak-over-ordet','H-flaggstang','J-hus-gemener'];
+var CH_WIDE_LOGOS = ['ordbild-boll','ordbild-flagga', /* äldre val, behålls för klubbhus som redan valt dem */ 'A-klubbhuset','C-ordbild','F-takikon','G-tak-over-ordet','H-flaggstang','J-hus-gemener'];
 function isWordmarkLogo(url) { return CH_WIDE_LOGOS.some(function(k){ return (url || '').indexOf('grafik/logor/' + k + '.png') >= 0; }); }
 function applyWordmarkHero() {
   var hl = document.getElementById('hero-logo'), ht = document.getElementById('hero-title'), he = document.getElementById('hero-eyebrow');
@@ -7150,7 +7150,7 @@ function applyWordmarkHero() {
   }
 }
 function isLogoHeaderImg(url) { return /grafik\/headers\//.test(url || ''); }
-var CH_LOGOS = [['A-klubbhuset','Klubbhuset'],['B-monogram','Monogram'],['C-ordbild','Ordbild'],['D-plakett','Plakett'],['E-klubbmarke','Klubbmärke'],['F-takikon','Takikon'],['G-tak-over-ordet','Tak över ordet'],['H-flaggstang','Flaggstången'],['I-staplad','Staplad'],['J-hus-gemener','Hus + gemener']];
+var CH_LOGOS = [['ordbild-boll','Ordbild med boll'],['ordbild-flagga','Ordbild med flagga'],['c-markt-boll','C-märke med boll'],['c-markt-flagga','C-märke med flagga'],['staplad','Staplad'],['emblem','Emblem']]; // release 458
 
 var _coverPickerOnSelect = null;
 var _coverPickerOnCancel = null;
@@ -25260,6 +25260,13 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (458)',
+    items: [
+      { type: 'new', text: 'Ny ClubhouseTour-logga: C:et med flagga och golfboll. Nya appikoner, ny logga på inloggningen och sex nya loggval under Klubbhus → Utseende och bland tourloggorna (ordbild med boll/flagga, C-märke med boll/flagga, staplad och emblem). Headers, tävlingsbilder och tourmärken är omgjorda med den nya loggan.' },
+      { type: 'improved', text: 'Nya klubbhus får C-märket som standardlogga. Klubbhus som redan valt en av de tidigare loggorna behåller den tills de byter.' },
+    ]
+  },
+  {
     date: '24 november 2026 (457)',
     items: [
       { type: 'fixed', text: 'Klubbhus med en bred ClubhouseTour-logga (t.ex. Flaggstången eller Ordbild) fick loggan och klubbhusets namn bredvid varandra i headern. Nu visas loggan stort och centrerad i stället för namnet, och klubbhusets namn står i den lilla raden ovanför.' },
@@ -30463,7 +30470,7 @@ function createClubhouse() {
   var id = clubSlug(name), n = 2;
   while(clubById(id)) { id = clubSlug(name) + '-' + n; n++; }
   // Release 454: nya klubbhus får ClubhouseTour-ikonen och fairway-headern som standard (går att byta under Utseende)
-  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), logo: 'preset:chHus', heroImg: 'grafik/hero/fairway-morkgron.jpg' });
+  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), logo: 'grafik/logor/c-markt-boll.png', heroImg: 'grafik/hero/fairway-morkgron.jpg' }); // release 458
   // Den som skapar klubbhuset får åtkomst direkt (bra för att kunna testa som spelare också)
   var me = findUser(currentUser.username);
   if(me) { me.clubhouses = userClubIds(me).concat([id]).filter(function(x, i, a){ return a.indexOf(x) === i; }); }
@@ -30711,7 +30718,7 @@ function clubLogoSrc(c) {
   if(c && c.logo === 'none') return '';
   if(clubPresetKey(c)) return clubPresetIconURI(clubPresetKey(c), '#fff');
   if(c && c.logo) return c.logo;
-  if(!c) return 'icon-192.png'; // release 453: före inloggning = ClubhouseTour
+  if(!c) return 'grafik/logor/c-markt-boll.png'; // release 458: före inloggning = ClubhouseTours C-märke
   return c.id === DEFAULT_CLUB_ID ? 'logo-hero.png' : '';
 }
 function clubHeroBg() {
@@ -30780,7 +30787,7 @@ function openClubLook(id) {
         'background:#1a2e22;border:2px solid '+(on?'var(--green)':'transparent')+';color:#fff;font-size:11px;font-weight:600">'+
         '<img src="'+url+'" alt="" style="height:34px;max-width:110px;object-fit:contain"><span>'+esc(x[1])+(on?' ✓':'')+'</span></button>';
     }).join('')+
-    Object.keys(CLUB_ICON_PRESETS).map(function(k){
+    Object.keys(CLUB_ICON_PRESETS).filter(function(k){ return k !== 'chHus' && k !== 'chL'; }).map(function(k){
       var on = curPreset === k;
       return '<button type="button" onclick="setClubField(\'logo\', \'preset:'+k+'\')" title="'+esc(CLUB_ICON_PRESETS[k].label)+'" '+
         'style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 12px;border-radius:12px;cursor:pointer;'+
@@ -30884,7 +30891,7 @@ function saveClubHero(file) {
 // Visar det klubbhus som senast användes på enheten (sparas vid varje inloggning
 // och klubbhusbyte i localStorage 'agcc-login-brand'). Har enheten aldrig varit
 // inloggad visas en neutral variant utan Älvsjö-märkning.
-var NEUTRAL_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><rect width="220" height="220" rx="48" fill="#0F4D3A"/><path d="M44 122 L110 64 L176 122" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><path d="M110 176 V114" stroke="#E2C25E" stroke-width="11" stroke-linecap="round"/><path d="M110 114 L148 130 L110 146 Z" fill="#E2C25E"/><path d="M68 176 H152" stroke="#7FDBB6" stroke-width="11" stroke-linecap="round"/></svg>'); // release 453: ClubhouseTour
+var NEUTRAL_LOGO = 'grafik/logor/c-markt-boll.png'; // release 458: ClubhouseTours C-märke
 function saveLoginBrand() {
   try {
     var c = currentClub();

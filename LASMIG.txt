@@ -1,0 +1,37 @@
+CLUBHOUSETOUR – GRAFIKPAKET
+===========================
+
+logor/          Den nya ClubhouseTour-loggan (C med flagga och golfboll), i två färgversioner:
+                "for-ljus-bakgrund"  = mörka färger, används på vit/ljus bakgrund
+                "for-mork-bakgrund"  = ljusa färger, används på mörk/grön bakgrund
+                png/ = transparent bakgrund, 1200x600. svg/ = vektor (skalas fritt).
+
+app-ikoner/     Ikoner för mobilens hemskärm, fyra bakgrunder:
+                mork/ (används som appens ikon), ljus/, gron/ och foto/
+                + med-text-1024 = ikonen med "clubhousetour" under (för större ytor)
+                Varje mapp: app-store-1024, android-512/192, apple-touch-icon-180,
+                ipad-pro-167, ipad-152, iphone-120, favicon-32/16, maskable-512
+                (Android, innehållet inom säkra zonen) och ikon.svg.
+
+tour-ikoner/    Runda märken att använda som tourlogga i appen (transparent bakgrund):
+                tour-gron, indoor-league, matchplay-cup, eclectic, final, major
+                png/ i 512, 256 och 128 px. svg/ = vektor.
+
+tavlingsbilder/ Bilder till deltävlingar:
+                *-kort-800x1000  = stående bild (t.ex. vänsterbilden i "Kommande runda")
+                *-banner-1600x440 = liggande bild överst på deltävlingskortet (+ @2x)
+                Varianter: kommande/deltävling, final, major, indoor.
+
+delning/        delningsbild-1200x630 – visas när en länk till appen delas
+                (t.ex. i Messenger, iMessage, Slack).
+
+headers/        De fem headerna (fairway, klubbhus, ljus, foto, kompakt topprad), + @2x.
+
+Typsnitt: Archivo och DM Serif Display (SIL Open Font License). Texten i alla
+SVG-filer är omvandlad till former – inget typsnitt behöver installeras.
+
+Färger: mörkgrön #0F4D3A · grön #0F6E56 · mint #7FDBB6 · guld #C9A23A / #E2C25E
+        kväll #1F2420 · krämvit #F6F5F0 · marin #1B3A5C · vinröd #5A1F24
+
+Logofiler i logor/: ordbild-boll, ordbild-flagga, c-markt-boll, c-markt-flagga, staplad, emblem.
+Loggan är vektoriserad från de uppladdade originalbilderna, så SVG-filerna är skarpa i alla storlekar.
