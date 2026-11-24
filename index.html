@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Älvsjö Players Tour</title>
+<title>ClubhouseTour</title>
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -12,7 +12,7 @@
 <script>try{if(localStorage.getItem("agcc-theme")==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Tourer">
+<meta name="apple-mobile-web-app-title" content="Clubhouse">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -548,13 +548,20 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 
 <div class="hero hero-sticky" id="hero-bg" onclick="if(this.classList.contains('hero-banner')) showHomeScreen()">
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
-    <div class="hero-eyebrow" id="hero-eyebrow">TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
+    <div class="hero-eyebrow" id="hero-eyebrow"></div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
-      <img id="hero-logo" src="logo-hero.png" style="height:clamp(40px,8.1vw,65px);width:auto" alt="ÄGCC Tour">
-      <div class="hero-title" id="hero-title">ÄLVSJÖ GCC TOUR</div>
+      <img id="hero-logo" src="icon-192.png" style="height:clamp(40px,8.1vw,65px);width:auto;border-radius:12px" alt="">
+      <div class="hero-title" id="hero-title">CLUBHOUSETOUR</div>
     </div>
     <div class="hero-sub" id="hero-sub" style="display:none"></div>
   </div>
+  <script>/* release 453: visa Älvsjös utseende direkt om enheten senast var i Älvsjö */
+  try{var _b=JSON.parse(localStorage.getItem('agcc-login-brand')||'null'),_c=localStorage.getItem('agcc-club');
+    if((_b&&_b.id==='alvsjo')||(!_b&&_c==='alvsjo')){
+      document.getElementById('hero-title').textContent='ÄLVSJÖ GCC TOUR';
+      document.getElementById('hero-eyebrow').textContent='TOUREN FÖR ÄLVSJÖ GOLF & COUNTRY CLUBS MEDLEMMAR';
+      var _l=document.getElementById('hero-logo');_l.src='logo-hero.png';_l.style.borderRadius='0';}}catch(e){}
+  </script>
   <div class="hero-scroll"></div>
 </div>
 
@@ -567,7 +574,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <div style="text-align:center;margin-bottom:22px">
       <img id="login-logo" src="logo-login.png" alt="" style="height:88px;width:auto;max-width:140px;object-fit:contain;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:8px">&#9971; Välkommen till</div>
-      <div id="login-title" style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">ÄLVSJÖ GCC TOUR</div>
+      <div id="login-title" style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">CLUBHOUSETOUR</div>
     </div>
     <div style="background:rgba(255,255,255,.97);border-radius:16px;padding:1.75rem;box-shadow:0 12px 40px rgba(0,0,0,.25);backdrop-filter:blur(8px)">
       <h2 style="margin-bottom:4px;text-align:center">Logga in</h2>
@@ -2847,7 +2854,7 @@ function syncLandscape() {
     }
   }
   if(on) {
-    var title = 'Älvsjö GCC Tour', t = null;
+    var title = (currentUser && currentClubId() !== DEFAULT_CLUB_ID) ? (clubShort(currentClub()) || 'ClubhouseTour') : 'Älvsjö GCC Tour', t = null; // release 455
     if(app && app.style.display !== 'none') { try { t = getTour(); } catch(e) {} if(t) title = (t.name || '') + (oom ? ' – Order of Merit' : ''); }
     var lt = document.getElementById('land-title'); if(lt) lt.textContent = title;
   }
@@ -3319,7 +3326,7 @@ function chMenu(id) {
 function chLink(id) { return location.origin + location.pathname + '#utmaning=' + id; }
 function chShare(id) {
   var c = _chAll.find(function(x){ return x.id === id; }); if(!c) return;
-  var url = chLink(id), text = 'Häng med i utmaningen "' + c.name + '" i ÄGCC-appen!';
+  var url = chLink(id), text = 'Häng med i utmaningen "' + c.name + '" i ClubhouseTour!';
   if(navigator.share) { navigator.share({ title: c.name, text: text, url: url }).catch(function(){}); return; }
   var done = function(){ showModal('<h3>Länk kopierad</h3><p style="font-size:13px;word-break:break-all">'+esc(url)+'</p><div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>'); };
   if(navigator.clipboard) navigator.clipboard.writeText(url).then(done, done); else done();
@@ -5700,6 +5707,9 @@ function heroLogoLibrary() {
   var lib = (tourCoverLabels && Array.isArray(tourCoverLabels._logoLibrary)) ? tourCoverLabels._logoLibrary.slice() : [];
   lib.sort(function(a, b){ return (b.at || 0) - (a.at || 0); }).forEach(function(x){ if(x) add(x.url, x.name); });
   (S.tours || []).forEach(function(t){ if(t && t.heroLogo) add(t.heroLogo, t.name); });
+  // Release 454: färdiga tourmärken från ClubhouseTour-grafiken
+  [['tour-gron','Tour'],['indoor-league','Indoor League'],['matchplay-cup','Matchplay Cup'],['eclectic','Eclectic'],['final','Final'],['major','Major']]
+    .forEach(function(x){ add('grafik/tour-ikoner/' + x[0] + '.png', 'Märke: ' + x[1]); });
   return out;
 }
 function saveHeroLogoToLibrary(url, name) {
@@ -7099,7 +7109,19 @@ var TOUR_COVER_LIBRARY = [
   { key:'17', label:'Golfare i silhuett', url:'tour-photos/17.jpg' },
   { key:'18', label:'Skogsbana', url:'tour-photos/18.jpg' },
   { key:'19', label:'Bunker', url:'tour-photos/19.jpg' },
-  { key:'20', label:'Omslag 20', url:'tour-photos/20.jpg' }
+  { key:'20', label:'Omslag 20', url:'tour-photos/20.jpg' },
+  // Release 454: ClubhouseTour-grafik (mappen grafik/ i repot)
+  { key:'ch-fairway', label:'Fairway mörkgrön', url:'grafik/hero/fairway-morkgron.jpg' },
+  { key:'ch-kvall', label:'Kväll', url:'grafik/hero/kvall.jpg' },
+  { key:'ch-marin', label:'Marin', url:'grafik/hero/marin.jpg' },
+  { key:'ch-vinrod', label:'Vinröd', url:'grafik/hero/vinrod.jpg' },
+  { key:'ch-deltavling', label:'Deltävling', url:'grafik/tavlingsbilder/deltavling-banner-1600x440.jpg' },
+  { key:'ch-final', label:'Final', url:'grafik/tavlingsbilder/final-banner-1600x440.jpg' },
+  { key:'ch-major', label:'Major', url:'grafik/tavlingsbilder/major-banner-1600x440.jpg' },
+  { key:'ch-indoor', label:'Indoor', url:'grafik/tavlingsbilder/indoor-banner-1600x440.jpg' },
+  { key:'ch-kommande-kort', label:'Kommande (stående)', url:'grafik/tavlingsbilder/kommande-tavling-kort-800x1000.jpg' },
+  { key:'ch-final-kort', label:'Final (stående)', url:'grafik/tavlingsbilder/final-kort-800x1000.jpg' },
+  { key:'ch-major-kort', label:'Major (stående)', url:'grafik/tavlingsbilder/major-kort-800x1000.jpg' }
 ];
 
 var _coverPickerOnSelect = null;
@@ -24854,8 +24876,24 @@ function halfwayHouseIconSVG(h, color) {
 // Färdiga klubbhusikoner som admin kan välja under Klubbhus → Utseende.
 // Sparas som c.logo = 'preset:<nyckel>' och ritas som SVG – ingen uppladdning behövs.
 var CLUB_ICON_PRESETS = {
-  halfway: { label: 'Halfway house', svg: halfwayHouseIconSVG }
+  halfway: { label: 'Halfway house', svg: halfwayHouseIconSVG },
+  chHus: { label: 'Klubbhus & flagga', svg: clubhouseFlagIconSVG },   // release 454
+  chL: { label: 'l-flagga', svg: clubhouseLetterIconSVG }              // release 454
 };
+// Release 454: ClubhouseTour-ikonerna. Taket/l:et i vald färg, flaggan i guld och greenen i mint.
+function clubhouseFlagIconSVG(h, color) {
+  h = h || 24; color = color || '#fff';
+  return '<svg role="img" aria-label="Klubbhus med flagga" viewBox="30 50 160 135" height="'+h+'" width="'+Math.round(h*160/135)+'" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto;overflow:visible">'+
+    '<path d="M44 122 L110 64 L176 122" fill="none" stroke="'+color+'" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '<path d="M110 176 V114" stroke="#E2C25E" stroke-width="11" stroke-linecap="round"/><path d="M110 114 L148 130 L110 146 Z" fill="#E2C25E"/>'+
+    '<path d="M68 176 H152" stroke="#7FDBB6" stroke-width="11" stroke-linecap="round"/></svg>';
+}
+function clubhouseLetterIconSVG(h, color) {
+  h = h || 24; color = color || '#fff';
+  return '<svg role="img" aria-label="Bokstaven l som flagga på en green" viewBox="-14 6 64 106" height="'+h+'" width="'+Math.round(h*64/106)+'" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto;overflow:visible">'+
+    '<path d="M6 100 V11.55 H25.9 V100 Z" fill="'+color+'"/><path d="M24.7 11.55 L46.7 20.05 L24.7 28.55 Z" fill="#E2C25E"/>'+
+    '<ellipse cx="15.95" cy="103" rx="26" ry="5" fill="#7FDBB6"/></svg>';
+}
 function clubPresetKey(c) {
   return (c && typeof c.logo === 'string' && c.logo.indexOf('preset:') === 0) ? c.logo.slice(7) : '';
 }
@@ -25189,6 +25227,25 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (455)',
+    items: [
+      { type: 'new', text: 'Appen heter nu ClubhouseTour: nytt namn i webbläsarfliken, "Clubhouse" under hemskärmsikonen och nya appikoner. Inbjudningar till utmaningar säger "i ClubhouseTour". Den som redan har appen på hemskärmen behåller sin gamla ikon tills den läggs till på nytt.' },
+    ]
+  },
+  {
+    date: '24 november 2026 (454)',
+    items: [
+      { type: 'new', text: 'Ny grafik att välja: två nya klubbhusikoner (Klubbhus & flagga, l-flagga) under Klubbhus → Utseende, fyra nya headerbilder och sju tävlingsbilder i omslagsbiblioteket, samt sex färdiga tourmärken (Tour, Indoor League, Matchplay Cup, Eclectic, Final, Major) bland tourloggorna.' },
+      { type: 'improved', text: 'Nya klubbhus får ClubhouseTour-ikonen och fairway-headern som standard. Befintliga klubbhus påverkas inte.' },
+    ]
+  },
+  {
+    date: '24 november 2026 (453)',
+    items: [
+      { type: 'improved', text: 'Älvsjös utseende (ÄLVSJÖ GCC TOUR, ÄGCC-loggan, undertexten och The ÄGCC Wall) hör nu till klubbhuset Älvsjö i stället för att vara appens grundutseende. För Älvsjö ser allt ut som förut; appens neutrala utseende (före inloggning och för nya enheter) är nu ClubhouseTour.' },
+    ]
+  },
   {
     date: '24 november 2026 (452)',
     items: [
@@ -30360,7 +30417,8 @@ function createClubhouse() {
   ensureClubList();
   var id = clubSlug(name), n = 2;
   while(clubById(id)) { id = clubSlug(name) + '-' + n; n++; }
-  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now() });
+  // Release 454: nya klubbhus får ClubhouseTour-ikonen och fairway-headern som standard (går att byta under Utseende)
+  S.clubhouses.push({ id: id, name: name, short: name.length > 14 ? name.slice(0, 14) : name, createdAt: Date.now(), logo: 'preset:chHus', heroImg: 'grafik/hero/fairway-morkgron.jpg' });
   // Den som skapar klubbhuset får åtkomst direkt (bra för att kunna testa som spelare också)
   var me = findUser(currentUser.username);
   if(me) { me.clubhouses = userClubIds(me).concat([id]).filter(function(x, i, a){ return a.indexOf(x) === i; }); }
@@ -30608,7 +30666,8 @@ function clubLogoSrc(c) {
   if(c && c.logo === 'none') return '';
   if(clubPresetKey(c)) return clubPresetIconURI(clubPresetKey(c), '#fff');
   if(c && c.logo) return c.logo;
-  return (!c || c.id === DEFAULT_CLUB_ID) ? 'logo-hero.png' : '';
+  if(!c) return 'icon-192.png'; // release 453: före inloggning = ClubhouseTour
+  return c.id === DEFAULT_CLUB_ID ? 'logo-hero.png' : '';
 }
 function clubHeroBg() {
   var c = currentUser ? currentClub() : null;
@@ -30771,7 +30830,7 @@ function saveClubHero(file) {
 // Visar det klubbhus som senast användes på enheten (sparas vid varje inloggning
 // och klubbhusbyte i localStorage 'agcc-login-brand'). Har enheten aldrig varit
 // inloggad visas en neutral variant utan Älvsjö-märkning.
-var NEUTRAL_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E9C6E"/><stop offset="1" stop-color="#0F5A3E"/></linearGradient></defs><circle cx="60" cy="60" r="56" fill="url(#g)" stroke="#fff" stroke-width="4"/><ellipse cx="60" cy="86" rx="30" ry="7" fill="#0A3D2A"/><rect x="57" y="30" width="4" height="56" fill="#fff"/><path d="M61 31 L88 40 L61 49 Z" fill="#FFB547"/><circle cx="44" cy="82" r="5" fill="#fff"/></svg>');
+var NEUTRAL_LOGO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><rect width="220" height="220" rx="48" fill="#0F4D3A"/><path d="M44 122 L110 64 L176 122" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><path d="M110 176 V114" stroke="#E2C25E" stroke-width="11" stroke-linecap="round"/><path d="M110 114 L148 130 L110 146 Z" fill="#E2C25E"/><path d="M68 176 H152" stroke="#7FDBB6" stroke-width="11" stroke-linecap="round"/></svg>'); // release 453: ClubhouseTour
 function saveLoginBrand() {
   try {
     var c = currentClub();
@@ -30790,7 +30849,7 @@ function applyLoginBranding() {
   else if(!b && id === DEFAULT_CLUB_ID) b = { id: DEFAULT_CLUB_ID };
   var logo = document.getElementById('login-logo'), title = document.getElementById('login-title'), scr = document.getElementById('login-screen');
   if(!logo || !title || !scr) return;
-  var bg = 'login-bg.jpg', logoSrc = NEUTRAL_LOGO, name = 'GOLFTOUREN', boxy = false;
+  var bg = 'login-bg.jpg', logoSrc = NEUTRAL_LOGO, name = 'CLUBHOUSETOUR', boxy = false; // release 453
   if(b && b.id === DEFAULT_CLUB_ID && !(c && (c.logo || c.heroImg))) { logoSrc = 'logo-login.png'; name = 'ÄLVSJÖ GCC TOUR'; boxy = true; }
   else if(b) { logoSrc = b.logo || NEUTRAL_LOGO; name = (b.id === DEFAULT_CLUB_ID ? 'ÄLVSJÖ GCC TOUR' : (b.name || '').toUpperCase()); if(b.bg) bg = b.bg; if(b.logo === 'logo-hero.png') { logoSrc = 'logo-login.png'; boxy = true; } }
   logo.src = logoSrc;
