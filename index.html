@@ -403,6 +403,10 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 462: inloggning i affischstil (ClubhouseTour) */
+#login-screen.poster{align-items:flex-start;padding-top:max(4vh,18px);overflow-y:auto}
+@media (min-aspect-ratio: 3/4){ #login-screen.poster #login-poster{background-size:auto 100%;background-position:center bottom} }
+@media (max-height: 740px){ #login-screen.poster #login-poster-tag{display:none !important} }
 /* Release 444: den inloggades egen rad markeras i listor */
 .me-row{background:var(--green-light) !important;box-shadow:inset 3px 0 0 var(--green);border-radius:6px}
 .oom-row.me-row{border-color:var(--green) !important;box-shadow:inset 4px 0 0 var(--green)}
@@ -573,11 +577,14 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 <div id="land-bar"><i class="ti ti-device-mobile-rotated"></i> <b id="land-title" style="color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b><span style="margin-left:auto;white-space:nowrap">Vrid telefonen för att visa menyn</span></div>
 
 <div id="login-screen" style="display:none;position:fixed;inset:0;z-index:500;background:url('login-bg.jpg') center/cover no-repeat;display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,20,13,.30) 0%,rgba(6,20,13,.45) 45%,rgba(6,20,13,.80) 100%)"></div>
+  <div id="login-poster-blur" style="display:none;position:absolute;inset:0;background:url('grafik/login/clubhousetour-login.jpg') center/cover no-repeat;filter:blur(22px) brightness(.8);transform:scale(1.1)"></div>
+  <div id="login-poster" style="display:none;position:absolute;inset:0;background:url('grafik/login/clubhousetour-login.jpg') center bottom/cover no-repeat"></div>
+  <div id="login-shade" style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,20,13,.30) 0%,rgba(6,20,13,.45) 45%,rgba(6,20,13,.80) 100%)"></div>
   <svg id="login-swoosh" viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden="true" style="display:none;position:absolute;left:0;right:0;bottom:0;width:100%;height:90px">
     <path d="M0 78 C 350 116, 700 22, 1000 0 L 1000 120 L 0 120 Z" fill="#0B3B27"/>
     <path d="M0 78 C 350 116, 700 22, 1000 0" fill="none" stroke="#1DB97A" stroke-width="5" vector-effect="non-scaling-stroke"/>
   </svg>
+  <div id="login-poster-tag" style="display:none;position:absolute;left:0;right:0;bottom:calc(5vh + env(safe-area-inset-bottom,0px));text-align:center;z-index:1;font-size:17px;font-weight:800;letter-spacing:.3em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.55);padding-left:.3em">TÄVLA <span style="color:#1DB97A">&bull;</span> SPELA <span style="color:#1DB97A">&bull;</span> FÖLJ</div>
   <div id="login-powered" style="display:none;position:absolute;left:0;right:0;bottom:16px;text-align:center;z-index:1;font-size:11px;font-weight:600;letter-spacing:.08em;color:rgba(255,255,255,.75)">
     EN DEL AV <img src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:18px;width:auto;vertical-align:-4px;margin-left:4px">
   </div>
@@ -586,6 +593,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <img id="login-logo" src="logo-login.png" alt="" style="height:88px;width:auto;max-width:140px;object-fit:contain;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);margin-bottom:14px">
       <div id="login-welcome" style="font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:8px">&#9971; Välkommen till</div>
       <div id="login-title" style="font-size:38px;font-weight:800;color:#fff;letter-spacing:-.02em;text-shadow:0 3px 24px rgba(0,0,0,.5)">CLUBHOUSETOUR</div>
+      <div id="login-poster-line" style="display:none;width:78%;max-width:300px;height:4px;border-radius:2px;background:#00875A;margin:6px auto 0"></div>
       <div id="login-tagline" style="display:none">
         <div style="width:72%;height:4px;border-radius:2px;background:#1DB97A;margin:14px auto 12px"></div>
         <div style="font-size:15px;font-weight:700;letter-spacing:.32em;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5);padding-left:.32em">TÄVLA &bull; SPELA &bull; FÖLJ</div>
@@ -25279,6 +25287,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (462)',
+    items: [
+      { type: 'improved', text: 'ClubhouseTours inloggning har fått affischen som grund: ljus himmel med solnedgång, flagga och golfboll, den mörka staplade loggan med grön linje överst, inloggningsrutan i mitten och "TÄVLA • SPELA • FÖLJ" ovanför den gröna vågen nederst. På bredare skärmar visas affischen i mitten med en suddig version av bilden runt om.' },
+    ]
+  },
+  {
     date: '24 november 2026 (461)',
     items: [
       { type: 'improved', text: 'Hjälp & tips: guiden "Lägg till som app på din iPhone" säger nu ClubhouseTour i stället för TOURER, och hemskärmsbilden visar "Clubhouse" under appikonen.' },
@@ -30963,12 +30977,19 @@ function applyLoginBranding() {
   if(sw) sw.style.display = '';
   if(pw) pw.style.display = neutral ? 'none' : '';
   title.style.display = neutral ? 'none' : '';
-  if(neutral) logoSrc = 'grafik/logor/staplad.png';
-  logo.style.height = neutral ? '170px' : '88px';
+  // Release 462: ClubhouseTours inloggning bygger på affischen (himmel, solnedgång, golfboll,
+  // grön våg) med den mörka staplade loggan överst och TÄVLA • SPELA • FÖLJ nederst.
+  scr.classList.toggle('poster', neutral);
+  ['login-poster','login-poster-blur','login-poster-line','login-poster-tag'].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = neutral ? '' : 'none'; });
+  var shade = document.getElementById('login-shade');
+  if(shade) shade.style.background = neutral ? 'linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,0) 55%,rgba(6,20,13,.35) 100%)' : 'linear-gradient(180deg,rgba(6,20,13,.30) 0%,rgba(6,20,13,.45) 45%,rgba(6,20,13,.80) 100%)';
+  if(neutral) { if(tg) tg.style.display = 'none'; if(sw) sw.style.display = 'none'; }
+  if(neutral) logoSrc = 'grafik/logor/staplad-ljus.png';
+  logo.style.height = neutral ? '150px' : '88px';
   logo.style.maxWidth = neutral ? '260px' : '140px';
   logo.src = logoSrc;
   logo.style.boxShadow = boxy ? '0 6px 20px rgba(0,0,0,.35)' : 'none';
-  logo.style.filter = boxy ? '' : 'drop-shadow(0 6px 16px rgba(0,0,0,.45))';
+  logo.style.filter = (boxy || neutral) ? '' : 'drop-shadow(0 6px 16px rgba(0,0,0,.45))';
   title.textContent = name;
   title.style.fontSize = name.length > 16 ? '30px' : '38px';
   scr.style.backgroundImage = "url('" + bg + "')";
