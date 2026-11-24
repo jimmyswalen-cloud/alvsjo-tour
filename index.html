@@ -25279,6 +25279,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (461)',
+    items: [
+      { type: 'improved', text: 'Hjälp & tips: guiden "Lägg till som app på din iPhone" säger nu ClubhouseTour i stället för TOURER, och hemskärmsbilden visar "Clubhouse" under appikonen.' },
+    ]
+  },
+  {
     date: '24 november 2026 (460)',
     items: [
       { type: 'improved', text: 'Inloggningen har fått ClubhouseTours nya design för alla – även ÄGCC och övriga klubbhus: klubbhusets logga och namn, en grön linje, "TÄVLA • SPELA • FÖLJ", grön våg nederst och en ny inloggningsruta med grön kant och större grön knapp. I klubbhusen står "En del av ClubhouseTour" längst ner.' },
@@ -28762,7 +28768,7 @@ function helpStepRow(n, icon, title, desc) {
   '</div>';
 }
 
-// Bygger en liten illustration av en iPhone-hemskärm med TOURERs faktiska appikon
+// Bygger en liten illustration av en iPhone-hemskärm med ClubhouseTours faktiska appikon
 // (samma bild som iOS använder, apple-touch-icon.png) bland några generiska appikoner,
 // så man ser ungefär hur det ser ut när appen är tillagd på hemskärmen.
 function helpIphoneMockupHTML() {
@@ -28777,7 +28783,7 @@ function helpIphoneMockupHTML() {
       '<div style="width:42px;height:42px;border-radius:11px;overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.35)">'+
         '<img src="apple-touch-icon.png" style="width:100%;height:100%;object-fit:cover;display:block">'+
       '</div>'+
-      '<span style="font-size:8.5px;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.45)">Tourer</span>'+
+      '<span style="font-size:8.5px;color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.45)">Clubhouse</span>'+
       '<span style="position:absolute;top:-5px;right:-6px;background:#FF3B30;color:#fff;font-size:7px;font-weight:700;padding:1px 4px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.3)">NY</span>'+
     '</div>';
   var icons = [
@@ -28824,15 +28830,15 @@ var HELP_TOPICS = [
   {
     id: 'iphone-install',
     icon: 'ti-brand-apple',
-    title: 'Lägg till TOURER som app på din iPhone',
+    title: 'Lägg till ClubhouseTour som app på din iPhone',
     body:
-      '<p style="font-size:13px;color:var(--text-2);margin:12px 0 6px">Genom att lägga till TOURER på hemskärmen får du en egen appikon och sidan öppnas i helskärmsläge utan Safaris adressfält och navigeringsknappar – precis som en vanlig app. <strong>OBS:</strong> detta fungerar bara i webbläsaren Safari på iPhone/iPad, inte i Chrome eller andra webbläsare.</p>'+
+      '<p style="font-size:13px;color:var(--text-2);margin:12px 0 6px">Genom att lägga till ClubhouseTour på hemskärmen får du en egen appikon och sidan öppnas i helskärmsläge utan Safaris adressfält och navigeringsknappar – precis som en vanlig app. <strong>OBS:</strong> detta fungerar bara i webbläsaren Safari på iPhone/iPad, inte i Chrome eller andra webbläsare.</p>'+
       '<div style="margin-top:6px">'+
-        helpStepRow(1, 'ti-compass', 'Öppna TOURER i Safari', 'Se till att du besöker sidan i Safari-appen (det ljusblå kompass-ikonen) – inte Chrome eller någon annan webbläsare.')+
+        helpStepRow(1, 'ti-compass', 'Öppna ClubhouseTour i Safari', 'Se till att du besöker sidan i Safari-appen (det ljusblå kompass-ikonen) – inte Chrome eller någon annan webbläsare.')+
         helpStepRow(2, 'ti-share', 'Tryck på Dela-ikonen', 'Tryck på delningsikonen (en fyrkant med en pil som pekar uppåt) längst ner i mitten av skärmen.')+
         helpStepRow(3, 'ti-square-rounded-plus', 'Välj "Lägg till på hemskärmen"', 'Bläddra nedåt i menyn som dyker upp och tryck på "Lägg till på hemskärmen" (Add to Home Screen).')+
-        helpStepRow(4, 'ti-edit', 'Namnge genvägen', 'Ge appen ett namn, t.ex. "Tourer", och tryck sedan på "Lägg till" uppe i högra hörnet.')+
-        helpStepRow(5, 'ti-device-mobile', 'Klart!', 'En ny appikon dyker nu upp på din hemskärm. Tryck på den för att öppna TOURER i helskärmsläge, precis som en vanlig app – snabbare och smidigare än att leta upp länken varje gång.')+
+        helpStepRow(4, 'ti-edit', 'Namnge genvägen', 'Ge appen ett namn, t.ex. "ClubhouseTour", och tryck sedan på "Lägg till" uppe i högra hörnet.')+
+        helpStepRow(5, 'ti-device-mobile', 'Klart!', 'En ny appikon dyker nu upp på din hemskärm. Tryck på den för att öppna ClubhouseTour i helskärmsläge, precis som en vanlig app – snabbare och smidigare än att leta upp länken varje gång.')+
       '</div>'+
       helpIphoneMockupHTML()
   }
