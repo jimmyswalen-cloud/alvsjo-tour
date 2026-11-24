@@ -924,6 +924,11 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
 window.onerror = function(msg, url, line, col, err) {
+  // Release 463: "Script error." utan radnummer kommer från skript utanför appen
+  // (webbläsarens dela-meny, tillägg, innehållsblockerare eller externa bibliotek).
+  // Det saknar information och påverkar inte appen - visa ingen ruta för det.
+  var m = String(msg || '');
+  if(/^Script error\.?$/i.test(m) || (!line && !err)) { try { console.warn('Ignorerat externt skriptfel:', m, url); } catch(e) {} return true; }
   alert('JS-fel: ' + msg + ' (rad ' + line + ')');
   return false;
 };
@@ -25286,6 +25291,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (463)',
+    items: [
+      { type: 'fixed', text: 'Rutan "JS-fel: Script error. (rad 0)" kunde dyka upp när man tryckte på Safaris Dela-knapp (t.ex. för att lägga till appen på hemskärmen). Det felet kommer från webbläsaren själv, inte från appen, och visas inte längre.' },
+    ]
+  },
   {
     date: '24 november 2026 (462)',
     items: [
