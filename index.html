@@ -5710,6 +5710,7 @@ function heroLogoLibrary() {
   // Release 454: färdiga tourmärken från ClubhouseTour-grafiken
   [['tour-gron','Tour'],['indoor-league','Indoor League'],['matchplay-cup','Matchplay Cup'],['eclectic','Eclectic'],['final','Final'],['major','Major']]
     .forEach(function(x){ add('grafik/tour-ikoner/' + x[0] + '.png', 'Märke: ' + x[1]); });
+  CH_LOGOS.forEach(function(x){ add('grafik/logor/' + x[0] + '.png', 'Logga: ' + x[1]); }); // release 456
   return out;
 }
 function saveHeroLogoToLibrary(url, name) {
@@ -7121,8 +7122,17 @@ var TOUR_COVER_LIBRARY = [
   { key:'ch-indoor', label:'Indoor', url:'grafik/tavlingsbilder/indoor-banner-1600x440.jpg' },
   { key:'ch-kommande-kort', label:'Kommande (stående)', url:'grafik/tavlingsbilder/kommande-tavling-kort-800x1000.jpg' },
   { key:'ch-final-kort', label:'Final (stående)', url:'grafik/tavlingsbilder/final-kort-800x1000.jpg' },
-  { key:'ch-major-kort', label:'Major (stående)', url:'grafik/tavlingsbilder/major-kort-800x1000.jpg' }
+  { key:'ch-major-kort', label:'Major (stående)', url:'grafik/tavlingsbilder/major-kort-800x1000.jpg' },
+  // Release 456: ClubhouseTour-headers med logga (visas som banner, utan text ovanpå)
+  { key:'ch-h-fairway', label:'Header: Fairway', url:'grafik/headers/01-fairway-morkgron.jpg' },
+  { key:'ch-h-kvall', label:'Header: Klubbhus kväll', url:'grafik/headers/02-klubbhus-kvall.jpg' },
+  { key:'ch-h-ljus', label:'Header: Ljus', url:'grafik/headers/03-ljus.jpg' },
+  { key:'ch-h-foto', label:'Header: Foto', url:'grafik/headers/04-foto.jpg' },
+  { key:'ch-h-kompakt', label:'Header: Kompakt topprad', url:'grafik/headers/05-kompakt-topprad.jpg' }
 ];
+// Release 456: bilder som redan innehåller logga/namn - visas som banner utan text ovanpå
+function isLogoHeaderImg(url) { return /grafik\/headers\//.test(url || ''); }
+var CH_LOGOS = [['A-klubbhuset','Klubbhuset'],['B-monogram','Monogram'],['C-ordbild','Ordbild'],['D-plakett','Plakett'],['E-klubbmarke','Klubbmärke'],['F-takikon','Takikon'],['G-tak-over-ordet','Tak över ordet'],['H-flaggstang','Flaggstången'],['I-staplad','Staplad'],['J-hus-gemener','Hus + gemener']];
 
 var _coverPickerOnSelect = null;
 var _coverPickerOnCancel = null;
@@ -24938,6 +24948,9 @@ function updateHero(tourId) {
   if(!tourId) {
     heroBg.style.backgroundImage = clubHeroBg();
     heroTitle.textContent='TOURER'; heroSub.textContent=''; heroSub.style.display='none';
+    // Release 456: header med inbyggd logga (eller klubbhuset valt "dölj text") visas som banner
+    var _hc = currentUser ? currentClub() : null;
+    if(_hc && _hc.heroImg && (isLogoHeaderImg(_hc.heroImg) || _hc.heroText === 'hide')) applyHeroBannerIfWide(heroBg, _hc.heroImg, '', 'hide');
     var _ec = currentUser ? currentClub() : null;
     heroEye.innerHTML = heroEyebrowHTML(_ec, 'TOUREN F\u00d6R \u00c4LVSJ\u00d6 GOLF & COUNTRY CLUBS MEDLEMMAR');
     // Andra klubbhus än Älvsjö: klubbhusets namn i headern (fullt eget utseende kommer i etapp 2)
@@ -25227,6 +25240,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (456)',
+    items: [
+      { type: 'new', text: 'Alla ClubhouseTour-loggor (A–J) går nu att välja: som klubbhusets logga under Klubbhus → Utseende och bland tourloggorna. De fem headerna med logga (Fairway, Klubbhus kväll, Ljus, Foto, Kompakt topprad) finns i omslagsbiblioteket, både för tourer och klubbhusets headerbild.' },
+      { type: 'improved', text: 'En header som redan innehåller loggan visas som banner utan text ovanpå. För egna bilder med namn/logga finns ett val under Utseende: "visa den som banner utan text".' },
+    ]
+  },
   {
     date: '24 november 2026 (455)',
     items: [
@@ -30728,6 +30748,13 @@ function openClubLook(id) {
   var curPreset = clubPresetKey(c);
   h += '<div style="font-size:12px;font-weight:700;color:var(--text-2);margin:-4px 0 6px">Färdiga ikoner</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'+
+    CH_LOGOS.map(function(x){ // release 456: ClubhouseTour-loggorna
+      var url = 'grafik/logor/' + x[0] + '.png', on = c.logo === url;
+      return '<button type="button" onclick="setClubField(\'logo\', \''+url+'\')" title="'+esc(x[1])+'" '+
+        'style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 12px;border-radius:12px;cursor:pointer;'+
+        'background:#1a2e22;border:2px solid '+(on?'var(--green)':'transparent')+';color:#fff;font-size:11px;font-weight:600">'+
+        '<img src="'+url+'" alt="" style="height:34px;max-width:110px;object-fit:contain"><span>'+esc(x[1])+(on?' ✓':'')+'</span></button>';
+    }).join('')+
     Object.keys(CLUB_ICON_PRESETS).map(function(k){
       var on = curPreset === k;
       return '<button type="button" onclick="setClubField(\'logo\', \'preset:'+k+'\')" title="'+esc(CLUB_ICON_PRESETS[k].label)+'" '+
@@ -30778,7 +30805,9 @@ function openClubLook(id) {
       '<button class="btn btn-sm btn-primary" onclick="pickClubHeroFromLibrary()"><i class="ti ti-photo-search"></i> Välj från omslagen</button>'+
       '<button class="btn btn-sm" onclick="document.getElementById(\'club-hero-file\').click()"><i class="ti ti-upload"></i> Ladda upp egen</button>'+
       (c.heroImg ? '<button class="btn btn-sm" onclick="setClubField(\'heroImg\', null)"><i class="ti ti-arrow-back-up"></i> Standardbild</button>' : '')+
-    '</div>';
+    '</div>'+
+    (c.heroImg && !isLogoHeaderImg(c.heroImg) ? '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 6px;cursor:pointer"><input type="checkbox" '+(c.heroText==='hide'?'checked':'')+' onchange="setClubField(\'heroText\', this.checked ? \'hide\' : null)"> Bilden innehåller redan namn/logga – visa den som banner utan text</label>' : '')+
+    (c.heroImg && isLogoHeaderImg(c.heroImg) ? '<p style="font-size:12px;color:var(--text-3);margin:2px 0 6px">Den här headern har loggan inbyggd och visas som banner utan text ovanpå.</p>' : '');
   h += '<div style="font-size:13px;font-weight:700;margin:12px 0 6px">Väggens namn</div>'+
     '<div class="row" style="gap:8px;align-items:center"><span style="flex:1;font-size:14px"><i class="ti ti-messages" style="color:var(--gold)"></i> '+esc(clubWallName(c))+'</span>'+
     '<button class="btn btn-sm" onclick="renameClubWall()"><i class="ti ti-edit"></i> Byt namn</button></div>';
