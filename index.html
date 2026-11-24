@@ -2537,6 +2537,7 @@ function showHomeScreen() {
   // den generiska "TOURER" som visas i Tourer-listvyn (showToursView) och övriga undersidor.
   var homeHeroTitle = document.getElementById('hero-title');
   if(homeHeroTitle) homeHeroTitle.textContent = (currentClubId() !== DEFAULT_CLUB_ID && currentClub()) ? (currentClub().name||'').toUpperCase() : 'ÄLVSJÖ GCC TOUR';
+  try { applyWordmarkHero(); } catch(e) {} // release 457
   renderHomeNextRoundWidget();
   renderHomeApprovalWidget();
   renderHomeSideBetWidget();
@@ -7131,6 +7132,23 @@ var TOUR_COVER_LIBRARY = [
   { key:'ch-h-kompakt', label:'Header: Kompakt topprad', url:'grafik/headers/05-kompakt-topprad.jpg' }
 ];
 // Release 456: bilder som redan innehåller logga/namn - visas som banner utan text ovanpå
+// Release 457: breda ordbildsloggor (namnet är redan loggan) - visas stort i stället för
+// klubbhusets namn i headern, och namnet flyttas upp till den lilla raden ovanför.
+var CH_WIDE_LOGOS = ['A-klubbhuset','C-ordbild','F-takikon','G-tak-over-ordet','H-flaggstang','J-hus-gemener'];
+function isWordmarkLogo(url) { return CH_WIDE_LOGOS.some(function(k){ return (url || '').indexOf('grafik/logor/' + k + '.png') >= 0; }); }
+function applyWordmarkHero() {
+  var hl = document.getElementById('hero-logo'), ht = document.getElementById('hero-title'), he = document.getElementById('hero-eyebrow');
+  if(!hl || !ht) return;
+  var onTour = !!(document.getElementById('hero-bg') || {}).getAttribute && document.getElementById('hero-bg').getAttribute('data-hero-tour');
+  var c = currentUser ? currentClub() : null;
+  var wm = !onTour && c && c.logo && isWordmarkLogo(c.logo);
+  ht.style.display = wm ? 'none' : '';
+  hl.style.maxWidth = wm ? 'min(88vw, 620px)' : '';
+  if(wm) {
+    hl.style.height = 'clamp(54px, 11vw, 100px)'; hl.style.borderRadius = '0';
+    if(he && !c.eyebrowCustom && c.eyebrowText !== 'hide') he.innerHTML = '<span style="display:inline-block;vertical-align:middle">' + esc((c.name || '').toUpperCase()) + '</span>';
+  }
+}
 function isLogoHeaderImg(url) { return /grafik\/headers\//.test(url || ''); }
 var CH_LOGOS = [['A-klubbhuset','Klubbhuset'],['B-monogram','Monogram'],['C-ordbild','Ordbild'],['D-plakett','Plakett'],['E-klubbmarke','Klubbmärke'],['F-takikon','Takikon'],['G-tak-over-ordet','Tak över ordet'],['H-flaggstang','Flaggstången'],['I-staplad','Staplad'],['J-hus-gemener','Hus + gemener']];
 
@@ -24977,6 +24995,7 @@ function updateHero(tourId) {
     if(tl0 && tl0.heroLogo) { hl0.src = tl0.heroLogo; hl0.style.display = ''; hl0.style.height = 'clamp(58px,13.5vw,108px)'; }
     else hl0.style.height = 'clamp(40px,8.1vw,65px)';
   }
+  try { applyWordmarkHero(); } catch(e) {} // release 457
 }
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
@@ -25240,6 +25259,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (457)',
+    items: [
+      { type: 'fixed', text: 'Klubbhus med en bred ClubhouseTour-logga (t.ex. Flaggstången eller Ordbild) fick loggan och klubbhusets namn bredvid varandra i headern. Nu visas loggan stort och centrerad i stället för namnet, och klubbhusets namn står i den lilla raden ovanför.' },
+    ]
+  },
   {
     date: '24 november 2026 (456)',
     items: [
