@@ -399,8 +399,6 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
-/* Release 449: på startsidan finns allt i användarkortet - dölj den globala raden ovanför */
-body:has(#tours-screen:not([style*="none"]) #home-screen-content:not([style*="none"])) #user-bar{display:none !important}
 /* Release 444: den inloggades egen rad markeras i listor */
 .me-row{background:var(--green-light) !important;box-shadow:inset 3px 0 0 var(--green);border-radius:6px}
 .oom-row.me-row{border-color:var(--green) !important;box-shadow:inset 4px 0 0 var(--green)}
@@ -594,6 +592,8 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 </div>
 
 <div id="user-bar" style="display:none;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;row-gap:10px;padding:24px 0 10px;font-size:12px;color:var(--text-2)">
+  <div id="user-card" style="width:100%"></div>
+  <span id="user-bar-legacy" style="display:none">
   <span style="display:flex;align-items:center;gap:6px"><img id="user-bar-logo" src="logo-footer.png" alt="ÄGCC Tour" style="width:19px;height:24px;border-radius:4px;object-fit:contain"><i class="ti ti-user-circle"></i> <span id="user-badge"></span><span id="club-switcher" style="display:none;align-items:center;gap:4px;margin-left:6px"></span></span>
   <span style="display:flex;gap:14px">
     <span id="nav-users-btn" style="display:none;cursor:pointer;color:var(--green-dark);font-weight:600;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="showUsersView()"><i class="ti ti-users-group" style="font-size:17px"></i><span>Användare</span></span>
@@ -601,6 +601,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="openChangePassword()"><i class="ti ti-key" style="font-size:17px"></i><span>Byt lösenord</span></span>
     <span id="nav-theme-btn" style="display:none;cursor:pointer;text-align:center;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="toggleTheme()"><i class="ti ti-moon" id="nav-theme-ic" style="font-size:17px"></i><span id="nav-theme-lbl">Mörkt</span></span>
     <span style="cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2" onclick="logout()"><i class="ti ti-logout" style="font-size:17px"></i><span>Logga ut</span></span>
+  </span>
   </span>
 </div>
 
@@ -3811,7 +3812,11 @@ function renderHomeUserBar() {
   // Release 449 (alternativ B): ETT kort med allt som rör den inloggade - namn,
   // roll, HCP, klubbhus och en rad med funktioner. Den globala användarraden
   // ovanför (med samma knappar) döljs på startsidan, så inget visas dubbelt.
-  var el = document.getElementById('home-user-bar');
+  // Release 450: kortet ligger nu i den GLOBALA användarraden (#user-card) och
+  // syns på alla sidor - inte bara startsidan. Den gamla raden finns kvar dold
+  // (#user-bar-legacy) eftersom annan kod fortfarande skriver till dess element.
+  var hb = document.getElementById('home-user-bar'); if(hb) { hb.innerHTML = ''; hb.style.display = 'none'; }
+  var el = document.getElementById('user-card');
   if(!el || !currentUser) return;
   var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; }) || currentUser;
   var uImg = playerPhoto(u.username, u.img);
@@ -3828,7 +3833,7 @@ function renderHomeUserBar() {
         '<select onchange="switchClub(this.value)" aria-label="Byt klubbhus" style="width:auto;margin:0;padding:1px 18px 1px 2px;font-size:12px;font-weight:700;color:var(--green-dark);background:transparent;border:none;cursor:pointer">' +
         acc.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(clubShort(c)) + '</option>'; }).join('') + '</select></span>'
     : '';
-  el.style.display = 'block';
+  el.style.cssText = 'width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-sizing:border-box';
   el.innerHTML =
     '<div style="display:flex;align-items:center;gap:12px">' +
       (uImg ? '<img src="' + uImg + '" style="width:46px;height:46px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green)" alt="">'
@@ -3847,7 +3852,7 @@ function renderHomeUserBar() {
       tile('ti-bell', 'Notiser', 'openPushSettings()') +
       tile('ti-key', 'Lösenord', 'openChangePassword()') +
       (isSuperAdmin() || currentUser.role === 'admin' ? tile('ti-users-group', 'Användare', 'showUsersView()') : '') +
-      (themeOk ? tile(dark ? 'ti-sun' : 'ti-moon', dark ? 'Ljust' : 'Mörkt', 'toggleTheme();renderHomeUserBar()') : '') +
+      (themeOk ? tile(dark ? 'ti-sun' : 'ti-moon', dark ? 'Ljust' : 'Mörkt', 'toggleTheme()') : '') +
       tile('ti-logout', 'Logga ut', 'logout()', 'var(--danger-text)') +
     '</div>';
 }
@@ -25183,6 +25188,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (450)',
+    items: [
+      { type: 'improved', text: 'Det nya användarkortet (bild, namn, HCP, klubbhus och raden Profil · Notiser · Lösenord · Användare · Mörkt/Ljust · Logga ut) visas nu på alla sidor - även inne i tourerna - och ersätter den gamla raden överallt.' },
+    ]
+  },
+  {
     date: '24 november 2026 (449)',
     items: [
       { type: 'improved', text: 'Startsidan: användarkortet är omgjort. Allt om dig samlas i ett kort - bild, namn, Admin-märke, HCP (tryck för att ändra) och klubbhus - med en rad funktioner under: Profil, Notiser, Lösenord, Användare (admin), Mörkt/Ljust och Logga ut. Raden med samma knappar ovanför döljs på startsidan, så inget visas dubbelt.' },
@@ -29132,7 +29143,7 @@ function afterLogin() {
   try { applyTheme(); } catch(e) {}
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('hero-bg').style.display = '';
-  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+  document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : ''); try { setTimeout(renderHomeUserBar, 0); } catch(e) {}
   document.getElementById('user-bar').style.display = 'flex';
   if(currentUser.role === 'admin') {
     document.getElementById('nav-users-btn').style.display = 'flex';
@@ -29216,7 +29227,7 @@ function impersonateUser(username) {
   impersonatorAdmin = currentUser.username;
   _clubIdBeforeImpersonation = _clubId;
   currentUser = target;
-  document.getElementById('user-badge').textContent = currentUser.username;
+  document.getElementById('user-badge').textContent = currentUser.username; try { setTimeout(renderHomeUserBar, 0); } catch(e) {}
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'none';
   // Klubbhus: räkna om utifrån SPELARENS klubbhus (inte admins val), så att väljaren
   // bara visas om spelaren har fler än ett klubbhus och bara visar dennes klubbhus.
@@ -29247,7 +29258,7 @@ function stopImpersonating() {
   impersonatorAdmin = null;
   if(!admin) { logout(); return; }
   currentUser = admin;
-  document.getElementById('user-badge').textContent = currentUser.username + ' (admin)';
+  document.getElementById('user-badge').textContent = currentUser.username + ' (admin)'; try { setTimeout(renderHomeUserBar, 0); } catch(e) {}
   if(document.getElementById('nav-users-btn')) document.getElementById('nav-users-btn').style.display = 'flex';
   // Tillbaka till admins eget klubbhus och full väljare
   _clubId = _clubIdBeforeImpersonation;
@@ -29350,7 +29361,7 @@ function submitMyProfile() {
   function finishSubmitMyProfile() {
     currentUser = u;
     save(); closeModal();
-    document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : '');
+    document.getElementById('user-badge').textContent = currentUser.username + (currentUser.role==='admin' ? ' (admin)' : ''); try { setTimeout(renderHomeUserBar, 0); } catch(e) {}
     refreshCurrentView();
     var globalProfileEl = document.getElementById('global-player-profile');
     if(globalProfileEl && globalProfileEl.style.display !== 'none') showGlobalPlayerProfile(u.username);
@@ -30192,6 +30203,7 @@ function switchClub(id) {
 }
 function renderClubSwitcher() {
   try { renderLabBanner(); } catch(e) {}
+  setTimeout(function(){ try { renderHomeUserBar(); } catch(e) {} }, 0); // release 450
   var el = document.getElementById('club-switcher');
   if(!el) return;
   var acc = accessibleClubs();
@@ -30941,6 +30953,7 @@ function applyTheme() {
   var ic = document.getElementById('nav-theme-ic'), lbl = document.getElementById('nav-theme-lbl');
   if(ic) ic.className = 'ti ' + (dark ? 'ti-sun' : 'ti-moon');
   if(lbl) lbl.textContent = dark ? 'Ljust' : 'Mörkt';
+  try { renderHomeUserBar(); } catch(e) {} // release 450
 }
 function toggleTheme() {
   if(!darkModeAllowed()) return;
