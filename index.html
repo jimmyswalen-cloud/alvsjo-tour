@@ -47,6 +47,8 @@ html{scroll-padding-top:calc(var(--hero-h,0px) + 12px)}
    centreras och sidorna beskärs, så att loggan inte krymper till en liten remsa. */
 .hero.hero-banner{height:auto;aspect-ratio:var(--hero-ar,4/1);max-height:260px;background-position:center 40%}
 .hero.hero-banner::before,.hero.hero-banner .hero-content{display:none}
+/* Release 445: en tour med egen bannerbild döljer hero-texten - då är hela bannern klickbar till startsidan */
+.hero.hero-banner{cursor:pointer}
 .hero.hero-banner .hero-scroll{height:22px}
 img.cover-banner{width:100%;display:block;object-fit:cover;object-position:center;height:auto !important;aspect-ratio:var(--ar,4/1);max-height:240px}
 /* Mellanbredd (700-999 px, t.ex. bärbar dator med skärmskalning): visa hela bilden i sitt eget format
@@ -397,6 +399,10 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 444: den inloggades egen rad markeras i listor */
+.me-row{background:var(--green-light) !important;box-shadow:inset 3px 0 0 var(--green);border-radius:6px}
+.oom-row.me-row{border-color:var(--green) !important;box-shadow:inset 4px 0 0 var(--green)}
+.me-pill{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--green);color:#fff;font-size:9px;font-weight:800;letter-spacing:.05em;vertical-align:1px;flex-shrink:0}
 /* Release 426/428: avslutade deltävlingar och tourer visas med svartvit bild */
 /* Release 442: knappraden i startsidans deltävlingskort - allt på en rad */
 .home-actions{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:10px 14px 12px}
@@ -540,7 +546,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
-<div class="hero hero-sticky" id="hero-bg">
+<div class="hero hero-sticky" id="hero-bg" onclick="if(this.classList.contains('hero-banner')) showHomeScreen()">
   <div class="hero-content" id="hero-content" onclick="showHomeScreen()" style="cursor:pointer" title="Tillbaka till startsidan">
     <div class="hero-eyebrow" id="hero-eyebrow">TOUREN FÖR ÄLVSJÖ GOLF &amp; COUNTRY CLUBS MEDLEMMAR</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:16px">
@@ -2033,6 +2039,39 @@ function applyHeroBannerIfWide(heroBg, src, tourId, mode) {
     }
   };
   im.src = src;
+}
+
+// Release 447: kompakt vy för en spelad dag i anmälningslistan. En rad per boll:
+// bollnummer, tid, anläggning/sim och spelarna med sitt resultat (eller status).
+function regPlayedDateCompactHTML(e, inDate, teeGroupsAll) {
+  var isStab = e.type === 'stableford';
+  var subOf = function(pi){ return (e.scoreSubmissions || []).find(function(x){ return x.pi === pi; }); };
+  var chip = function(x){
+    var sub = subOf(x.pi), first = esc(x.p.name);
+    var res = sub && sub.score != null
+      ? '<b style="color:' + (isSubmissionApproved(sub) ? 'var(--green-dark)' : 'var(--gold)') + '">' + sub.score + (isStab ? '\u00a0p' : '') + '</b>' + (isSubmissionApproved(sub) ? '' : ' <i class="ti ti-clock" style="font-size:10px;color:var(--gold)" title="Väntar på markör"></i>')
+      : '<span style="color:var(--danger-text)" title="Inget scorekort inskickat">–</span>';
+    return '<span onclick="event.stopPropagation();showPlayerProfile(' + x.pi + ')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface2);white-space:nowrap">' + first + ' ' + res + '</span>';
+  };
+  var gIdxs = [];
+  inDate.forEach(function(x){ if(x.gIdx >= 0 && gIdxs.indexOf(x.gIdx) < 0) gIdxs.push(x.gIdx); });
+  gIdxs.sort(function(a, b){ return String(teeGroupsAll[a].time || '99').localeCompare(String(teeGroupsAll[b].time || '99')) || a - b; });
+  var h = '';
+  gIdxs.forEach(function(gIdx, n){
+    var g = teeGroupsAll[gIdx];
+    var members = inDate.filter(function(x){ return x.gIdx === gIdx; });
+    members.sort(function(a, b){ return (g.playerPis || []).indexOf(a.pi) - (g.playerPis || []).indexOf(b.pi); });
+    var r0 = members[0] && members[0].reg, venue = r0 ? simVenueLabel(r0) : '';
+    h += '<tr><td colspan="2" style="padding:7px 10px;border-bottom:1px solid var(--border)">' +
+      '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);margin-bottom:4px">' +
+        '<span style="font-weight:800;color:var(--text-2)">Boll ' + (n + 1) + '</span>' +
+        (g.time ? '<span>· ' + esc(g.time) + '</span>' : '') + (venue ? '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">· ' + esc(venue) + '</span>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px">' + members.map(chip).join('') + '</div></td></tr>';
+  });
+  var loose = inDate.filter(function(x){ return !(x.gIdx >= 0); });
+  if(loose.length) h += '<tr><td colspan="2" style="padding:7px 10px;border-bottom:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);margin-bottom:4px;font-weight:800">Utan boll</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + loose.map(chip).join('') + '</div></td></tr>';
+  return h;
 }
 
 // Release 432: datumrubrik i anmälningslistan.
@@ -12659,6 +12698,8 @@ function eventCardHTML(i,e) {
       // Release 432: tydlig datumrubrik - kalenderbricka, veckodag, datum, "Idag/Imorgon/Spelad"
       var nBollar = 0; inDate.forEach(function(x, k){ if(x.gIdx>=0 && inDate.findIndex(function(y){ return y.gIdx===x.gIdx; })===k) nBollar++; });
       rows += regDateHeaderHTML(d, e, inDate.length, nBollar);
+      // Release 447: spelade dagar visas kompakt - en rad per boll med spelarnas resultat.
+      if(d && d < hcpTodayISO()) { rows += regPlayedDateCompactHTML(e, inDate, teeGroupsAll); return; }
       // Bollar för datumet, sorterade på starttid (utan tid sist, sedan skapandeordning)
       var gIdxs = [];
       inDate.forEach(function(x){ if(x.gIdx>=0 && gIdxs.indexOf(x.gIdx)<0) gIdxs.push(x.gIdx); });
@@ -13384,6 +13425,9 @@ function toggleEventBollMode(ei) {
   e.bollMode = sfMode(e) === 'admin' ? 'free' : 'admin'; save(); openRegister(ei);
 }
 
+// Release 446: vilka spelare som är utfällda för redigering i Anmälningar.
+var _regExpand = {};
+function toggleRegExpand(i, pi) { _regExpand[pi] = !_regExpand[pi]; openRegister(i); }
 function openRegister(i) {
   var t=getTour(), e=t.events[i], regs=e.registrations||[];
   _sfModeBanner = isAdmin() ? '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--surface2);margin-bottom:10px;flex-wrap:wrap"><span style="font-size:13px"><b>Bollar:</b> '+(sfMode(e)==='admin'?'Admin sätter bollar – spelarna svarar bara Jag spelar / Kan inte':'Fritt – spelarna kan gå med, skapa egen eller låta admin sätta')+'</span><button class="btn btn-sm" onclick="toggleEventBollMode('+i+')">'+(sfMode(e)==='admin'?'Byt till fritt':'Byt till admin sätter')+'</button></div>' : '';
@@ -13437,6 +13481,34 @@ function openRegister(i) {
                 (rv ? '<span><i class="ti ti-device-desktop" style="font-size:12px"></i> '+esc(simVenueLabel(reg))+'</span>' : '<span style="color:var(--text-3)">Plats ej angiven</span>')+
               '</div>';
         }
+        // Release 446: spelare som redan har en boll, eller har spelat klart, visas
+        // som en kompakt sammanfattning i stället för alla knappar och fält - så att
+        // det inte ser ut som att man kan avanmäla sig från en runda man redan spelat.
+        if(status==='registered' && !(_regExpand && _regExpand[pi])) {
+          var cg = (e.teeGroups || []).find(function(g){ return g.date===dateVal && g.playerPis.indexOf(pi)>=0; });
+          var csub = (e.scoreSubmissions || []).find(function(x){ return x.pi===pi; });
+          var played = !!csub || (cg && cg.date < hcpTodayISO());
+          if(cg || csub) {
+            var cmates = cg ? cg.playerPis.filter(function(x){ return x!==pi; }).map(function(x){ var pp=t.players[x]; return pp?pp.name.split(' ')[0]:'?'; }) : [];
+            var ctime = (cg && cg.time) || (reg && reg.time) || '';
+            var cvenue = isSimTour(t) && reg && reg.venue ? simVenueLabel(reg) : '';
+            var chip = played
+              ? (csub && isSubmissionApproved(csub) ? ['ti-circle-check','Spelat · godkänt','#0F6E56','var(--green-light)']
+                 : csub ? ['ti-clock','Spelat · väntar på markör','#8A5A00','var(--gold-light)']
+                 : ['ti-flag','Spelat · ej inskickat','#B42318','var(--danger-bg)'])
+              : ['ti-golf','I boll','var(--green-dark)','var(--green-light)'];
+            var canChange = isAdmin() || (canEdit && !played);
+            return '<div style="padding:9px 0;border-bottom:1px solid var(--border)">'+
+              '<div class="row" style="gap:10px;align-items:center">'+avatar+
+                '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+nameLabel+'</div>'+
+                  '<div style="font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+
+                    '<i class="ti ti-calendar" style="font-size:11px"></i> '+esc(sfDateLbl(dateVal))+(ctime?' · '+esc(ctime):'')+
+                    (cvenue?' · '+esc(cvenue):'')+(cmates.length?' · med '+esc(cmates.join(', ')):'')+'</div></div>'+
+                '<span style="flex-shrink:0;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:'+chip[2]+';background:'+chip[3]+';white-space:nowrap"><i class="ti '+chip[0]+'" style="font-size:12px"></i> '+chip[1]+'</span>'+
+                (canChange ? '<button class="btn btn-sm" style="flex-shrink:0;padding:3px 8px;font-size:11px" title="Ändra anmälan" onclick="toggleRegExpand('+i+','+pi+')"><i class="ti ti-pencil"></i></button>' : '')+
+              '</div></div>';
+          }
+        }
         var bollRow = '';
         if(status==='registered') {
           if(!e.teeGroups) e.teeGroups = [];
@@ -13465,6 +13537,7 @@ function openRegister(i) {
             '<div style="flex:1;font-size:13px;font-weight:500">'+nameLabel+'</div>'+
             '<div class="row" style="gap:4px">'+btns+'</div>'+
           '</div>'+dateRow+bollRow+
+          (_regExpand && _regExpand[pi] ? '<div style="margin-top:6px"><button class="btn btn-sm" style="padding:2px 8px;font-size:11px" onclick="toggleRegExpand('+i+','+pi+')"><i class="ti ti-chevron-up"></i> Klar</button></div>' : '')+
         '</div>';
       }).join('')
     : '<p style="color:var(--text-3);font-size:13px">Inga spelare skapade.</p>';
@@ -19954,6 +20027,13 @@ function liveTeeLabelHTML(r) {
   return '<i class="ti ti-calendar-time" style="font-size:12px;color:var(--text-3);vertical-align:-1px"></i> '+day+(r.teeTime && r.teeDate >= today ? ' · <b>'+esc(r.teeTime)+'</b>' : '');
 }
 
+// Release 444: är den här spelaren jag (den inloggade)?
+function isMePlayer(t, pi) {
+  if(!currentUser || pi == null) return false;
+  try { var pl = (t && getPlayersForTour(t)) || [], p = pl[pi] || (t && t.players && t.players[pi]); return !!(p && p.username === currentUser.username); } catch(x) { return false; }
+}
+function mePillHTML() { return '<span class="me-pill">DU</span>'; }
+
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
@@ -19995,13 +20075,15 @@ function buildLiveStandingsRowsHTML(rows) {
     if(waiting && (!prev || !prevWaiting) && idx > 0) sectionHdr = liveSectionHeaderHTML('ti-clock', 'Startar senare');
     else if(r.notStarted && (!prev || !prev.notStarted)) sectionHdr = liveSectionHeaderHTML('ti-user-question', 'Anmälda utan boll');
     if(waiting || r.notStarted) {
-      return sectionHdr + '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.6':'')+'">'+
-        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px"></span><span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(r.notStarted?';color:var(--text-3)':'')+'">'+esc(abbreviateFirstName(r.name))+'</span></div>'+
+      var meW = isMePlayer(getTour(), r.pi);
+      return sectionHdr + '<div class="row'+(meW?' me-row':'')+'" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.6':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px"></span><span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(r.notStarted?';color:var(--text-3)':'')+'">'+esc(abbreviateFirstName(r.name))+(meW?mePillHTML():'')+'</span></div>'+
         '<div style="font-size:11px;flex-shrink:0;color:var(--text-2);white-space:nowrap;text-align:right">'+liveTeeLabelHTML(r)+'</div>'+
       '</div>';
     }
-    return '<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
-      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+'</span></div>'+
+    var me = isMePlayer(getTour(), r.pi);
+    return '<div class="row'+(me?' me-row':'')+'" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.55':'')+'">'+
+      '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px;color:var(--text-3);font-size:11px">'+(r.notStarted?'':(idx+1))+'</span><span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(abbreviateFirstName(r.name))+hsBadge+(me?mePillHTML():'')+'</span></div>'+
       '<div style="display:flex;gap:7px;font-size:11px;flex-shrink:0;align-items:center">'+
         '<span class="sc-col" style="width:26px;text-align:center;font-weight:700;color:'+diffFmt.color+'" title="Score – '+(r.isStab?'poäng mot hcp':'netto mot par')+(r.headStart!=null?' (inkl. slagförsprång)':'')+'. Avgör placeringen.">'+diffFmt.text+'</span>'+
         '<span style="width:22px;text-align:center;color:var(--text-2)" title="Brutto">'+(r.thru?r.brutto:'–')+'</span>'+
@@ -21811,10 +21893,11 @@ function buildTop3HTML(t, compact) {
     var p = players[s.pi]; if(!p) return '';
     var pUser = (S.users||[]).find(function(u){ return u.username===p.username; });
     var pImg = playerPhoto(p.username, (pUser&&pUser.img) || p.img);
-    return '<div class="row" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
+    var meT = isMePlayer(t, s.pi);
+    return '<div class="row'+(meT?' me-row':'')+'" style="gap:8px;align-items:center;padding:'+(compact?'4px 0':'7px 0')+';border-bottom:1px solid var(--border);'+(compact?'':'cursor:pointer')+'"'+(compact?'':' onclick="showPlayerProfile('+s.pi+')"')+'>'+
       '<span style="font-size:'+(compact?'14px':'17px')+';min-width:20px;text-align:center">'+(medals[idx]||(idx+1))+'</span>'+
       (pImg?'<img src="'+pImg+'" style="width:'+avatarSize+'px;height:'+avatarSize+'px;border-radius:50%;object-fit:cover;flex-shrink:0">':'<div class="avatar-ph" style="width:'+avatarSize+'px;height:'+avatarSize+'px;font-size:10px;flex-shrink:0">'+ini(p.name)+'</div>')+
-      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
+      '<span style="flex:1;font-size:'+(compact?'12px':'13px')+';font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">'+esc(p.name)+(meT?mePillHTML():'')+playerBrandLogoTag(p.username, compact?17:19)+'</span>'+
       '<span style="font-size:'+(compact?'12px':'13px')+';font-weight:700;color:var(--green-dark);min-width:44px;text-align:right">'+s.scoreLabel+'</span>'+
     '</div>';
   }).join('');
@@ -21866,13 +21949,14 @@ function renderOOM(){
       var pLogo = playerBrandLogoTag(p.username, 15);
       var won = winningsData ? (winningsData.winnings[pi]||0) : 0;
       var statsLine = d.events+' tävl · '+d.wins+' vinst'+(d.wins!==1?'er':'')+(bestN>0?' · bästa '+d.counted+'/'+d.events:'');
-      return '<div class="oom-row oom-fixed" onclick="showPlayerProfile('+pi+')">'+
+      var meO = !!(currentUser && p.username === currentUser.username);
+      return '<div class="oom-row oom-fixed'+(meO?' me-row':'')+'" onclick="showPlayerProfile('+pi+')">'+
         '<div style="width:24px;height:24px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-2);flex-shrink:0">'+(seasonNotStarted?'-':(idx+1))+'</div>'+
         (pImg?'<img src="'+pImg+'" class="avatar" style="width:40px;height:40px;object-fit:cover;border-radius:50%;flex-shrink:0" alt="">':'<div class="avatar-ph" style="width:40px;height:40px;font-size:14px;flex-shrink:0">'+ini(p.name)+'</div>')+
         '<div style="flex:1;min-width:0">'+
           // Release 418: hela raden ges åt namnet (loggan flyttad till raden under),
           // och långa namn kortas till "P. Pettersson" / "A. J. Wrååk" så de syns.
-          '<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(p.name)+'">'+esc(oomDisplayName(p.name))+'</div>'+
+          '<div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(p.name)+'">'+esc(oomDisplayName(p.name))+(meO?mePillHTML():'')+'</div>'+
           // Release 421: statistiken får en egen hel rad och loggan en egen rad under.
           // Loggraden har fast höjd även utan logga, så att alla rader blir lika höga.
           '<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">'+statsLine+'</div>'+
@@ -25050,6 +25134,31 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (447)',
+    items: [
+      { type: 'improved', text: 'Deltävlingskortets anmälningslista: spelade dagar visas nu kompakt - en rad per boll (bollnummer, tid, anläggning) med spelarna som små etiketter och deras resultat, t.ex. "Jimmy Swalén 36 p". Väntar ett scorekort på markören syns en klocka, och saknas scorekort står ett streck.' },
+    ]
+  },
+  {
+    date: '24 november 2026 (446)',
+    items: [
+      { type: 'improved', text: 'Anmälningar: spelare som redan har en boll eller har spelat klart visas nu som en kompakt rad - datum, tid, anläggning och med vem - plus en status ("I boll", "Spelat · godkänt", "Spelat · väntar på markör" eller "Spelat · ej inskickat"). Knapparna Anmäld/Oklart/Deltar ej och alla fält visas inte längre för dem.' },
+      { type: 'improved', text: 'Behöver något ändras finns en pennknapp som fäller ut den vanliga redigeringen. Efter spelad runda är det bara admin som kan ändra.' },
+    ]
+  },
+  {
+    date: '24 november 2026 (445)',
+    items: [
+      { type: 'fixed', text: 'Headern är klickbar igen: i tourer med egen bannerbild (t.ex. Älvsjö Indoor Golf League) tar ett tryck på bannern dig tillbaka till startsidan, precis som den vanliga headern.' },
+    ]
+  },
+  {
+    date: '23 november 2026 (444)',
+    items: [
+      { type: 'new', text: 'Ditt eget namn syns tydligare i listorna: din rad markeras med en grön bakgrund och kant, och en liten "DU"-etikett vid namnet. Gäller live-tabellen (även under "Startar senare"), Order of Merit och "Top 3 i ledning".' },
+    ]
+  },
   {
     date: '23 november 2026 (443)',
     items: [
