@@ -399,6 +399,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 449: på startsidan finns allt i användarkortet - dölj den globala raden ovanför */
+body:has(#tours-screen:not([style*="none"]) #home-screen-content:not([style*="none"])) #user-bar{display:none !important}
 /* Release 444: den inloggades egen rad markeras i listor */
 .me-row{background:var(--green-light) !important;box-shadow:inset 3px 0 0 var(--green);border-radius:6px}
 .oom-row.me-row{border-color:var(--green) !important;box-shadow:inset 4px 0 0 var(--green)}
@@ -3806,22 +3808,48 @@ function showBrandLogosPage() {
 }
 
 function renderHomeUserBar() {
+  // Release 449 (alternativ B): ETT kort med allt som rör den inloggade - namn,
+  // roll, HCP, klubbhus och en rad med funktioner. Den globala användarraden
+  // ovanför (med samma knappar) döljs på startsidan, så inget visas dubbelt.
   var el = document.getElementById('home-user-bar');
   if(!el || !currentUser) return;
   var u = (S.users||[]).find(function(x){ return x.username===currentUser.username; }) || currentUser;
-  var initials = ini(u.name||u.username);
   var uImg = playerPhoto(u.username, u.img);
-  var hcpVal = fmtHcp(u.hcp);
+  var acc = []; try { acc = accessibleClubs(); } catch(x) {}
+  var cur = ''; try { cur = currentClubId(); } catch(x) {}
+  var dark = false; try { dark = currentThemeChoice() === 'dark'; } catch(x) {}
+  var themeOk = true; try { themeOk = darkModeAllowed(); } catch(x) {}
+  var tile = function(icon, label, onclick, color){
+    return '<button type="button" onclick="' + onclick + '" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border:none;border-radius:10px;background:transparent;font-size:11px;font-weight:600;color:' + (color || 'var(--text-2)') + ';cursor:pointer">' +
+      '<i class="ti ' + icon + '" style="font-size:19px"></i><span style="white-space:nowrap">' + label + '</span></button>';
+  };
+  var club = acc.length >= 2
+    ? '<span style="display:inline-flex;align-items:center;gap:3px;color:var(--green-dark);font-weight:700"><i class="ti ti-building-community" style="font-size:13px"></i>' +
+        '<select onchange="switchClub(this.value)" aria-label="Byt klubbhus" style="width:auto;margin:0;padding:1px 18px 1px 2px;font-size:12px;font-weight:700;color:var(--green-dark);background:transparent;border:none;cursor:pointer">' +
+        acc.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(clubShort(c)) + '</option>'; }).join('') + '</select></span>'
+    : '';
+  el.style.display = 'block';
   el.innerHTML =
-    (uImg ? '<img src="'+uImg+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0">' :
-      '<div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--green-dark);flex-shrink:0">'+initials+'</div>') +
-    '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(u.name||u.username)+'</div>' +
-    '<div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px">'+(isAdmin()?'Admin':'Spelare')+' &middot; HCP '+hcpVal+
-      ' <i class="ti ti-edit" style="cursor:pointer;font-size:12px" onclick="event.stopPropagation();quickEditHcpFromHome()" title="Ändra HCP"></i>'+
-    '</div></div>' +
-    '<button class="btn btn-sm" onclick="openPushSettings()" title="Notiser" style="margin-right:6px"><i class="ti ti-bell"></i></button>' +
-    '<button class="btn btn-sm" onclick="viewMyProfile()" style="margin-right:6px"><i class="ti ti-user"></i></button>' +
-    '<button class="btn btn-sm" onclick="logout()"><i class="ti ti-logout"></i></button>';
+    '<div style="display:flex;align-items:center;gap:12px">' +
+      (uImg ? '<img src="' + uImg + '" style="width:46px;height:46px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--green)" alt="">'
+            : '<div class="avatar-ph" style="width:46px;height:46px;font-size:15px;flex-shrink:0;border:2px solid var(--green)">' + esc(ini(u.name || u.username)) + '</div>') +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700;color:var(--text)">' + esc(u.name || u.username) + '</span>' +
+          (isAdmin() ? '<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-2)">Admin</span>' : '') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+          '<span style="cursor:pointer;white-space:nowrap" onclick="event.stopPropagation();quickEditHcpFromHome()" title="Ändra HCP">HCP <b style="color:var(--text)">' + fmtHcp(u.hcp) + '</b> <i class="ti ti-pencil" style="font-size:12px"></i></span>' +
+          (club ? '<span style="color:var(--text-3)">·</span>' + club : '') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:2px;margin-top:10px;padding-top:6px;border-top:1px solid var(--border)">' +
+      tile('ti-user', 'Profil', 'viewMyProfile()') +
+      tile('ti-bell', 'Notiser', 'openPushSettings()') +
+      tile('ti-key', 'Lösenord', 'openChangePassword()') +
+      (isSuperAdmin() || currentUser.role === 'admin' ? tile('ti-users-group', 'Användare', 'showUsersView()') : '') +
+      (themeOk ? tile(dark ? 'ti-sun' : 'ti-moon', dark ? 'Ljust' : 'Mörkt', 'toggleTheme();renderHomeUserBar()') : '') +
+      tile('ti-logout', 'Logga ut', 'logout()', 'var(--danger-text)') +
+    '</div>';
 }
 
 // Snabb HCP-redigering direkt från startsidans användarrad. Fristående från
@@ -6658,6 +6686,13 @@ function checkHomeSubmitReminder(tourId, eid, gIdx) {
 // spelaren SJÄLV sparat ett värde (p.shcpManuallySet, satt av
 // saveMyShcpQuick/nollställt av resetMyShcpQuick) - ELLER hela bollens SHCP
 // bekräftats i livescoringen (d.shcpConfirmed).
+// Release 448: har spelaren skickat in sitt scorekort får bara admin ändra SHCP
+// för den rundan - annars skulle poängen ändras i efterhand.
+function isShcpLockedFor(e, pi) {
+  if(isAdmin() || !e || pi == null) return false;
+  return (e.scoreSubmissions || []).some(function(x){ return x.pi === pi; });
+}
+
 function checkHomeShcpBadge(tourId, eid, gIdx) {
   var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
   if(!t) return;
@@ -6676,6 +6711,10 @@ function checkHomeShcpBadge(tourId, eid, gIdx) {
       confirmed = !!d.shcpConfirmed || !!(p && p.shcpManuallySet);
       if(p && p.shcp!=null) myShcp = p.shcp;
     }
+    if(isShcpLockedFor(e, myPi)) {
+      el.innerHTML = '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap" title="Scorekortet är inskickat - bara admin kan ändra SHCP"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-lock" style="font-size:12px;color:var(--text-3)"></i></span>';
+      return;
+    }
     el.innerHTML = confirmed
       ? '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><span style="color:var(--text-3);font-weight:600">SHCP</span> '+(myShcp!=null?myShcp:'–')+' <i class="ti ti-edit" style="font-size:14px;color:var(--text-2)" title="Ändra SHCP"></i></span>'
       : '<span style="font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();openMyShcpQuickEdit(\''+tourId+'\',\''+eid+'\','+gIdx+')"><i class="ti ti-alert-circle"></i> Fyll i SHCP</span>';
@@ -6689,6 +6728,8 @@ function checkHomeShcpBadge(tourId, eid, gIdx) {
 // för att snabbt kunna mata in sitt EGET SHCP innan rondan, utan att behöva gå
 // via hela bollens vy - och utan att röra övriga spelares värden.
 function openMyShcpQuickEdit(tourId, eid, gIdx) {
+  try { var _t0 = (S.tours||[]).find(function(x){ return x.id===tourId; }), _e0 = _t0 && (_t0.events||[]).find(function(x){ return x.id===eid; });
+    if(_e0 && isShcpLockedFor(_e0, getMyPi(_t0))) { alert('Ditt scorekort är inskickat - bara admin kan ändra SHCP för den här rundan.'); return; } } catch(x) {}
   var t = (S.tours||[]).find(function(x){ return x.id===tourId; });
   if(!t) return;
   var e = (t.events||[]).find(function(x){ return x.id===eid; });
@@ -10218,7 +10259,7 @@ function renderMyScoreModalBody() {
   if(!ctx.hasScorecard) {
     // Banan saknar scorekortsdata (par/hcp per hål) - fall tillbaka på enkel totalinmatning. Inget granskningsläge här.
     h += '<p style="font-size:12px;color:#854F0B;background:var(--gold-light);padding:8px 10px;border-radius:8px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> Banan "'+esc(e.course)+'" saknar scorekortsdata (par/hcp per hål) i Bandatabasen ännu. Be admin fylla i det, eller ange totalresultat direkt här under.</p>';
-    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"></div>';
+    h += '<div class="field"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="this.value=this.value?Math.round(this.value):this.value"'+(!isAdmin() && ctx.existing ? ' readonly style="opacity:.6"' : '')+'></div>';
     if(!ctx.isStab) h += '<div class="field"><label>Brutto</label><input type="number" id="my-brutto" value="'+(existing&&existing.brutto!=null?existing.brutto:'')+'" oninput="recalcMyNet()"></div>';
     h += '<div class="field"><label>'+(ctx.isStab?'Poäng':'Netto')+'</label><input type="number" id="my-score" value="'+(existing?existing.score:'')+'" '+(!ctx.isStab?'readonly':'')+'></div>';
   } else if(ctx.mode==='review') {
@@ -10295,7 +10336,8 @@ function renderMyScoreReviewTableHTML(ctx) {
 // nu med en frivillig Puttar-kolumn och förifylld från livescoring/tidigare inskick.
 function renderMyScoreEditTableHTML(ctx) {
   var hd = ctx.sim ? ';display:none' : ''; // simulatorgolf: dölj puttkolumnen
-  var h = '<div class="field" style="max-width:160px"><label>Spelhandicap (SHCP)</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="recalcMyScorecard()"></div>';
+  var shLock = !isAdmin() && !!ctx.existing; // release 448
+  var h = '<div class="field" style="max-width:220px"><label>Spelhandicap (SHCP)'+(shLock?' <i class="ti ti-lock" style="font-size:12px;color:var(--text-3)"></i>':'')+'</label><input type="number" step="1" id="my-shcp" value="'+ctx.sourceShcp+'" oninput="recalcMyScorecard()"'+(shLock?' readonly style="opacity:.6" title="Scorekortet är inskickat - bara admin kan ändra SHCP"':'')+'></div>';
   h += (ctx.sim ? '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. Extra slag visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt.</p>' : '<p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Fyll i antal slag på varje hål. "Extra slag" visar hur många handicapslag du får på hålet utifrån ditt SHCP. '+(ctx.isStab?'Poäng':'Netto')+' räknas ut automatiskt. Puttar är frivilligt.</p>');
   h += '<div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
   h += '<thead style="position:sticky;top:0;background:var(--surface);z-index:1"><tr style="color:var(--text-3);text-transform:uppercase;font-size:10px">'+
@@ -18609,8 +18651,14 @@ function renderLiveScoringView() {
 // Steg 1, innan hål-inmatningen börjar: varje spelares SHCP (spelhandicap)
 // för dagens runda bekräftas eller justeras. Körs automatiskt första gången
 // bollen öppnas, och kan öppnas igen via "Ändra SHCP" i inmatningsvyn.
+function liveShcpLockedForBoll(d) {
+  if(isAdmin() || !d) return false;
+  var ev = findEventById(d.eventId);
+  return !!ev && (d.players || []).some(function(p){ return isShcpLockedFor(ev, p.pi); });
+}
 function renderLiveShcpHTML() {
   var d = _liveScoring.data;
+  if(d && d.shcpConfirmed && liveShcpLockedForBoll(d)) { alert('Scorekort är inskickade för bollen - bara admin kan ändra SHCP.'); _liveScoring.mode = 'grid'; renderLiveGridHTML(); return; }
   var el = document.getElementById('live-scoring-modal-body');
   if(!d || !el) return;
 
@@ -18776,7 +18824,7 @@ function renderLiveGridHTML() {
   el.innerHTML =
     completionBanner+
     '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;gap:6px;flex-wrap:wrap">'+
-      '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>'+
+      (liveShcpLockedForBoll(d) ? '' : '<button class="btn btn-sm" onclick="_liveScoring.mode=\'shcp\';renderLiveShcpHTML()"><i class="ti ti-settings"></i> Ändra SHCP</button>')+
       (canSwitchBoll ? '<button class="btn btn-sm" onclick="closeModal();setTimeout(function(){openLiveScoringBollPicker(\''+d.eventId+'\','+_liveScoring.gIdx+')},60)"><i class="ti ti-users"></i> Byt boll</button>' : '')+
       '<button class="btn btn-sm" title="Se hela live-tabellen" onclick="openLiveFollow(\''+d.eventId+'\')"><i class="ti ti-trophy" style="color:var(--gold)"></i> Live-tabell</button>'+
     '</div>'+
@@ -25134,6 +25182,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '24 november 2026 (449)',
+    items: [
+      { type: 'improved', text: 'Startsidan: användarkortet är omgjort. Allt om dig samlas i ett kort - bild, namn, Admin-märke, HCP (tryck för att ändra) och klubbhus - med en rad funktioner under: Profil, Notiser, Lösenord, Användare (admin), Mörkt/Ljust och Logga ut. Raden med samma knappar ovanför döljs på startsidan, så inget visas dubbelt.' },
+    ]
+  },
+  {
+    date: '24 november 2026 (448)',
+    items: [
+      { type: 'fixed', text: 'SHCP kan inte längre ändras av spelaren efter att scorekortet skickats in - bara admin kan det. Pennan vid SHCP på startsidan byts mot ett lås, "Ändra SHCP" i livescoringen döljs när bollens scorekort är inskickade, och SHCP-fältet i "Mitt resultat" är låst.' },
+    ]
+  },
   {
     date: '24 november 2026 (447)',
     items: [
