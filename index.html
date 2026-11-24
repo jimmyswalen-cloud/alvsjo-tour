@@ -610,10 +610,11 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
         <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px;font-size:15px;font-weight:700;border-radius:12px;background:#00875A;border-color:#00875A">Logga in</button>
       </form>
     </div>
-    <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Ny spelare? <a href="signup.html" style="color:#fff;font-weight:600;text-decoration:underline">Skapa konto här</a> · Kontakta din admin om du saknar inloggningsuppgifter</p>
+    <p style="text-align:center;font-size:12px;color:rgba(255,255,255,.6);margin-top:18px">Ny spelare? <a href="signup.html" style="color:#fff;font-weight:600;text-decoration:underline">Skapa konto här</a><br>Kontakta din admin om du saknar inloggningsuppgifter</p>
 
     <div style="margin-top:14px;text-align:center">
-      <button type="button" id="release-notes-toggle" onclick="toggleReleaseNotes()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:6px 10px">
+      <div id="login-app-version" style="font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.3px"></div>
+      <button type="button" id="release-notes-toggle" onclick="toggleReleaseNotes()" hidden style="background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:6px 10px">
         <i class="ti ti-sparkles" style="font-size:14px"></i> Nyheter i appen
         <i class="ti ti-chevron-down" id="release-notes-chevron" style="font-size:13px;transition:transform .2s"></i>
       </button>
@@ -25297,6 +25298,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (467)',
+    items: [
+      { type: 'improved', text: 'Inloggningen: "Nyheter i appen" är borttagen och appversionen visas i stället. Texten "Kontakta din admin om du saknar inloggningsuppgifter" står nu på en egen rad.' },
+    ]
+  },
+  {
     date: '24 november 2026 (466)',
     items: [
       { type: 'fixed', text: 'Inloggningen: klubbhus som valt en header med inbakad ClubhouseTour-logga fick en jättestor logga i bakgrunden bakom inloggningsrutan. Nu visas samma foto utan text som bakgrund.' },
@@ -28682,6 +28689,8 @@ function getAppVersionString() {
   return num ? (year + '-' + num) : '';
 }
 function renderAppVersionLabel() {
+  // Release 467: versionen visas även på inloggningen (i stället för "Nyheter i appen")
+  try { var lv = document.getElementById('login-app-version'), v0 = getAppVersionString(); if(lv) lv.textContent = v0 ? ('App Version ' + v0) : ''; } catch(e) {}
   var el = document.getElementById('app-version-label');
   if(!el) return;
   var v = getAppVersionString();
