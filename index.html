@@ -25297,6 +25297,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (466)',
+    items: [
+      { type: 'fixed', text: 'Inloggningen: klubbhus som valt en header med inbakad ClubhouseTour-logga fick en jättestor logga i bakgrunden bakom inloggningsrutan. Nu visas samma foto utan text som bakgrund.' },
+    ]
+  },
+  {
     date: '24 november 2026 (465)',
     items: [
       { type: 'new', text: 'Ny landningssida om ClubhouseTour (om.html): vad appen gör, hur man kommer igång, funktionerna med illustrationer (skapa tour, livescoring, leaderboard, side bets, statistik, Ryder Cup) och kontakt. Nås via "En del av ClubhouseTour" längst ner på startsidan och på inloggningen, samt via ClubhouseTour-loggan på inloggningen.' },
@@ -30981,6 +30987,18 @@ function saveLoginBrand() {
     localStorage.setItem('agcc-login-brand', JSON.stringify({ id: c.id, name: c.name, logo: clubLogoSrc(c) || '', bg: c.heroImg || '' }));
   } catch(e) {}
 }
+// Release 466: headers med inbakad logga/text passar inte som bakgrund bakom
+// inloggningen (loggan blev jättestor bakom rutan) - använd samma foto utan text.
+function loginBgFor(url) {
+  var map = {
+    '01-fairway-morkgron.jpg': 'grafik/hero/fairway-morkgron.jpg', '02-klubbhus-kvall.jpg': 'grafik/hero/kvall.jpg',
+    '03-ljus.jpg': 'login-bg.jpg', '04-foto.jpg': 'login-bg.jpg', '05-kompakt-topprad.jpg': 'grafik/hero/fairway-morkgron.jpg',
+    '06-tavla-spela-folj.jpg': 'login-bg.jpg', '07-tavla-spela-folj-bana.jpg': 'tour-photos/19.jpg', '08-tavla-spela-folj-dronare.jpg': 'tour-photos/12.jpg'
+  };
+  if(!url || !isLogoHeaderImg(url)) return url;
+  var f = url.split('/').pop();
+  return map[f] || 'login-bg.jpg';
+}
 function applyLoginBranding() {
   var b = null;
   try { b = JSON.parse(localStorage.getItem('agcc-login-brand') || 'null'); } catch(e) {}
@@ -31025,7 +31043,7 @@ function applyLoginBranding() {
   logo.style.filter = (boxy || neutral) ? '' : 'drop-shadow(0 6px 16px rgba(0,0,0,.45))';
   title.textContent = name;
   title.style.fontSize = name.length > 16 ? '30px' : '38px';
-  scr.style.backgroundImage = "url('" + bg + "')";
+  scr.style.backgroundImage = "url('" + loginBgFor(bg) + "')";
 }
 
 
