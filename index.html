@@ -16693,12 +16693,19 @@ function casualTitleFor(r, finished) {
 function setCasualTitle(t) { var el = document.getElementById('casual-title'); if(el) el.textContent = t; }
 
 // ── Steg 1: bana ────────────────────────────────────────────────────────────
+// Release 477: förvald starttid = närmaste 10-minuterspass minst 10 minuter fram (10:27 -> 10:40)
+function casualDefaultStartTime() {
+  var d = new Date(Date.now() + 10*60000);
+  var m = Math.ceil(d.getMinutes() / 10) * 10;
+  if(m === 60) { d.setHours(d.getHours() + 1); m = 0; }
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + m).slice(-2);
+}
 function startCasualRoundWizard() {
   if(!currentUser) return;
   var me = findUser(currentUser.username) || currentUser;
   _cwTab = 'fav'; // börja alltid på Favoriter
   _cwUserLimit = 8;
-  _cw = { step:1, courseId:null, date: hcpTodayISO(), sim:false, roundType:'casual', hidden:false, silent:false, search:'',
+  _cw = { step:1, courseId:null, date: hcpTodayISO(), time: casualDefaultStartTime(), sim:false, roundType:'casual', hidden:false, silent:false, search:'',
     format:{ primary:'stableford', secondary:null }, contests:[], teamOf:{}, teamShcp:{}, teamSize:2,
     players: [{ key:'u_'+currentUser.username, username: currentUser.username, name: me.name || currentUser.username, guest:false, shcp: Math.round(me.hcp||0) }] };
   if(_cr.unsub) { try { _cr.unsub(); } catch(e) {} _cr.unsub = null; }
@@ -16719,6 +16726,7 @@ function renderCasualWizard() {
     h += '<div class="card" style="padding:12px 14px;margin-bottom:12px">'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
         '<label style="font-size:12px;color:var(--text-2)">Datum<br><input type="date" value="'+_cw.date+'" max="'+hcpTodayISO()+'" onchange="_cw.date=this.value;renderCasualCourseList()" style="margin:2px 0 0;width:160px"></label>'+
+        '<label style="font-size:12px;color:var(--text-2)">Starttid<br><input type="time" step="600" value="'+(_cw.time || casualDefaultStartTime())+'" onchange="_cw.time=this.value" style="margin:2px 0 0;width:120px"></label>'+
       '</div></div>';
     h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
       '<input id="cw-search" type="text" placeholder="Sök bana, klubb eller ort..." value="'+esc(_cw.search)+'" oninput="_cw.search=this.value;renderCasualCourseList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0"></div>';
@@ -16850,19 +16858,18 @@ function renderCasualCourseList() {
   if(!el) return;
   _cwRecentMap = null; // räknas om vid varje ritning
   var q = (_cw.search||'').trim().toLowerCase();
-  // Release 474: tydligare knapp för att skapa en bana som saknas
-  var h = '<button type="button" onclick="openCasualCourseForm(null)" style="width:100%;display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:12px;padding:12px 14px;border-radius:12px;cursor:pointer;font:inherit;background:var(--green-light);border:1.5px solid var(--green);color:var(--text)">'+
-    '<span style="width:38px;height:38px;border-radius:10px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-plus" style="font-size:22px"></i></span>'+
-    '<span style="flex:1;min-width:0"><b style="display:block;font-size:14px">Skapa ny bana</b><span style="font-size:12px;color:var(--text-2)">Saknas banan? Lägg till den med par och hålindex – tar en minut.</span></span>'+
-    '<i class="ti ti-chevron-right" style="font-size:18px;color:var(--green-dark)"></i></button>';
+  // Release 477: banvalet är huvudsaken - "Skapa ny bana" ligger diskret längst ner
+  var h = '';
+  var createBtn = '<button type="button" onclick="openCasualCourseForm(null)" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin:14px 0 4px;padding:11px 14px;border-radius:12px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;background:transparent;border:1px dashed var(--border-strong);color:var(--text-2)">'+
+    '<i class="ti ti-plus"></i> Hittar du inte banan? Skapa ny bana</button>';
   if(q) {
     // Sökträffar - banor med komplett scorekort först
     var list = (courseDb||[]).filter(function(c){ return [c.name, c.klubb, c.kommun, c.district].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0; })
       .sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
     var shown = list.slice(0, 30);
-    h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+'</div>';
+    h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+' – tryck på en bana för att välja den</div>';
     h += shown.length ? '<div class="cw-cgrid">'+shown.map(function(c){ return casualCourseRowHTML(c); }).join('')+'</div>' : '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
-    el.innerHTML = h;
+    el.innerHTML = h + createBtn;
     return;
   }
   var favIds = casualFavIds();
@@ -16873,6 +16880,7 @@ function renderCasualCourseList() {
   };
   h += '<div style="display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px">'+
     tab('fav','ti-star','Favoriter', favIds.length)+tab('recent','ti-history','Senast spelade')+tab('near','ti-map-pin','Nära mig')+'</div>';
+  h += '<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text);margin:2px 2px 8px"><i class="ti ti-hand-finger" style="color:var(--green-dark)"></i> Tryck på en bana för att välja den</div>';
   if(_cwTab === 'recent') {
     // Release 473: banor man spelat senast - sällskapsronder och tourrundor, nyast först
     var rec = casualRecentCourses();
@@ -16880,11 +16888,11 @@ function renderCasualCourseList() {
       : '<div class="card" style="padding:14px;font-size:13px;color:var(--text-2);text-align:center"><i class="ti ti-history" style="font-size:22px;color:var(--text-3)"></i><br>Inga spelade banor än. Banorna du spelar dyker upp här.</div>';
   } else if(_cwTab === 'near') {
     if(_cwPosState === 'idle') { casualRequestPos(); return; }
-    if(_cwPosState === 'loading') { h += '<p style="text-align:center;color:var(--text-3);font-size:13px;padding:14px 0"><i class="ti ti-loader-2"></i> Hämtar din position…</p>'; el.innerHTML = h; return; }
+    if(_cwPosState === 'loading') { h += '<p style="text-align:center;color:var(--text-3);font-size:13px;padding:14px 0"><i class="ti ti-loader-2"></i> Hämtar din position…</p>'; el.innerHTML = h + createBtn; return; }
     if(_cwPosState !== 'ok') {
       h += '<div class="card" style="padding:12px 14px;font-size:13px;color:var(--text-2)"><i class="ti ti-map-pin-off"></i> '+(_cwPosState==='unsupported'?'Enheten stöder inte platsdelning.':'Kunde inte hämta din position. Tillåt platsdelning för appen i telefonens inställningar.')+
         ' Sök på banans namn ovan, eller välj bland dina favoriter.<div style="margin-top:8px"><button class="btn btn-sm" onclick="casualRequestPos()"><i class="ti ti-refresh"></i> Försök igen</button></div></div>';
-      el.innerHTML = h; return;
+      el.innerHTML = h + createBtn; return;
     }
     var near = (courseDb||[]).filter(function(c){ return c.lat != null && c.lng != null && !isNaN(c.lat) && !isNaN(c.lng); })
       .map(function(c){ return { c:c, km: haversineKm(_cwPos.lat, _cwPos.lng, Number(c.lat), Number(c.lng)) }; })
@@ -16904,7 +16912,7 @@ function renderCasualCourseList() {
       if(favs.length > 6) h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">Visar 6 av '+favs.length+' favoriter (mest spelade först). Sök för att hitta övriga.</p>';
     }
   }
-  el.innerHTML = h;
+  el.innerHTML = h + createBtn;
 }
 // Golfregel 5.2b: man får inte spela/träna på tävlingsbanan före (eller mellan) sina
 // tävlingsronder samma dag. Ger en VARNING (inte spärr) om spelaren har en ej inlämnad
@@ -17256,7 +17264,7 @@ function createCasualRound() {
   var c = courseDb.find(function(x){ return x.id === _cw.courseId; });
   if(!c || !casualCourseHasCard(c)) { alert('Välj en bana med scorekort.'); return; }
   var doc = {
-    createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(),
+    createdBy: currentUser.username, createdAt: Date.now(), date: _cw.date || hcpTodayISO(), time: _cw.time || null,
     clubhouse: currentClubId(),
     courseId: c.id, courseName: c.name, holePars: c.holePars.slice(), holeHcpIndex: c.holeHcpIndex.slice(),
     sim: _cw.roundType === 'sim', roundType: _cw.roundType || 'casual', status: 'active',
@@ -25372,6 +25380,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (477)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond → Välj bana: banvalet är nu det tydliga – "Tryck på en bana för att välja den" står ovanför bankorten, och "Skapa ny bana" har flyttats längst ner som en diskret länk.' },
+      { type: 'new', text: 'Starttid bredvid datumet. Förvald tid är närmaste tiominuterspass minst tio minuter fram (klockan 10:27 föreslås 10:40), och den går att ändra i steg om tio minuter.' },
+    ]
+  },
   {
     date: '25 november 2026 (476)',
     items: [
