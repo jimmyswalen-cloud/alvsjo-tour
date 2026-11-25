@@ -16729,7 +16729,9 @@ function renderCasualWizard() {
         '<label style="font-size:12px;color:var(--text-2)">Starttid<br><input type="time" step="600" value="'+(_cw.time || casualDefaultStartTime())+'" onchange="_cw.time=this.value" style="margin:2px 0 0;width:120px"></label>'+
       '</div></div>';
     h += '<div style="position:relative;margin-bottom:10px"><i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)"></i>'+
-      '<input id="cw-search" type="text" placeholder="Sök bana, klubb eller ort..." value="'+esc(_cw.search)+'" oninput="_cw.search=this.value;renderCasualCourseList()" style="padding-left:32px;width:100%;box-sizing:border-box;margin:0"></div>';
+      '<input id="cw-search" type="text" placeholder="Sök bana, klubb eller ort..." value="'+esc(_cw.search)+'" oninput="_cw.search=this.value;document.getElementById(\'cw-search-clear\').style.display=this.value?\'flex\':\'none\';renderCasualCourseList()" style="padding-left:32px;padding-right:40px;width:100%;box-sizing:border-box;margin:0">'+
+      // Release 478: kryss som rensar sökningen
+      '<button type="button" id="cw-search-clear" aria-label="Rensa sökningen" onclick="casualClearSearch()" style="display:'+(_cw.search?'flex':'none')+';position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:none;border-radius:50%;background:var(--surface2);color:var(--text-2);align-items:center;justify-content:center;cursor:pointer;font-size:16px"><i class="ti ti-x"></i></button></div>';
     h += '<div id="cw-course-list"></div>';
     el.innerHTML = h;
     renderCasualCourseList();
@@ -16853,6 +16855,14 @@ function casualRecentCourses() {
   });
   return Object.keys(byId).map(function(k){ return byId[k]; }).sort(function(a, b){ return a.date < b.date ? 1 : -1; });
 }
+function casualClearSearch() {
+  if(!_cw) return;
+  _cw.search = '';
+  var inp = document.getElementById('cw-search'), b = document.getElementById('cw-search-clear');
+  if(inp) { inp.value = ''; inp.focus(); }
+  if(b) b.style.display = 'none';
+  renderCasualCourseList();
+}
 function renderCasualCourseList() {
   var el = document.getElementById('cw-course-list');
   if(!el) return;
@@ -16867,7 +16877,7 @@ function renderCasualCourseList() {
     var list = (courseDb||[]).filter(function(c){ return [c.name, c.klubb, c.kommun, c.district].filter(Boolean).join(' ').toLowerCase().indexOf(q) >= 0; })
       .sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
     var shown = list.slice(0, 30);
-    h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+' – tryck på en bana för att välja den</div>';
+    h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+(list.length?' – tryck på en bana för att välja den':'')+'</div>';
     h += shown.length ? '<div class="cw-cgrid">'+shown.map(function(c){ return casualCourseRowHTML(c); }).join('')+'</div>' : '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
     el.innerHTML = h + createBtn;
     return;
@@ -16982,8 +16992,12 @@ function renderCasualUserList(q) {
   q = (q||'').trim().toLowerCase();
   var inRound = {}; _cw.players.forEach(function(p){ if(p.username) inRound[p.username] = true; });
   var row = function(u, sub){
-    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'+
-      '<span style="flex:1;font-size:14px">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+(sub?' · '+sub:'')+'</span></span>'+
+    // Release 479: spelarens bild (eller initialer) framför namnet
+    var img = playerPhoto(u.username, u.img);
+    var av = img ? '<img src="'+img+'" alt="" loading="lazy" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">'
+                 : '<div class="avatar-ph" style="width:34px;height:34px;font-size:12px;flex-shrink:0">'+esc(ini(u.name||u.username))+'</div>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'+av+
+      '<span style="flex:1;font-size:14px;min-width:0">'+esc(u.name||u.username)+' <span style="font-size:11px;color:var(--text-3)">HCP '+hcpFmt(u.hcp)+(sub?' · '+sub:'')+'</span></span>'+
       '<button class="btn btn-sm btn-primary" onclick="casualAddUser(\''+esc(u.username)+'\')"><i class="ti ti-plus"></i></button></div>';
   };
   var all = clubUsers().filter(function(u){
@@ -25380,6 +25394,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (479)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond → Lägg till från registret: spelarnas profilbilder (eller initialer) visas nu framför namnen, både under "Senast spelat med" och "Alla spelare".' },
+    ]
+  },
+  {
+    date: '25 november 2026 (478)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond → Välj bana: ett kryss i sökfältet rensar sökningen med ett tryck (visas när man har skrivit något).' },
+    ]
+  },
   {
     date: '25 november 2026 (477)',
     items: [
