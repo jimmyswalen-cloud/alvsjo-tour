@@ -3798,6 +3798,9 @@ function showCourseStats(fromCoursesShortcut) {
 // statistikflikarna och med rubriken BANOR) - inte hela statistikvyn.
 var _statsCoursesOnly = false;
 function showCoursesShortcut() {
+  // Release 487: för admin leder "Banor" till baninställningarna (Bandata). Spelare utan
+  // adminbehörighet kan inte ändra banor och får banvyn med banornas statistik.
+  if(isAdmin()) { showCourseDataPage(); return; }
   _statsCoursesOnly = true;
   if(_statsView !== 'course') {
     _statsView = 'course';
@@ -25422,6 +25425,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (487)',
+    items: [
+      { type: 'fixed', text: 'Mer → Banor tar nu admin direkt till baninställningarna (Bandata: lägg till, redigera och importera banor) i stället för till statistiken. Spelare utan adminbehörighet får som förut en vy med banorna.' },
+    ]
+  },
   {
     date: '25 november 2026 (486)',
     items: [
