@@ -403,6 +403,8 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 470: användarkortet visas bara på startsidan */
+body:not(:has(#tours-screen:not([style*="none"]) #home-screen-content:not([style*="none"]))) #user-bar{display:none !important}
 /* Release 468: "Nyheter i appen" visas inte på inloggningen (knappens egen display skrev över hidden) */
 #release-notes-toggle,#release-notes-panel{display:none !important}
 /* Release 464: "En del av ClubhouseTour" – vit logga i mörkt läge, mörk i ljust */
@@ -25302,6 +25304,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (470)',
+    items: [
+      { type: 'improved', text: 'Användarkortet (bild, namn, HCP, klubbhus och knapparna Profil, Notiser m.fl.) visas nu bara högst upp på startsidan – inte längre på alla andra sidor, så att innehållet kommer högre upp.' },
+      { type: 'improved', text: 'Landningssidan om ClubhouseTour har fått fler delar: sällskapsrond med Wolf, What\'s in the Bag, en Ryder Cup-bild med flaggor och ställningstavla som i appen, samt "Och mycket mer" (väggen, eclectic, utmaningar, simulatorliga, anmälan, notiser, eget klubbhus och banstatistik).' },
+    ]
+  },
   {
     date: '24 november 2026 (469)',
     items: [
