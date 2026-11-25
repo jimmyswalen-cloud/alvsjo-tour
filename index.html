@@ -20285,7 +20285,7 @@ function liveSectionHeaderHTML(icon, label) {
 }
 // "Idag 19:00", "Imorgon 21:00", "Mån 30 nov · 19:00" - eller "Ingen boll".
 function liveTeeLabelHTML(r) {
-  if(r.notStarted || !r.teeDate) return '<span style="color:var(--text-3)">'+(r.notStarted ? 'Ingen boll' : 'Ej startat')+'</span>';
+  if(!r.teeDate) return '<span style="color:var(--text-3)">'+(r.notStarted ? 'Ingen boll' : 'Ej startat')+'</span>';
   var today = hcpTodayISO(), tm = new Date(today+'T12:00:00'); tm.setDate(tm.getDate()+1);
   var tomorrow = tm.toISOString().slice(0,10), day;
   if(r.teeDate === today) day = '<b style="color:var(--green-dark)">Idag</b>';
@@ -20303,6 +20303,14 @@ function isMePlayer(t, pi) {
 function mePillHTML() { return ''; } // release 488: den markerade raden räcker – ingen DU-etikett
 
 function buildLiveStandingsRowsHTML(rows) {
+  // Release 489: en spelare som ligger i en boll men vars boll inte startat livescoring
+  // ännu räknades som "Anmäld utan boll". Nu hamnar den under "Startar senare" med
+  // speldag och tid, och bara de som verkligen saknar boll visas som utan boll.
+  var isWaiting = function(r){ return (!r.notStarted && r.thru === 0 && !r.submitted) || (r.notStarted && !!r.teeDate); };
+  var isNoBoll = function(r){ return r.notStarted && !r.teeDate; };
+  var started = rows.filter(function(r){ return !isWaiting(r) && !isNoBoll(r); });
+  var waitingRows = rows.filter(isWaiting).sort(function(a, b){ return String(a.teeDate || '9').localeCompare(String(b.teeDate || '9')) || String(a.teeTime || '99').localeCompare(String(b.teeTime || '99')); });
+  rows = started.concat(waitingRows, rows.filter(isNoBoll));
   _liveStandingsRowsCache = rows;
   return rows.map(function(r, idx){
     var diffFmt = formatLiveDiff(r.diff, r.thru, r.isStab);
@@ -20336,16 +20344,15 @@ function buildLiveStandingsRowsHTML(rows) {
     // Release 431: tydliga steg i tabellen. Spelare som har en boll men inte
     // slagit ett slag än visar sin speldag och starttid i stället för streck,
     // och de som saknar boll visar det. Varje grupp får en liten rubrik.
-    var waiting = !r.notStarted && r.thru === 0 && !r.submitted;
+    var waiting = isWaiting(r), noBoll = isNoBoll(r);
     var prev = idx > 0 ? rows[idx-1] : null;
-    var prevWaiting = prev && !prev.notStarted && prev.thru === 0 && !prev.submitted;
     var sectionHdr = '';
-    if(waiting && (!prev || !prevWaiting) && idx > 0) sectionHdr = liveSectionHeaderHTML('ti-clock', 'Startar senare');
-    else if(r.notStarted && (!prev || !prev.notStarted)) sectionHdr = liveSectionHeaderHTML('ti-user-question', 'Anmälda utan boll');
-    if(waiting || r.notStarted) {
+    if(waiting && (!prev || !isWaiting(prev)) && idx > 0) sectionHdr = liveSectionHeaderHTML('ti-clock', 'Startar senare');
+    else if(noBoll && (!prev || !isNoBoll(prev))) sectionHdr = liveSectionHeaderHTML('ti-user-question', 'Anmälda utan boll');
+    if(waiting || noBoll) {
       var meW = isMePlayer(getTour(), r.pi);
-      return sectionHdr + '<div class="row'+(meW?' me-row':'')+'" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(r.notStarted?';opacity:.6':'')+'">'+
-        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px"></span><span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(r.notStarted?';color:var(--text-3)':'')+'">'+esc(abbreviateFirstName(r.name))+(meW?mePillHTML():'')+'</span></div>'+
+      return sectionHdr + '<div class="row'+(meW?' me-row':'')+'" style="justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)'+(noBoll?';opacity:.6':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer" onclick="openPlayerLiveScorecard('+idx+')"><span style="width:14px"></span><span style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'+(noBoll?';color:var(--text-3)':'')+'">'+esc(abbreviateFirstName(r.name))+(meW?mePillHTML():'')+'</span></div>'+
         '<div style="font-size:11px;flex-shrink:0;color:var(--text-2);white-space:nowrap;text-align:right">'+liveTeeLabelHTML(r)+'</div>'+
       '</div>';
     }
@@ -25425,6 +25432,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (489)',
+    items: [
+      { type: 'fixed', text: 'Live-tabellen: en spelare med boll vars livescoring inte startat än (t.ex. en boll på en senare speldag) visades felaktigt under "Anmälda utan boll". Nu visas den under "Startar senare" med speldag och starttid, sorterat i tidsordning.' },
+    ]
+  },
   {
     date: '25 november 2026 (488)',
     items: [
