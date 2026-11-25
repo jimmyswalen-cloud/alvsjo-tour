@@ -403,6 +403,18 @@ body.oom-landscape #leaderboard-section,body.oom-landscape #oom-head-row{display
 /* Release 417: informationsruta (blå) som fungerar i både ljust och mörkt läge */
 .info-banner{background:#EAF3FB;border:1px solid #B9D9F0;color:var(--info-text)}
 html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
+/* Release 476: bankort i sällskapsrondens banval (förslag B) */
+.cw-cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:8px}
+.cw-ccard{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column}
+.cw-ccard:active{transform:scale(.98)}
+.cw-cimg{position:relative;height:92px;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.75);font-size:26px}
+.cw-cstar{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cw-cstar.on{color:#F2C14E}
+.cw-ctx{padding:8px 10px 10px}
+.cw-cname{font-weight:700;font-size:14px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cw-cextra{font-size:11px;color:var(--text-2);font-weight:600;margin-top:3px;line-height:1.3}
+.cw-cmeta{font-size:11px;margin-top:3px}
+@media (min-width:700px){ .cw-cgrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
 /* Release 470: användarkortet visas bara på startsidan */
 body:not(:has(#tours-screen:not([style*="none"]) #home-screen-content:not([style*="none"]))) #user-bar{display:none !important}
 /* Release 468: "Nyheter i appen" visas inte på inloggningen (knappens egen display skrev över hidden) */
@@ -16797,12 +16809,20 @@ function casualCourseRowHTML(c, extra) {
     if(rp) extra = 'Senast spelad ' + sfDateLbl(rp.date) + (rp.n > 1 ? ' · ' + rp.n + ' rundor' : '');
   }
   if(currentUser && _cw && casualCompetitionConflict(currentUser.username, c, _cw.date)) extra = '<span style="color:#C2410C">⚠️ Tävlingsbana idag</span>' + (extra ? ' · ' + extra : '');
-  return '<div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
-    (img?'<img src="'+img+'" style="width:52px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">':'<div style="width:52px;height:38px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-golf" style="color:var(--text-3)"></i></div>')+
-    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name)+'</div>'+
-    '<div style="font-size:12px;color:'+(ok?'var(--green-dark)':'#B45309')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(extra?'<span style="color:var(--text-2);font-weight:600">'+extra+'</span> · ':'')+(ok?'<i class="ti ti-check"></i> Scorekort · '+c.holePars.length+' hål · par '+c.holePars.reduce(function(a,b){return a+b;},0):'<i class="ti ti-alert-circle"></i> Scorekort saknas – tryck för att lägga in')+'</div></div>'+
-    '<button type="button" title="'+(fav?'Ta bort favorit':'Lägg till som favorit')+'" onclick="toggleCasualFavorite(\''+c.id+'\', event)" style="border:none;background:transparent;cursor:pointer;padding:6px;font-size:20px;color:'+(fav?'#E0A030':'var(--text-3)')+'"><i class="ti '+(fav?'ti-star-filled':'ti-star')+'"></i></button>'+
-  '</div>';
+  // Release 476 (förslag B): stora bankort med bild, två per rad
+  var par = ok ? c.holePars.reduce(function(a,b){return a+b;},0) : 0;
+  var palette = ['#2F6B3F,#9CC36A','#1E4D5C,#6FA7A0','#4A5D2A,#B9C77A','#2B3F55,#8FB3C9','#3E5A2C,#C9B46A'];
+  var hsh = 0; (c.name||'').split('').forEach(function(ch){ hsh = (hsh*31 + ch.charCodeAt(0)) % 997; });
+  var ph = palette[hsh % palette.length];
+  return '<div class="cw-ccard" onclick="'+(ok?'casualPickCourse(\''+c.id+'\')':'openCasualCourseForm(\''+c.id+'\')')+'">'+
+    '<div class="cw-cimg" style="'+(img?'background-image:url(\''+img+'\')':'background:linear-gradient(135deg,'+ph+')')+'">'+
+      (img?'':'<i class="ti ti-golf"></i>')+
+      '<button type="button" title="'+(fav?'Ta bort favorit':'Lägg till som favorit')+'" onclick="toggleCasualFavorite(\''+c.id+'\', event)" class="cw-cstar'+(fav?' on':'')+'"><i class="ti '+(fav?'ti-star-filled':'ti-star')+'"></i></button>'+
+    '</div>'+
+    '<div class="cw-ctx"><div class="cw-cname">'+esc(c.name)+'</div>'+
+      (extra?'<div class="cw-cextra">'+extra+'</div>':'')+
+      '<div class="cw-cmeta" style="color:'+(ok?'var(--green-dark)':'#B45309')+'">'+(ok?'<i class="ti ti-check"></i> '+c.holePars.length+' hål · par '+par:'<i class="ti ti-alert-circle"></i> Scorekort saknas')+'</div>'+
+    '</div></div>';
 }
 // Release 473: senast spelade banor för den inloggade (sällskapsronder + tourrundor).
 var _cwRecentMap = null;
@@ -16841,7 +16861,7 @@ function renderCasualCourseList() {
       .sort(function(a,b){ return (casualCourseHasCard(b) - casualCourseHasCard(a)) || a.name.localeCompare(b.name,'sv'); });
     var shown = list.slice(0, 30);
     h += '<div style="font-size:12px;color:var(--text-3);margin:0 2px 6px">'+list.length+' träff'+(list.length===1?'':'ar')+'</div>';
-    h += shown.length ? shown.map(function(c){ return casualCourseRowHTML(c); }).join('') : '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
+    h += shown.length ? '<div class="cw-cgrid">'+shown.map(function(c){ return casualCourseRowHTML(c); }).join('')+'</div>' : '<p class="empty">Ingen bana matchar "'+esc(_cw.search)+'".</p>';
     el.innerHTML = h;
     return;
   }
@@ -16856,7 +16876,7 @@ function renderCasualCourseList() {
   if(_cwTab === 'recent') {
     // Release 473: banor man spelat senast - sällskapsronder och tourrundor, nyast först
     var rec = casualRecentCourses();
-    h += rec.length ? rec.slice(0, 8).map(function(x){ return casualCourseRowHTML(x.c); }).join('')
+    h += rec.length ? '<div class="cw-cgrid">'+rec.slice(0, 8).map(function(x){ return casualCourseRowHTML(x.c); }).join('')+'</div>'
       : '<div class="card" style="padding:14px;font-size:13px;color:var(--text-2);text-align:center"><i class="ti ti-history" style="font-size:22px;color:var(--text-3)"></i><br>Inga spelade banor än. Banorna du spelar dyker upp här.</div>';
   } else if(_cwTab === 'near') {
     if(_cwPosState === 'idle') { casualRequestPos(); return; }
@@ -16869,7 +16889,7 @@ function renderCasualCourseList() {
     var near = (courseDb||[]).filter(function(c){ return c.lat != null && c.lng != null && !isNaN(c.lat) && !isNaN(c.lng); })
       .map(function(c){ return { c:c, km: haversineKm(_cwPos.lat, _cwPos.lng, Number(c.lat), Number(c.lng)) }; })
       .sort(function(a,b){ return a.km - b.km; }).slice(0, 5);
-    h += near.length ? near.map(function(x){ return casualCourseRowHTML(x.c, (x.km < 10 ? x.km.toFixed(1).replace('.',',') : Math.round(x.km))+' km'); }).join('')
+    h += near.length ? '<div class="cw-cgrid">'+near.map(function(x){ return casualCourseRowHTML(x.c, '<i class="ti ti-map-pin"></i> '+(x.km < 10 ? x.km.toFixed(1).replace('.',',') : Math.round(x.km))+' km'); }).join('')+'</div>'
       : '<p class="empty">Inga banor med koordinater hittades.</p>';
     h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">De 5 närmaste banorna. Sök ovan för att hitta andra.</p>';
   } else {
@@ -16880,8 +16900,8 @@ function renderCasualCourseList() {
       .sort(function(a,b){ return ((played[b.id]||0) - (played[a.id]||0)) || a.name.localeCompare(b.name,'sv'); });
     if(!favs.length) h += '<div class="card" style="padding:14px;font-size:13px;color:var(--text-2);text-align:center"><i class="ti ti-star" style="font-size:22px;color:#E0A030"></i><br>Inga favoriter än. Tryck på stjärnan vid en bana för att spara den här.</div>';
     else {
-      h += favs.slice(0, 5).map(function(c){ return casualCourseRowHTML(c, played[c.id] ? played[c.id]+' rond'+(played[c.id]===1?'':'er') : null); }).join('');
-      if(favs.length > 5) h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">Visar 5 av '+favs.length+' favoriter (mest spelade först). Sök för att hitta övriga.</p>';
+      h += '<div class="cw-cgrid">'+favs.slice(0, 6).map(function(c){ return casualCourseRowHTML(c, played[c.id] ? played[c.id]+' rond'+(played[c.id]===1?'':'er') : null); }).join('')+'</div>';
+      if(favs.length > 6) h += '<p style="font-size:11px;color:var(--text-3);text-align:center;margin:4px 0 0">Visar 6 av '+favs.length+' favoriter (mest spelade först). Sök för att hitta övriga.</p>';
     }
   }
   el.innerHTML = h;
@@ -25352,6 +25372,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (476)',
+    items: [
+      { type: 'improved', text: 'Sällskapsrond → Välj bana: banorna visas nu som stora kort med bild, två per rad (tre på större skärmar). Varje kort visar banans namn, när du senast spelade den, antal hål och par, och stjärnan för favorit sitter i bildens hörn.' },
+    ]
+  },
   {
     date: '25 november 2026 (475)',
     items: [
