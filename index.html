@@ -3810,6 +3810,7 @@ function showGlobalSettings() {
   _gsSection = null;
   renderGlobalSettings();
   window.scrollTo(0, 0);
+  setPageHero('INSTÄLLNINGAR'); // release 469
 }
 
 // Egen undersida (nås via Inställningar) för all bandata samlat - både
@@ -3827,6 +3828,7 @@ function showCourseDataPage() {
   });
   renderCourseDataPage();
   window.scrollTo(0, 0);
+  setPageHero('BANDATA'); // release 469
 }
 
 function renderCourseDataPage() {
@@ -3850,6 +3852,7 @@ function showBrandLogosPage() {
   });
   renderLogoManagerSection('brand-logos-content');
   window.scrollTo(0, 0);
+  setPageHero('MÄRKESLOGGOR'); // release 469
 }
 
 function renderHomeUserBar() {
@@ -25300,6 +25303,12 @@ function findUser(username) {
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
   {
+    date: '24 november 2026 (469)',
+    items: [
+      { type: 'fixed', text: 'Headern visade "TOURER" även på sidor som inte har med tourerna att göra. Nu står det t.ex. ANVÄNDARE, MIN PROFIL, SPELARE, INSTÄLLNINGAR, IDÉER & NYHETER, HJÄLP & TIPS, BANDATA och MÄRKESLOGGOR.' },
+    ]
+  },
+  {
     date: '24 november 2026 (468)',
     items: [
       { type: 'fixed', text: 'Inloggningen: "Nyheter i appen" syntes fortfarande trots att den skulle vara borttagen. Nu är den borta.' },
@@ -28815,7 +28824,7 @@ function showIdeaWall() {
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'idea-wall-screen' ? '' : 'none';
   });
-  updateHero(null);
+  setPageHero('IDÉER & NYHETER');
   renderReleaseNotesInline();
   renderIdeaWall();
   window.scrollTo(0, 0);
@@ -28943,7 +28952,7 @@ function showHelp() {
     var el = document.getElementById(id);
     if(el) el.style.display = id === 'help-screen' ? '' : 'none';
   });
-  updateHero(null);
+  setPageHero('HJÄLP & TIPS');
   renderHelpContent();
   window.scrollTo(0, 0);
 }
@@ -29635,6 +29644,15 @@ function submitChangePassword() {
 }
 
 // ── ADMIN: USER MANAGEMENT ─────────────────────────────────────────────────
+// Release 469: sidor utanför tourerna får en egen rubrik i headern i stället för "TOURER".
+function setPageHero(title) {
+  try {
+    updateHero(null);
+    var ht = document.getElementById('hero-title');
+    if(ht) ht.textContent = title;
+    applyWordmarkHero();
+  } catch(e) {}
+}
 function showUsersView(fromSettings) {
   var ub = document.getElementById('users-back');
   if(ub) {
@@ -29644,7 +29662,7 @@ function showUsersView(fromSettings) {
   document.getElementById('tours-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = '';
-  updateHero(null);
+  setPageHero('ANVÄNDARE');
   var profileEl = document.getElementById('global-player-profile');
   var listEl = document.getElementById('users-list');
   if(profileEl) profileEl.style.display = 'none';
@@ -29730,6 +29748,7 @@ function showGlobalPlayerProfile(username) {
   var profileEl = document.getElementById('global-player-profile');
   if(listEl) listEl.style.display = 'none'; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = 'none';
   if(profileEl) { profileEl.style.display = ''; profileEl.innerHTML = buildGlobalPlayerProfileHTML(username); }
+  setPageHero(currentUser && username === currentUser.username ? 'MIN PROFIL' : 'SPELARE');
   window.scrollTo(0, 0);
 }
 
@@ -29737,7 +29756,7 @@ function goBackFromGlobalProfile() {
   var listEl = document.getElementById('users-list');
   var profileEl = document.getElementById('global-player-profile');
   if(profileEl) profileEl.style.display = 'none';
-  if(listEl) listEl.style.display = ''; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = '';
+  if(listEl) listEl.style.display = ''; var cfEl = document.getElementById('users-club-filter'); if(cfEl) cfEl.style.display = ''; setPageHero('ANVÄNDARE');
   window.scrollTo(0, 0);
 }
 
