@@ -419,6 +419,9 @@ html[data-theme="dark"] .info-banner{background:#14283A;border-color:#2F5878}
 body:not(:has(#tours-screen:not([style*="none"]) #home-screen-content:not([style*="none"]))) #user-bar{display:none !important}
 /* Release 468: "Nyheter i appen" visas inte på inloggningen (knappens egen display skrev över hidden) */
 #release-notes-toggle,#release-notes-panel{display:none !important}
+/* Release 480: "En del av ClubhouseTour" – loggan krymps/kapas aldrig, raden bryts hellre */
+.ch-powered a, #login-powered a{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;max-width:100%}
+html:not([data-theme="dark"]) .ch-powered-light{display:inline-block}
 /* Release 464: "En del av ClubhouseTour" – vit logga i mörkt läge, mörk i ljust */
 .ch-powered-light{display:none}
 html:not([data-theme="dark"]) .ch-powered-dark{display:none}
@@ -637,7 +640,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
       <div id="release-notes-panel" style="display:none;text-align:left;background:rgba(255,255,255,.97);border-radius:12px;padding:14px 16px;margin-top:8px;max-height:280px;overflow-y:auto;box-shadow:0 8px 28px rgba(0,0,0,.25)"></div>
     </div>
     <div id="login-powered" style="display:none;position:relative;margin-top:14px;text-align:center;z-index:1;font-size:11px;font-weight:600;letter-spacing:.08em;color:rgba(255,255,255,.8)">
-    <a href="om.html" title="Om ClubhouseTour" style="color:inherit;text-decoration:none">EN DEL AV <img src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:18px;width:auto;vertical-align:-4px;margin-left:4px"></a>
+    <a href="om.html" title="Om ClubhouseTour" style="color:inherit;text-decoration:none">EN DEL AV <img src="grafik/logor/ordbild-boll-liten.png" alt="ClubhouseTour" style="height:18px;width:auto;max-width:none;flex-shrink:0"></a>
   </div>
   </div>
 </div>
@@ -939,7 +942,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
 <!-- Release 471: appversion och "En del av ClubhouseTour" längst ner på alla sidor -->
 <div id="app-footer" style="padding:18px 0 6px">
   <div id="app-version-label" style="text-align:center;font-size:11px;color:var(--text-3);padding:6px 0 4px;letter-spacing:.3px"></div>
-  <div class="ch-powered" style="text-align:center;padding:2px 0 22px;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)"><a href="om.html" title="Om ClubhouseTour" style="color:inherit;text-decoration:none">EN DEL AV <img class="ch-powered-dark" src="grafik/logor/ordbild-boll.png" alt="ClubhouseTour" style="height:16px;width:auto;vertical-align:-4px;margin-left:3px"><img class="ch-powered-light" src="grafik/logor/ordbild-boll-ljus.png" alt="ClubhouseTour" style="height:16px;width:auto;vertical-align:-4px;margin-left:3px"></a></div>
+  <div class="ch-powered" style="text-align:center;padding:2px 0 22px;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-3)"><a href="om.html" title="Om ClubhouseTour" style="color:inherit;text-decoration:none">EN DEL AV <img class="ch-powered-dark" src="grafik/logor/ordbild-boll-liten.png" alt="ClubhouseTour" style="height:16px;width:auto;max-width:none;flex-shrink:0"><img class="ch-powered-light" src="grafik/logor/ordbild-boll-ljus-liten.png" alt="ClubhouseTour" style="height:16px;width:auto;max-width:none;flex-shrink:0"></a></div>
 </div>
 
 <div id="modal-mc"></div>
@@ -25394,6 +25397,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (480)',
+    items: [
+      { type: 'fixed', text: 'Loggan i "En del av ClubhouseTour" längst ner kunde kapas på bredden i mobilen. Nu används en lättare loggfil i rätt storlek och loggan krymps eller beskärs aldrig – på riktigt smala skärmar bryts raden i stället.' },
+    ]
+  },
   {
     date: '25 november 2026 (479)',
     items: [
