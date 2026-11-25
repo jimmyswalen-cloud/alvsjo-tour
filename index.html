@@ -557,6 +557,9 @@ html[data-theme="dark"] [style*="#FFE3B3" i]:not(.home-card):not(.bs-it){backgro
 /* Märkesloggor (svart text på vit/transparent botten) inverteras i mörkt läge: vit text,
    och den (nu svarta) bakgrunden blandas bort med screen så loggan ser transparent ut.
    hue-rotate återställer ev. färgade detaljer (t.ex. röda) till ungefär sin ursprungsfärg. */
+/* Release 484: i ljust läge blandas loggans vita bakgrund bort (multiply), så loggan smälter in
+   även på färgade rader som den gröna "DU"-raden. I mörkt läge sköter screen samma sak. */
+img.brand-logo{mix-blend-mode:multiply;background:transparent !important}
 html[data-theme="dark"] img.brand-logo{filter:invert(1) hue-rotate(180deg);mix-blend-mode:screen;background:transparent !important}
 html[data-theme="dark"] .brand-logo-box{background:transparent !important;padding:0 !important}
 html[data-theme="dark"] [style*="#FFF6DD"]{background:linear-gradient(90deg,rgba(186,117,23,.28),transparent) !important}
@@ -3773,7 +3776,10 @@ function showToursList() {
   window.scrollTo(0, 0);
 }
 
-function showCourseStats() {
+function showCourseStats(fromCoursesShortcut) {
+  var _wasOnly = _statsCoursesOnly;
+  if(!fromCoursesShortcut) _statsCoursesOnly = false;
+  if(_wasOnly !== _statsCoursesOnly || fromCoursesShortcut) { var _csc = document.getElementById('course-stats-content'); if(_csc) _csc.innerHTML = ''; } // rita om när läget byts
   document.getElementById('tours-screen').style.display = '';
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('users-screen').style.display = 'none';
@@ -3783,19 +3789,23 @@ function showCourseStats() {
   });
   renderCourseStatsView();
   window.scrollTo(0, 0);
-  setPageHero('STATISTIK'); // release 472
+  setPageHero(_statsCoursesOnly ? 'BANOR' : 'STATISTIK'); // release 472/483
 }
 
 // Genväg "Banor" i Mer-menyn: öppnar Statistik direkt på fliken Banstatistik
 // (banlistan med sök, distrikt, karta och "Nära mig"), oavsett vilken flik som var vald sist.
+// Release 483: "Banor" i Mer-menyn öppnar en egen banvy (banstatistiken utan
+// statistikflikarna och med rubriken BANOR) - inte hela statistikvyn.
+var _statsCoursesOnly = false;
 function showCoursesShortcut() {
+  _statsCoursesOnly = true;
   if(_statsView !== 'course') {
     _statsView = 'course';
     try { localStorage.setItem('statsView', 'course'); } catch(e) {}
     var el = document.getElementById('course-stats-content');
     if(el) el.innerHTML = '';
   }
-  showCourseStats();
+  showCourseStats(true);
 }
 
 function showTourSearch() {
@@ -4464,6 +4474,7 @@ function setStatsView(v) {
   renderCourseStatsView();
 }
 function statsViewTabsHTML() {
+  if(_statsCoursesOnly) return ''; // release 483: banvyn visar bara banorna
   var b = function(v, icon, label){
     var on = _statsView === v;
     return '<button type="button" onclick="setStatsView(\''+v+'\')" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 8px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;white-space:nowrap;'+
@@ -25405,6 +25416,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (484)',
+    items: [
+      { type: 'fixed', text: 'Märkesloggorna (t.ex. Titleist) fick en vit ruta bakom sig på den gröna "DU"-raden och andra färgade rader. Nu smälter loggorna in mot bakgrunden i både ljust och mörkt läge.' },
+    ]
+  },
+  {
+    date: '25 november 2026 (483)',
+    items: [
+      { type: 'fixed', text: 'Mer → Banor öppnade hela statistikvyn med rubriken STATISTIK. Nu öppnas en egen banvy med rubriken BANOR som bara visar banorna (utan statistikflikarna). Statistikknappen i menyn längst ner visar som förut all statistik.' },
+    ]
+  },
   {
     date: '25 november 2026 (482)',
     items: [
