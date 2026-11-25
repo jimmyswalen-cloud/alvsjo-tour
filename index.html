@@ -20300,7 +20300,7 @@ function isMePlayer(t, pi) {
   if(!currentUser || pi == null) return false;
   try { var pl = (t && getPlayersForTour(t)) || [], p = pl[pi] || (t && t.players && t.players[pi]); return !!(p && p.username === currentUser.username); } catch(x) { return false; }
 }
-function mePillHTML() { return '<span class="me-pill">DU</span>'; }
+function mePillHTML() { return ''; } // release 488: den markerade raden räcker – ingen DU-etikett
 
 function buildLiveStandingsRowsHTML(rows) {
   _liveStandingsRowsCache = rows;
@@ -25425,6 +25425,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (488)',
+    items: [
+      { type: 'improved', text: 'Listorna: din egen rad markeras fortfarande med grön bakgrund och kant, men etiketten "DU" vid namnet är borttagen.' },
+    ]
+  },
   {
     date: '25 november 2026 (487)',
     items: [
