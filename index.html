@@ -6224,8 +6224,12 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 // på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
 // krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
 function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality, allowFit) {
-  // Release 499: aldrig två beskärningsrutor samtidigt (de delar id:n, så den andra blev tom)
-  closeCropModalOnly();
+  // Release 499/500: aldrig två beskärningsrutor samtidigt (de delar id:n, så den andra blev tom).
+  // Kommer ett andra anrop direkt efter det första (dubbel inklistring/dubbelt event) behålls
+  // den första rutan och det nya anropet ignoreras; annars ersätts en gammal ruta.
+  if(document.getElementById('crop-modal-overlay') && window._cropOpenedAt && Date.now() - window._cropOpenedAt < 1500) return;
+  document.querySelectorAll('#crop-modal-overlay').forEach(function(o){ try { o.remove(); } catch(err) {} });
+  window._cropOpenedAt = Date.now();
   crop.cb = cb;
   // allowFit: man får zooma ut tills HELA bilden syns (t.ex. en logga i headern).
   // Tomrummet runt bilden fylls med bildens egen kantfärg så det smälter ihop.
@@ -6261,7 +6265,9 @@ function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality, allowFit) {
   ov.appendChild(box);
   document.body.appendChild(ov);
   setTimeout(function() {
-    var cbox = document.getElementById('crop-box');
+    // Release 500: hämta rutan i DEN HÄR overlayn (inte första bästa med samma id)
+    if(!ov.isConnected) return;
+    var cbox = ov.querySelector('#crop-box');
     if(!cbox) return;
     var cW = cbox.offsetWidth;
     // Höga format (t.ex. stående bilder) får inte bli högre än skärmen tillåter: krymp rutan och centrera den.
@@ -6291,7 +6297,7 @@ function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality, allowFit) {
       cbox.addEventListener('mousedown', cropMD);
       cbox.addEventListener('touchstart', cropTS, {passive:false});
       cbox.addEventListener('wheel', cropWheel, {passive:false});
-      document.getElementById('crop-save-btn').onclick = cropCommit;
+      var sb = ov.querySelector('#crop-save-btn'); if(sb) sb.onclick = cropCommit;
     };
     img.src = dataUrl;
   }, 80);
@@ -25478,6 +25484,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '26 november 2026 (500)',
+    items: [
+      { type: 'fixed', text: 'Klistra in bild: ytterligare skydd mot att "Välj bildutsnitt" öppnas två gånger. Kommer två anrop direkt efter varandra behålls den första rutan (med bilden) och det andra ignoreras, och bilden läggs alltid i rätt ruta.' },
+    ]
+  },
   {
     date: '26 november 2026 (499)',
     items: [
