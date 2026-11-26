@@ -707,6 +707,7 @@ html[data-theme="dark"] .leaflet-container{filter:brightness(.8)}
   <div id="home-screen-content">
     <div id="home-champ-greeting"></div>
     <div id="home-user-bar" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px"></div>
+    <div id="home-ongoing-widget"></div>
     <div id="home-push-banner"></div>
     <div id="home-billing-widget"></div>
     <div id="home-pending-users-widget"></div>
@@ -1667,6 +1668,7 @@ function initFirebaseSync(onFirstLoad) {
       try { seedTrackmanForIndoorTour(); } catch(e) {}
       try { applyTheme(); } catch(e) {}
       try { applyClubFilters(); renderClubSwitcher(); } catch(e) {}
+      try { renderBnavMain(); } catch(e) {}
       try { renderHomePendingUsers(); } catch(e) {}
       try { if(document.getElementById('wall-composer') && document.activeElement && document.activeElement.id !== 'wall-input') renderWallComposer(); else renderWallHeadActions(); } catch(e) {}
     }
@@ -16682,6 +16684,10 @@ function casualTotals(r, pl) {
 function renderHomeCasualWidget() {
   var el = document.getElementById('home-casual-widget');
   if(!el || !currentUser) return;
+  // Release 493: pågående ronder visas högst upp (mellan spelarraden och väggen) i stället för
+  // under Meny, och mittknappen i menyraden ritas om samtidigt så den alltid visar "Fortsätt"
+  // när kortet syns (tidigare kunde knappen hänga kvar på "Ny rond", t.ex. efter klubbhusbyte).
+  var top = document.getElementById('home-ongoing-widget');
   var mine = (_casualAll||[]).filter(function(r){ return r.status === 'active' && (r.createdBy === currentUser.username || casualIsParticipant(r, currentUser.username)); })
     .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); });
   var h = '<div class="home-card" onclick="startCasualRoundWizard()" style="background:linear-gradient(135deg,#FFE3B3,#FFD08A);border:none;margin-bottom:12px;flex-direction:row;justify-content:flex-start;text-align:left;gap:14px;padding:1rem 1.2rem">'+
@@ -16689,6 +16695,7 @@ function renderHomeCasualWidget() {
     '<div style="flex:1;min-width:0"><div class="home-card-label" style="color:#7A4100;margin:0">Sällskapsrond</div>'+
     '<div class="home-card-sub" style="color:#8F5200">Spela en runda utanför tourerna och för score i appen</div></div>'+
     '<i class="ti ti-chevron-right" style="font-size:22px;color:#7A4100"></i></div>';
+  var menuLen = h.length;
   mine.forEach(function(r){
     var me = (r.players||[]).find(function(p){ return p.username === currentUser.username; }) || (r.players||[])[0];
     if(me && cfIsTeamScore(r)) { var tm = cfTeamOf(r, me.key); if(tm) me = { key: tm.key, shcp: tm.shcp }; }
@@ -16702,7 +16709,9 @@ function renderHomeCasualWidget() {
             '<div style="font-size:12px;color:var(--text-3)">'+(r.players||[]).length+' spelare'+(t?' · du har spelat '+t.thru+' av '+(r.holePars||[]).length+' hål':'')+'</div></div>'; })()+
       '<span class="btn btn-sm btn-primary">Fortsätt</span></div>';
   });
-  el.innerHTML = h;
+  if(top) { top.innerHTML = h.slice(menuLen); el.innerHTML = h.slice(0, menuLen); }
+  else el.innerHTML = h;
+  try { renderBnavMain(); } catch(e) {}
 }
 
 // ── Skärm ───────────────────────────────────────────────────────────────────
@@ -25458,6 +25467,13 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '26 november 2026 (493)',
+    items: [
+      { type: 'improved', text: 'En pågående runda (sällskapsrond eller eclectic-runda) visas nu högst upp på startsidan, direkt under spelarraden och ovanför väggen, så att den syns direkt utan att man behöver scrolla ner till Meny.' },
+      { type: 'fixed', text: 'Mittknappen i menyraden kunde visa "Ny rond" fast man hade en pågående runda (t.ex. en eclectic-runda i Labbet). Knappen uppdateras nu samtidigt som kortet för pågående runda, så den visar "Fortsätt" och tar dig rakt in i ronden.' },
+    ]
+  },
   {
     date: '26 november 2026 (492)',
     items: [
