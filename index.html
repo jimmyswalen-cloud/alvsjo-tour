@@ -9715,15 +9715,19 @@ function rcBoardHTML(t) {
       var lbl = m.r ? (m.r.w === 'H' ? 'AS' : (m.r.m || '1UP')) : (st ? (st.leader ? st.label : 'AS') : '');
       var mid = m.r ? 'F' : (st ? String(st.played) : ((s.teeTimes || {})[m.i] || '–'));
       var cellA = lead === 'A', cellB = lead === 'B';
-      var nm = function(us){ return us.map(surname).join(' / '); };
+      // Release 494: ett namn per rad (fyrboll/foursome) och radbrytning i stället för "..." så
+      // att alla namn får plats; statusrutan visas bara när matchen har ett läge.
+      var nm = function(us){ return us.map(function(u){ return esc(surname(u)); }).join('<br>'); };
+      var NMS = 'white-space:normal;overflow-wrap:break-word;line-height:1.15;padding:4px 0;min-width:0';
       var stat = function(on, side){ var show = on || lead === 'H';
+        if(!lead) return '';
         return '<div class="rcb-stat" style="width:58px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:' + (on ? esc((side === 'A' ? A : B).color) : LIGHT) + ';color:' + (on ? '#fff' : INK) + '">' + (show ? esc(lbl) : '') + '</div>'; };
       return '<div onclick="rcOpenLive(' + si + ',' + m.i + ')" style="display:grid;grid-template-columns:minmax(0,1fr) 46px minmax(0,1fr);cursor:pointer;min-height:38px">' +
         '<div style="display:flex;align-items:stretch;min-width:0">' + stat(cellA, 'A') +
-          '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;padding:0 10px;font-size:12px;font-weight:800;background:' + (cellA ? esc(A.color) : LIGHT) + ';color:' + (cellA ? '#fff' : INK) + '"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(nm(m.a)) + '</span></div></div>' +
+          '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;font-size:11.5px;font-weight:800;background:' + (cellA ? esc(A.color) : LIGHT) + ';color:' + (cellA ? '#fff' : INK) + '"><span style="' + NMS + ';text-align:right">' + nm(m.a) + '</span></div></div>' +
         '<div style="display:flex;align-items:center;justify-content:center;background:#FBFCFE;color:' + INK + ';font-weight:800;font-size:' + (mid.length > 2 ? '11px' : '15px') + ';border-left:2px solid ' + NAVY + ';border-right:2px solid ' + NAVY + '">' + esc(mid) + '</div>' +
         '<div style="display:flex;align-items:stretch;min-width:0">' +
-          '<div style="flex:1;min-width:0;display:flex;align-items:center;padding:0 10px;font-size:12px;font-weight:800;background:' + (cellB ? esc(B.color) : LIGHT) + ';color:' + (cellB ? '#fff' : INK) + '"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(nm(m.b)) + '</span></div>' + stat(cellB, 'B') + '</div>' +
+          '<div style="flex:1;min-width:0;display:flex;align-items:center;padding:0 8px;font-size:11.5px;font-weight:800;background:' + (cellB ? esc(B.color) : LIGHT) + ';color:' + (cellB ? '#fff' : INK) + '"><span style="' + NMS + '">' + nm(m.b) + '</span></div>' + stat(cellB, 'B') + '</div>' +
       '</div>';
     }).join('') + '</div>';
   }
@@ -25467,6 +25471,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '26 november 2026 (494)',
+    items: [
+      { type: 'fixed', text: 'Ryder Cup-ledartavlan: namnen klipptes av med "..." (t.ex. "ÅBERG / JONS..."). Nu står spelarna i ett par på varsin rad och långa namn bryts i stället för att kapas, så alla namn får plats. Statusrutan längst ut visas bara när matchen har börjat, vilket ger namnen mer plats innan start.' },
+    ]
+  },
   {
     date: '26 november 2026 (493)',
     items: [
