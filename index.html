@@ -2371,26 +2371,31 @@ function uploadProfileImage(dataUrl, username, cb) {
 }
 
 // Allow pasting images from clipboard into any file-trigger button
+// Release 499: en enda global paste-lyssnare i stället för en ny per anrop. Förut kunde samma
+// inklistring trigga flera gånger (knappens egen lyssnare + dokumentets, och en extra lyssnare
+// för varje gång formuläret öppnats), så beskärningsrutan öppnades två gånger ovanpå varandra
+// och den översta blev tom. Nu hanteras varje inklistring exakt en gång, av senast öppnade
+// uppladdningsknapp som finns kvar på sidan, och ignoreras medan beskärningen redan är öppen.
+var _pasteTargets = [];
 function enablePasteForInput(btnId, onImage) {
-  var btn = document.getElementById(btnId);
-  if(!btn) return;
-  btn.addEventListener('paste', handlePasteEvent);
-  // also listen globally while this modal is open
-  document.addEventListener('paste', function pasteHandler(e) {
-    if(!document.getElementById(btnId)) { document.removeEventListener('paste', pasteHandler); return; }
-    handlePasteEvent(e);
-  });
-  function handlePasteEvent(e) {
-    var items = (e.clipboardData || window.clipboardData).items;
-    for(var i=0;i<items.length;i++){
-      if(items[i].type.indexOf('image')===0){
-        var file = items[i].getAsFile();
-        onImage(file);
-        e.preventDefault();
-        break;
-      }
-    }
-  }
+  _pasteTargets = _pasteTargets.filter(function(t){ return t.id !== btnId; });
+  _pasteTargets.push({ id: btnId, cb: onImage });
+  if(window._pasteListenerOn) return;
+  window._pasteListenerOn = true;
+  document.addEventListener('paste', function(e) {
+    if(e._ctPasteDone) return;
+    _pasteTargets = _pasteTargets.filter(function(t){ return !!document.getElementById(t.id); });
+    if(!_pasteTargets.length) return;
+    var cd = e.clipboardData || window.clipboardData; if(!cd || !cd.items) return;
+    var file = null;
+    for(var i=0;i<cd.items.length;i++){ if(cd.items[i].kind === 'file' && cd.items[i].type.indexOf('image')===0){ file = cd.items[i].getAsFile(); if(file) break; } }
+    if(!file) return;
+    e.preventDefault(); e._ctPasteDone = true;
+    if(document.getElementById('crop-modal-overlay')) return; // beskärning pågår redan
+    var now = Date.now(); if(window._lastPasteAt && now - window._lastPasteAt < 700) return;
+    window._lastPasteAt = now;
+    _pasteTargets[_pasteTargets.length - 1].cb(file);
+  }, true);
 }
 
 // ── NAVIGATION ─────────────────────────────────────────────────────────────
@@ -6219,6 +6224,8 @@ var crop = { active:false, imgEl:null, x:0, y:0, scale:1, minScale:1, cW:0, cH:0
 // på en smal mobil kunde ge en oavsiktligt hög och smal ruta eftersom bredden
 // krympt men höjden inte följde med - exakt det som gjorde bilderna "smala".)
 function showCropModal(dataUrl, ratio, cb, outW, warnMinW, quality, allowFit) {
+  // Release 499: aldrig två beskärningsrutor samtidigt (de delar id:n, så den andra blev tom)
+  closeCropModalOnly();
   crop.cb = cb;
   // allowFit: man får zooma ut tills HELA bilden syns (t.ex. en logga i headern).
   // Tomrummet runt bilden fylls med bildens egen kantfärg så det smälter ihop.
@@ -25471,6 +25478,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '26 november 2026 (499)',
+    items: [
+      { type: 'fixed', text: 'Klistra in bild (t.ex. profilbild): ibland öppnades "Välj bildutsnitt" två gånger ovanpå varandra och den översta rutan var tom. Varje inklistring hanteras nu bara en gång, och det kan aldrig ligga två beskärningsrutor öppna samtidigt.' },
+    ]
+  },
   {
     date: '26 november 2026 (498)',
     items: [
