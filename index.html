@@ -3935,10 +3935,13 @@ function renderHomeUserBar() {
     return '<button type="button" onclick="' + onclick + '" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border:none;border-radius:10px;background:transparent;font-size:11px;font-weight:600;color:' + (color || 'var(--text-2)') + ';cursor:pointer">' +
       '<i class="ti ' + icon + '" style="font-size:19px"></i><span style="white-space:nowrap">' + label + '</span></button>';
   };
+  // Release 491: klubbhusväljaren ligger i en egen ruta till höger i kortet
   var club = acc.length >= 2
-    ? '<span style="display:inline-flex;align-items:center;gap:3px;color:var(--green-dark);font-weight:700"><i class="ti ti-building-community" style="font-size:13px"></i>' +
-        '<select onchange="switchClub(this.value)" aria-label="Byt klubbhus" style="width:auto;margin:0;padding:1px 18px 1px 2px;font-size:12px;font-weight:700;color:var(--green-dark);background:transparent;border:none;cursor:pointer">' +
-        acc.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(clubShort(c)) + '</option>'; }).join('') + '</select></span>'
+    ? '<label style="flex-shrink:0;max-width:44%;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 10px;border-radius:10px;background:var(--surface);border:1px solid var(--border);cursor:pointer">' +
+        // Release 492: liten ClubhouseTour-logga ovanför listan med klubbhus
+        '<span style="display:block;line-height:0;margin-bottom:3px"><img class="ch-powered-dark" src="ordbild-boll-liten.png" alt="ClubhouseTour" style="height:11px;width:auto;max-width:none"><img class="ch-powered-light" src="ordbild-boll-ljus-liten.png" alt="ClubhouseTour" style="height:11px;width:auto;max-width:none"></span>' +
+        '<select onchange="switchClub(this.value)" aria-label="Byt klubbhus" style="width:100%;margin:0;padding:0 16px 0 0;font-size:13px;font-weight:800;color:var(--green-dark);background:transparent;border:none;cursor:pointer;text-overflow:ellipsis">' +
+        acc.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(clubShort(c)) + '</option>'; }).join('') + '</select></label>'
     : '';
   el.style.cssText = 'width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-sizing:border-box';
   el.innerHTML =
@@ -3950,9 +3953,8 @@ function renderHomeUserBar() {
           (isAdmin() ? '<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid var(--border-strong);color:var(--text-2)">Admin</span>' : '') + '</div>' +
         '<div style="font-size:12px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
           '<span style="cursor:pointer;white-space:nowrap" onclick="event.stopPropagation();quickEditHcpFromHome()" title="Ändra HCP">HCP <b style="color:var(--text)">' + fmtHcp(u.hcp) + '</b> <i class="ti ti-pencil" style="font-size:12px"></i></span>' +
-          (club ? '<span style="color:var(--text-3)">·</span>' + club : '') +
         '</div>' +
-      '</div>' +
+      '</div>' + club +
     '</div>' +
     '<div style="display:flex;gap:2px;margin-top:10px;padding-top:6px;border-top:1px solid var(--border)">' +
       tile('ti-user', 'Profil', 'viewMyProfile()') +
@@ -25456,6 +25458,18 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '26 november 2026 (492)',
+    items: [
+      { type: 'improved', text: 'Klubbhusväljaren i användarkortet har en liten ClubhouseTour-logga ovanför listan med klubbhus.' },
+    ]
+  },
+  {
+    date: '26 november 2026 (491)',
+    items: [
+      { type: 'improved', text: 'Startsidan: klubbhusväljaren har flyttats ut till en egen ruta till höger i användarkortet, bredvid ditt namn – tydligare och lättare att trycka på.' },
+    ]
+  },
   {
     date: '25 november 2026 (490)',
     items: [
