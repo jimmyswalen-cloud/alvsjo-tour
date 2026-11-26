@@ -2098,16 +2098,39 @@ function fitCoverImg(img) {
 // Tourens hero: byter till bannerläge (hel bild, ingen overlay) om omslaget är en bred banner.
 // mode: 'show' = alltid vanlig header med tournamn över bilden, 'hide' = alltid hel bild utan text,
 // annars automatiskt (bred bild = bannerläge).
+// Release 490: bannerbeslutet sparas per bild. Tidigare visades tourens namn i headern tills
+// bilden laddats färdigt och appen hunnit mäta den - då hann texten "blinka" fram bakom bilden.
+// Nu läggs bannerläget på direkt om bilden är känd, och texten döljs medan en okänd bild laddas.
+var _heroBannerCache = {};
+try { _heroBannerCache = JSON.parse(localStorage.getItem('agcc-hero-banner') || '{}') || {}; } catch(e) {}
 function applyHeroBannerIfWide(heroBg, src, tourId, mode) {
   if(mode === 'show') return;
+  var content = heroBg.querySelector('.hero-content');
+  var known = _heroBannerCache[src];
+  if(mode === 'hide' || (known && known.b)) {
+    if(known && known.ar) heroBg.style.setProperty('--hero-ar', known.ar);
+    heroBg.classList.add('hero-banner');
+  } else if(!known && content) {
+    content.style.visibility = 'hidden'; // okänd bild: visa ingen text förrän vi vet
+  }
   var im = new Image();
+  var done = function(){ if(content) content.style.visibility = ''; };
   im.onload = function() {
-    if(heroBg.getAttribute('data-hero-tour') !== String(tourId)) return; // användaren har hunnit navigera vidare
-    if(mode === 'hide' || isBannerAspect(im.naturalWidth, im.naturalHeight)) {
-      heroBg.style.setProperty('--hero-ar', im.naturalWidth + ' / ' + im.naturalHeight);
+    var ar = im.naturalWidth + ' / ' + im.naturalHeight;
+    var isB = mode === 'hide' || isBannerAspect(im.naturalWidth, im.naturalHeight);
+    _heroBannerCache[src] = { b: isB, ar: ar };
+    try { localStorage.setItem('agcc-hero-banner', JSON.stringify(_heroBannerCache)); } catch(e) {}
+    if(heroBg.getAttribute('data-hero-tour') !== String(tourId)) { done(); return; } // användaren har hunnit navigera vidare
+    if(isB) {
+      heroBg.style.setProperty('--hero-ar', ar);
       heroBg.classList.add('hero-banner');
+    } else {
+      heroBg.classList.remove('hero-banner');
     }
+    done();
   };
+  im.onerror = done;
+  setTimeout(done, 2500); // säkerhetsnät: visa texten om bilden aldrig laddas
   im.src = src;
 }
 
@@ -25134,6 +25157,7 @@ function updateHero(tourId) {
       heroSub=document.getElementById('hero-sub'), heroEye=document.getElementById('hero-eyebrow');
   if(!heroBg) return;
   heroBg.classList.remove('hero-banner'); heroBg.style.removeProperty('--hero-ar');
+  var _hcv = heroBg.querySelector('.hero-content'); if(_hcv) _hcv.style.visibility = ''; // release 490
   heroBg.setAttribute('data-hero-tour', tourId || '');
   if(!tourId) {
     heroBg.style.backgroundImage = clubHeroBg();
@@ -25432,6 +25456,12 @@ function findUser(username) {
 // ── RELEASE NOTES ────────────────────────────────────────────────────────
 // Newest first. Add a new entry at the top whenever a batch of changes ships.
 var RELEASE_NOTES = [
+  {
+    date: '25 november 2026 (490)',
+    items: [
+      { type: 'fixed', text: 'Tourer med egen bannerbild (t.ex. Älvsjö Indoor Golf League): tourens namn syntes en kort stund bakom headern innan bilden laddats. Nu visas bannern direkt, och för en ny bild döljs texten tills bilden är laddad.' },
+    ]
+  },
   {
     date: '25 november 2026 (489)',
     items: [
